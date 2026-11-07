@@ -54,7 +54,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 | Member | Anyone on the roster who is logged in | Read the live transcript, the draft and the archive. **Flag** a paragraph ("this is wrong" plus an optional note) but not edit text. |
 | Editor | The **standing trusted-editors list** (set by an admin), plus anyone the chair adds for one meeting | Everything a Member can do, plus **suggest text edits** (shown as tracked suggestions) |
 | Leader | Anyone with the **leader** permission in the roster (currently the officers: president, VP, secretary and treasurer), or someone a current leader designates for one meeting. Recorded as "Led by" in the minutes. | Run the meeting console. Accept or reject suggestions and flags. Edit directly. Submit. |
-| Admin | Club IT | Roster sync, settings, the trusted-editors list, integrations |
+| Admin | Club IT (whoever builds and runs this app) | Roster sync, settings, the trusted-editors list, integrations |
 
 ## 4. Functional requirements
 
@@ -125,7 +125,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 - **FR-27** On **Submit**, the system:
   1. saves the minutes to the archive (§4.6) as version 1,
   2. renders the PDF in the current visual format (logo, green section bars), named `5-nov-26-minutes.pdf`,
-  3. emails the PDF and the chow list from **the club Gmail account** to **everyone on the roster** who has an email address, one message per person or BCC, with Reply-To set to the chair,
+  3. emails the PDF and the chow list from **the club's Gmail account** to **everyone on the roster** who has an email address, one message per person or BCC, with Reply-To set to the chair,
   4. (later) posts a Discord summary with a link to the archive (personal items are left out by default, see §4.8).
 - **FR-28** Keep versions. A correction creates v2, updates the archive, and emails a short "Corrected minutes" notice listing what changed. Earlier versions remain viewable.
 
@@ -148,7 +148,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 ### 4.7 Roster and chow
 - **FR-35a** The roster Google Sheet is the **single source of truth** for people: members, guests and prospects, officer roles, and who can lead or edit. The app keeps only a read-only cache, and **no roster data is kept in git or in local config**.
 - **FR-35b** Proposed extra columns in the sheet (to agree with whoever maintains the Discord side): `Short name`, `Aliases` (spellings seen in old minutes), `Officer role`, `Minutes access` (leader / editor / blank), `Attends remotely`, `Status` (active / SK / prospect / guest), `Email`.
-- **FR-36** The roster's single source of truth is the Google Sheet (the Discord roster). It is read through the Google Sheets API with a service account and contains name, callsign, preferred short name ("Amy A", "Amy B", "Amy A"), **email** (for minutes delivery and login), status (active, SK, prospect), whether they attend remotely, and the Discord ID.
+- **FR-36** The roster's single source of truth is the Google Sheet (the Discord roster). It is read through the Google Sheets API with a service account and contains name, callsign, preferred short name (first name plus last initial when a first name is shared), **email** (for minutes delivery and login), status (active, SK, prospect), whether they attend remotely, and the Discord ID.
 - **FR-37** Replace the website roster xlsx with an export generated from the Google Sheet.
 - **FR-38** Keep the chow rotation in the app or the sheet, with swaps, blackout dates and next week's reminder. **[Q]** Should we move chow into the roster sheet as a second tab?
 
@@ -191,7 +191,7 @@ Members share personal news in their reports (health, jobs, family), and **those
 | Drafts, follow-ups, summaries, archive import | **OpenRouter** | Cents per meeting. A one-off import of 51 meetings costs about a dollar or two. |
 | Web app | FastAPI with WebSockets; SQLite with FTS5 for search; Markdown files as the archive of record | |
 | PDF | Markdown → HTML template → WeasyPrint | Reproduces the current look. |
-| Email | Gmail API or an SMTP app password for the club Gmail account | Gmail's limit of about 500 recipients a day is plenty. |
+| Email | Gmail API or an SMTP app password for the club's Gmail account | Gmail's limit of about 500 recipients a day is plenty. |
 | Roster | Google Sheets API (service account) | |
 
 ## 7. Decisions and open questions
