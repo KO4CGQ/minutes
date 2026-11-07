@@ -4,6 +4,9 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
+## Unreleased
+- **Updates page refreshes itself:** while an update is waiting or running, the admin Updates page checks every few seconds and shows the result (the new version and ✅ or ❌) once the app is back, without a manual reload.
+
 ## 0.8.0 (2026-11-07)
 - **Docs in sync:** the README describes what the app does now, REQUIREMENTS says "leader" throughout (whoever leads that night: an officer or a member ticked `minutes_editor`), and Admin is a separate role. No member names or club email addresses in the repo, its examples or its history.
 - **Works on phones:** the top bar is one row (logo, ☰, your name); ☰ opens the pages and the search box as a list. The search page has its own search box. Tables fit the screen; the roster list hides license, office and member-since on a phone, and the roster opens in card view on phones unless you picked the list. Business item buttons line up in even rows that are easy to tap, and typing in a field no longer zooms the page on iPhones. The Guests page keeps dates on one line and hides First visit on a phone.

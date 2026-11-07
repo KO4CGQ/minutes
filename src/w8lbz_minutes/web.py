@@ -709,7 +709,7 @@ def admin_updates_run(request: Request, target: str = Form(""), notes_done: int 
     _admin_log(request, update_requested=target)
     _log.info("update to %s requested by %s", target, mid)
     return RedirectResponse("/admin/updates?note=" + quote("Update started. The app restarts in a minute or two; "
-                                                           "reload this page to see the result."), status_code=303)
+                                                           "this page shows the result when it's done."), status_code=303)
 
 
 @app.post("/admin/updates/cancel")
