@@ -209,3 +209,18 @@ def test_about_page(monkeypatch):
     assert web.version("w8lbz-minutes") in html and "Jim Flattery, KO4CGQ" in html and "AGPL-3.0-or-later" in html
     assert ">fastapi<" in html.lower() and "What's new" in html
     assert 'href="/about"' in c.get("/links").text  # in the name menu on every page
+
+
+def test_top_bar_links_everyone_to_tonights_live_meeting(client, monkeypatch):
+    from w8lbz_minutes import web
+    assert "Live meeting" not in client.get("/").text
+    tonight = next(m for m in web.archive.meetings if m.date == dt.date.today())
+    monkeypatch.setattr(tonight, "status", "draft")
+    assert f'href="/meetings/{tonight.slug}"' in client.get("/").text.split("</nav>")[0]
+
+
+def test_roster_opens_as_cards_on_phones_until_a_view_is_picked(client):
+    phone = {"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148"}
+    assert 'class="membergrid"' in client.get("/roster", headers=phone).text
+    client.get("/roster?view=list")  # remembered in a cookie
+    assert 'class="membergrid"' not in client.get("/roster", headers=phone).text

@@ -4,6 +4,13 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
+## Unreleased
+- **Works on phones:** the top bar is one row (logo, ☰, your name); ☰ opens the pages and the search box as a list. The search page has its own search box. Tables fit the screen; the roster list hides license, office and member-since on a phone, and the roster opens in card view on phones unless you picked the list. Business item buttons line up in even rows that are easy to tap, and typing in a field no longer zooms the page on iPhones. The Guests page keeps dates on one line and hides First visit on a phone.
+- **Emoji icons** on buttons and labels (✏️ Edit, ✅ Mark done, 🔄 Reopen, 🔁 Ask to swap and so on) in place of plain text symbols.
+- **Live meeting link:** while tonight's meeting is being taken, the top bar shows 🔴 Live meeting (for everyone, in place of Lead a meeting), linking to the minutes as they're written.
+- **Favicon:** the club logo on a white circle, so it shows on any tab colour, and as the icon when the site is added to a phone's home screen.
+- **Fixed:** more space between the Download PDF / View original buttons and the minutes.
+
 ## 0.7.1 (2026-11-07)
 - **Fixed:** behind-the-scenes fixes to how the app updates itself.
 

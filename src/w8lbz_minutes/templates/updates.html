@@ -6,13 +6,13 @@
 <div class="cards">
 <article class="card">
   <div class="card-head"><div class="card-text">Running <b>{{ running }}</b>{% if rel %} · latest release <b>{{ rel.version }}</b>{% endif %}</div>
-    <div class="topacts"><form method="post" action="/admin/updates/check" class="inline"><button class="act">↻ Check now</button></form></div></div>
+    <div class="topacts"><form method="post" action="/admin/updates/check" class="inline"><button class="act">🔄 Check now</button></form></div></div>
   {% if not rel %}<p class="muted">Couldn't reach GitHub to check for releases.</p>
   {% elif not newer %}<p class="muted">You're up to date.</p>{% endif %}
 </article>
 
 {% if st.stuck %}<article class="card overdue">
-  <div class="card-text">⚠ The update to {{ st.requested.to }} asked for {{ st.requested.at|tsfull }} hasn't started.</div>
+  <div class="card-text">⚠️ The update to {{ st.requested.to }} asked for {{ st.requested.at|tsfull }} hasn't started.</div>
   <p class="muted">Nothing on the server picked it up, so the updater probably isn't installed yet. On CT103 run <code>/opt/w8lbz-minutes/deploy/update.sh</code> once by hand (it installs the updater; this request then runs right after), and check <code>systemctl status w8lbz-minutes-update.path</code>. Or withdraw the request:</p>
   <form method="post" action="/admin/updates/cancel" class="inline"><button class="btn small ghost">Withdraw the request</button></form>
 </article>
@@ -34,7 +34,7 @@
 </article>{% endif %}
 
 {% if st.last %}<article class="card{{ '' if st.last.ok else ' overdue' }}">
-  <div class="card-text">{{ '✓' if st.last.ok else '✗' }} Last update{% if st.last.to %} to {{ st.last.to }}{% endif %}: {{ 'finished' if st.last.ok else 'failed' }} {{ st.last.finished|tsfull }}{% if st.last.by %}, asked for by {{ club.short(st.last.by) }}{% endif %}.</div>
+  <div class="card-text">{{ '✅' if st.last.ok else '❌' }} Last update{% if st.last.to %} to {{ st.last.to }}{% endif %}: {{ 'finished' if st.last.ok else 'failed' }} {{ st.last.finished|tsfull }}{% if st.last.by %}, asked for by {{ club.short(st.last.by) }}{% endif %}.</div>
   <details><summary class="muted">Output</summary><pre class="relnotes">{{ st.last.output }}</pre></details>
 </article>{% endif %}
 </div>

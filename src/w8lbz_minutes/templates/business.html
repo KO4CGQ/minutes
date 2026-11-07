@@ -22,14 +22,14 @@
 <article class="card{{ ' overdue' if x.overdue }}" id="i{{ x.id }}">
   <div class="card-head"><div class="card-text">{{ x.text }}</div>
     <div class="topacts">
-      {% if mine %}<button type="button" class="act" data-panel="e{{ x.id }}" title="Edit the wording, owner or dates">✎ Edit</button>
-      <form method="post" action="/business/{{ x.id }}/done" class="inline" onsubmit="return confirm('Mark this item done? It shows as done in the next minutes, then drops off.')"><button class="act" title="Mark done">✓ Mark done</button></form>{% endif %}
+      {% if mine %}<button type="button" class="act" data-panel="e{{ x.id }}" title="Edit the wording, owner or dates">✏️ Edit</button>
+      <form method="post" action="/business/{{ x.id }}/done" class="inline" onsubmit="return confirm('Mark this item done? It shows as done in the next minutes, then drops off.')"><button class="act" title="Mark done">✅ Mark done</button></form>{% endif %}
       <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">🕘 History ({{ x.history|length + cs|length }})</button>
     </div></div>
   <div class="card-meta">
     {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a></span>{% else %}<span class="chip muted">No owner</span>{% endif %}
     {% if x.due %}<span class="chip{{ ' late' if x.overdue }}">⏰ due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}
-    {% if x.agenda and x.agenda > today %}<span class="chip">⏸ on the agenda for {{ fmt(x.agenda) }}</span>{% endif %}
+    {% if x.agenda and x.agenda > today %}<span class="chip">⏸️ on the agenda for {{ fmt(x.agenda) }}</span>{% endif %}
     {% if x.quiet %}<span class="chip warn" title="Nothing has changed on it for weeks">quiet for a while: still on?</span>{% endif %}
     <span class="chip">📅 since <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>
   </div>
@@ -86,12 +86,12 @@
 
 {% elif tab == 'done' %}
 <div class="cards">{% for x in done %}<article class="card done" id="i{{ x.id }}">
-  <div class="card-head"><div class="card-text">✓ {{ x.text }}</div>
+  <div class="card-head"><div class="card-text">✅ {{ x.text }}</div>
     <div class="topacts">
-      {% if leader or x.owner == me.id %}<form method="post" action="/business/{{ x.id }}/done" class="inline"><input type="hidden" name="done" value="0"><button class="act" title="Open it again">↺ Reopen</button></form>{% endif %}
+      {% if leader or x.owner == me.id %}<form method="post" action="/business/{{ x.id }}/done" class="inline"><input type="hidden" name="done" value="0"><button class="act" title="Open it again">🔄 Reopen</button></form>{% endif %}
       <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">🕘 History ({{ x.history|length + (x.comments or [])|length }})</button>
     </div></div>
-  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{{ x.owner_name }}</span>{% endif %}<span class="chip">✓ done {{ fmt(x.closed) }}</span>
+  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{{ x.owner_name }}</span>{% endif %}<span class="chip">✅ done {{ fmt(x.closed) }}</span>
     <span class="chip">📅 since <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span></div>
   <div class="panel" id="h{{ x.id }}" hidden>{{ timeline(x) }}</div>
 </article>{% else %}<p class="muted">Nothing yet.</p>{% endfor %}</div>

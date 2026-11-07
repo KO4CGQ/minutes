@@ -167,6 +167,8 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         "can_lead": (archive.club.can_lead(mid) or admin_mode(request)) if mid else False,
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
+        # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
+        "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         "update_available": _update_badge(request),
         "rp_id": authn.rp_id, **ctx})
 
@@ -1027,7 +1029,8 @@ def member(request: Request, mid: str):
 @app.get("/roster", response_class=HTMLResponse)
 def roster(request: Request, status: str = "Active", p: str = Query("1", alias="page"), per: str = "", view: str = ""):
     """Everyone on the roster, as a list or as cards (remembered in a cookie); contact details are on member pages."""
-    view = view if view in ("list", "cards") else request.cookies.get("roster_view", "list")
+    phone = "Mobi" in request.headers.get("user-agent", "")  # iPhone and Android phones say "Mobile"
+    view = view if view in ("list", "cards") else request.cookies.get("roster_view", "cards" if phone else "list")
     if view not in ("list", "cards"):
         view = "list"
     def since(m):

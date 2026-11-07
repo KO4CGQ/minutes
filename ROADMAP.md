@@ -14,6 +14,10 @@ The schedule, rotation, swaps, meeting-night records and the minutes' Upcoming C
 - **Calendar:** each chow night is mirrored to the club's "Chow" Google Calendar, so swaps update it automatically.
 - **With the minutes email:** a printable chow list (PDF or .xlsx) attached, replacing the Secretary's spreadsheet.
 
+## Look and feel
+- **Meeting-time button:** a clock in the top bar (club time), and "Lead a meeting" as a pill button reading "Start meeting" that pulses as Thursday 7:30 pm approaches.
+- **Transparent profile pictures:** keep the transparency of PNG (and similar) uploads instead of flattening them.
+
 ## Admin tools
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 

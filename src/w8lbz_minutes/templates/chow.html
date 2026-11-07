@@ -27,8 +27,8 @@
     {% else %}<div class="rot-name muted">(open)</div>{% endif %}
   </div>
   <div class="rot-ops">
-    {% if x.member and x.member != me.id and mine and x.status != 'none' %}<button type="button" class="act" data-panel="s{{ d }}">⇄ Ask to swap</button>{% endif %}
-    {% if leader %}<button type="button" class="act" data-panel="c{{ d }}">✎ Change</button>{% endif %}
+    {% if x.member and x.member != me.id and mine and x.status != 'none' %}<button type="button" class="act" data-panel="s{{ d }}">🔁 Ask to swap</button>{% endif %}
+    {% if leader %}<button type="button" class="act" data-panel="c{{ d }}">✏️ Change</button>{% endif %}
   </div>
   {% if x.member and x.member != me.id and mine and x.status != 'none' %}<div class="panel rot-panel" id="s{{ d }}" hidden>
     <form method="post" action="/chow/request" class="modern"><input type="hidden" name="theirs" value="{{ d }}">
@@ -47,7 +47,7 @@
 
 {% if leader %}<h2>Swap two nights</h2>
 <form method="post" action="/chow/swap" class="modern card swapcard" onsubmit="const [a, b] = [...this.querySelectorAll('select')].map((x) => x.selectedOptions[0].text); if (this.a.value === this.b.value) { alert('Pick two different nights.'); return false; } return confirm(`Swap ${a} and ${b}? Both members and the Secretary are emailed.`)">
-  <div class="formrow">{% for f in ('a', 'b') %}<select name="{{ f }}" aria-label="Night" required><option value="" selected disabled>Pick a night…</option>{% for d, x in upcoming if x.member and x.status != 'none' %}<option value="{{ d }}">{{ fmt(d) }}: {{ club.short(x.member) }}</option>{% endfor %}</select>{% if f == 'a' %} <span class="swapicon">⇄</span> {% endif %}{% endfor %}
+  <div class="formrow">{% for f in ('a', 'b') %}<select name="{{ f }}" aria-label="Night" required><option value="" selected disabled>Pick a night…</option>{% for d, x in upcoming if x.member and x.status != 'none' %}<option value="{{ d }}">{{ fmt(d) }}: {{ club.short(x.member) }}</option>{% endfor %}</select>{% if f == 'a' %} <span class="swapicon">🔁</span> {% endif %}{% endfor %}
   <button class="btn small">Swap</button></div>
   <p class="hint">Both members and the Secretary are emailed. Changes made on a meeting night go into that meeting's minutes.</p>
 </form>
@@ -73,13 +73,13 @@
     <div class="rot-name">{{ club.name(mid) }}{% if mid == next_up %} <span class="badge">next</span>{% endif %}</div>
     {% if c %}<div class="rot-limits">
       {% if c.not_weeks %}<span class="chip">🚫 not the {% for w in c.not_weeks %}{{ ord[w] }}{{ ', ' if not loop.last }}{% endfor %} {{ 'week' if c.not_weeks|length == 1 else 'weeks' }}</span>{% endif %}
-      {% for a, b in c.away %}<span class="chip">✈ away {{ fmt(a) }} – {{ fmt(b) }}</span>{% endfor %}
-      {% if c.skip %}<span class="chip">⏭ skips {{ 'their next turn' if c.skip == 1 else 'their next %d turns' % c.skip }}</span>{% endif %}
+      {% for a, b in c.away %}<span class="chip">✈️ away {{ fmt(a) }} – {{ fmt(b) }}</span>{% endfor %}
+      {% if c.skip %}<span class="chip">⏭️ skips {{ 'their next turn' if c.skip == 1 else 'their next %d turns' % c.skip }}</span>{% endif %}
       {% if c.note %}<div class="rot-note">{{ c.note }}</div>{% endif %}
     </div>{% endif %}
   </div>
   <div class="rot-ops">
-    {% for op, label in (('up', '↑'), ('down', '↓')) %}<form method="post" action="/chow/order" class="inline"><input type="hidden" name="member" value="{{ mid }}"><input type="hidden" name="op" value="{{ op }}"><button class="act" title="Move {{ op }}">{{ label }}</button></form>{% endfor %}
+    {% for op, label in (('up', '⬆️'), ('down', '⬇️')) %}<form method="post" action="/chow/order" class="inline"><input type="hidden" name="member" value="{{ mid }}"><input type="hidden" name="op" value="{{ op }}"><button class="act" title="Move {{ op }}">{{ label }}</button></form>{% endfor %}
     <button type="button" class="act" data-panel="l{{ mid }}" title="Weeks they can't do, time away, a note">Limits</button>
   </div>
   <div class="panel rot-panel" id="l{{ mid }}" hidden>
@@ -109,10 +109,10 @@
   <div class="rot-main">
     {% if x.status == 'none' %}<div class="rot-name muted">No chow</div>{% if x.note %}<div class="rot-note">{{ x.note }}</div>{% endif %}
     {% else %}<div class="rot-name">{{ club.name(x.member) if x.member else '(open)' }}</div>
-    <div class="rot-limits">{% if x.status == 'provided' %}<span class="chip ok">✓ provided</span>{% elif x.status == 'missed' %}<span class="chip late">✗ not provided</span>{% elif x.status == 'covered' %}<span class="chip">↪ brought by {{ club.short(x.covered_by) }}</span>{% else %}<span class="chip muted">not recorded</span>{% endif %}
+    <div class="rot-limits">{% if x.status == 'provided' %}<span class="chip ok">✅ provided</span>{% elif x.status == 'missed' %}<span class="chip late">❌ not provided</span>{% elif x.status == 'covered' %}<span class="chip">↪️ brought by {{ club.short(x.covered_by) }}</span>{% else %}<span class="chip muted">not recorded</span>{% endif %}
       {% if x.note and x.status in ('provided', 'covered') %}<div class="rot-note">{{ x.note }}</div>{% endif %}</div>{% endif %}
   </div>
-  <div class="rot-ops">{% if x.member and x.status != 'none' %}<button type="button" class="act" data-panel="r{{ d }}">✎ Record</button>{% endif %}</div>
+  <div class="rot-ops">{% if x.member and x.status != 'none' %}<button type="button" class="act" data-panel="r{{ d }}">✏️ Record</button>{% endif %}</div>
   {% if x.member and x.status != 'none' %}<div class="panel rot-panel" id="r{{ d }}" hidden>
     <form method="post" action="/chow/record" class="modern"><input type="hidden" name="date" value="{{ d }}">
       <div class="formrow">
