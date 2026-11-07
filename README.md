@@ -2,16 +2,14 @@
 
 Meeting-minutes assistant for W8LBZ. See [REQUIREMENTS.md](REQUIREMENTS.md).
 
-## Built so far
-- **Archive:** each meeting is a Markdown file at `data/meetings/YYYY-MM-DD/minutes.md`, next to the original PDF.
-- **Importer:** converts the historical PDFs (and `*CORRECTED*.txt`) into the archive with a plain parser, no AI. Imported meetings are marked "imported, unreviewed".
-- **Web UI:**
-  - archive list
-  - minutes view in the modernized layout, with PDF download and a link to the original
-  - full-text search
-  - per-member history
-  - attendance stats
-  - guest tracking
+## What it does
+Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROADMAP.md](ROADMAP.md).
+- **Archive:** each meeting is a Markdown file at `data/meetings/YYYY-MM-DD/minutes.md`, next to the original PDF. The importer converts the historical PDFs (and `*CORRECTED*.txt`) with a plain parser, no AI; imported meetings are marked "imported, unreviewed".
+- **Minutes:** the modernized layout with PDF download, full-text search, per-member history, attendance stats and guest tracking.
+- **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
+- **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode.
+- **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders.
+- **Chow schedule:** the rotation, swaps, and who provided, missed or covered each night.
 
 ## Run
 ```sh
@@ -22,7 +20,7 @@ uv run w8lbz-minutes import archive                  # (re)build data/ from arch
 uv run w8lbz-minutes serve --host 0.0.0.0 --port 8765
 uv run pytest -q
 ```
-The roster sync needs a Google service-account key at `private/google-service-account.json`. Share the sheet with the account's email as Viewer.
+The roster sync needs a Google service-account key at `private/google-service-account.json`. Share the sheet with the account's email as Editor (profile edits are written back to it).
 
 PDF generation needs the system Pango library: `sudo apt install libpango-1.0-0 libpangoft2-1.0-0`.
 
@@ -43,14 +41,12 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 - **AI** (optional) needs `W8LBZ_OPENROUTER_KEY` in `/etc/w8lbz-minutes/env` and `ai: {model: ...}` in club.yaml. Each call is logged to `ai-log.jsonl` in the data folder (time, model, size, cost; never the text).
 - **Recovery:** an admin on the server can print a one-time link for a member: `w8lbz-minutes login-link KO4CGQ`
 
-Only officers and members ticked `minutes_editor` in the roster can use the leader console.
+Officers and members ticked `minutes_editor` in the roster sheet can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
 
 ## Config
-`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the club links, the leaders and editors lists, the private never-record list, and a stopgap roster. The Google Sheet roster will replace the roster part.
+`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the club links, the roster sheet's address and the private never-record list. People, offices and who may lead come from the roster sheet.
 
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
-
-**No login yet.** Keep the server on the LAN or tailnet only.
 
 ## Emailing the minutes
 When a leader submits the minutes, the PDF goes to every roster member with an email address (except Inactive and Silent Key), each getting their own copy. Replies go to the meeting's leader.
@@ -86,14 +82,14 @@ In admin mode, a member's page has **View the app as …**: the app as that memb
 - **Updating from the app:** admins in admin mode see "Version X is available" and an **Updates** page with **Update now**. It writes `update-request.json` in the data folder; the root-owned `w8lbz-minutes-update.path` unit sees it and runs `deploy/update-from-app.sh` (which runs `update.sh` and records the result). `update.sh` installs and enables that unit, so the first update after this feature arrives is still by hand.
 - Every pull request runs the tests (the Tests workflow).
 
-## License
-Copyright © 2026 Jim Flattery, KO4CGQ.
-
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE).
-
-If you run a modified version for others over a network, you must offer them its source code (AGPL section 13). The About page's source link does this for the club's copy.
-
 ## Chow schedule
 `/chow` is the chow list; the app is the source of truth (state in `chow.json`, every change in `chow-log.jsonl`, both in the data directory).
 - One-time import of the Secretary's spreadsheet: `w8lbz-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
 - Members ask each other to swap; leaders edit directly; the console records provided, missed or covered on meeting night.
+
+## License
+Copyright © 2026 James Flattery, KO4CGQ.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE).
+
+If you run a modified version for others over a network, you must offer them its source code (AGPL section 13). The About page's source link does this for the club's copy.

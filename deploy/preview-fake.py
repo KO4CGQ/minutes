@@ -3,21 +3,18 @@ or emails sit in a preview. Names and callsigns stay: the meetings, attendance a
 
     python3 deploy/preview-fake.py PREVIEW_DATA_DIR
 
-Known test records (non-officers, so what you see depends on what they share):
-    kd8aaa  Amy Able   shares everything
-    kd8bbb Bob Baker    shares nothing
-    kd8ccc  Cal Cole  shares phone only
-    kd8ddd Dee Dunn shares email only
-Everyone else shares nothing, as on the real roster until a member opts in. Officers see everything regardless.
+The first three non-officers (by callsign) are the test records, so what you see depends on what they share:
+everything, phone only, and email only. Everyone else shares nothing, as on the real roster until a member
+opts in. Officers see everything regardless. The script prints who they are.
 """
 import json
 import sys
 from pathlib import Path
 
-SHARES = {"kd8aaa": ["email", "phone", "address", "birthday"], "kd8ccc": ["phone"], "kd8ddd": ["email"]}
-
 path = Path(sys.argv[1]) / "roster.json"
 people = json.loads(path.read_text())
+testers = sorted((p for p in people if not p.get("officer")), key=lambda p: p["id"])[:3]
+SHARES = dict(zip((p["id"] for p in testers), (["email", "phone", "address", "birthday"], ["phone"], ["email"])))
 for i, p in enumerate(people, 1):
     p["email"] = f"{p['id']}@example.org"
     p["phone"] = f"419-555-01{i:02d}"
@@ -25,4 +22,5 @@ for i, p in enumerate(people, 1):
     p["birthday"] = f"{i % 12 + 1:02d}-{i % 28 + 1:02d}"
     p["share"] = SHARES.get(p["id"], [])
 path.write_text(json.dumps(people, indent=1))
-print(f"Preview roster: made-up contact details for {len(people)} members")
+print(f"Preview roster: made-up contact details for {len(people)} members; test records: "
+      + ", ".join(f"{p.get('callsign') or p['id']} shares {' '.join(SHARES[p['id']]) or 'nothing'}" for p in testers))
