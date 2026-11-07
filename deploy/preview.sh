@@ -63,4 +63,4 @@ for _ in $(seq 20); do curl -s -o /dev/null "http://127.0.0.1:$PORT/login" && br
 
 echo "Preview of $B ($(git -C "$DIR/app" log --oneline -1)): http://$HOST_IP:$PORT"
 echo "Sign in (one use, 15 minutes):"
-(cd "$DIR/app" && env "${ENV[@]}" .venv/bin/w8lbz-minutes login-link "${W8LBZ_PREVIEW_USER:-KO4CGQ}" --base-url "http://$HOST_IP:$PORT" | tail -1)
+(cd "$DIR/app" && env "${ENV[@]}" .venv/bin/w8lbz-minutes login-link "${W8LBZ_PREVIEW_USER:?set W8LBZ_PREVIEW_USER to your callsign}" --base-url "http://$HOST_IP:$PORT" | tail -1)

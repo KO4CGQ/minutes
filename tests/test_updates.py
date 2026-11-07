@@ -40,22 +40,22 @@ def test_check_and_deploy_notes(env):
 def test_request(env, monkeypatch):
     monkeypatch.setattr(updates, "latest", lambda *a, **k: {"version": "0.7.0", "notes": NOTES, "deploy_notes": ["x"]})
     with pytest.raises(ValueError):
-        updates.request("ko4cgq", "0.7.0", notes_confirmed=False)       # steps by hand come first
-    updates.request("ko4cgq", "0.7.0", notes_confirmed=True)
+        updates.request("kd8adm", "0.7.0", notes_confirmed=False)       # steps by hand come first
+    updates.request("kd8adm", "0.7.0", notes_confirmed=True)
     req = json.loads((env / "update-request.json").read_text())
-    assert req["by"] == "ko4cgq" and req["from"] == "0.6.0" and req["to"] == "0.7.0"
+    assert req["by"] == "kd8adm" and req["from"] == "0.6.0" and req["to"] == "0.7.0"
     assert "requested" in updates.status()
     with pytest.raises(ValueError):
-        updates.request("ko4cgq", "0.7.0", True)                          # one at a time
+        updates.request("kd8adm", "0.7.0", True)                          # one at a time
     req["at"] -= 3600                                                      # an hour later, nothing picked it up
     (env / "update-request.json").write_text(json.dumps(req))
     assert updates.status()["stuck"]
     assert updates.cancel() and "requested" not in updates.status()
-    updates.request("ko4cgq", "0.7.0", True)
+    updates.request("kd8adm", "0.7.0", True)
     monkeypatch.setattr(updates, "PREVIEW", "branch")
     (env / "update-request.json").unlink()
     with pytest.raises(ValueError):
-        updates.request("ko4cgq", "0.7.0", True)                          # previews never update themselves
+        updates.request("kd8adm", "0.7.0", True)                          # previews never update themselves
 
 
 def test_admin_page(env, tmp_path, monkeypatch):
@@ -66,8 +66,8 @@ def test_admin_page(env, tmp_path, monkeypatch):
     from w8lbz_minutes.club import Club
     from w8lbz_minutes.store import Archive
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml",
-                roster=[{"id": "ko4cgq", "first": "Jim", "last": "F", "callsign": "KO4CGQ"}, {"id": "bob", "first": "Bob", "last": "B"}])
-    club.admins = {"ko4cgq"}
+                roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "callsign": "KD8ADM"}, {"id": "bob", "first": "Bob", "last": "B"}])
+    club.admins = {"kd8adm"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
     monkeypatch.setattr(web, "authn", a)
@@ -75,7 +75,7 @@ def test_admin_page(env, tmp_path, monkeypatch):
     monkeypatch.setattr(updates, "latest", lambda *a, **k: {"version": "0.7.0", "notes": NOTES, "url": "u",
                                                               "deploy_notes": updates.deploy_notes(NOTES)})
     c = TestClient(web.app)
-    token = a.new_session("ko4cgq")
+    token = a.new_session("kd8adm")
     c.cookies.set(web.COOKIE, token)
     assert c.get("/admin/updates", follow_redirects=False).headers["location"].startswith("/admin/confirm")
     page = c.get("/links").text                                                  # admins hear about it outside admin mode too

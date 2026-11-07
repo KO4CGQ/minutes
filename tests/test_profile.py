@@ -225,15 +225,15 @@ def test_admin_mode(tmp_path, monkeypatch):
     from w8lbz_minutes.auth import Auth
     from w8lbz_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[
-        {"id": "ko4cgq", "first": "Jim", "last": "F", "callsign": "KO4CGQ", "email": "jim@example.org"},
+        {"id": "kd8adm", "first": "Ann", "last": "Admin", "callsign": "KD8ADM", "email": "ann@example.org"},
         {"id": "kd8ccc", "first": "Bob", "last": "Member", "phone": "419-555-0199"}])
-    club.admins = {"ko4cgq"}
+    club.admins = {"kd8adm"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web, "DATA", tmp_path)
     c = TestClient(web.app)
-    c.cookies.set(web.COOKIE, a.new_session("ko4cgq"))
+    c.cookies.set(web.COOKIE, a.new_session("kd8adm"))
     assert "419-555-0199" not in c.get("/members/kd8ccc").text          # off by default: an ordinary member
     assert c.get("/roster/changes").status_code == 403
     assert "Turn on admin mode" in c.get("/links").text
@@ -270,7 +270,7 @@ def turn_on_admin_mode(c, monkeypatch):
     assert "Admin mode is on" not in c.get("/links").text                       # not until confirmed
     assert "Email me a confirmation link" in c.get(r.headers["location"]).text
     c.post("/admin/confirm/email", data={"next": "/links"})
-    assert sent and sent[-1][0] == "jim@example.org"
+    assert sent and sent[-1][0] == "ann@example.org"
     link = urlparse(next(w for w in sent[-1][1].split() if "/admin/confirm/link" in w))
     assert c.get("/admin/confirm/link?t=wrong").url.path == "/admin/confirm"    # a made-up code does nothing
     assert "Admin mode is on" in c.get(f"{link.path}?{link.query}").text
@@ -283,24 +283,24 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     from w8lbz_minutes.auth import Auth
     from w8lbz_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[
-        {"id": "ko4cgq", "first": "Jim", "last": "F", "callsign": "KO4CGQ", "email": "jim@example.org"},
+        {"id": "kd8adm", "first": "Ann", "last": "Admin", "callsign": "KD8ADM", "email": "ann@example.org"},
         {"id": "tess", "first": "Tess", "last": "Treasurer", "officer": True, "phone": "419-555-0142"},
         {"id": "bob", "first": "Bob", "last": "Member", "phone": "419-555-0199"}])
-    club.admins = {"ko4cgq"}
+    club.admins = {"kd8adm"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web, "DATA", tmp_path)
     c = TestClient(web.app)
-    c.cookies.set(web.COOKIE, a.new_session("ko4cgq"))
+    c.cookies.set(web.COOKIE, a.new_session("kd8adm"))
     assert c.post("/admin/view-as", data={"member": "bob"}).status_code == 403   # admin mode is off
     turn_on_admin_mode(c, monkeypatch)
     assert "View the app as Bob" in c.get("/members/bob").text
     c.post("/admin/view-as", data={"member": "bob", "next": "/links"})
     page = c.get("/members/tess").text
     assert "Viewing the app as <b>Bob Member</b>" in page
-    assert "419-555-0142" not in page                     # Bob can't see Tess's unshared phone, so neither can Jim now
-    assert "Bob ▾" in c.get("/links").text and "Jim ▾" not in c.get("/links").text  # the name menu is Bob's
+    assert "419-555-0142" not in page                     # Bob can't see Tess's unshared phone, so neither can Ann now
+    assert "Bob ▾" in c.get("/links").text and "Ann ▾" not in c.get("/links").text  # the name menu is Bob's
     assert c.post("/profile", data={"phone": "1"}).status_code == 403          # read-only
     assert c.get("/account").status_code == 403                                 # not their sign-ins or passkeys
     assert c.get("/roster/changes").status_code == 403                          # Bob's permissions, not admin's
@@ -330,11 +330,11 @@ def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
     monkeypatch.setattr(auth_mod.smtplib, "SMTP", FakeSMTP)
     monkeypatch.setenv("W8LBZ_SMTP_USER", "club@example.org")
     monkeypatch.setenv("W8LBZ_SMTP_PASSWORD", "pw")
-    assert auth_mod.send_email(["jim@example.org", "amy@example.org"], "Minutes", "body", only_to={"jim@example.org"}) == 1
-    assert auth_mod.send_email("amy@example.org", "Reminder", "body", only_to={"jim@example.org"}) == 0
+    assert auth_mod.send_email(["ann@example.org", "amy@example.org"], "Minutes", "body", only_to={"ann@example.org"}) == 1
+    assert auth_mod.send_email("amy@example.org", "Reminder", "body", only_to={"ann@example.org"}) == 0
     log = [json.loads(x) for x in (tmp_path / "email-log.jsonl").read_text().splitlines()]
-    assert sent == ["jim@example.org"]
+    assert sent == ["ann@example.org"]
     assert [(e["subject"], e["status"], e["to"], e["withheld"]) for e in log] == [
-        ("Minutes", "sent", ["jim@example.org"], ["amy@example.org"]),
+        ("Minutes", "sent", ["ann@example.org"], ["amy@example.org"]),
         ("Reminder", "held back (test mode)", [], ["amy@example.org"])]
     assert oct((tmp_path / "email-log.jsonl").stat().st_mode)[-3:] == "600"
