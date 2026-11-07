@@ -4,15 +4,17 @@
 <script>/* theme before first paint: "light", "dark", or follow the device */
 try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <meta name="color-scheme" content="light dark">
+<link rel="icon" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="/static/style.css?v={{ ASSETS }}"><link rel="stylesheet" href="/static/minutes.css?v={{ ASSETS }}"></head>
 <body>
 <nav class="top">
   <a class="brand" href="/"><img src="/static/logo.png" alt="">W8LBZ Minutes</a>
   {% if me %}{% set here = request.url.path %}
-  {% for href, label in (('/', 'Archive'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/business', 'Business'), ('/chow', 'Chow'), ('/guests', 'Guests'), ('/links', 'Links')) + ((('/console', 'Lead a meeting'),) if can_lead else ()) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href != '/' and here.startswith(href)) or (href == '/' and here.startswith('/meetings'))) }}">{{ label }}</a>{% endfor %}
+  <button type="button" class="burger" aria-label="Pages and search" aria-expanded="false" aria-controls="navlinks">☰</button>
+  <div class="navlinks" id="navlinks">{% for href, label in (('/', 'Archive'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/business', 'Business'), ('/chow', 'Chow'), ('/guests', 'Guests'), ('/links', 'Links')) + (((('/meetings/' ~ live.slug, '🔴 Live meeting'),) if live else (('/console', 'Lead a meeting'),) if can_lead else ())) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href != '/' and here.startswith(href)) or (href == '/' and here.startswith('/meetings'))) }}">{{ label }}</a>{% endfor %}</div>
   <form action="/search"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}"></form>
   <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}{{ me.short or me.first }}{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
-    <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">⬆ Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/email">Email log</a><a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
+    <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">⬆️ Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/email">Email log</a><a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
     {% if is_admin %}<form method="post" action="/admin/mode"><input type="hidden" name="on" value="{{ 0 if admin_until else 1 }}"><input type="hidden" name="next" value="{{ request.url.path }}">
       <button type="submit"><span class="ico">🛡️</span>{{ 'Turn off admin mode' if admin_until else 'Turn on admin mode' }}</button></form>{% endif %}
     <div class="sep"></div>
@@ -39,6 +41,9 @@ document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener
   markTheme();
 }));
 markTheme();
+// phones: the ☰ button shows the page links and search
+document.querySelector("nav.top .burger")?.addEventListener("click", (e) => {
+  const nav = e.currentTarget.closest("nav"); e.currentTarget.setAttribute("aria-expanded", nav.classList.toggle("open")); });
 // close the name menu when clicking elsewhere
 document.addEventListener("click", (e) => document.querySelectorAll("details.menu[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
 </script>

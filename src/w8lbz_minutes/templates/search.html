@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% block body %}
 <h1>Search{% if q %}: “{{ q }}”{% endif %}</h1>
+<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
 {% if q %}<p class="muted">{{ results|length }} result{{ 's' if results|length != 1 }}{% if results|length == 100 %} (showing first 100){% endif %}</p>{% endif %}
 <ul class="results">{% for r in results %}
 <li><a href="/meetings/{{ r.slug }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>

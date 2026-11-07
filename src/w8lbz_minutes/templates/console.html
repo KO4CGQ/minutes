@@ -5,7 +5,7 @@
   Led by <select id="leader">{% for id in leaders %}<option value="{{ id }}" {{ 'selected' if id == m.leader }}>{{ club.name(id) }}</option>{% endfor %}</select>
   <button type="button" class="share" id="share" data-path="/meetings/{{ m.slug }}"
     title="Members can follow along live at this link: the minutes on it update every few seconds as you take them. Paste it in the Teams chat. They sign in like they do for the archive. Click to copy.">🔗 Share live view</button>
-  <a class="muted small" href="/meetings/{{ m.slug }}" target="_blank" title="Open the live view in a new tab">open ↗</a></div>
+  <a class="muted small" href="/meetings/{{ m.slug }}" target="_blank" title="Open the live view in a new tab">open ↗️</a></div>
   <div id="saved" class="saved">Saved</div>
 </div>
 <nav id="steps" class="steps"></nav>
@@ -22,7 +22,7 @@ document.getElementById("share").addEventListener("click", async (e) => {
   const b = e.currentTarget, url = location.origin + b.dataset.path;
   try { await navigator.clipboard.writeText(url); }   // needs HTTPS; the LAN address falls back to a prompt
   catch { window.prompt("Copy this link:", url); return; }
-  const was = b.textContent; b.textContent = "✓ Link copied"; b.classList.add("ok");
+  const was = b.textContent; b.textContent = "✅ Link copied"; b.classList.add("ok");
   setTimeout(() => { b.textContent = was; b.classList.remove("ok"); }, 2000);
 });
 </script>
