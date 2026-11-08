@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, chow, console, gcal, membership, prefs, profile, updates
+from . import ai, avatars, business, calview, chow, console, gcal, membership, prefs, profile, updates
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
@@ -1339,6 +1339,82 @@ def preview_outbox():
 ICONS = ("link", "globe", "video", "chat", "mail", "phone", "document", "form", "book", "news", "calendar", "map",
          "users", "radio", "antenna", "play", "code", "cart", "money", "info", "star")  # all drawn in _icons.html
 SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "hidden": (False, False)}
+
+
+# ---------------- calendar ----------------
+
+@app.get("/calendar", response_class=HTMLResponse)
+def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", mid: str = Depends(me)):
+    """Agenda (from a day, 8 weeks) or month grid: club calendars, chow nights and birthdays."""
+    today = dt.date.today()
+    try:
+        first = dt.date.fromisoformat(month + "-01") if month else today.replace(day=1)
+        start_day = dt.date.fromisoformat(start) if start else today
+    except ValueError:
+        raise HTTPException(404)
+    if view == "month":
+        lo = first - dt.timedelta(days=(first.weekday() + 1) % 7)  # weeks start on Sunday
+        nxt = (first + dt.timedelta(days=32)).replace(day=1)
+        hi = nxt + dt.timedelta(days=(5 - nxt.weekday()) % 7)
+    else:
+        view, lo, hi = "agenda", start_day, start_day + dt.timedelta(days=55)
+    items, note = calview.entries(archive.club, archive, request.state.member, lo, hi, elevated=admin_mode(request))
+    by_day: dict[dt.date, list] = {}
+    for e in items:
+        for d in e.days(lo, hi):
+            by_day.setdefault(d, []).append(e)
+    return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note,
+                kinds=calview.KINDS, can_edit=can_lead_now(request) and bool(calview.editable(archive.club)),
+                prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
+                timedelta=dt.timedelta)
+
+
+def _calendar_editor(request: Request) -> dict:
+    if not can_lead_now(request):
+        raise HTTPException(403, "Only leaders and minutes editors can change the club calendars.")
+    cals = calview.editable(archive.club)
+    if not cals:
+        raise HTTPException(404, "The club calendars aren't set up.")
+    return cals
+
+
+@app.get("/calendar/edit", response_class=HTMLResponse)
+def calendar_edit(request: Request, cal: str = "events", id: str = "", date: str = "", error: str = "", mid: str = Depends(me)):
+    cals = _calendar_editor(request)
+    if cal not in cals:
+        raise HTTPException(404)
+    e = calview.get(archive.club, cal, id) if id else None
+    if e and e.get("extendedProperties", {}).get("private", {}).get("w8lbz") == "1":
+        raise HTTPException(409, "This event comes from the minutes' Upcoming Events; change it in the leader console.")
+    f = calview.form_values(e) if e else {"title": "", "where": "", "notes": "", "date": date, "time": "", "end_date": "", "end_time": ""}
+    return page(request, "calendar_edit.html", f=f, cal=cal, id=id, cals=cals, error=error, repeats=bool(e and e.get("recurringEventId")))
+
+
+@app.post("/calendar/save")
+async def calendar_save(request: Request, mid: str = Depends(me)):
+    cals = _calendar_editor(request)
+    form = dict((await request.form()).items())
+    cal, eid, old = form.get("cal", ""), form.get("id", ""), form.get("old_cal", "")
+    if cal not in cals or (old and old not in cals):
+        raise HTTPException(404)
+    try:
+        b = calview.save(archive.club, cal, eid or None, form, by=mid, old_kind=old or None)
+    except ValueError as e:
+        return RedirectResponse(f"/calendar/edit?cal={quote(cal)}&id={quote(eid)}&error=" + quote(str(e)), status_code=303)
+    except Exception as e:  # Google said no (permissions, a deleted event): keep what was typed in the log, say why
+        _log.exception("calendar save failed")
+        return RedirectResponse(f"/calendar/edit?cal={quote(cal)}&id={quote(eid)}&error=" + quote(f"Google Calendar didn't accept the change ({e}).")[:1500], status_code=303)
+    day = (b["start"].get("date") or b["start"]["dateTime"])[:10]
+    return RedirectResponse(f"/calendar?start={day}", status_code=303)
+
+
+@app.post("/calendar/delete")
+def calendar_delete(request: Request, cal: str = Form(...), id: str = Form(...), mid: str = Depends(me)):
+    cals = _calendar_editor(request)
+    if cal not in cals:
+        raise HTTPException(404)
+    calview.delete(archive.club, cal, id, by=mid)
+    return RedirectResponse("/calendar", status_code=303)
 
 
 @app.get("/links", response_class=HTMLResponse)

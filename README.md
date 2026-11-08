@@ -112,12 +112,14 @@ In admin mode, a member's page has **View the app as …**: the app as that memb
 The app keeps two Google Calendars current: **Chow** (each chow night at the meeting time, so swaps show up by themselves) and the club's **events** calendar, usually the club account's main public calendar (each Upcoming Event with a date: all day, a time range, or several days; a start time with no end is taken as 2 hours). It syncs a little after any change in the console or to chow, and again in the daily `reminders` run. It only creates, changes or deletes events it made itself, and only from today on, so events added by hand and past events are left alone. If someone already added an event by hand with the same title on the same day, the app doesn't add a second copy.
 
 To turn it on:
-1. In Google Calendar, share each calendar with the service account's email (the `client_email` in `private/google-service-account.json`) with **Make changes to events**.
+1. In Google Calendar, share each calendar (chow, the club's events calendar, Planning, Community) with the service account's email (the `client_email` in `private/google-service-account.json`) with **Make changes to events**.
 2. In club.yaml, under `club:`, add `timezone:` and `calendars:` with each calendar's ID (Settings → the calendar → Integrate calendar → Calendar ID; an account's main calendar has the account's email address as its ID); see `club.example.yaml`.
    Once the chow calendar syncs, delete any chow nights from today on that were entered there by hand, or they'll show twice.
 3. Restart the app. The Security page's **Server** tab shows the last sync, or why it failed.
 
-Previews never sync.
+**Calendar page** (`/calendar`, in the menu): every member sees an agenda (the next 8 weeks) or a month grid with the club events, Planning and Community calendars read from Google, chow nights, and birthdays (those a member shares; officers see all). Leaders and minutes editors (and admins in admin mode) can **add, change and delete** events on the club events, Planning and Community calendars there, so nobody else needs the club's Google account. Changes go straight to Google and are logged in `calendar-log.jsonl`. Events that came from the minutes are changed in the leader console instead. Before the calendars are set up, the page shows the weekly meeting, the minutes' dated events, chow and birthdays.
+
+Previews never sync, and their Calendar page doesn't read or edit Google.
 
 ## Chow schedule
 `/chow` is the chow list; the app is the source of truth (state in `chow.json`, every change in `chow-log.jsonl`, both in the data directory).

@@ -35,6 +35,14 @@ def _timed(start: dt.datetime, hours: float, tz: str) -> dict:
             "end": {"dateTime": (start + dt.timedelta(hours=hours)).isoformat(timespec="seconds"), "timeZone": tz}}
 
 
+def times(e, tz: str) -> dict:
+    """Google's start and end for an Item with a `when` (and maybe `until`)."""
+    start, end, all_day = e.span()
+    if all_day:  # Google's all-day end is the day after the last day
+        return {"start": {"date": start.date().isoformat()}, "end": {"date": (end.date() + dt.timedelta(days=1)).isoformat()}}
+    return _timed(start, (end - start).total_seconds() / 3600, tz)
+
+
 def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict]]:
     """Calendar kind -> {key: event} for everything from today on: chow nights and dated Upcoming Events."""
     tz = str(club.info.get("timezone", "America/New_York"))
@@ -49,12 +57,7 @@ def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict
     for e in events:
         if not e.when or (e.until or e.when)[:10] < today.isoformat():
             continue
-        start, end, all_day = e.span()
-        if all_day:  # Google's all-day end is the day after the last day
-            when = {"start": {"date": start.date().isoformat()}, "end": {"date": (end.date() + dt.timedelta(days=1)).isoformat()}}
-        else:
-            when = _timed(start, (end - start).total_seconds() / 3600, tz)
-        out["events"][f"event:{e.when}:{e.text[:60]}"] = {"summary": e.text, **when}
+        out["events"][f"event:{e.when}:{e.text[:60]}"] = {"summary": e.text, **times(e, tz)}
     return out
 
 

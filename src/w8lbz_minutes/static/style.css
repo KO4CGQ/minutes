@@ -407,3 +407,23 @@ ul.checklist { list-style: none; padding: 0; margin: .3rem 0; } ul.checklist li 
 ul.checklist li::before { content: ""; position: absolute; left: 0; top: .55rem; width: 1rem; height: 1rem; border: 2px solid var(--border-strong); border-radius: .25rem; }
 ul.checklist li.late::before { border-color: var(--danger); }
 form.linkedit table.list { overflow: visible; }
+/* calendar page */
+.callegend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .85rem; color: var(--muted); }
+.callegend span { display: inline-flex; align-items: center; gap: .3rem; }
+.dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; flex: none; margin-right: .35rem; vertical-align: middle; }
+.k-events { background: var(--accent); } .k-chow { background: #d9932b; } .k-planning { background: #7b4fb0; }
+.k-community { background: #2f7fc1; } .k-birthday { background: #d24f86; }
+h2.calday { font-size: 1rem; margin: 1.1rem 0 .3rem; color: var(--accent-text); }
+ul.agenda { list-style: none; padding: 0; margin: 0; } ul.agenda li { padding: .45rem 0; border-bottom: 1px solid var(--border); }
+.caltime { font-variant-numeric: tabular-nums; color: var(--muted); }
+table.month { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+table.month th { font-size: .75rem; color: var(--muted); padding: .3rem; font-weight: 600; }
+table.month td { border: 1px solid var(--border); vertical-align: top; height: 5.5rem; padding: .2rem .25rem; overflow: hidden; }
+table.month td.other { background: var(--surface-2); color: var(--faint); } table.month td.today .daynum { background: var(--accent); color: #fff; }
+table.month .daynum { display: inline-block; min-width: 1.5rem; text-align: center; border-radius: 1rem; font-size: .85rem; text-decoration: none; }
+table.month ul { list-style: none; padding: 0; margin: .15rem 0 0; font-size: .75rem; line-height: 1.25; }
+table.month li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) {  /* phones: a dot per event; tap the day for the details */
+  table.month td { height: 3.4rem; padding: .15rem; } table.month li { display: inline; } table.month .caltime, table.month .caltitle, table.month li.more { display: none; }
+  table.month .dot { margin-right: .1rem; }
+}

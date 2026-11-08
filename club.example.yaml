@@ -8,10 +8,12 @@ club:
   meeting_time: "19:30"     # 24-hour; the "Start meeting" button pulses from 30 minutes before
   invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit
   timezone: America/New_York  # for the club calendars
-  calendars:               # optional: Google Calendar IDs the app keeps current (share each with the service account,
-                           # "Make changes to events"; the app only touches events it created)
-    chow: abc123@group.calendar.google.com     # each chow night, at the meeting time
-    events: def456@group.calendar.google.com   # Upcoming Events that have a date
+  calendars:               # optional: Google Calendar IDs (share each with the service account, "Make changes to events")
+    chow: abc123@group.calendar.google.com     # kept current by the app: each chow night, at the meeting time
+    events: club@example.org                   # the club's own events (an account's main calendar: its address);
+                                               # dated Upcoming Events are added here; leaders edit it on the Calendar page
+    planning: def456@group.calendar.google.com   # officers' dates (the annual meeting); shown and edited on the Calendar page
+    community: ghi789@group.calendar.google.com  # what's on in the area; shown and edited on the Calendar page
   remind_days_before: 3    # business item owners get an email this many days before the due date (and once if overdue)
   date_formats:          # strftime codes; %-d = day without leading zero
     list: "%b %-d, %Y"    # tables, e.g. Nov 5, 2026

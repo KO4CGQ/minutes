@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block title %}Calendar{% endblock %}{% block body %}
+<div class="headrow"><h1>Calendar</h1>{% if can_edit %}<a class="btn small" href="/calendar/edit">+ Add an event</a>{% endif %}</div>
+<nav class="tabs" aria-label="View">{% for v, label in (('agenda', 'Agenda'), ('month', 'Month')) %}<a href="/calendar?view={{ v }}{% if v == 'month' %}&month={{ first.strftime('%Y-%m') }}{% endif %}" class="{{ 'on' if view == v }}"{% if view == v %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+<p class="callegend">{% for k, label in kinds.items() %}<span><i class="dot k-{{ k }}"></i>{{ label }}</span>{% endfor %}</p>
+{% if note %}<p class="msg err">{{ note }}</p>{% endif %}
+
+{% macro item(e, d) %}<i class="dot k-{{ e.kind }}"></i>{% if e.time and d == e.start %}<span class="caltime">{{ e.time }}</span> {% endif %}<span class="caltitle">{{ e.title }}</span>{% endmacro %}
+
+{% if view == 'agenda' %}
+{% set days = by_day|dictsort %}
+{% for d, es in days %}<h2 class="calday" id="d{{ d }}">{{ 'Today' if d == today else d.strftime('%A, %B %-d') }}</h2>
+<ul class="agenda">{% for e in es %}<li>{{ item(e, d) }}
+  {% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}
+  {% if e.where %}<span class="muted small"> · {{ e.where }}</span>{% endif %}
+  {% if can_edit and e.id and e.kind in ('events', 'planning', 'community') %}{% if e.from_minutes %}<span class="muted small"> · from the minutes</span>{% else %} <a class="small" href="/calendar/edit?cal={{ e.kind }}&id={{ e.id }}">Edit</a>{% endif %}{% endif %}</li>{% endfor %}</ul>
+{% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
+<p class="row">{% if lo != today %}<a class="btn small ghost" href="/calendar">Back to today</a>{% endif %}<a class="btn small ghost" href="/calendar?start={{ hi + timedelta(days=1) }}">Later →</a></p>
+
+{% else %}
+<div class="headrow"><h2>{{ first.strftime('%B %Y') }}</h2><p class="row"><a class="btn small ghost" href="/calendar?view=month&month={{ prev_month }}" aria-label="Previous month">←</a>
+<a class="btn small ghost" href="/calendar?view=month">Today</a><a class="btn small ghost" href="/calendar?view=month&month={{ next_month }}" aria-label="Next month">→</a></p></div>
+<table class="month"><thead><tr>{% for n in ('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat') %}<th>{{ n }}</th>{% endfor %}</tr></thead><tbody>
+{% set ns = namespace(d=lo) %}{% for w in range(((hi - lo).days + 1) // 7) %}<tr>{% for i in range(7) %}{% set d = ns.d %}
+<td class="{{ 'other' if d.month != first.month }}{{ ' today' if d == today }}"><a class="daynum" href="/calendar?start={{ d }}" aria-label="{{ d.strftime('%A, %B %-d') }}">{{ d.day }}</a>
+{% set es = by_day.get(d, []) %}{% if es %}<ul>{% for e in es[:3] %}<li title="{{ e.time ~ ' ' if e.time }}{{ e.title }}">{{ item(e, d) }}</li>{% endfor %}{% if es|length > 3 %}<li class="more"><a href="/calendar?start={{ d }}">+{{ es|length - 3 }} more</a></li>{% endif %}</ul>{% endif %}</td>
+{% set ns.d = d + timedelta(days=1) %}{% endfor %}</tr>{% endfor %}
+</tbody></table>
+<p class="muted small">Tap a day to see it in the agenda.</p>
+{% endif %}
+{% endblock %}
