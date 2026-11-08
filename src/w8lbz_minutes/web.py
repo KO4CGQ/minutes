@@ -1387,7 +1387,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
 
 def _feed_url(request: Request, path: str) -> str:
     """The feed's address on the app's HTTPS name, which calendar services (Google, Outlook) can reach."""
-    return f"https://{authn.rp_id}{path}" if authn.rp_id else str(request.base_url).rstrip("/") + path
+    return f"https://{authn.rp_id}{path}" if authn.rp_id and not PREVIEW else str(request.base_url).rstrip("/") + path
 
 
 @app.get("/calendar/subscribe", response_class=HTMLResponse)
