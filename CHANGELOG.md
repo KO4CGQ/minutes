@@ -14,6 +14,8 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Meeting-day email** (on by default, can be turned off): the morning of each meeting, the time, "you're bringing chow tonight" when you are, the business you're looking after, upcoming events and a link to last meeting's minutes. The daily `reminders` run (already on a timer) sends it along with chow reminders, never twice in one day.
 - **One preview for ongoing work:** `deploy/preview.sh BRANCH NAME` keeps one address (NAME) while it moves between branches.
 - **Birthday, month only:** on Your profile you can give just the month of your birthday (the day is optional). It shows as "July", and is saved to the roster sheet as `07`.
+- **Leader console, business items:** with no due date, an item shows a **+ Due date** button that opens the date picker. An empty date box was easy to miss, especially on phones. "since Nov 5" now reads "first mentioned Nov 5", in the console and on the Business page.
+- **Motions:** **+ Motion** opens a short form: who moved it (pick a member), what it was, who seconded it, and the result (Passed, Failed, Tabled, Withdrawn or Died for lack of a second). There's no default result, so it can't be recorded as passed by accident. It adds "Motion: Bob Baker moved to buy a new antenna, seconded by Amy Able. Passed." as a New Business item, as before.
 - **Links editor on phones:** each link is its own spaced card, and saved links start folded to their name (⋯ opens one).
 
 ## 0.9.1 (2026-11-08)

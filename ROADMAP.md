@@ -15,6 +15,8 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
+- **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below).
+- **Motions as records:** keep a motion's mover, seconder and result as data, not just text, so bylaws amendments and spending can be traced to the motion that approved them (see Bylaws).
 
 ## Look and feel: ideas to consider
 - **Unified search:** one search box for minutes, members (name, callsign), business items and chow nights, with results grouped by kind. Minutes already have full-text search; the others are small lists, so this is a modest change.
@@ -31,7 +33,7 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 
 ## Club calendars
 The club's Google calendars ("Meetings & Events", "Chow", "Community Events", "Planning") aren't relied on yet; the app keeping them current would make them something members can trust.
-- **Meetings & Events:** the weekly meeting, plus dated club events from Upcoming Events.
+- **Meetings & Events:** the weekly meeting, plus dated club events from Upcoming Events. This needs Upcoming Events entered with real fields (date, time, place, title) in the console instead of free text, kept as data from week to week like business items.
 - **Chow:** written by the chow module (see above).
 - **Planning:** due dates of tracked business items.
 - **Community Events:** non-club happenings in the area; the app could show them, edited in Google Calendar.

@@ -282,10 +282,8 @@
     const arr = (M.sections[sec] || []).map((i) => i.text);
     const set = (a) => { M.sections[sec] = a.map((t) => ({ text: t, member: null })); };
     const rows = itemRows(arr, set);
-    const motion = sec === "New Business" || sec === "Old Business" ? h("button", { class: "btn small ghost", onclick: () => {
-      arr.push("Motion: ___ moved to ___, seconded by ___. Passed."); set(arr); render(); save(); } }, "+ Motion") : null;
     const hint = [HINTS[sec], EMPTY_NOTE].filter(Boolean).join(" ");
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), rows, motion);
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), rows);
   }
 
   // ---------- business: tracked items (business.py); every change is saved on the server at once ----------
@@ -310,24 +308,47 @@
         value: x.owner ? (people[x.owner]?.name || "") : "", class: "ownerbox",
         onchange: (e) => send(`/business/${x.id}/edit`, { owner: e.target.value.trim() }) }),
         D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), { empty: "(no owner)" });
-      const due = h("input", { type: "date", value: x.due || "", title: "Due date",
+      // An empty date box looks like nothing at all on some phones, so until there's a date it's a button.
+      const dateBox = h("input", { type: "date", value: x.due || "", "aria-label": "Due date",
         onchange: (e) => send(`/business/${x.id}/edit`, { due: e.target.value }) });
+      const due = x.due ? h("label", { class: "due" }, "Due ", dateBox) : h("button", { class: "btn small ghost", type: "button",
+        onclick: (e) => { const l = h("label", { class: "due" }, "Due ", dateBox); e.target.replaceWith(l); dateBox.focus();
+          try { dateBox.showPicker(); } catch (_) { /* older browsers: the focused box is enough */ } } }, "+ Due date");
       return h("div", { class: "bizitem" + (done ? " done" : "") + (x.overdue ? " overdue" : "") },
         h("div", { class: "row" }, ta,
           h("button", { class: "btn small" + (done ? "" : " ghost"), title: done ? "Not done after all" : "Mark done",
             onclick: () => send(`/business/${x.id}/done`, { done: done ? 0 : 1 }) }, done ? "✅ Done" : "Done"),
           isNew ? h("button", { class: "btn small ghost", title: "Delete (added by mistake)",
             onclick: () => { if (confirm("Delete this item?")) send(`/business/${x.id}/delete`, {}); } }, "✖️") : null),
-        h("div", { class: "row meta" }, owner, " due ", due,
+        h("div", { class: "row meta" }, owner, due,
           x.overdue ? h("span", { class: "badge warn" }, `overdue since ${fmtDate(x.due)}`) : null,
-          !isNew ? h("span", { class: "hint" }, ` since ${fmtDate(x.opened)}`) : null),
+          !isNew ? h("span", { class: "hint" }, `first mentioned ${fmtDate(x.opened)}`) : null),
         (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, `${c.name}: `), c.text)));
     };
     const add = () => {
       const ta = h("textarea", { rows: 1, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });
       const go = () => { if (ta.value.trim()) send("/business/add", { text: ta.value }); };
       return h("div", {}, h("div", { class: "row" }, ta, h("button", { class: "btn small", onclick: go }, "+ Add item")),
-        h("button", { class: "btn small ghost", onclick: () => { ta.value = "Motion: ___ moved to ___, seconded by ___. Passed."; ta.focus(); grow(ta); } }, "+ Motion"));
+        h("button", { class: "btn small ghost", onclick: (e) => e.target.replaceWith(motionForm()) }, "+ Motion"));
+    };
+    // A motion: who moved it, what, who seconded, and how it went (no default: the leader picks the result).
+    const motionForm = () => {
+      const person = (label) => makeCombo(h("input", { placeholder: label, "aria-label": label, class: "ownerbox" }),
+        D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), { empty: "(nobody)" });
+      const mover = person("Moved by"), second = person("Seconded by");
+      const what = h("textarea", { rows: 1, placeholder: "buy a new antenna for the repeater", "aria-label": "Moved to", oninput: (e) => grow(e.target) });
+      const result = h("select", { "aria-label": "Result" }, ["", "Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second"]
+        .map((v) => h("option", { value: v }, v || "Result…")));
+      const val = (w) => w.querySelector("input").value.trim();
+      const go = () => {
+        if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
+        const r = result.value, s = val(second);
+        send("/business/add", { text: `Motion: ${val(mover)} moved to ${what.value.trim().replace(/^to\s+/i, "").replace(/\.$/, "")}` +
+          (s ? `, seconded by ${s}. ${r}.` : r.startsWith("Died") ? `. The motion died for lack of a second.` : `. ${r}.`) });
+      };
+      return h("div", { class: "bizitem motion" }, h("b", {}, "Motion"),
+        h("div", { class: "row" }, mover, h("span", {}, "moved to")), what,
+        h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
     };
     const draw = () => {
       const items = isNew ? D.business.new : D.business.old;
