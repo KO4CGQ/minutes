@@ -357,6 +357,14 @@ def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
     fd = next(x for x in got if x.title == "Field Day")
     assert (fd.starts, fd.ends) == (dt.datetime(2027, 6, 26, 14, 0), dt.datetime(2027, 6, 27, 16, 59)) and fd.time == "2:00 PM"
     assert fd.zone == "Sat Jun 26 18:00 – Sun Jun 27 20:59 UTC"
+    with events.locked():  # one date retyped in club time: kept in the series' zone (UTC), so it lands where it was typed
+        evs = events.load()
+        one = {**v, "start": "2027-06-26T13:00", "end": "2027-06-27T16:59", "tz": None, "repeat": None}
+        events.change(evs, evs[0]["id"], "2027-06-26", "events", one, "this", TZ)
+        events.save(evs)
+    assert evs[0]["changes"]["2027-06-26"]["start"] == "2027-06-26T17:00" and evs[0]["tz"] == "UTC"
+    fd = next(x for x in calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))[0] if x.title == "Field Day")
+    assert fd.starts == dt.datetime(2027, 6, 26, 13, 0)
     # late UTC on the last day of the range is still that day in club time
     late = events.add([], "events", events.from_form({"title": "Late", "date": "2027-07-01", "time": "01:00", "tz": "UTC"}, TZ), "x")
     with events.locked():
@@ -374,7 +382,7 @@ def test_search_finds_calendar_events_and_the_agenda_can_show_more_weeks(tmp_pat
         events.save(evs)
     (tmp_path / "meetings").mkdir()
     monkeypatch.setattr(web, "archive", Archive(tmp_path / "meetings", club()))
-    m, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    m, *_ = signed_in(tmp_path, monkeypatch, "kd8bbb")
     found = m.get("/search?q=city+PARK").text
     assert "Fox hunt" in found and f"/calendar?start={today + dt.timedelta(days=80)}" in found
     assert "Fox hunt" not in m.get("/search?q=park+bench").text
@@ -387,12 +395,14 @@ def test_imported_minutes_offer_the_original_and_new_ones_the_pdf(tmp_path, monk
     from w8lbz_minutes import web
     root = tmp_path / "meetings"
     old = Meeting(date=dt.date(2025, 3, 6), status="published", source="6-mar-25-minutes.pdf")
+    fixed = Meeting(date=dt.date(2025, 3, 13), status="published", source="13-mar-25-minutes-CORRECTED.txt")  # no original PDF
     new = Meeting(date=dt.date(2026, 11, 5), status="published")
-    old.save(root), new.save(root)
+    old.save(root), new.save(root), fixed.save(root)
     (root / old.slug / "original.pdf").write_bytes(b"%PDF")
     (root / new.slug / "original.pdf").write_bytes(b"%PDF")  # a stray file doesn't make it "imported"
-    m, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    m, c, _ = signed_in(tmp_path, monkeypatch, "kd8bbb")
     monkeypatch.setattr(web, "archive", Archive(root, c))
     o, n = m.get(f"/meetings/{old.slug}").text, m.get(f"/meetings/{new.slug}").text
     assert "View original" in o and "Download PDF" not in o
     assert "View original" not in n and "Download PDF" in n
+    assert "Download PDF" in m.get(f"/meetings/{fixed.slug}").text  # imported, but no original to show: the PDF instead

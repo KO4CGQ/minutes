@@ -5,10 +5,10 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
-- **Event time zones:** a timed event can be kept in another time zone (the club's, from club.yaml, by default). Field Day, for example, is 1800 UTC Saturday to 2059 UTC Sunday: the calendar shows it in club time, and the event's details also give the UTC times. The feeds and Google get club time.
+- **Event time zones:** a timed event can be kept in another time zone (the club's, from club.yaml, by default). Field Day, for example, is 1800 UTC Saturday to 2059 UTC Sunday: the calendar shows it in club time, and the event's details also give the UTC times. The feeds and Google get club time. Changing one date of a repeating event in another zone keeps it at the time typed.
 - **Search finds calendar events:** the search box looks through calendar events (title, place, notes) as well as the minutes. Matching events are listed first, each with its next date, linked to that day in the agenda.
 - **Longer agenda:** the agenda shows 8 weeks by default; **Show** can switch it to 3 months, 6 months or a year.
-- **Minutes buttons:** minutes imported from before the app have **View original** and no Download PDF. Minutes made in the app have **Download PDF** and never View original.
+- **Minutes buttons:** one or the other. Minutes imported with their original PDF have **View original**. All others have **Download PDF**: minutes made in the app, and corrected minutes imported from text.
 - **Console reminder:** when Club events is a public calendar, the Upcoming Events step says dated events are public too, so members-only details stay out of them.
 - **Docs:** how to release a stack of PRs (README), and backups on the roadmap.
 
