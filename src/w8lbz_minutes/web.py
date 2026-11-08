@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import threading
+import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
 from urllib.parse import quote
@@ -1190,17 +1191,26 @@ def _security_admin(request: Request) -> str:
     return mid
 
 
+SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
+                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
+
+
 @app.get("/admin/security", response_class=HTMLResponse)
-def security_page(request: Request, mid: str = Depends(real_me)):
+@app.get("/admin/security/{tab}", response_class=HTMLResponse)
+def security_page(request: Request, tab: str = "signins", mid: str = Depends(real_me)):
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
     if not admin_mode(request):
-        return RedirectResponse("/admin/confirm?next=/admin/security", status_code=303)
+        return RedirectResponse(f"/admin/confirm?next=/admin/security/{quote(tab)}", status_code=303)
+    if tab not in dict(SECURITY_TABS):
+        raise HTTPException(404)
     p = DATA / "admin-log.jsonl"
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
     roster = DATA / "roster.json"
-    return page(request, "security.html", signins=authn.signins(100), events=authn.events(100), bans=authn.bans(),
+    events = authn.events(100)
+    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS,
+                failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
                 test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
@@ -1218,7 +1228,7 @@ def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), re
         raise HTTPException(400, "That's the address you're using (or this server); banning it would lock you out.")
     authn.ban(ip, hours or None, reason or "banned by an admin", mid)
     _admin_log(request, ban=ip, hours=hours or None)
-    return RedirectResponse("/admin/security#bans", status_code=303)
+    return RedirectResponse("/admin/security/bans", status_code=303)
 
 
 @app.post("/admin/security/unban")
@@ -1226,7 +1236,7 @@ def security_unban(request: Request, ip: str = Form(...)):
     _security_admin(request)
     authn.unban(ip)
     _admin_log(request, unban=ip)
-    return RedirectResponse("/admin/security#bans", status_code=303)
+    return RedirectResponse("/admin/security/bans", status_code=303)
 
 
 @app.post("/admin/security/signout")
@@ -1234,7 +1244,7 @@ def security_signout(request: Request, session: int = Form(...)):
     _security_admin(request)
     who = authn.end_session_id(session)
     _admin_log(request, signed_out=who)
-    return RedirectResponse("/admin/security#sessions", status_code=303)
+    return RedirectResponse("/admin/security/devices", status_code=303)
 
 
 @app.get("/preview/outbox")

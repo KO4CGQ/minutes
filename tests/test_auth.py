@@ -171,3 +171,25 @@ def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, mo
     assert web.device("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36") == "Chrome on Windows"
     assert [web.where(x) for x in ("9.9.9.9", "192.168.23.5", "100.81.37.6", "127.0.0.1")] == \
         ["internet", "LAN", "tailnet", "this server"]
+
+
+def test_security_page_tabs(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])
+    club.admins = {"kd8adm"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tok = a.new_session("kd8adm", "Mozilla/5.0 (Windows NT 10.0) Chrome/130.0", "192.168.23.10", "passkey")
+    a.set_admin(tok, 60)
+    a.ban("9.9.9.9", 24, "test", "automatic")
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, tok)
+    assert "Chrome on Windows" in c.get("/admin/security").text
+    for t in ("devices", "failed", "bans", "admin", "server"):
+        assert c.get(f"/admin/security/{t}").status_code == 200
+    assert "9.9.9.9" in c.get("/admin/security/bans").text and "9.9.9.9" not in c.get("/admin/security/server").text
+    assert c.get("/admin/security/nope").status_code == 404
+    r = c.post("/admin/security/unban", data={"ip": "9.9.9.9"}, follow_redirects=False)
+    assert r.headers["location"] == "/admin/security/bans" and not a.banned("9.9.9.9")
