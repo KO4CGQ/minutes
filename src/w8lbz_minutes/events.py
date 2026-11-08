@@ -55,6 +55,30 @@ def save(evs: list[dict]) -> None:
     tmp.replace(_path())
 
 
+def ensure_meeting(club) -> None:
+    """Put the weekly meeting on the Club events calendar once (club.meeting_day and meeting_time), as a real
+    repeating event leaders can change: skip a holiday, move a date. Not again if a leader deletes it."""
+    marker = DATA / "events-meeting-added"
+    if marker.exists():
+        return
+    with locked():
+        if marker.exists():
+            return
+        from .chow import WEEKDAYS
+        wd = WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
+        today = dt.date.today()
+        first = today + dt.timedelta(days=(wd - today.weekday()) % 7)
+        at = str(club.info.get("meeting_time", "19:30"))
+        start = dt.datetime.fromisoformat(f"{first}T{at}")
+        evs = load()
+        e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": "", "notes": "",
+                                "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
+                                "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, "the app")
+        e["meeting"] = True
+        save(evs)
+        marker.write_text(e["id"])
+
+
 def get(evs: list[dict], eid: str) -> dict:
     e = next((x for x in evs if x["id"] == eid), None)
     if not e:

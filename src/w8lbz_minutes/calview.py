@@ -90,6 +90,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     """Everything between lo and hi (inclusive), sorted. public: only the public calendars, no chow or birthdays.
     (The second value is kept for callers that show a note; with no outside calendar to reach, there's none.)"""
     out: list[Entry] = []
+    store.ensure_meeting(club)
     kinds = public_kinds(club) if public else list(store.CALS)
     for e in store.load():
         if e["cal"] not in kinds:

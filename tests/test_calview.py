@@ -302,3 +302,18 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     assert "From the last minutes" in coming and "Winter Field Day coming in Jan" in coming  # undated, as written
     sub = m.get("/calendar/subscribe").text
     assert calview.feed_token("kd8bbb") in sub and "/calendar/public.ics" in sub
+
+
+def test_the_weekly_meeting_is_on_the_calendar_from_the_start(tmp_path):
+    (events.DATA / "events-meeting-added").unlink()
+    c = club()
+    c.info.update(meeting_day="Thursday", meeting_time="19:30")
+    today = dt.date.today()
+    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", today, today + dt.timedelta(days=20))
+    meets = [e for e in got if e.title == "W0TST meeting"]
+    assert len(meets) == 3 and all(e.start.weekday() == 3 and e.time == "7:30 PM" for e in meets) and meets[0].repeats
+    with events.locked():  # a leader deletes it: it isn't put back
+        evs = events.load()
+        events.delete(evs, evs[0]["id"], None)
+        events.save(evs)
+    assert not any(e.title == "W0TST meeting" for e in calview.entries(c, Archive(tmp_path, c), "kd8bbb", today, today + dt.timedelta(days=20))[0])

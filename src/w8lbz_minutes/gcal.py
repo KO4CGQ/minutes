@@ -59,6 +59,7 @@ def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict
         out["chow"][f"chow:{date}"] = {"summary": f"Chow: {who}",
                                        **_timed(dt.datetime.combine(dt.date.fromisoformat(date), at), EVENT_HOURS, tz)}
     seen = set()
+    store.ensure_meeting(club)
     for e in store.load():
         for d in store.dates(e, today, today + dt.timedelta(days=365)):
             o = store.occurrence(e, d)

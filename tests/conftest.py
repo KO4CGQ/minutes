@@ -33,6 +33,7 @@ def fresh_events(tmp_path, monkeypatch):
     from w8lbz_minutes import events
     d = tmp_path / "events-data"
     d.mkdir()
+    (d / "events-meeting-added").write_text("")  # tests add the weekly meeting themselves when they want it
     monkeypatch.setattr(events, "DATA", d)
 
 
