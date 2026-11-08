@@ -83,3 +83,15 @@ def test_roster_card_view_is_remembered(env, tmp_path, monkeypatch):
     assert 'class="membercard"' in page and "Secretary" in page and '<table class="list">' not in page
     assert 'class="membercard"' in c.get("/roster").text                            # remembered
     assert '<table class="list">' in c.get("/roster?view=list").text
+
+
+def test_transparency_kept(env):
+    img, out = Image.new("RGBA", (300, 300), (0, 0, 0, 0)), io.BytesIO()
+    img.save(out, "PNG")
+    avatars.save("amy", out.getvalue())
+    got = Image.open(avatars.path("amy"))
+    assert got.format == "PNG" and got.mode == "RGBA" and got.getpixel((5, 5))[3] == 0
+    assert avatars.url("amy").startswith("/avatars/amy.png?v=")
+    avatars.save("amy", photo())  # a JPEG replaces the PNG
+    assert avatars.path("amy").suffix == ".jpg" and not (env / "avatars" / "amy.png").exists()
+    assert avatars.remove("amy") and avatars.url("amy") is None

@@ -180,6 +180,9 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         "club": archive.club,
         "me": archive.club.members.get(mid) if mid else None,
         "can_lead": (archive.club.can_lead(mid) or admin_mode(request)) if mid else False,
+        # JS weekday (0 = Sunday) and time of the weekly meeting, for the "Start meeting" button
+        "meeting_at": f"{(chow.WEEKDAYS.index(str(archive.club.info.get('meeting_day', 'Thursday')).lower()) + 1) % 7} "
+                      f"{archive.club.info.get('meeting_time', '19:30')}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
@@ -236,6 +239,11 @@ def get_meeting(slug: str):
 
 
 # ---------------- login & account ----------------
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return RedirectResponse("/static/favicon.png", status_code=301)  # browsers ask for it regardless of <link rel=icon>
+
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""):
@@ -807,10 +815,11 @@ def member_photo_remove(request: Request, who: str, mid: str = Depends(officer))
 @app.get("/avatars/{name}")
 def avatar_file(name: str, mid: str = Depends(me)):
     """Pictures are for signed-in members only; the address changes with the picture, so cache it."""
-    who = name.removesuffix(".jpg")
-    if who not in archive.club.members or not avatars.path(who).exists():
+    who = name.rsplit(".", 1)[0]
+    f = avatars.path(who) if who in archive.club.members else None
+    if not f or not f.exists():
         raise HTTPException(404)
-    return FileResponse(avatars.path(who), media_type="image/jpeg",
+    return FileResponse(f, media_type="image/png" if f.suffix == ".png" else "image/jpeg",
                         headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
@@ -989,6 +998,26 @@ def by_period(period: str) -> tuple[list, str, str]:
 
 
 @app.get("/", response_class=HTMLResponse)
+def home(request: Request, mid: str = Depends(me)):
+    """What's next for this member: the next meeting, their chow night, their business items, the latest minutes."""
+    if request.url.query:  # old bookmarks of the archive (/?period=...)
+        return RedirectResponse(f"/minutes?{request.url.query}", status_code=301)
+    club, today = archive.club, dt.date.today()
+    nights = chow.meeting_nights(club, today, today + dt.timedelta(days=7))
+    s = chow.load()
+    upcoming = chow.upcoming(s, n=60)
+    latest = next((m for m in archive.meetings if m.status != "draft"), None)  # newest first
+    items = [business.view(club, x, today.isoformat()) for x in business.load()["items"]
+             if x["status"] == "open" and x.get("owner") == mid]
+    return page(request, "home.html", next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+                my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
+                swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
+                items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest,
+                today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
+                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
+
+
+@app.get("/minutes", response_class=HTMLResponse)
 def index(request: Request, period: str = "", p: str = Query("1", alias="page"), per: str = ""):
     """Meetings newest first, a page at a time, for a period (this year by default)."""
     ms, period, label = by_period(period)
@@ -1087,13 +1116,16 @@ def bylaws(request: Request):
     return page(request, "bylaws.html", html=html)
 
 
-LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"),
+LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"), ("mailto:", "mail"),
+              ("tel:", "phone"), ("youtube.", "play"), ("youtu.be", "play"), ("github.", "code"), ("maps.", "map"),
+              ("/maps", "map"), ("qrz.com", "antenna"), ("repeaterbook.", "antenna"), ("arrl.org", "radio"),
+              ("facebook.", "users"), ("groups.io", "users"), ("amazon.", "cart"), ("forms.", "form"),
               ("/bylaws", "document"), ("docs.google.", "document"), (".pdf", "document"), ("calendar", "calendar"))
 
 
 def link_icon(url: str) -> str:
-    """Icon name for a club link, guessed from its address. In club.yaml a link can set `icon:` to one of
-    video, chat, globe, document, radio, calendar or link."""
+    """Icon name for a club link, guessed from its address ("Auto" on the Links editor): a known site's icon,
+    else a globe for a bare website address, else a chain link. A link can set `icon:` to any name in ICONS."""
     u = url.lower()
     return next((icon for key, icon in LINK_ICONS if key in u), "globe" if u.count("/") <= 3 else "link")
 
@@ -1102,7 +1134,7 @@ templates.env.filters["link_icon"] = link_icon
 
 
 def link_host(url: str) -> str:
-    host = re.sub(r"^https?://(www\.)?", "", url).split("/")[0]
+    host = re.sub(r"^(https?://(www\.)?|mailto:|tel:)", "", url).split("/")[0]
     return "on this site" if host == authn.rp_id else host
 
 
@@ -1252,9 +1284,35 @@ def preview_outbox():
     return RedirectResponse("/admin/email", status_code=303)
 
 
+ICONS = ("link", "globe", "video", "chat", "mail", "phone", "document", "form", "book", "news", "calendar", "map",
+         "users", "radio", "antenna", "play", "code", "cart", "money", "info", "star")  # all drawn in _icons.html
+SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "hidden": (False, False)}
+
+
 @app.get("/links", response_class=HTMLResponse)
-def links(request: Request):
-    return page(request, "links.html")
+def links(request: Request, edit: int = 0, error: str = ""):
+    return page(request, "links.html", edit=bool(edit and admin_mode(request)), error=error, icons=ICONS, guesses=LINK_ICONS)
+
+
+@app.post("/links")
+async def links_save(request: Request, mid: str = Depends(me)):
+    """Admins (in admin mode) choose the links, their icons, their order, and where each shows."""
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode to edit the club links.")
+    form = await request.form()
+    rows = zip(form.getlist("label"), form.getlist("url"), form.getlist("icon"), form.getlist("show"))
+    out = []
+    for label, url, icon, show in rows:
+        label, url = label.strip(), url.strip()
+        if not label and not url:
+            continue
+        if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url):
+            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto: or tel: ({label or url})."), status_code=303)
+        page_, minutes_ = SHOW.get(show, (True, True))
+        out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if icon in ICONS else {}), "page": page_, "minutes": minutes_})
+    archive.club.save_links(out[:40])
+    _admin_log(request, links=[x["label"] for x in out])
+    return RedirectResponse("/links", status_code=303)
 
 
 @app.get("/stats", response_class=HTMLResponse)

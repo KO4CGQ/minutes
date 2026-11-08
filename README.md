@@ -5,7 +5,8 @@ Meeting-minutes assistant for W8LBZ. See [REQUIREMENTS.md](REQUIREMENTS.md).
 ## What it does
 Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROADMAP.md](ROADMAP.md).
 - **Archive:** each meeting is a Markdown file at `data/meetings/YYYY-MM-DD/minutes.md`, next to the original PDF. The importer converts the historical PDFs (and `*CORRECTED*.txt`) with a plain parser, no AI; imported meetings are marked "imported, unreviewed".
-- **Minutes:** the modernized layout with PDF download, full-text search, per-member history, attendance stats and guest tracking.
+- **Home:** what's next for you: the next meeting, your chow night and swap requests, your business items, the latest minutes and upcoming events.
+- **Minutes:** the archive (`/minutes`) in the modernized layout with PDF download, full-text search, per-member history, attendance stats and guest tracking.
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode.
 - **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders.
