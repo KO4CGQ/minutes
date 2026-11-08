@@ -55,7 +55,7 @@
 <li>Roster last synced: {{ roster_synced|tsfull if roster_synced else 'never' }}</li>
 <li>Email: {{ 'test mode (only the addresses in email.only_to get mail)' if test_mode else 'sent to members' }}</li>
 <li>Signed-in devices: {{ sessions|length }}</li>
-<li>Club calendars: {% if not calendars %}not set up (<code>club.calendars</code> in club.yaml){% elif not calendar %}not synced yet{% elif calendar.error %}<b>last sync failed</b> {{ calendar.at|tsfull }}: {{ calendar.error }}{% else %}synced {{ calendar.at|tsfull }}{% for k, c in calendar.counts.items() %}; {{ k }}: {{ c.added }} added, {{ c.changed }} changed, {{ c.removed }} removed{% endfor %}{% endif %}</li>
+<li>Copy to Google Calendar (optional): {% if not calendars %}off (<code>club.calendars</code> in club.yaml turns it on){% elif not calendar %}not copied yet{% elif calendar.error %}<b>last sync failed</b> {{ calendar.at|tsfull }}: {{ calendar.error }}{% else %}synced {{ calendar.at|tsfull }}{% for k, c in calendar.counts.items() %}; {{ k }}: {{ c.added }} added, {{ c.changed }} changed, {{ c.removed }} removed{% endfor %}{% endif %}</li>
 </ul>
 {% endif %}
 {% endblock %}

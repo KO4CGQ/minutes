@@ -2,11 +2,11 @@
 <h1>{{ 'Change' if id else 'Add' }} an event</h1>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 <form method="post" action="/calendar/save" class="profile">
-<input type="hidden" name="id" value="{{ id }}"><input type="hidden" name="old_cal" value="{{ cal if id else '' }}">
-{% if repeats %}<fieldset><legend>This event repeats</legend><p class="muted small">What should a change (or Delete) apply to?</p>
-  {% for k, label in scopes.items() %}<label class="check"><input type="radio" name="scope" value="{{ k }}" {{ 'checked' if k == 'this' }}> {{ label }}</label>{% endfor %}
-  <p class="muted small">For more than this date, the dates shown below are this date's; every other date moves by the same amount.</p></fieldset>{% endif %}
-<label>Calendar <select name="cal">{% for k, label in cals.items() %}<option value="{{ k }}" {{ 'selected' if k == cal }}>{{ label }}</option>{% endfor %}</select></label>
+<input type="hidden" name="id" value="{{ id }}"><input type="hidden" name="d" value="{{ d }}">{% if repeats %}<input type="hidden" name="was_repeating" value="1">{% endif %}
+{% if repeats and d %}<fieldset><legend>This event repeats</legend><p class="muted small">What should a change (or Delete) apply to?</p>
+  {% for k, label in scopes.items() %}<label class="check"><input type="radio" name="scope" value="{{ k }}" {{ 'checked' if k == (f.scope or 'this') }}> {{ label }}</label>{% endfor %}
+  <p class="muted small">For more than this date, the dates below are this date's; the other dates move by the same amount.</p></fieldset>{% endif %}
+<label>Calendar <select name="cal">{% for k, label in cals.items() %}<option value="{{ k }}" {{ 'selected' if k == (f.cal or 'events') }}>{{ label }}</option>{% endfor %}</select></label>
 <p class="muted small">Club events are what the club runs or joins. Community is what's on in the area. Planning is for officers' dates, like the annual meeting.</p>
 <label>Title <input name="title" value="{{ f.title }}" maxlength="200" required></label>
 <fieldset><legend>Starts</legend><div class="row"><input type="date" name="date" value="{{ f.date }}" required aria-label="Start date">
@@ -15,9 +15,25 @@
 <fieldset><legend>Ends</legend><div class="row"><input type="date" name="end_date" value="{{ f.end_date }}" aria-label="Last day (optional)">
   <input type="time" name="end_time" value="{{ f.end_time }}" aria-label="End time (optional)"></div>
   <p class="muted small">Optional. An end time alone means the same day; a later date for an event over several days. With a start time and no end, it's taken as 2 hours.</p></fieldset>
+<fieldset><legend>Repeats</legend>
+  <select name="repeat" aria-label="Repeats">{% for v, label in repeat_choices %}<option value="{{ v }}" {{ 'selected' if v == (f.repeat or '') }}>{{ label }}</option>{% endfor %}</select>
+  <label class="until">Until <input type="date" name="repeat_until" value="{{ f.repeat_until }}" aria-label="Repeats until (optional)"></label>
+  <p class="muted small">"Until" is optional; leave it empty to keep repeating.</p></fieldset>
 <label>Where <input name="where" value="{{ f.where }}" maxlength="200"></label>
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
 <p class="row"><button class="btn">Save</button> <a class="btn ghost" href="/calendar{% if f.date %}?start={{ f.date }}{% endif %}">Cancel</a>
 {% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate onclick="return confirm('Delete this event from the calendar?')">Delete</button>{% endif %}</p>
 </form>
+<script>
+// The Repeats menu names the start day ("Monthly on the 2nd Tuesday"): reword it when the date changes.
+document.querySelector("input[name=date]").addEventListener("change", (e) => {
+  const d = new Date(e.target.value + "T12:00"); if (isNaN(d)) return;
+  const day = d.toLocaleDateString("en-US", { weekday: "long" }), n = Math.floor((d.getDate() - 1) / 7) + 1;
+  const th = (x) => x + (x % 100 >= 11 && x % 100 <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[x % 10] || "th");
+  const words = { weekly: `Every ${day}`, biweekly: `Every 2 weeks on ${day}`, monthly_weekday: n <= 4 ? `Monthly on the ${th(n)} ${day}` : `Monthly on the last ${day}`,
+    monthly_last: `Monthly on the last ${day}`, monthly: `Monthly on the ${th(d.getDate())}`,
+    yearly: `Every year on ${d.toLocaleDateString("en-US", { month: "long", day: "numeric" })}` };
+  document.querySelectorAll("select[name=repeat] option").forEach((o) => { if (words[o.value]) o.textContent = words[o.value]; });
+});
+</script>
 {% endblock %}

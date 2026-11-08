@@ -30,14 +30,11 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Club calendars
-Chow nights and dated Upcoming Events are synced (see the README). Still to do:
-- **The weekly meeting** on Meetings & Events, if the club doesn't already keep it there as a recurring event (then the app would only add cancellations, e.g. holidays).
-- **New repeating events from the Calendar page:** changing one date, this and following, or every date works; creating a new repeating event (a new net) still needs Google Calendar.
+The calendars are kept by the app, with .ics import, subscriptions, public calendars and an optional copy to Google (see the README). Still to do:
 - **Calendar editors:** editing is for leaders and minutes editors; a separate `calendar_editor` tick on the roster sheet could let others (e.g. the net manager) edit too.
 - **Who changed what:** a page for officers listing `calendar-log.jsonl`.
-- **Planning:** due dates of tracked business items.
-- **Community Events:** non-club happenings in the area; the app could show them, edited in Google Calendar.
-- The service account is added to each calendar with "Make changes to events"; the app only touches events it created.
+- **Planning:** due dates of tracked business items on the Planning calendar.
+- **More repeat patterns:** daily, or several days of the month; today these are listed as not imported.
 
 ## Members and roster management
 The Google Sheet stays the source of truth; the app writes values back to it (values only, never formatting or structure).

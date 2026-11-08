@@ -1,143 +1,224 @@
 import datetime as dt
-import json
 from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import calview, chow, gcal
+from w8lbz_minutes import calview, chow, events, gcal
 from w8lbz_minutes.club import Club
 from w8lbz_minutes.meeting import Item, Meeting
 from w8lbz_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 NOV = (dt.date(2026, 11, 1), dt.date(2026, 11, 30))
+TZ = "America/New_York"
 
 
-def club(calendars=True):
-    c = Club(FIX / "test-club.yaml", roster=[
+def club():
+    return Club(FIX / "test-club.yaml", roster=[
         {"id": "kd8aaa", "first": "Amy", "last": "Able", "officer": True},
         {"id": "kd8bbb", "first": "Bob", "last": "Baker", "birthday": "11-05", "share": ["birthday"]},
         {"id": "kd8ccc", "first": "Cal", "last": "Cole", "birthday": "11-20"},           # not shared
         {"id": "kd8ddd", "first": "Dee", "last": "Dunn", "birthday": "11", "share": ["birthday"]}])  # month only
-    if calendars:
-        c.info["calendars"] = {"events": "club@cal", "planning": "plan@cal", "community": "area@cal", "chow": "chow@cal"}
-    return c
-
-
-class FakeGoogle:
-    def __init__(self, cals):
-        self.cals, self.n = cals, 0
-
-    def _ok(self, j=None):
-        return type("R", (), {"raise_for_status": lambda s: None, "json": lambda s: j or {}})()
-
-    def _split(self, url):
-        rest = url.split("/calendars/")[1].split("/")
-        return rest[0], (rest[2] if len(rest) > 2 else None)
-
-    def get(self, url, params=None, **kw):
-        cal, eid = self._split(url)
-        if eid:
-            return self._ok(next(e for e in self.cals[cal] if e["id"] == eid))
-        return self._ok({"items": self.cals.get(cal, [])})
-
-    def post(self, url, json):
-        self.n += 1
-        self.cals.setdefault(self._split(url)[0], []).append({**json, "id": f"n{self.n}"})
-        return self._ok()
-
-    def patch(self, url, json):
-        cal, eid = self._split(url)
-        self.cals[cal] = [{**e, **json, "id": eid} if e["id"] == eid else e for e in self.cals[cal]]  # PATCH merges
-        return self._ok()
-
-    def delete(self, url):
-        cal, eid = self._split(url)
-        self.cals[cal] = [e for e in self.cals[cal] if e["id"] != eid]
-        return self._ok()
 
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(chow, "DATA", tmp_path)
     monkeypatch.setattr(calview, "DATA", tmp_path)
-    calview._cache.clear()
 
 
-def google():
-    return FakeGoogle({
-        "club@cal": [{"id": "net1", "summary": "Weekly net", "recurringEventId": "net", "start": {"dateTime": "2026-11-10T20:00:00-05:00"},
-                      "end": {"dateTime": "2026-11-10T21:00:00-05:00"}, "location": "146.520"},
-                     {"id": "fd", "summary": "Winter Field Day", "start": {"date": "2026-11-21"}, "end": {"date": "2026-11-23"}},
-                     {"id": "x", "summary": "Called off", "status": "cancelled", "start": {"date": "2026-11-03"}, "end": {"date": "2026-11-04"}},
-                     {"id": "app1", "summary": "VE testing", "extendedProperties": {"private": {"w8lbz": "1"}},
-                      "start": {"dateTime": "2026-11-14T10:00:00-05:00"}, "end": {"dateTime": "2026-11-14T13:00:00-05:00"}}],
-        "plan@cal": [{"id": "am", "summary": "Annual meeting", "start": {"date": "2026-11-19"}, "end": {"date": "2026-11-20"}}],
-        "area@cal": [], "chow@cal": [{"id": "never", "summary": "read from the app, not Google", "start": {"date": "2026-11-01"}, "end": {"date": "2026-11-02"}}]})
+def form(**kw):
+    return events.from_form({"title": "Weekly net", "date": "2026-11-10", "time": "20:00", "end_time": "21:00", **kw})
 
 
-def test_page_merges_google_chow_and_birthdays(tmp_path):
+def net(evs=None, **kw):
+    evs = [] if evs is None else evs
+    return evs, events.add(evs, "events", form(repeat="weekly", **kw), "kd8aaa")
+
+
+def days(e, lo=NOV[0], hi=dt.date(2027, 3, 31)):
+    return [d.isoformat() for d in events.dates(e, lo, hi)]
+
+
+# ---------------- repeating ----------------
+
+def test_repeat_rules_and_labels():
+    _, e = net()
+    assert days(e, *NOV) == ["2026-11-10", "2026-11-17", "2026-11-24"] and events.repeat_label(e["start"], e["repeat"]) == "Every Tuesday"
+    bi = events.add([], "events", form(repeat="biweekly", repeat_until="2026-12-31"), "x")
+    assert days(bi) == ["2026-11-10", "2026-11-24", "2026-12-08", "2026-12-22"]
+    nth = events.add([], "events", form(repeat="monthly_weekday"), "x")
+    assert days(nth)[:3] == ["2026-11-10", "2026-12-08", "2027-01-12"] and events.repeat_label(nth["start"], nth["repeat"]) == "Monthly on the 2nd Tuesday"
+    last = events.add([], "events", form(date="2026-11-24", repeat="monthly_last"), "x")
+    assert days(last)[:3] == ["2026-11-24", "2026-12-29", "2027-01-26"]
+    on31 = events.add([], "events", events.from_form({"title": "x", "date": "2026-12-31", "repeat": "monthly"}), "x")
+    assert days(on31, dt.date(2026, 12, 1), dt.date(2027, 5, 31)) == ["2026-12-31", "2027-01-31", "2027-03-31", "2027-05-31"]
+    yearly = events.add([], "planning", events.from_form({"title": "Annual meeting", "date": "2026-11-19", "repeat": "yearly"}), "x")
+    assert days(yearly, NOV[0], dt.date(2028, 12, 31)) == ["2026-11-19", "2027-11-19", "2028-11-19"]
+    fd = events.add([], "events", events.from_form({"title": "Field Day", "date": "2026-11-28", "end_date": "2026-11-29"}), "x")
+    assert days(fd, dt.date(2026, 11, 29), dt.date(2026, 11, 30)) == ["2026-11-28"]  # still on, on its second day
+
+
+def test_form_checks():
+    with pytest.raises(ValueError, match="title"):
+        events.from_form({"title": " ", "date": "2026-11-10"})
+    with pytest.raises(ValueError, match="before the start"):
+        form(end_time="19:00")
+    with pytest.raises(ValueError, match="stops repeating before"):
+        form(repeat="weekly", repeat_until="2026-11-01")
+    with pytest.raises(ValueError, match="repeats"):
+        form(repeat="daily")
+    assert form(end_date="2026-11-11", end_time="")["end"] == "2026-11-11T20:00"  # a last day and no end time: same time that day
+    assert events.from_form({"title": "x", "date": "2026-11-10", "end_date": "2026-11-10"})["end"] is None
+
+
+def test_change_this_following_every_date():
+    evs, e = net()
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", time="20:30", end_time="21:30", title="Net (late)", repeat="weekly"), "this")
+    assert events.occurrence(e, dt.date(2026, 11, 17))["start"] == "2026-11-17T20:30" and events.occurrence(e, dt.date(2026, 11, 24))["title"] == "Weekly net"
+    evs, e = net()
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-18", time="19:00", end_time="20:00", repeat="weekly"), "all")
+    assert e["start"] == "2026-11-11T19:00" and e["end"] == "2026-11-11T20:00" and days(e, *NOV)[0] == "2026-11-11"  # moved to Wednesdays
+    evs, e = net()
+    events.change(evs, e["id"], "2026-11-24", "community", form(date="2026-11-24", title="Net, new host", repeat="weekly"), "following")
+    old, new = evs
+    assert old["repeat"]["until"] == "2026-11-23" and days(old, *NOV) == ["2026-11-10", "2026-11-17"]
+    assert (new["cal"], new["title"], days(new, *NOV)) == ("community", "Net, new host", ["2026-11-24"])
+
+
+def test_delete_this_following_every_date():
+    evs, e = net()
+    events.delete(evs, e["id"], "2026-11-17", "this")
+    assert days(e, *NOV) == ["2026-11-10", "2026-11-24"]
+    events.delete(evs, e["id"], "2026-11-24", "following")
+    assert days(e, *NOV) == ["2026-11-10"]
+    events.delete(evs, e["id"], "2026-11-10", "all")
+    assert evs == []
+
+
+# ---------------- what the page shows ----------------
+
+def test_page_merges_events_minutes_chow_and_birthdays(tmp_path):
+    with events.locked():
+        evs, _ = net()
+        events.add(evs, "planning", events.from_form({"title": "Annual meeting", "date": "2026-11-19"}), "x")
+        events.add(evs, "events", events.from_form({"title": "VE testing", "date": "2026-11-14", "time": "10:00"}), "x")
+        events.save(evs)
     s = chow.load()
     s["nights"] = {"2026-11-12": {"member": "kd8aaa"}, "2026-11-26": {"status": "none"}}
     chow.save(s)
+    Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Upcoming Events": [
+        Item("VE testing", when="2026-11-14T10:00"), Item("Hamfest", when="2026-11-21", until="2026-11-22")]}).save(tmp_path)
     c = club()
-    got, note = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV, session=google())
-    assert note is None
-    seen = [(e.start.isoformat(), e.kind, e.title) for e in got]
-    assert ("2026-11-12", "chow", "Chow: Amy Able") in seen and ("2026-11-19", "planning", "Annual meeting") in seen
-    assert ("2026-11-05", "birthday", "Birthday: Bob Baker") in seen and ("2026-11-01", "birthday", "November birthday: Dee Dunn") in seen
-    assert not any("Cal Cole" in t or "Called off" in t or "not Google" in t for _, _, t in seen)  # private, cancelled, chow from the app
-    fd = next(e for e in got if e.title == "Winter Field Day")
-    assert (fd.end.isoformat(), [d.day for d in fd.days(*NOV)]) == ("2026-11-22", [21, 22])
-    net = next(e for e in got if e.title == "Weekly net")
-    assert (net.time, net.where, net.repeats, net.id) == ("8:00 PM", "146.520", True, "net1")
-    assert next(e for e in got if e.title == "VE testing").from_minutes
-    officer, _ = calview.entries(c, Archive(tmp_path, c), "kd8aaa", *NOV, session=google())
-    assert not any(e.title == "Birthday: Cal Cole" for e in officer)  # private stays private, even for officers
-    cal, _ = calview.entries(c, Archive(tmp_path, c), "kd8ccc", *NOV, session=google())
-    assert any(e.title == "Birthday: Cal Cole" for e in cal)  # but you see your own
-
-
-def test_without_calendars_it_shows_the_app_own_data(tmp_path):
-    c = club(calendars=False)
-    Meeting(date=dt.date(2026, 11, 5), status="published",
-            sections={"Upcoming Events": [Item("Hamfest", when="2026-11-14", until="2026-11-15")]}).save(tmp_path)
     got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
-    assert [e.start.day for e in got if e.title == "Club meeting"] == [5, 12, 19, 26]
-    assert any(e.title == "Hamfest" and e.end.day == 15 for e in got)
+    seen = [(e.start.isoformat(), e.kind, e.title) for e in got]
+    assert [t for d, k, t in seen if t == "Weekly net"] == ["Weekly net"] * 3 and ("2026-11-19", "planning", "Annual meeting") in seen
+    assert ("2026-11-12", "chow", "Chow: Amy Able") in seen and ("2026-11-01", "birthday", "November birthday: Dee Dunn") in seen
+    assert [t for _, _, t in seen].count("VE testing") == 1  # on the calendar and in the minutes: shown once
+    ham = next(e for e in got if e.title == "Hamfest")
+    assert ham.from_minutes and ham.end.day == 22
+    net_ = next(e for e in got if e.title == "Weekly net")
+    assert (net_.time, net_.repeats, net_.occ, net_.ends.hour) == ("8:00 PM", True, "2026-11-10", 21)
+    assert not any("Cal Cole" in t for _, _, t in seen)  # private stays private, even for officers
+    assert any(e.title == "Birthday: Cal Cole" for e in calview.entries(c, Archive(tmp_path, c), "kd8ccc", *NOV)[0])  # your own
+    c.info["public_calendars"] = ["events", "chow"]
+    pub, _ = calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)
+    assert {e.kind for e in pub} == {"events"}  # no chow, birthdays or Planning in public
 
 
-def test_unreachable_google_still_shows_chow_and_birthdays(tmp_path):
-    class Broken:
-        def get(self, *a, **k):
-            raise ConnectionError("offline")
-    c = club()
-    got, note = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV, session=Broken())
-    assert "Couldn't reach" in note and any(e.kind == "birthday" for e in got)
+# ---------------- importing .ics ----------------
+
+ICS = """BEGIN:VCALENDAR\r
+VERSION:2.0\r
+BEGIN:VEVENT\r
+UID:net-1@google.com\r
+SUMMARY:Weekly net\\, all welcome\r
+DTSTART;TZID=America/New_York:20261110T200000\r
+DTEND;TZID=America/New_York:20261110T210000\r
+RRULE:FREQ=WEEKLY;BYDAY=TU\r
+EXDATE;TZID=America/New_York:20261124T200000\r
+LOCATION:146.520 simplex\r
+DESCRIPTION:Check in by callsign.\\nNet control: the duty officer\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:net-1@google.com\r
+RECURRENCE-ID;TZID=America/New_York:20261117T200000\r
+SUMMARY:Weekly net (Thanksgiving week\r
+ , early)\r
+DTSTART;TZID=America/New_York:20261117T190000\r
+DTEND;TZID=America/New_York:20261117T200000\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:fd@google.com\r
+SUMMARY:Winter Field Day\r
+DTSTART;VALUE=DATE:20270130\r
+DTEND;VALUE=DATE:20270201\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:hunt@google.com\r
+SUMMARY:Fox hunt\r
+DTSTART:20261121T190000Z\r
+DURATION:PT2H\r
+RRULE:FREQ=MONTHLY;BYDAY=3SA;COUNT=3\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:daily@google.com\r
+SUMMARY:Daily check\r
+DTSTART:20261101T120000Z\r
+RRULE:FREQ=DAILY\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:twice@google.com\r
+SUMMARY:Tue and Thu net\r
+DTSTART:20261103T010000Z\r
+RRULE:FREQ=WEEKLY;BYDAY=TU,TH\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:gone@google.com\r
+SUMMARY:Called off\r
+STATUS:CANCELLED\r
+DTSTART;VALUE=DATE:20261128\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+UID:old@google.com\r
+SUMMARY:Long ago\r
+DTSTART;VALUE=DATE:20200101\r
+END:VEVENT\r
+END:VCALENDAR\r
+"""
 
 
-def test_leaders_add_change_move_and_delete(tmp_path):
-    c, g = club(), google()
-    with pytest.raises(ValueError, match="title"):
-        calview.body(c, {"title": " ", "date": "2026-11-20"})
-    with pytest.raises(ValueError, match="before the start"):
-        calview.body(c, {"title": "Fox hunt", "date": "2026-11-20", "time": "14:00", "end_time": "13:00"})
-    b = calview.save(c, "events", None, {"title": "Fox hunt", "date": "2026-11-20", "time": "14:00", "end_time": "16:00", "where": "City park"},
-                     by="kd8aaa", session=g)
-    assert b["start"]["dateTime"] == "2026-11-20T14:00:00" and b["end"]["dateTime"] == "2026-11-20T16:00:00" and b["location"] == "City park"
-    new = next(e for e in g.cals["club@cal"] if e["summary"] == "Fox hunt")
-    assert calview.form_values(new)["end_time"] == "16:00"
-    calview.save(c, "community", new["id"], {"title": "Fox hunt", "date": "2026-11-21"}, by="kd8aaa", old_kind="events", session=g)
-    assert not any(e["summary"] == "Fox hunt" for e in g.cals["club@cal"]) and g.cals["area@cal"][0]["start"] == {"date": "2026-11-21"}
-    calview.delete(c, "planning", "am", by="kd8aaa", session=g)
-    assert g.cals["plan@cal"] == []
-    assert [(h["action"], h["calendar"], h["title"]) for h in calview.history()] == [
-        ("deleted", "planning", "Annual meeting"), ("moved", "community", "Fox hunt"), ("added", "events", "Fox hunt")]
-    # a multi-day all-day event reads back with its last day
-    assert calview.form_values(next(e for e in g.cals["club@cal"] if e["id"] == "fd"))["end_date"] == "2026-11-22"
+def test_import_ics():
+    evs = []
+    r = events.import_ics(evs, ICS, "events", "kd8aaa", TZ, dt.date(2025, 11, 8))
+    assert r["added"] == ["Weekly net, all welcome", "Winter Field Day", "Fox hunt", "Tue and Thu net", "Tue and Thu net"]
+    assert [t for t, _ in r["skipped"]] == ["Daily check"]
+    tt = [e for e in evs if e["title"] == "Tue and Thu net"]  # one weekly event per day
+    assert [(e["start"], events.repeat_label(e["start"], e["repeat"])) for e in tt] == [
+        ("2026-11-03T20:00", "Every Tuesday"), ("2026-11-05T20:00", "Every Thursday")]
+    n = next(e for e in evs if e["uid"] == "net-1@google.com")
+    assert (n["start"], n["end"], n["where"], n["notes"]) == ("2026-11-10T20:00", "2026-11-10T21:00", "146.520 simplex",
+                                                            "Check in by callsign.\nNet control: the duty officer")
+    assert days(n, *NOV) == ["2026-11-10", "2026-11-17"]  # the 24th is taken out
+    moved = events.occurrence(n, dt.date(2026, 11, 17))
+    assert (moved["start"], moved["title"]) == ("2026-11-17T19:00", "Weekly net (Thanksgiving week, early)")
+    fd = next(e for e in evs if e["title"] == "Winter Field Day")
+    assert (fd["start"], fd["end"]) == ("2027-01-30", "2027-01-31")  # two days: the .ics end is the day after
+    hunt = next(e for e in evs if e["title"] == "Fox hunt")
+    assert hunt["start"] == "2026-11-21T14:00" and hunt["end"] == "2026-11-21T16:00"  # UTC into club time
+    assert days(hunt) == ["2026-11-21", "2026-12-19", "2027-01-16"]  # third Saturdays, 3 times
+    # again: updated, not doubled; an event typed in by hand with the same title and day is left alone
+    evs2 = [*evs]
+    r2 = events.import_ics(evs2, ICS, "events", "kd8aaa", TZ, dt.date(2025, 11, 8))
+    assert len(evs2) == 5 and len(r2["updated"]) == 5 and r2["added"] == []
+    hand = [{"id": "h", "cal": "events", "title": "winter field day", "start": "2027-01-30", "end": None, "repeat": None}]
+    r3 = events.import_ics(hand, ICS, "events", "kd8aaa", TZ, dt.date(2025, 11, 8))
+    assert r3["already"] == ["Winter Field Day"]
 
 
-def test_calendar_pages(tmp_path, monkeypatch):
+# ---------------- the pages ----------------
+
+def signed_in(tmp_path, monkeypatch, who):
     from fastapi.testclient import TestClient
     from w8lbz_minutes import web
     from w8lbz_minutes.auth import Auth
@@ -145,117 +226,71 @@ def test_calendar_pages(tmp_path, monkeypatch):
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", c)
-    monkeypatch.setattr(gcal, "_session", google)
+    monkeypatch.setattr(gcal, "soon", lambda *a, **k: None)
     t = TestClient(web.app)
-    t.cookies.set(web.COOKIE, a.new_session("kd8bbb"))
-    r = t.get("/calendar?start=2026-11-01")
-    assert "start=2026-09-06" in r.text and "start=2026-12-27" in r.text  # Earlier (8 weeks back) and Later
-    assert "Weekly net" in r.text and "Add an event" not in r.text  # members see; leaders edit
-    assert t.get("/calendar?view=month&month=2026-11").status_code == 200
-    assert t.get("/calendar/edit").status_code == 403
-    t.cookies.set(web.COOKIE, a.new_session("kd8aaa"))  # an officer
-    assert "Add an event" in t.get("/calendar?start=2026-11-01").text
-    assert 'value="Weekly net"' in t.get("/calendar/edit?cal=events&id=net1").text
-    assert t.get("/calendar/edit?cal=events&id=app1").status_code == 409  # from the minutes: edit in the console
+    t.cookies.set(web.COOKIE, a.new_session(who))
+    return t, c, a
 
 
-def series():
-    """A weekly Tuesday net (the series) and its Nov 17 date, as Google returns them."""
-    master = {"id": "net", "summary": "Weekly net", "recurrence": ["RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=52"],
-              "start": {"dateTime": "2026-11-03T20:00:00-05:00"}, "end": {"dateTime": "2026-11-03T21:00:00-05:00"}}
-    inst = {"id": "net_17", "summary": "Weekly net", "recurringEventId": "net", "originalStartTime": {"dateTime": "2026-11-17T20:00:00-05:00"},
-            "start": {"dateTime": "2026-11-17T20:00:00-05:00"}, "end": {"dateTime": "2026-11-17T21:00:00-05:00"}}
-    return FakeGoogle({"club@cal": [master, inst]})
+def test_leaders_add_change_delete_and_import_on_the_page(tmp_path, monkeypatch):
+    t, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    assert "Add an event" not in t.get("/calendar").text and t.get("/calendar/edit").status_code == 403  # members see; leaders edit
+    t.cookies.set(web_cookie(), a.new_session("kd8aaa"))  # an officer
+    r = t.post("/calendar/save", data={"cal": "events", "title": "Fox hunt", "date": "2026-11-21", "time": "14:00", "end_time": "13:00"})
+    assert r.status_code == 400 and "before the start" in r.text and 'value="Fox hunt"' in r.text  # what was typed stays
+    r = t.post("/calendar/save", data={"cal": "events", "title": "Weekly net", "date": "2026-11-10", "time": "20:00",
+                                       "repeat": "weekly"}, follow_redirects=False)
+    assert r.headers["location"] == "/calendar?start=2026-11-10"
+    eid = events.load()[0]["id"]
+    page = t.get("/calendar?start=2026-11-01").text
+    assert f"/calendar/edit?id={eid}&d=2026-11-17" in page and "repeats" in page
+    assert "Every Tuesday" in t.get(f"/calendar/edit?id={eid}&d=2026-11-17").text
+    t.post("/calendar/delete", data={"id": eid, "d": "2026-11-17", "scope": "this"})
+    assert "2026-11-17" in events.load()[0]["skip"]
+    up = t.post("/calendar/import", data={"cal": "community", "since": "2025-01-01"}, files={"file": ("club.ics", ICS.encode(), "text/calendar")})
+    assert "Added 5" in up.text and "Daily check" in up.text
+    assert t.post("/calendar/import", data={"cal": "events"}, files={"file": ("x.ics", b"hello", "text/plain")}).text.count("an .ics calendar file") == 1
+    assert [h["action"] for h in events.history()][:2] == ["imported 5 new and 0 updated events into", "deleted one date of"]
 
 
-def by_id(g, eid):
-    return next(e for e in g.cals["club@cal"] if e["id"] == eid)
-
-
-def test_repeating_event_this_following_all():
-    c = club()
-    form = {"title": "Weekly net (new frequency)", "date": "2026-11-17", "time": "20:30", "end_time": "21:30"}
-    g = series()  # this date only: just the occurrence
-    calview.save(c, "events", "net_17", {**form, "scope": "this"}, by="kd8aaa", old_kind="events", session=g)
-    assert by_id(g, "net_17")["start"]["dateTime"] == "2026-11-17T20:30:00" and by_id(g, "net")["summary"] == "Weekly net"
-    g = series()  # every date: the series moves by the same 30 minutes, from its own first date
-    calview.save(c, "events", "net_17", {**form, "scope": "all"}, by="kd8aaa", old_kind="events", session=g)
-    m = by_id(g, "net")
-    assert (m["summary"], m["start"]["dateTime"], m["end"]["dateTime"]) == ("Weekly net (new frequency)", "2026-11-03T20:30:00", "2026-11-03T21:30:00")
-    g = series()  # this and following: the old series ends the day before, a new one starts here
-    calview.save(c, "events", "net_17", {**form, "scope": "following"}, by="kd8aaa", old_kind="events", session=g)
-    assert by_id(g, "net")["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=TU;UNTIL=20261118T005959Z"]  # 7:59:59 PM Nov 17, Eastern
-    new = g.cals["club@cal"][-1]
-    assert new["summary"] == "Weekly net (new frequency)" and new["start"]["dateTime"] == "2026-11-17T20:30:00"
-    assert new["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=52"]
-    g = series()  # moving every date to Wednesday moves BYDAY too
-    calview.save(c, "events", "net_17", {**form, "date": "2026-11-18", "scope": "all"}, by="kd8aaa", old_kind="events", session=g)
-    assert by_id(g, "net")["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=WE;COUNT=52"] and by_id(g, "net")["start"]["dateTime"].startswith("2026-11-04")
-
-
-def test_repeating_event_delete_scopes_and_limits():
-    c = club()
-    g = series()
-    calview.delete(c, "events", "net_17", by="kd8aaa", scope="following", session=g)
-    assert "UNTIL=20261118T005959Z" in by_id(g, "net")["recurrence"][0]
-    g = series()
-    calview.delete(c, "events", "net_17", by="kd8aaa", scope="all", session=g)
-    assert [e["id"] for e in g.cals["club@cal"]] == ["net_17"]  # (Google drops the dates with the series)
-    g = series()
-    calview.delete(c, "events", "net_17", by="kd8aaa", scope="this", session=g)
-    assert [e["id"] for e in g.cals["club@cal"]] == ["net"]
-    g = series()
-    by_id(g, "net")["recurrence"] = ["RRULE:FREQ=WEEKLY;BYDAY=TU,TH"]
-    with pytest.raises(ValueError, match="more than one day"):
-        calview.save(c, "events", "net_17", {"title": "Net", "date": "2026-11-18", "time": "20:00", "scope": "all"}, by="kd8aaa",
-                     old_kind="events", session=g)
-    with pytest.raises(ValueError, match="one date at a time"):
-        calview.save(c, "community", "net_17", {"title": "Net", "date": "2026-11-17", "scope": "all"}, by="kd8aaa", old_kind="events", session=g)
+def web_cookie():
+    from w8lbz_minutes import web
+    return web.COOKIE
 
 
 def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
-    s = chow.load()
-    s["nights"] = {(dt.date.today() + dt.timedelta(days=2)).isoformat(): {"member": "kd8aaa"}}
-    chow.save(s)
-    c = club()
     today = dt.date.today()
-    g = google()
-    g.cals["club@cal"].append({"id": "pub", "summary": "Fox hunt; bring a radio, and snacks", "location": "City park",
-                               "start": {"dateTime": f"{today + dt.timedelta(days=3)}T14:00:00-05:00"},
-                               "end": {"dateTime": f"{today + dt.timedelta(days=3)}T16:00:00-05:00"}})
-    g.cals["plan@cal"].append({"id": "pl", "summary": "Board dinner", "start": {"date": f"{today + dt.timedelta(days=4)}"},
-                               "end": {"date": f"{today + dt.timedelta(days=6)}"}})
-    a = Auth(c, tmp_path / "auth.sqlite")
-    monkeypatch.setattr(web, "authn", a)
-    monkeypatch.setattr(web.archive, "club", c)
-    monkeypatch.setattr(gcal, "_session", lambda: g)
+    s = chow.load()
+    s["nights"] = {(today + dt.timedelta(days=2)).isoformat(): {"member": "kd8aaa"}}
+    chow.save(s)
+    with events.locked():
+        evs = []
+        events.add(evs, "events", events.from_form({"title": "Fox hunt; bring a radio, and snacks", "where": "City park",
+                                                    "date": (today + dt.timedelta(days=3)).isoformat(), "time": "14:00", "end_time": "16:00"}), "x")
+        events.add(evs, "planning", events.from_form({"title": "Board dinner", "date": (today + dt.timedelta(days=4)).isoformat(),
+                                                      "end_date": (today + dt.timedelta(days=5)).isoformat()}), "x")
+        events.save(evs)
+    m, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
     anon = TestClient(web.app)
     assert anon.get("/calendar/public", follow_redirects=False).status_code == 404  # nothing public yet
-    # a member's private feed: no sign-in, the secret is the link
     tok = calview.feed_token("kd8bbb")
-    r = anon.get(f"/calendar/feed/{tok}.ics")
-    assert r.status_code == 200 and r.headers["content-type"].startswith("text/calendar")
-    body = r.text
+    body = anon.get(f"/calendar/feed/{tok}.ics").text
     assert "SUMMARY:Fox hunt\; bring a radio\\, and snacks" in body and "LOCATION:City park" in body
     assert "DTSTART;TZID=America/New_York:" in body and "SUMMARY:Chow: Amy Able" in body
     assert f"DTEND;VALUE=DATE:{(today + dt.timedelta(days=6)):%Y%m%d}" in body  # Board dinner: two days, end is the day after
     assert all(len(line.encode()) <= 75 for line in body.split("\r\n"))
-    assert anon.get("/calendar/feed/wrong.ics").status_code == 404
-    only = anon.get(f"/calendar/feed/{tok}.ics?show=chow").text  # just my chow nights
+    only = anon.get(f"/calendar/feed/{tok}.ics?show=chow").text
     assert "Chow: Amy Able" in only and "Fox hunt" not in only and "X-WR-CALNAME:W0TST Chow" in only
+    assert anon.get("/calendar/feed/wrong.ics").status_code == 404
     assert calview.feed_token("kd8bbb", reset=True) != tok and anon.get(f"/calendar/feed/{tok}.ics").status_code == 404
-    # public: only the calendars an admin chose; never chow or birthdays
     c.info["public_calendars"] = ["events", "chow"]  # chow is never public, even if listed
     page = anon.get("/calendar/public")
     assert page.status_code == 200 and "Fox hunt" in page.text and "Chow" not in page.text and "Board dinner" not in page.text
     feed = anon.get("/calendar/public.ics").text
     assert "Fox hunt" in feed and "Chow" not in feed and "Birthday" not in feed and "Board dinner" not in feed
-    assert anon.get("/calendar", follow_redirects=False).status_code in (302, 303, 307)  # the members' page still needs sign-in
-    m = TestClient(web.app)
-    m.cookies.set(web.COOKIE, a.new_session("kd8bbb"))
+    assert anon.get("/calendar", follow_redirects=False).status_code in (302, 303, 307)  # the members' page needs sign-in
     home = m.get("/").text  # Home's "Coming up" is the calendar's next two weeks, chow left to its own card
     coming = home[home.index("Coming up"):]
     assert "Fox hunt" in coming and "Board dinner" in coming and "Chow: Amy Able" not in coming

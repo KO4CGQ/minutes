@@ -1,7 +1,10 @@
-"""Keep the club's Google Calendars current: chow nights on the "Chow" calendar, dated Upcoming Events on
-"Meetings & Events".
+"""Optional: a copy of the club's calendars in Google Calendar, for people who follow them there. The app keeps
+the calendars itself (events.py); this only ever writes to Google, so Google being down changes nothing in the app.
+Copied: chow nights, the app's Club events / Planning / Community events (each date of a repeating one, a year
+ahead), and the minutes' dated Upcoming Events.
 
-club.yaml names the calendars (`calendars: {chow: ID, events: ID}`); each is shared with the service account
+club.yaml names the calendars (`calendars: {chow: ID, events: ID, planning: ID, community: ID}`, any of them);
+each is shared with the service account
 ("Make changes to events"). The app marks the events it creates (a private `w8lbz` property) and only ever
 changes or deletes those, from today on, so people can keep adding their own events by hand and past events
 stay as they were. Each sync compares what should be there with what is, so it's safe to run any time.
@@ -14,9 +17,9 @@ import logging
 import threading
 import time
 
-from . import chow
+from . import chow, events as store
 from .club import DATA, PREVIEW, Club
-from .meeting import EVENT_HOURS
+from .meeting import EVENT_HOURS, Item
 
 log = logging.getLogger(__name__)
 API = "https://www.googleapis.com/calendar/v3/calendars/{}/events"
@@ -44,18 +47,27 @@ def times(e, tz: str) -> dict:
 
 
 def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict]]:
-    """Calendar kind -> {key: event} for everything from today on: chow nights and dated Upcoming Events."""
+    """Calendar kind -> {key: event} for everything from today on: chow nights, the app's own events, and the
+    minutes' dated Upcoming Events (`events`) not already on the Club events calendar."""
     tz = str(club.info.get("timezone", "America/New_York"))
     at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
-    out: dict[str, dict[str, dict]] = {"chow": {}, "events": {}}
+    out: dict[str, dict[str, dict]] = {"chow": {}, **{k: {} for k in store.CALS}}
     for date, x in chow.upcoming(chow.load(), today, n=60):
         if x.get("status") == "none":
             continue
         who = club.name(x["member"]) if x.get("member") else "open, nobody yet"
         out["chow"][f"chow:{date}"] = {"summary": f"Chow: {who}",
                                        **_timed(dt.datetime.combine(dt.date.fromisoformat(date), at), EVENT_HOURS, tz)}
+    seen = set()
+    for e in store.load():
+        for d in store.dates(e, today, today + dt.timedelta(days=365)):
+            o = store.occurrence(e, d)
+            seen.add((o["start"][:10], o["title"].lower()))
+            out[e["cal"]][f"ev:{e['id']}:{d}"] = {"summary": o["title"], "location": o.get("where") or "",
+                                                  "description": o.get("notes") or "",
+                                                  **times(Item(o["title"], when=o["start"], until=o["end"]), tz)}
     for e in events:
-        if not e.when or (e.until or e.when)[:10] < today.isoformat():
+        if not e.when or (e.until or e.when)[:10] < today.isoformat() or (e.when[:10], e.text.lower()) in seen:
             continue
         out["events"][f"event:{e.when}:{e.text[:60]}"] = {"summary": e.text, **times(e, tz)}
     return out
@@ -68,7 +80,7 @@ def _day_title(e: dict) -> tuple[str, str]:
 def _same(have: dict, want: dict) -> bool:
     def key(e):
         return (e.get("summary"), (e["start"].get("dateTime") or "")[:19], e["start"].get("date"),
-                (e["end"].get("dateTime") or "")[:19], e["end"].get("date"))
+                (e["end"].get("dateTime") or "")[:19], e["end"].get("date"), e.get("location") or "", e.get("description") or "")
     return key(have) == key(want)
 
 

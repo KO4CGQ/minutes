@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, calview, chow, console, gcal, membership, prefs, profile, updates
+from . import ai, avatars, business, calview, chow, console, events, gcal, membership, prefs, profile, updates
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
@@ -136,7 +136,7 @@ async def require_login(request: Request, call_next):
     return JSONResponse({"detail": "Please sign in"}, status_code=401)
 
 
-CALENDAR_PATHS = ("/chow", "/api/meetings", "/console")  # changes here can move chow nights or Upcoming Events
+CALENDAR_PATHS = ("/chow", "/api/meetings", "/console", "/calendar")  # changes here can move chow nights or events
 
 
 @app.middleware("http")
@@ -1417,7 +1417,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
     kinds = {k: v for k, v in calview.KINDS.items() if not public or k in calview.public_kinds(archive.club)}
     return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
-                can_edit=not public and can_lead_now(request) and bool(calview.editable(archive.club)),
+                can_edit=not public and can_lead_now(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
                 timedelta=dt.timedelta)
 
@@ -1429,8 +1429,7 @@ def _feed_url(request: Request, path: str) -> str:
 
 @app.get("/calendar/subscribe", response_class=HTMLResponse)
 def calendar_subscribe(request: Request, mid: str = Depends(me)):
-    kinds = {k: v for k, v in calview.KINDS.items() if k in ("chow", "birthday") or k in calview.editable(archive.club) or
-             (k == "events" and not calview.editable(archive.club))}  # the calendars this club has
+    kinds = calview.KINDS
     return page(request, "calendar_subscribe.html", private=_feed_url(request, f"/calendar/feed/{calview.feed_token(mid)}.ics"), kinds=kinds,
                 public=_feed_url(request, "/calendar/public.ics") if calview.public_kinds(archive.club) else None,
                 public_page=_feed_url(request, "/calendar/public") if calview.public_kinds(archive.club) else None)
@@ -1471,57 +1470,117 @@ def calendar_public_feed():
     return _ics(items, f"{archive.club.info.get('callsign', 'Club')} events")
 
 
-def _calendar_editor(request: Request) -> dict:
+def _calendar_editor(request: Request) -> None:
     if not can_lead_now(request):
         raise HTTPException(403, "Only leaders and minutes editors can change the club calendars.")
-    cals = calview.editable(archive.club)
-    if not cals:
-        raise HTTPException(404, "The club calendars aren't set up.")
-    return cals
+
+
+def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
+    r = page(request, "calendar_edit.html", f=f, id=id, d=d, cals=events.CALS, error=error, repeats=repeats, scopes=events.SCOPES,
+             repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()))
+    r.status_code = status
+    return r
+
+
+def _repeat_choices(day: str) -> list[tuple[str, str]]:
+    """The Repeats menu, worded for the start day ("Monthly on the 2nd Tuesday")."""
+    start = day[:10]
+    lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})  # noqa: E731
+    return [("", "Doesn't repeat"), ("weekly", lab("weekly")), ("biweekly", lab("weekly", interval=2)),
+            ("monthly_weekday", lab("monthly_weekday")), ("monthly_last", lab("monthly_weekday", last=True)),
+            ("monthly", lab("monthly")), ("yearly", lab("yearly"))]
 
 
 @app.get("/calendar/edit", response_class=HTMLResponse)
-def calendar_edit(request: Request, cal: str = "events", id: str = "", date: str = "", error: str = "", mid: str = Depends(me)):
-    cals = _calendar_editor(request)
-    if cal not in cals:
-        raise HTTPException(404)
-    e = calview.get(archive.club, cal, id) if id else None
-    if e and e.get("extendedProperties", {}).get("private", {}).get("w8lbz") == "1":
-        raise HTTPException(409, "This event comes from the minutes' Upcoming Events; change it in the leader console.")
-    f = calview.form_values(e) if e else {"title": "", "where": "", "notes": "", "date": date, "time": "", "end_date": "", "end_time": ""}
-    return page(request, "calendar_edit.html", f=f, cal=cal, id=id, cals=cals, error=error, repeats=bool(e and e.get("recurringEventId")),
-                scopes=calview.SCOPES)
+def calendar_edit(request: Request, id: str = "", d: str = "", date: str = "", cal: str = "events", mid: str = Depends(me)):
+    """Add an event (no id), or change one (on date d, for a repeating event)."""
+    _calendar_editor(request)
+    if not id:
+        return _event_form(request, {"cal": cal if cal in events.CALS else "events", "date": date or dt.date.today().isoformat()})
+    try:
+        e = events.get(events.load(), id)
+    except KeyError:
+        raise HTTPException(404, "That event isn't on the calendar any more.")
+    return _event_form(request, events.form_values(e, d or None), id, d, repeats=bool(e.get("repeat")))
 
 
 @app.post("/calendar/save")
 async def calendar_save(request: Request, mid: str = Depends(me)):
-    cals = _calendar_editor(request)
-    form = dict((await request.form()).items())
-    cal, eid, old = form.get("cal", ""), form.get("id", ""), form.get("old_cal", "")
-    if cal not in cals or (old and old not in cals) or form.get("scope", "this") not in calview.SCOPES:
+    _calendar_editor(request)
+    f = dict((await request.form()).items())
+    eid, d, cal, scope = f.get("id", ""), f.get("d", ""), f.get("cal", ""), f.get("scope") or "all"
+    if cal not in events.CALS or scope not in events.SCOPES:
         raise HTTPException(404)
     try:
-        b = calview.save(archive.club, cal, eid or None, form, by=mid, old_kind=old or None)
-    except ValueError as e:
-        return RedirectResponse(f"/calendar/edit?cal={quote(cal)}&id={quote(eid)}&error=" + quote(str(e)), status_code=303)
-    except Exception as e:  # Google said no (permissions, a deleted event): keep what was typed in the log, say why
-        _log.exception("calendar save failed")
-        return RedirectResponse(f"/calendar/edit?cal={quote(cal)}&id={quote(eid)}&error=" + quote(f"Google Calendar didn't accept the change ({e}).")[:1500], status_code=303)
-    day = (b["start"].get("date") or b["start"]["dateTime"])[:10]
-    return RedirectResponse(f"/calendar?start={day}", status_code=303)
+        v = events.from_form(f)
+        with events.locked():
+            evs = events.load()
+            if eid:
+                events.change(evs, eid, d or None, cal, v, scope)
+                action = "changed" if not d else {"this": "changed one date of", "following": "changed this and following dates of",
+                                                  "all": "changed every date of"}[scope]
+            else:
+                events.add(evs, cal, v, mid)
+                action = "added"
+            events.save(evs)
+    except ValueError as x:
+        return _event_form(request, f, eid, d, str(x), repeats=bool(f.get("was_repeating")), status=400)
+    except KeyError:
+        raise HTTPException(404, "That event isn't on the calendar any more.")
+    events.log(mid, action, {"cal": cal, **v})
+    return RedirectResponse(f"/calendar?start={v['start'][:10]}", status_code=303)
 
 
 @app.post("/calendar/delete")
-def calendar_delete(request: Request, old_cal: str = Form(...), id: str = Form(...), scope: str = Form("this"), mid: str = Depends(me)):
-    cals = _calendar_editor(request)
-    if old_cal not in cals or scope not in calview.SCOPES:
+def calendar_delete(request: Request, id: str = Form(...), d: str = Form(""), scope: str = Form("all"), mid: str = Depends(me)):
+    _calendar_editor(request)
+    if scope not in events.SCOPES:
         raise HTTPException(404)
-    try:
-        calview.delete(archive.club, old_cal, id, by=mid, scope=scope)
-    except Exception as e:
-        _log.exception("calendar delete failed")
-        return RedirectResponse(f"/calendar/edit?cal={quote(old_cal)}&id={quote(id)}&error=" + quote(f"Google Calendar didn't delete it ({e}).")[:1500], status_code=303)
+    with events.locked():
+        evs = events.load()
+        try:
+            e = events.delete(evs, id, d or None, scope)
+        except KeyError:
+            raise HTTPException(404, "That event isn't on the calendar any more.")
+        events.save(evs)
+    events.log(mid, "deleted" if not d else {"this": "deleted one date of", "following": "deleted this and following dates of",
+                                             "all": "deleted every date of"}[scope], e)
     return RedirectResponse("/calendar", status_code=303)
+
+
+@app.get("/calendar/import", response_class=HTMLResponse)
+def calendar_import_form(request: Request, mid: str = Depends(me)):
+    _calendar_editor(request)
+    return page(request, "calendar_import.html", cals=events.CALS, report=None,
+                since=(dt.date.today() - dt.timedelta(days=365)).isoformat())
+
+
+@app.post("/calendar/import", response_class=HTMLResponse)
+async def calendar_import(request: Request, mid: str = Depends(me)):
+    """Add the events of an .ics file (exported from Google, Outlook, Apple...) to one of the club calendars."""
+    _calendar_editor(request)
+    form = await request.form()
+    cal, f = form.get("cal", ""), form.get("file")
+    if cal not in events.CALS or f is None or not hasattr(f, "read"):
+        raise HTTPException(400, "Pick a calendar and an .ics file.")
+    raw = await f.read(10_000_001)
+    try:
+        if len(raw) > 10_000_000:
+            raise ValueError("That file is over 10 MB.")
+        text = raw.decode("utf-8-sig")
+        if "BEGIN:VCALENDAR" not in text[:2000].upper():
+            raise ValueError("That isn't an .ics calendar file.")
+        since = dt.date.fromisoformat(form.get("since") or "1900-01-01")
+    except (UnicodeDecodeError, ValueError) as x:
+        return page(request, "calendar_import.html", cals=events.CALS, report=None, error=str(x) if isinstance(x, ValueError) else
+                    "That file isn't text; is it an .ics file?", since=form.get("since", ""))
+    with events.locked():
+        evs = events.load()
+        report = events.import_ics(evs, text, cal, mid, str(archive.club.info.get("timezone", "America/New_York")), since)
+        events.save(evs)
+    events.log(mid, f"imported {len(report['added'])} new and {len(report['updated'])} updated events into", {"cal": cal, "title": f.filename})
+    gcal.soon(lambda: archive.club, lambda: archive)
+    return page(request, "calendar_import.html", cals=events.CALS, report=report, cal=cal, since=form.get("since", ""))
 
 
 @app.get("/links", response_class=HTMLResponse)

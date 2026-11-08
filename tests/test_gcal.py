@@ -136,3 +136,23 @@ def test_event_ends_and_multi_day(tmp_path, monkeypatch):
         Item("Field Day", when="2027-06-26", until="2027-06-27"), Item("Old", when="2027-06-20")]}).save(tmp_path)
     m = console.start(Archive(tmp_path, club()), dt.date(2027, 6, 27), None)
     assert [i.text for i in m.items("Upcoming Events")] == ["Field Day"]
+
+
+def test_copies_the_app_calendars_to_google(tmp_path, monkeypatch):
+    from w8lbz_minutes import events
+    monkeypatch.setattr(chow, "DATA", tmp_path)
+    with events.locked():
+        evs = []
+        events.add(evs, "events", events.from_form({"title": "Weekly net", "date": "2026-11-17", "time": "20:00", "end_time": "21:00",
+                                                    "repeat": "weekly", "repeat_until": "2026-12-01", "where": "146.520"}), "x")
+        events.add(evs, "planning", events.from_form({"title": "Annual meeting", "date": "2026-11-19"}), "x")
+        events.save(evs)
+    c = club()
+    c.info["calendars"]["planning"] = "plan@cal"
+    cal = FakeCal()
+    minutes = [Item("Weekly net", when="2026-11-24T20:00"), Item("Hamfest", when="2026-12-05")]
+    got = gcal.sync(c, minutes, THU, cal)
+    assert got["events"]["added"] == 4 and got["planning"]["added"] == 1  # 3 nets + Hamfest; the minutes' net is already there
+    nets = [e for e in cal.items["events@cal"] if e["summary"] == "Weekly net"]
+    assert [e["start"]["dateTime"][:10] for e in nets] == ["2026-11-17", "2026-11-24", "2026-12-01"] and nets[0]["location"] == "146.520"
+    assert "community" not in got  # no Google calendar named for it: nothing copied

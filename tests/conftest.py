@@ -28,6 +28,15 @@ def fresh_prefs(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def fresh_events(tmp_path, monkeypatch):
+    """The club calendars (events.json) and the calendar log start empty in each test."""
+    from w8lbz_minutes import events
+    d = tmp_path / "events-data"
+    d.mkdir()
+    monkeypatch.setattr(events, "DATA", d)
+
+
+@pytest.fixture(autouse=True)
 def no_update_check(monkeypatch):
     """Pages for admins in admin mode check GitHub for a new release; never from the tests."""
     from w8lbz_minutes import updates
