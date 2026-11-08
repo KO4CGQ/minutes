@@ -14,6 +14,7 @@ from __future__ import annotations
 import calendar as monthcal
 import datetime as dt
 import fcntl
+import html
 import json
 import re
 import secrets
@@ -308,6 +309,17 @@ def _text(v: str) -> str:
     return re.sub(r"\\([\\;,nN])", lambda m: "\n" if m.group(1) in "nN" else m.group(1), v).strip()
 
 
+def _plain(v: str) -> str:
+    """Google exports descriptions as HTML: keep the text and the line breaks, drop the tags."""
+    if not re.search(r"<(p|br|a|b|i|u|em|strong|ul|ol|li|div|span)\b", v, re.I):
+        return v
+    v = re.sub(r"<a\b[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", lambda m: m.group(2) if m.group(2) == m.group(1) else f"{m.group(2)} ({m.group(1)})", v, flags=re.I | re.S)
+    v = re.sub(r"<br\s*/?>|</(p|div|li)>", "\n", v, flags=re.I)
+    v = re.sub(r"<li\b[^>]*>", "- ", v, flags=re.I)
+    v = html.unescape(re.sub(r"<[^>]+>", "", v))
+    return re.sub(r"\n{3,}", "\n\n", v).strip()
+
+
 def _when(value: str, params: dict, tz: ZoneInfo) -> tuple[dt.datetime, bool]:
     """(club-time datetime, timed?) from an .ics date or date-time."""
     v = value.strip()
@@ -430,7 +442,7 @@ def import_ics(evs: list[dict], text: str, cal: str, by: str, tz_name: str, sinc
         last = dt.date.fromisoformat(repeat["until"]) if repeat and repeat.get("until") else end.date() if not repeat else dt.date.max
         if last < since:
             continue
-        v = {"title": title, "where": _text(one(b, "LOCATION")[1] or "")[:200], "notes": _text(one(b, "DESCRIPTION")[1] or "")[:2000],
+        v = {"title": title, "where": _text(one(b, "LOCATION")[1] or "")[:200], "notes": _plain(_text(one(b, "DESCRIPTION")[1] or ""))[:2000],
              "start": _iso(start, timed), "end": (_iso(end, timed) if end > start else None), "repeat": repeat}
         skips = [_when(x, p, tz)[0].date().isoformat() for p, vals in b.get("EXDATE", []) for x in vals.split(",")]
         uid = one(b, "UID")[1]
@@ -463,6 +475,6 @@ def import_ics(evs: list[dict], text: str, cal: str, by: str, tz_name: str, sinc
             continue
         f = f - dt.timedelta(days=1) if not timed and "DTEND" in b else f
         e["changes"][rid] = {"title": _text(one(b, "SUMMARY")[1] or e["title"])[:200], "where": _text(one(b, "LOCATION")[1] or "")[:200],
-                             "notes": _text(one(b, "DESCRIPTION")[1] or "")[:2000], "start": _iso(s, timed),
+                             "notes": _plain(_text(one(b, "DESCRIPTION")[1] or ""))[:2000], "start": _iso(s, timed),
                              "end": _iso(f, timed) if f > s else None}
     return report

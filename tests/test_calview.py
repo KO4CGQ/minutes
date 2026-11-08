@@ -232,6 +232,15 @@ def signed_in(tmp_path, monkeypatch, who):
     return t, c, a
 
 
+def test_import_turns_html_descriptions_into_text():
+    ics = ("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:h1\r\nDTSTART;VALUE=DATE:20300105\r\nSUMMARY:Exam session\r\n"
+           'DESCRIPTION:<p dir="auto">Fee <strong>$15</strong> &amp\\; walk-ins.</p><a href="https://example.org">https://example.org</a>\r\n'
+           "END:VEVENT\r\nEND:VCALENDAR\r\n")
+    evs = []
+    events.import_ics(evs, ics, "events", "KD8AAA", "America/New_York", dt.date(2029, 1, 1))
+    assert evs[0]["notes"] == "Fee $15 & walk-ins.\nhttps://example.org"
+
+
 def test_leaders_add_change_delete_and_import_on_the_page(tmp_path, monkeypatch):
     t, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
     assert "Add an event" not in t.get("/calendar").text and t.get("/calendar/edit").status_code == 403  # members see; leaders edit
