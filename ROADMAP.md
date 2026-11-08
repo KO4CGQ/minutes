@@ -5,19 +5,28 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Next
-- **Chow list, what's left** (see below): reminders, the calendar, and the chow list in the minutes email.
+- **Email preferences** (with chow reminders): a Notifications tab on Your profile. For each kind of email (minutes, chow reminders, business item reminders, roster changes) a member picks: right away, in a weekly digest, or off. Chow reminders on the days they choose (e.g. 7, 3 and 1 days before); business items likewise before a due date. The weekly digest: your next chow night, your items due, and a link to the latest minutes. Sign-in links, swap requests waiting for your answer and security emails can't be turned off.
+- **Chow list, what's left** (see below): reminders (with email preferences above), the calendar, and the printable chow list.
 - **Email the minutes to the whole club:** remove test mode (`email.only_to`) once the club is ready.
 
 ## Chow list, what's left
 The schedule, rotation, swaps, meeting-night records and the minutes' Upcoming Chow section are done.
 - **Reminders:** each member chooses on their profile whether and when to get an email reminder before their chow night (e.g. 3 days before, the day before, or off).
 - **Calendar:** each chow night is mirrored to the club's "Chow" Google Calendar, so swaps update it automatically.
-- **With the minutes email:** a printable chow list (PDF or .xlsx) attached, replacing the Secretary's spreadsheet.
+- **Printable chow list:** a PDF of the nights still to come, emailed only when the list is released or changes (not with every set of minutes), replacing the Secretary's spreadsheet.
 
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
 
+## Look and feel: ideas to consider
+- **Unified search:** one search box for minutes, members (name, callsign), business items and chow nights, with results grouped by kind. Minutes already have full-text search; the others are small lists, so this is a modest change.
+- **Line icons instead of emoji** on buttons and labels: emoji show as empty boxes on computers without an emoji font. The Links page's icon set (`_icons.html`) could cover them.
+- **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
+- **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
+- **Abandoned meetings:** a leader can discard a meeting that was started by mistake (today only `w8lbz-minutes delete-meeting` on the server).
+
 ## Admin tools
+- **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Club calendars
