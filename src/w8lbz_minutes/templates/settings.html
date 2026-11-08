@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Settings{% endblock %}{% block body %}
+<h1>Your profile</h1>
+{% include "_profile_tabs.html" %}
+{% if saved %}<p class="msg ok">Your settings are saved.</p>{% endif %}
+<p>How the app shows things to you, wherever you sign in.</p>
+<form method="post" class="profile">
+{% for k, (label, opts, _) in options.items() %}
+<fieldset><legend>{{ label }}</legend>{% if k == 'week_start' %}<p class="muted small">For the calendar's month view.</p>{% endif %}
+  {% for o, text in opts.items() %}<label class="check"><input type="radio" name="{{ k }}" value="{{ o }}" {{ 'checked' if s[k] == o }}> {{ text }}</label>{% endfor %}
+</fieldset>{% endfor %}
+<p class="muted small">Light or dark is in the menu under your name, and is kept on each device.</p>
+<p><button class="btn">Save</button></p>
+</form>
+{% endblock %}

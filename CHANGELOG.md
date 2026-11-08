@@ -27,6 +27,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Upcoming Events have dates:** in the leader console each event gets a start (date, optional time) and an optional end: an end time ("Sat, Nov 21, 10:00 AM – 1:00 PM: VE testing") or a last day for an event over several days ("Sat, Jun 26 – Sun, Jun 27: Field Day"). The minutes show the dates first. Events that have ended drop off when the next meeting starts. Events without a date work as before; they just don't go on the calendar.
 - **Brand logos for links:** the Links editor's icon picker has a search box over about 3,400 brand logos from Simple Icons (Home Assistant, Discord, YouTube, GitHub…), stored with the app rather than loaded from the internet.
 - **Emoji that always show:** every emoji in the app (✅ ✏️ 📅 🔴 💬 and the rest) is the device's own emoji where it has color emoji, and a matching line icon drawn by the app where it doesn't (some Linux computers showed empty boxes).
+- **Your settings:** a **Settings** tab on Your profile, starting with the first day of the week (Sunday or Monday) for the calendar's month view. It's kept with your account, so it follows you to every device.
 - **Links editor on phones:** each link is its own spaced card, and saved links start folded to their name (⋯ opens one).
 
 ## 0.9.1 (2026-11-08)

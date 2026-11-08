@@ -816,6 +816,18 @@ async def email_prefs_save(request: Request, mid: str = Depends(me)):
     return RedirectResponse("/profile/email?saved=1", status_code=303)
 
 
+@app.get("/profile/settings", response_class=HTMLResponse)
+def settings_page(request: Request, saved: int = 0, mid: str = Depends(me)):
+    return page(request, "settings.html", s=prefs.settings(mid), options=prefs.SETTINGS, saved=saved)
+
+
+@app.post("/profile/settings")
+async def settings_save(request: Request, mid: str = Depends(me)):
+    form = await request.form()
+    prefs.save_settings(mid, {k: form.get(k) for k in prefs.SETTINGS})
+    return RedirectResponse("/profile/settings?saved=1", status_code=303)
+
+
 @app.post("/profile/photo")
 async def profile_photo(request: Request, mid: str = Depends(me)):
     """Upload (or replace) your own profile picture."""
@@ -1404,10 +1416,11 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
         start_day = dt.date.fromisoformat(start) if start else today
     except ValueError:
         raise HTTPException(404)
+    ws = 0 if prefs.settings(mid)["week_start"] == "monday" else 6  # the weekday a week starts on (Monday is 0)
     if view == "month":
-        lo = first - dt.timedelta(days=(first.weekday() + 1) % 7)  # weeks start on Sunday
-        nxt = (first + dt.timedelta(days=32)).replace(day=1)
-        hi = nxt + dt.timedelta(days=(5 - nxt.weekday()) % 7)
+        lo = first - dt.timedelta(days=(first.weekday() - ws) % 7)
+        last = (first + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1)
+        hi = last + dt.timedelta(days=(ws + 6 - last.weekday()) % 7)
     else:
         view, lo, hi = "agenda", start_day, start_day + dt.timedelta(days=55)
     public = mid is None
@@ -1419,7 +1432,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
     kinds = {k: v for k, v in calview.KINDS.items() if not public or k in calview.public_kinds(archive.club)}
     repeats = {e["id"]: events.repeat_label(e["start"], e["repeat"]) for e in events.load() if e.get("repeat")}
     return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
-                items=items, repeats=repeats,
+                items=items, repeats=repeats, weekdays=[dt.date(2024, 1, 1 + (ws + i) % 7).strftime("%a") for i in range(7)],
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
                 can_edit=not public and can_lead_now(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),

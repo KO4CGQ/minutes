@@ -66,6 +66,25 @@ def save(mid: str, choices: dict) -> dict:
     return get(mid)
 
 
+# ---------------- other settings (Your profile → Settings), in settings.json ----------------
+
+SETTINGS = {"week_start": ("First day of the week", {"sunday": "Sunday", "monday": "Monday"}, "sunday")}
+
+
+def settings(mid: str | None) -> dict:
+    """A member's settings, defaults filled in (and the defaults for someone not signed in)."""
+    saved = _read("settings.json").get(mid, {}) if mid else {}
+    return {k: saved.get(k) if saved.get(k) in choices else default for k, (_, choices, default) in SETTINGS.items()}
+
+
+def save_settings(mid: str, choices: dict) -> dict:
+    """Keep only valid choices (they come from a form)."""
+    alls = _read("settings.json")
+    alls[mid] = {k: v for k, v in choices.items() if k in SETTINGS and v in SETTINGS[k][1]}
+    _write("settings.json", alls)
+    return settings(mid)
+
+
 def wants(mid: str, kind: str) -> str:
     return get(mid)[kind]
 

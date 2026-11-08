@@ -18,7 +18,7 @@
 {% else %}
 <div class="headrow"><h2>{{ first.strftime('%B %Y') }}</h2><p class="row"><a class="btn small ghost" href="{{ base }}?view=month&month={{ prev_month }}" aria-label="Previous month">←</a>
 <a class="btn small ghost" href="{{ base }}?view=month">Today</a><a class="btn small ghost" href="{{ base }}?view=month&month={{ next_month }}" aria-label="Next month">→</a></p></div>
-<table class="month"><thead><tr>{% for n in ('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat') %}<th>{{ n }}</th>{% endfor %}</tr></thead><tbody>
+<table class="month"><thead><tr>{% for n in weekdays %}<th>{{ n }}</th>{% endfor %}</tr></thead><tbody>
 {% set ns = namespace(d=lo) %}{% for w in range(((hi - lo).days + 1) // 7) %}<tr>{% for i in range(7) %}{% set d = ns.d %}
 <td class="{{ 'other' if d.month != first.month }}{{ ' today' if d == today }}"><a class="daynum" href="{{ base }}?start={{ d }}" aria-label="{{ d.strftime('%A, %B %-d') }}">{{ d.day }}</a>
 {% set es = by_day.get(d, []) %}{% if es %}<ul>{% for e in es %}<li data-kind="{{ e.kind }}" title="{{ e.time ~ ' ' if e.time }}{{ e.title }}"{% if loop.index > 3 %} class="extra"{% endif %}>{% call open(e) %}<i class="dot k-{{ e.kind }}"></i>{% if e.time and d == e.start %}<span class="caltime">{{ e.time }}</span> {% endif %}<span class="caltitle">{{ e.title }}</span>{% endcall %}</li>{% endfor %}<li class="more"{% if es|length <= 3 %} hidden{% endif %}><a href="{{ base }}?start={{ d }}">+<span>{{ es|length - 3 }}</span> more</a></li></ul>{% endif %}</td>
