@@ -337,3 +337,62 @@ def test_the_weekly_meeting_is_on_the_calendar_from_the_start(tmp_path):
         events.delete(evs, evs[0]["id"], None)
         events.save(evs)
     assert not any(e.title == "W0TST meeting" for e in calview.entries(c, Archive(tmp_path, c), "kd8bbb", today, today + dt.timedelta(days=20))[0])
+
+
+def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
+    # Field Day: the fourth full weekend of June (always the 4th Saturday), 1800 UTC Saturday to 2059 UTC Sunday
+    v = events.from_form({"title": "Field Day", "date": "2026-06-27", "time": "18:00", "end_date": "2026-06-28", "end_time": "20:59",
+                          "repeat": "yearly_weekday", "tz": "UTC"}, TZ)
+    assert v["tz"] == "UTC" and events.from_form({"title": "x", "date": "2026-06-27", "time": "18:00", "tz": TZ}, TZ)["tz"] is None
+    assert events.from_form({"title": "x", "date": "2026-06-27", "tz": "UTC"}, TZ)["tz"] is None  # all day: no zone
+    with pytest.raises(ValueError, match="time zone"):
+        events.from_form({"title": "x", "date": "2026-06-27", "time": "18:00", "tz": "Mars/Olympus"}, TZ)
+    with events.locked():
+        evs = []
+        e = events.add(evs, "events", v, "x")
+        events.save(evs)
+    assert events.form_values(e, None)["tz"] == "UTC"
+    c = club()
+    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))
+    fd = next(x for x in got if x.title == "Field Day")
+    assert (fd.starts, fd.ends) == (dt.datetime(2027, 6, 26, 14, 0), dt.datetime(2027, 6, 27, 16, 59)) and fd.time == "2:00 PM"
+    assert fd.zone == "Sat Jun 26 18:00 – Sun Jun 27 20:59 UTC"
+    # late UTC on the last day of the range is still that day in club time
+    late = events.add([], "events", events.from_form({"title": "Late", "date": "2027-07-01", "time": "01:00", "tz": "UTC"}, TZ), "x")
+    with events.locked():
+        events.save([late])
+    assert [x.start for x in calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))[0]
+            if x.title == "Late"] == [dt.date(2027, 6, 30)]
+
+
+def test_search_finds_calendar_events_and_the_agenda_can_show_more_weeks(tmp_path, monkeypatch):
+    from w8lbz_minutes import web
+    today = dt.date.today()
+    with events.locked():
+        evs = []
+        events.add(evs, "events", events.from_form({"title": "Fox hunt", "where": "City park", "date": (today + dt.timedelta(days=80)).isoformat()}), "x")
+        events.save(evs)
+    (tmp_path / "meetings").mkdir()
+    monkeypatch.setattr(web, "archive", Archive(tmp_path / "meetings", club()))
+    m, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    found = m.get("/search?q=city+PARK").text
+    assert "Fox hunt" in found and f"/calendar?start={today + dt.timedelta(days=80)}" in found
+    assert "Fox hunt" not in m.get("/search?q=park+bench").text
+    assert "Fox hunt" not in m.get("/calendar").text and "Fox hunt" in m.get("/calendar?weeks=13").text
+    assert "Fox hunt" not in m.get("/calendar?weeks=999").text  # not a choice: 8 weeks
+    assert f"start={today + dt.timedelta(days=91)}&amp;weeks=13" in m.get("/calendar?weeks=13").text  # Later keeps the length
+
+
+def test_imported_minutes_offer_the_original_and_new_ones_the_pdf(tmp_path, monkeypatch):
+    from w8lbz_minutes import web
+    root = tmp_path / "meetings"
+    old = Meeting(date=dt.date(2025, 3, 6), status="published", source="6-mar-25-minutes.pdf")
+    new = Meeting(date=dt.date(2026, 11, 5), status="published")
+    old.save(root), new.save(root)
+    (root / old.slug / "original.pdf").write_bytes(b"%PDF")
+    (root / new.slug / "original.pdf").write_bytes(b"%PDF")  # a stray file doesn't make it "imported"
+    m, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    monkeypatch.setattr(web, "archive", Archive(root, c))
+    o, n = m.get(f"/meetings/{old.slug}").text, m.get(f"/meetings/{new.slug}").text
+    assert "View original" in o and "Download PDF" not in o
+    assert "View original" not in n and "Download PDF" in n

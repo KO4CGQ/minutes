@@ -15,6 +15,9 @@
 <fieldset><legend>Ends</legend><div class="row"><input type="date" name="end_date" value="{{ f.end_date }}" aria-label="Last day (optional)">
   <input type="time" name="end_time" value="{{ f.end_time }}" aria-label="End time (optional)"></div>
   <p class="muted small">Optional. An end time alone means the same day; a later date for an event over several days. With a start time and no end, it's taken as 2 hours.</p></fieldset>
+<label>Time zone <input name="tz" list="zones" value="{{ f.tz or club_tz }}" autocomplete="off" spellcheck="false"></label>
+<datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
+<p class="muted small">For timed events. The club's is {{ club_tz }}; pick another (like UTC for a contest) and the calendar shows it in club time.</p>
 <fieldset><legend>Repeats</legend>
   <select name="repeat" aria-label="Repeats">{% for v, label in repeat_choices %}<option value="{{ v }}" {{ 'selected' if v == (f.repeat or '') }}>{{ label }}</option>{% endfor %}</select>
   <label class="until">Until <input type="date" name="repeat_until" value="{{ f.repeat_until }}" aria-label="Repeats until (optional)"></label>

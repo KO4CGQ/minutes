@@ -1,6 +1,10 @@
 {% extends "base.html" %}{% block body %}
 <h1>Search{% if q %}: “{{ q }}”{% endif %}</h1>
-<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
+<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search minutes and calendar…" value="{{ q or '' }}" aria-label="Search minutes and calendar"></form>
+{% if cal_results %}<h2>Calendar</h2>
+<ul class="results">{% for r in cal_results %}<li><a href="/calendar?start={{ r.date }}">{{ r.date.strftime('%a %b %-d, %Y') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}
+<div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>{% endfor %}</ul>
+<h2>Minutes</h2>{% endif %}
 {% if q %}<p class="muted">{{ results|length }} result{{ 's' if results|length != 1 }}{% if results|length == 100 %} (showing first 100){% endif %}</p>{% endif %}
 <ul class="results">{% for r in results %}
 <li><a href="/meetings/{{ r.slug }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>

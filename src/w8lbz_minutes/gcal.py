@@ -62,7 +62,7 @@ def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict
     store.ensure_meeting(club)
     for e in store.load():
         for d in store.dates(e, today, today + dt.timedelta(days=365)):
-            o = store.occurrence(e, d)
+            o = store.in_zone(store.occurrence(e, d), e.get("tz"), tz)
             seen.add((o["start"][:10], o["title"].lower()))
             out[e["cal"]][f"ev:{e['id']}:{d}"] = {"summary": o["title"], "location": o.get("where") or "",
                                                   "description": o.get("notes") or "",

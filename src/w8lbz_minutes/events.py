@@ -6,6 +6,7 @@ events.json in the data folder: {"events": [event, ...]}. An event:
     repeat: None or {"freq": "weekly" | "monthly" | "monthly_weekday" | "yearly" | "yearly_weekday", "interval": 1, "last": False,
                      "until": "YYYY-MM-DD" or None},
     skip: [dates taken out of a repeating event], changes: {date: {title, where, notes, start, end}} (one date changed),
+    tz: the IANA time zone start/end are in (timed events), when not the club's (club.yaml timezone), e.g. "UTC",
     uid: the .ics UID it was imported from, if any.
 Google Calendar, if set up, gets a copy (gcal.py); nothing here depends on it.
 """
@@ -20,7 +21,7 @@ import re
 import secrets
 import time
 from contextlib import contextmanager
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, available_timezones
 
 from .club import DATA
 
@@ -168,9 +169,20 @@ def occurrence(e: dict, d: dt.date) -> dict:
     return {**o, **e.get("changes", {}).get(d.isoformat(), {})}
 
 
+def in_zone(o: dict, tz: str | None, club_tz: str) -> dict:
+    """An occurrence of an event kept in another time zone (tz), with its start and end in club time."""
+    if not tz or tz == club_tz or "T" not in o["start"]:
+        return o
+    conv = lambda v: _iso(_dt(v).replace(tzinfo=ZoneInfo(tz)).astimezone(ZoneInfo(club_tz)), True) if v else v  # noqa: E731
+    return {**o, "start": conv(o["start"]), "end": conv(o.get("end"))}
+
+
+ZONES = sorted(available_timezones())
+
+
 # ---------------- changes from the form ----------------
 
-def from_form(f: dict) -> dict:
+def from_form(f: dict, club_tz: str = "") -> dict:
     """title, where, notes, start, end and repeat from the form's fields. Raises ValueError for the form."""
     title = " ".join((f.get("title") or "").split())[:200]
     if not title:
@@ -191,6 +203,9 @@ def from_form(f: dict) -> dict:
             raise ValueError("end")
     except ValueError as x:
         raise ValueError("The end is before the start." if str(x) == "end" else "That date or time isn't right.")
+    tz = (f.get("tz") or "").strip() or club_tz
+    if t and tz and tz not in ZONES:
+        raise ValueError("Pick a time zone from the list, like UTC or America/Chicago.")
     rep = f.get("repeat") or ""
     if rep not in REPEATS:
         raise ValueError("Pick how it repeats.")
@@ -202,7 +217,8 @@ def from_form(f: dict) -> dict:
         repeat = {"freq": {"biweekly": "weekly", "monthly_last": "monthly_weekday"}.get(rep, rep),
                   "interval": 2 if rep == "biweekly" else 1, "last": rep == "monthly_last" or (rep == "yearly_weekday" and day.day > 28), "until": until}
     return {"title": title, "where": " ".join((f.get("where") or "").split())[:200],
-            "notes": (f.get("notes") or "").strip()[:2000], "start": start, "end": end, "repeat": repeat}
+            "notes": (f.get("notes") or "").strip()[:2000], "start": start, "end": end, "repeat": repeat,
+            "tz": tz if t and tz != club_tz else None}
 
 
 def form_values(e: dict, d: str | None) -> dict:
@@ -213,7 +229,7 @@ def form_values(e: dict, d: str | None) -> dict:
     end = o.get("end") or ""
     return {"title": o["title"], "where": o.get("where", ""), "notes": o.get("notes", ""), "cal": e["cal"],
             "date": o["start"][:10], "time": o["start"][11:16], "end_date": end[:10] if end[:10] != o["start"][:10] else "",
-            "end_time": end[11:16], "repeat": rep, "repeat_until": (r or {}).get("until") or ""}
+            "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or ""}
 
 
 def add(evs: list[dict], cal: str, v: dict, by: str) -> dict:
@@ -451,7 +467,7 @@ def import_ics(evs: list[dict], text: str, cal: str, by: str, tz_name: str, sinc
         if last < since:
             continue
         v = {"title": title, "where": _text(one(b, "LOCATION")[1] or "")[:200], "notes": _plain(_text(one(b, "DESCRIPTION")[1] or ""))[:2000],
-             "start": _iso(start, timed), "end": (_iso(end, timed) if end > start else None), "repeat": repeat}
+             "start": _iso(start, timed), "end": (_iso(end, timed) if end > start else None), "repeat": repeat, "tz": None}
         skips = [_when(x, p, tz)[0].date().isoformat() for p, vals in b.get("EXDATE", []) for x in vals.split(",")]
         uid = one(b, "UID")[1]
         known = next((x for x in evs if uid and x.get("uid") == uid), None)

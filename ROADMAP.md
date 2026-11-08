@@ -18,7 +18,7 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 - **Motions as records:** keep a motion's mover, seconder and result as data, not just text, so bylaws amendments and spending can be traced to the motion that approved them (see Bylaws).
 
 ## Look and feel: ideas to consider
-- **Unified search:** one search box for minutes, members (name, callsign), business items and chow nights, with results grouped by kind. Minutes already have full-text search; the others are small lists, so this is a modest change.
+- **Unified search, the rest:** minutes and calendar events share one search box already; add members (name, callsign), business items and chow nights, grouped by kind.
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
 - **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.

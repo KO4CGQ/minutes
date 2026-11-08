@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
 from . import chow, events as store, gcal
 from .club import DATA, Club
@@ -28,6 +29,7 @@ class Entry:
     ends: dt.datetime | None = None
     occ: str | None = None  # a repeating event's original date (which date to edit)
     notes: str = ""
+    zone: str = ""  # an event kept in another time zone: its times there ("Sat Jun 27 18:00 – Sun Jun 28 20:59 UTC")
 
     def days(self, lo: dt.date, hi: dt.date) -> list[dt.date]:
         """The days it covers within lo..hi (a long event is listed on each day, up to two weeks)."""
@@ -50,6 +52,15 @@ def _entry(o: dict, kind: str, **kw) -> Entry:
     return Entry(s.date(), f.date() if not timed else max(s.date(), (f - dt.timedelta(seconds=1)).date()), o["title"], kind,
                  _clock(s) if timed else None, o.get("where") or None, starts=s if timed else None, ends=f if timed else None,
                  notes=o.get("notes", ""), **kw)
+
+
+def _zone(o: dict, tz: str | None, club_tz: str) -> str:
+    if not tz or tz == club_tz or "T" not in o["start"]:
+        return ""
+    s = dt.datetime.fromisoformat(o["start"])
+    f = dt.datetime.fromisoformat(o["end"]) if o.get("end") else s + dt.timedelta(hours=store_hours())
+    abbr = s.replace(tzinfo=ZoneInfo(tz)).tzname()
+    return f"{s:%H:%M} – {f:%H:%M} {abbr}" if s.date() == f.date() else f"{s:%a %b %-d %H:%M} – {f:%a %b %-d %H:%M} {abbr}"
 
 
 def store_hours() -> int:
@@ -92,12 +103,14 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     out: list[Entry] = []
     store.ensure_meeting(club)
     kinds = public_kinds(club) if public else list(store.CALS)
+    tz = str(club.info.get("timezone", "America/New_York"))
     for e in store.load():
         if e["cal"] not in kinds:
             continue
-        for d in store.dates(e, lo, hi):
+        for d in store.dates(e, lo - dt.timedelta(days=1), hi + dt.timedelta(days=1)):  # a day either side: another zone's date can differ
             o = store.occurrence(e, d)
-            x = _entry(o, e["cal"], id=e["id"], repeats=bool(e.get("repeat")), occ=d.isoformat() if e.get("repeat") else None)
+            x = _entry(store.in_zone(o, e.get("tz"), tz), e["cal"], id=e["id"], repeats=bool(e.get("repeat")),
+                       occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz))
             if x.end >= lo and x.start <= hi:
                 out.append(x)
     if "events" in kinds:  # the minutes' dated Upcoming Events, unless the same event is already on the calendar

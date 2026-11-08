@@ -1077,7 +1077,7 @@ def index(request: Request, period: str = "", p: str = Query("1", alias="page"),
 @app.get("/meetings/{slug}", response_class=HTMLResponse)
 def view(request: Request, slug: str):
     m = get_meeting(slug)
-    has_original = (archive.root / slug / "original.pdf").exists()
+    has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
     return page(request, "meeting.html", m=m, has_original=has_original,
                 emailed=console.email_status(archive, slug))
 
@@ -1115,7 +1115,22 @@ def search(request: Request, q: str = ""):
     results = archive.search(q) if q else []
     for r in results:
         r["date"] = archive.by_slug[r["slug"]].date
-    return page(request, "search.html", q=q, results=results)
+    return page(request, "search.html", q=q, results=results, cal_results=_search_calendar(q))
+
+
+def _search_calendar(q: str) -> list[dict]:
+    """Calendar events whose title, place or notes have every word of q, each with its next date (or its last one)."""
+    words = q.lower().split()
+    if not words:
+        return []
+    today, out = dt.date.today(), []
+    for e in events.load():
+        text = " ".join((e["title"], e.get("where", ""), e.get("notes", ""))).lower()
+        if all(w in text for w in words):
+            ahead = events.dates(e, today, today + dt.timedelta(days=400))
+            out.append({"title": e["title"], "where": e.get("where", ""), "cal": events.CALS[e["cal"]],
+                        "date": ahead[0] if ahead else dt.date.fromisoformat(e["start"][:10]), "repeat": events.repeat_label(e["start"], e.get("repeat"))})
+    return sorted(out, key=lambda r: (r["date"] < today, abs((r["date"] - today).days)))
 
 
 @app.get("/members/{mid}", response_class=HTMLResponse)
@@ -1396,20 +1411,24 @@ SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "
 # ---------------- calendar ----------------
 
 @app.get("/calendar", response_class=HTMLResponse)
-def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", mid: str = Depends(me)):
-    """Agenda (from a day, 8 weeks) or month grid: club calendars, chow nights and birthdays."""
-    return _calendar(request, view, start, month, mid)
+def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: int = 8, mid: str = Depends(me)):
+    """Agenda (from a day, 8 weeks or more) or month grid: club calendars, chow nights and birthdays."""
+    return _calendar(request, view, start, month, mid, weeks)
 
 
 @app.get("/calendar/public", response_class=HTMLResponse)
-def calendar_public(request: Request, view: str = "agenda", start: str = "", month: str = ""):
+def calendar_public(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: int = 8):
     """The calendars an admin made public, for anyone (no chow, no birthdays)."""
     if not calview.public_kinds(archive.club):
         raise HTTPException(404)
-    return _calendar(request, view, start, month, None)
+    return _calendar(request, view, start, month, None, weeks)
 
 
-def _calendar(request: Request, view: str, start: str, month: str, mid: str | None) -> HTMLResponse:
+AGENDA_WEEKS = {8: "8 weeks", 13: "3 months", 26: "6 months", 52: "a year"}
+
+
+def _calendar(request: Request, view: str, start: str, month: str, mid: str | None, weeks: int = 8) -> HTMLResponse:
+    weeks = weeks if weeks in AGENDA_WEEKS else 8
     today = dt.date.today()
     try:
         first = dt.date.fromisoformat(month + "-01") if month else today.replace(day=1)
@@ -1422,7 +1441,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
         last = (first + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1)
         hi = last + dt.timedelta(days=(ws + 6 - last.weekday()) % 7)
     else:
-        view, lo, hi = "agenda", start_day, start_day + dt.timedelta(days=55)
+        view, lo, hi = "agenda", start_day, start_day + dt.timedelta(days=7 * weeks - 1)
     public = mid is None
     items, note = calview.entries(archive.club, archive, mid, lo, hi, public=public)
     by_day: dict[dt.date, list] = {}
@@ -1436,7 +1455,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
                 can_edit=not public and can_lead_now(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
-                timedelta=dt.timedelta)
+                timedelta=dt.timedelta, weeks=weeks, agenda_weeks=AGENDA_WEEKS)
 
 
 def _feed_url(request: Request, path: str) -> str:
@@ -1487,6 +1506,10 @@ def calendar_public_feed():
     return _ics(items, f"{archive.club.info.get('callsign', 'Club')} events")
 
 
+def _club_tz() -> str:
+    return str(archive.club.info.get("timezone", "America/New_York"))
+
+
 def _calendar_editor(request: Request) -> None:
     if not can_lead_now(request):
         raise HTTPException(403, "Only leaders and minutes editors can change the club calendars.")
@@ -1494,7 +1517,7 @@ def _calendar_editor(request: Request) -> None:
 
 def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
     r = page(request, "calendar_edit.html", f=f, id=id, d=d, cals=events.CALS, error=error, repeats=repeats, scopes=events.SCOPES,
-             repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()))
+             repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()), zones=events.ZONES, club_tz=_club_tz())
     r.status_code = status
     return r
 
@@ -1529,7 +1552,7 @@ async def calendar_save(request: Request, mid: str = Depends(me)):
     if cal not in events.CALS or scope not in events.SCOPES:
         raise HTTPException(404)
     try:
-        v = events.from_form(f)
+        v = events.from_form(f, _club_tz())
         with events.locked():
             evs = events.load()
             if eid:
