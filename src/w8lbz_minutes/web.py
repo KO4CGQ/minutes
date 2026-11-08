@@ -1417,7 +1417,9 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
         for d in e.days(lo, hi):
             by_day.setdefault(d, []).append(e)
     kinds = {k: v for k, v in calview.KINDS.items() if not public or k in calview.public_kinds(archive.club)}
+    repeats = {e["id"]: events.repeat_label(e["start"], e["repeat"]) for e in events.load() if e.get("repeat")}
     return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
+                items=items, repeats=repeats,
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
                 can_edit=not public and can_lead_now(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),

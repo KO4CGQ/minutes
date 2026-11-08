@@ -261,7 +261,8 @@ def test_leaders_add_change_delete_and_import_on_the_page(tmp_path, monkeypatch)
     assert r.headers["location"] == "/calendar?start=2026-11-10"
     eid = events.load()[0]["id"]
     page = t.get("/calendar?start=2026-11-01").text
-    assert f"/calendar/edit?id={eid}&d=2026-11-17" in page and "aria-label=\"Edit Weekly net\"" in page and "· repeats" not in page
+    assert f"/calendar/edit?id={eid}&d=2026-11-17" in page and "· repeats" not in page
+    assert 'class="calopen" data-ev=' in page and "Every Tuesday" in page  # rows open a dialog: when, repeats, Edit
     assert "Every Tuesday" in t.get(f"/calendar/edit?id={eid}&d=2026-11-17").text
     assert 'class="calkind" data-kind="planning"' in page and '<li data-kind="events">' in page  # the legend shows or hides each
     t.post("/calendar/delete", data={"id": eid, "d": "2026-11-17", "scope": "this"})
