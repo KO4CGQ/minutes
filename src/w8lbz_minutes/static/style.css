@@ -436,5 +436,6 @@ form.profile label.until { display: block; margin-top: .5rem; }
 a.caledit { display: inline-flex; align-items: center; justify-content: center; min-width: 2rem; min-height: 2rem; margin: -.4rem 0;
   vertical-align: middle; border-radius: .5rem; color: var(--muted); } a.caledit:hover { background: var(--accent-soft); color: var(--accent-text); }
 a.caledit .ico { width: 1.05rem; height: 1.05rem; }
+/* emoji(): the native emoji where the device draws color emoji (html.emoji, set in base.html), else the app's line icon */
 .emo { display: none; font-size: 1rem; line-height: 1; } html.emoji .emo { display: inline; } html.emoji .emo-alt { display: none; }
-.emo-alt { display: inline-flex; }
+.emo-alt { display: inline-flex; vertical-align: -.2em; } .emo-alt .ico { width: 1.15em; height: 1.15em; } .emoji-wrap { display: inline; }

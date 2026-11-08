@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_avatar.html" import avatar %}{% block title %}Your profile{% endblock %}{% block body %}
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}{% block title %}Your profile{% endblock %}{% block body %}
 <h1>Your profile</h1>
 {% include "_profile_tabs.html" %}
 {% if saved and not error %}<p class="msg ok">Saved. The club roster is updated.</p>{% endif %}
@@ -25,7 +25,7 @@
       <label>Callsign <input value="{{ m.callsign or '' }}" readonly tabindex="-1" class="cs"></label>
       <label>License class <input value="{{ m.license_class or '' }}" readonly tabindex="-1"></label>
     </div>
-    <span class="hint">🔒 The Secretary keeps these on the roster. To change one, ask an officer.</span>
+    <span class="hint">{{ emoji('🔒', 'lock') }} The Secretary keeps these on the roster. To change one, ask an officer.</span>
   </fieldset>
   <label>Email <input type="email" name="email" value="{{ m.email or '' }}" autocomplete="email">
     <span class="hint">Also how you sign in. A change takes effect after you confirm it from the new address.</span></label>

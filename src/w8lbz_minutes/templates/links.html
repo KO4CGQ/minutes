@@ -1,5 +1,5 @@
-{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Club links{% endblock %}{% block body %}
-<div class="headrow"><h1>Club links</h1>{% if admin_until and not edit %}<a class="btn small ghost" href="/links?edit=1">✏️ Edit links</a>{% endif %}</div>
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}Club links{% endblock %}{% block body %}
+<div class="headrow"><h1>Club links</h1>{% if admin_until and not edit %}<a class="btn small ghost" href="/links?edit=1">{{ emoji('✏️', 'pencil') }} Edit links</a>{% endif %}</div>
 {% if edit %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 <p class="muted">Pick where each link shows: on this page, in the "Club Links" footer of the minutes (and their PDF), both, or neither. Use ↑ ↓ to change the order.

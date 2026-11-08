@@ -80,7 +80,7 @@
           body: JSON.stringify({ meeting: M, state: S }),
         });
         if (!r.ok) throw new Error(await r.text());
-        saved.textContent = "Saved ✅"; saved.className = "saved";
+        saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved";
       } catch (e) { saved.textContent = "Not saved: " + e.message; saved.className = "saved err"; }
       waiters.splice(0).forEach((r) => r());
     }, now ? 0 : 700);
@@ -269,7 +269,7 @@
       ...arr.map((t, i) => {
         const ta = h("textarea", { rows: 1, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
         ta.value = t;
-        return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, "✖️"));
+        return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
       }),
       h("button", { class: "btn small ghost", onclick: () => { arr.push(""); setArr(arr); draw(); wrap.querySelectorAll("textarea")[arr.length - 1].focus(); } }, "+ Add item"));
     draw();
@@ -314,7 +314,7 @@
           oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
         ta.value = e.text;
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
-            h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, "✖️")),
+            h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, emo("✖️", "x"))),
           h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, nodate),
           h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")));
       }), h("button", { class: "btn small ghost", onclick: () => { evs.push({ text: "", member: null, when: null }); draw();
@@ -334,7 +334,7 @@
         body: new URLSearchParams({ meeting: M.slug, ...data }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return; }
-      D.business = j; saved.textContent = "Saved ✅"; saved.className = "saved"; draw();
+      D.business = j; saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved"; draw();
     };
     const fmtDate = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const row = (x) => {
@@ -356,9 +356,9 @@
       return h("div", { class: "bizitem" + (done ? " done" : "") + (x.overdue ? " overdue" : "") },
         h("div", { class: "row" }, ta,
           h("button", { class: "btn small" + (done ? "" : " ghost"), title: done ? "Not done after all" : "Mark done",
-            onclick: () => send(`/business/${x.id}/done`, { done: done ? 0 : 1 }) }, done ? "✅ Done" : "Done"),
+            onclick: () => send(`/business/${x.id}/done`, { done: done ? 0 : 1 }) }, done ? [emo("✅", "check"), " Done"] : "Done"),
           isNew ? h("button", { class: "btn small ghost", title: "Delete (added by mistake)",
-            onclick: () => { if (confirm("Delete this item?")) send(`/business/${x.id}/delete`, {}); } }, "✖️") : null),
+            onclick: () => { if (confirm("Delete this item?")) send(`/business/${x.id}/delete`, {}); } }, emo("✖️", "x")) : null),
         h("div", { class: "row meta" }, owner, due,
           x.overdue ? h("span", { class: "badge warn" }, `overdue since ${fmtDate(x.due)}`) : null,
           !isNew ? h("span", { class: "hint" }, `first mentioned ${fmtDate(x.opened)}`) : null),
@@ -420,9 +420,9 @@
       const what = h("input", { placeholder: "What they brought (optional)", value: C.note || "", size: 26 });
       const cover = h("select", {}, h("option", { value: "" }, "Who brought it?"),
         D.members.filter((m) => m.id !== C.member).map((m) => h("option", { value: m.id, selected: m.id === C.covered_by }, m.name)));
-      const done = { provided: "✅ provided", missed: "❌ not provided", covered: "brought by someone else" }[C.status];
+      const done = { provided: [emo("✅", "check"), " provided"], missed: [emo("❌", "xcircle"), " not provided"], covered: "brought by someone else" }[C.status];
       box.replaceChildren(
-        h("div", {}, h("b", {}, "Chow tonight: "), C.name, done ? h("span", { class: "badge" }, " " + done) : null,
+        h("div", {}, h("b", {}, "Chow tonight: "), C.name, done ? h("span", { class: "badge" }, " ", done) : null,
           C.status === "covered" && C.covered_by ? ` (${people[C.covered_by]?.name || C.covered_by})` : "",
           C.note ? `: ${C.note}` : ""),
         h("div", { class: "row" }, what,
