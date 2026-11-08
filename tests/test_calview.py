@@ -294,5 +294,11 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     home = m.get("/").text  # Home's "Coming up" is the calendar's next two weeks, chow left to its own card
     coming = home[home.index("Coming up"):]
     assert "Fox hunt" in coming and "Board dinner" in coming and "Chow: Amy Able" not in coming
+    (tmp_path / "meetings").mkdir()
+    Meeting(date=today - dt.timedelta(days=3), status="published",
+            sections={"Upcoming Events": [Item("Winter Field Day coming in Jan")]}).save(tmp_path / "meetings")
+    monkeypatch.setattr(web, "archive", Archive(tmp_path / "meetings", c))
+    coming = (h := m.get("/").text)[h.index("Coming up"):]
+    assert "From the last minutes" in coming and "Winter Field Day coming in Jan" in coming  # undated, as written
     sub = m.get("/calendar/subscribe").text
     assert calview.feed_token("kd8bbb") in sub and "/calendar/public.ics" in sub
