@@ -415,18 +415,19 @@ form.linkedit table.list { overflow: visible; }
 .k-events { background: var(--accent); } .k-chow { background: #d9932b; } .k-planning { background: #7b4fb0; }
 .k-community { background: #2f7fc1; } .k-birthday { background: #d24f86; }
 h2.calday { font-size: 1rem; margin: 1.1rem 0 .3rem; color: var(--accent-text); }
-ul.agenda { list-style: none; padding: 0; margin: 0; } ul.agenda li { border-radius: var(--radius-sm); } ul.agenda li.alt { background: var(--surface-2); }
+ul.agenda { list-style: none; padding: 0; margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+ul.agenda li + li { border-top: 1px solid var(--border); } ul.agenda li.alt { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
 .caltime { font-variant-numeric: tabular-nums; color: var(--muted); }
 /* an event: the whole row opens its details */
 button.calopen { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; width: 100%; }
-ul.agenda button.calopen { display: flex; align-items: baseline; gap: .5rem; padding: .6rem .6rem; border-radius: var(--radius-sm); min-height: 2.75rem; }
+ul.agenda button.calopen { display: flex; align-items: baseline; gap: .5rem; padding: .65rem .75rem; min-height: 2.75rem; }
 ul.agenda button.calopen:hover { background: var(--accent-soft); } button.calopen:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 ul.agenda .caltime { flex: none; width: 4.6rem; font-size: .9rem; } ul.agenda .dot { align-self: center; margin-right: 0; } ul.agenda .caltitle { min-width: 0; overflow-wrap: anywhere; }
 table.month button.calopen { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; }
 table.month button.calopen:hover { background: var(--accent-soft); }
 /* the details dialog */
 dialog#calmodal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
-  box-shadow: 0 10px 40px rgba(0,0,0,.3); } dialog#calmodal::backdrop { background: rgba(0,0,0,.45); }
+  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop { background: rgba(0,0,0,.45); }
 dialog#calmodal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
 dialog#calmodal form { position: absolute; top: .5rem; right: .5rem; margin: 0; }
 button.calclose { font: inherit; background: none; border: 0; cursor: pointer; min-width: 2.5rem; min-height: 2.5rem; border-radius: 50%; color: var(--muted); }
