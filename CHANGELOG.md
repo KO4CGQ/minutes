@@ -22,6 +22,8 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Repeating events:** changing or deleting one date of a repeating event (a weekly net) asks whether it's for this date only, this and following dates, or every date.
 - **Subscribe from your calendar app:** each member gets a private calendar link (Calendar → Subscribe) for Apple Calendar, Outlook, Google or a phone, with the club calendars, chow nights and shared birthdays; tick which of them to include (one at a time gives each its own color in the app). "Make a new link" replaces it.
 - **Public calendars (optional):** an admin can make chosen club calendars public (`public_calendars` in club.yaml): a page and a feed anyone can see without signing in. Chow nights and birthdays are never public.
+- **Brand logos for links:** the Links editor's icon picker has a search box over about 3,400 brand logos from Simple Icons (Home Assistant, Discord, YouTube, GitHub…), stored with the app rather than loaded from the internet.
+- **Home: Coming up is the calendar:** the next two weeks from the club calendar (nets, VE testing, fox hunts, Planning, Community, shared birthdays), not only the last minutes' Upcoming Events, with a link to the Calendar page. Chow keeps its own card.
 - **Links editor on phones:** each link is its own spaced card, and saved links start folded to their name (⋯ opens one).
 
 ## 0.9.1 (2026-11-08)

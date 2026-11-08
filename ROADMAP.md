@@ -20,7 +20,7 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 ## Look and feel: ideas to consider
 - **Unified search:** one search box for minutes, members (name, callsign), business items and chow nights, with results grouped by kind. Minutes already have full-text search; the others are small lists, so this is a modest change.
 - **Line icons instead of emoji** on buttons and labels: emoji show as empty boxes on computers without an emoji font. The Links page's icon set (`_icons.html`) could cover them.
-- **More link icons, hosted locally:** add [Simple Icons](https://simpleicons.org) (CC0 brand logos: Discord, YouTube, GitHub, Facebook…) as SVGs copied into the repo, never from a CDN, and give the icon picker a search box like the combo box (`combo.js`). Font Awesome Free (CC BY 4.0, credit needed) is the fallback for general icons; Nerd Fonts is a terminal font, and svgl's logos have mixed licenses, so neither fits.
+- **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
 - **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 

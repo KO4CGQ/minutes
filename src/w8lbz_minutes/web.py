@@ -1042,10 +1042,13 @@ def home(request: Request, mid: str = Depends(me)):
     latest = next((m for m in archive.meetings if m.status != "draft"), None)  # newest first
     items = [business.view(club, x, today.isoformat()) for x in business.load()["items"]
              if x["status"] == "open" and x.get("owner") == mid]
+    # the calendar's next two weeks, without what Home already shows (chow nights; the weekly meeting the app makes up)
+    coming, _ = calview.entries(club, archive, mid, today, today + dt.timedelta(days=13))
+    coming = [e for e in coming if e.kind != "chow" and not (e.title == "Club meeting" and not e.id)][:8]
     return page(request, "home.html", next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
-                items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest,
+                items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming,
                 today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
                 fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
 

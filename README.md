@@ -91,6 +91,9 @@ Callsigns listed under `admins:` in `club.yaml` get **Turn on admin mode** in th
 
 In admin mode, a member's page has **View the app as …**: the app as that member sees it, read-only (no changes, and not their sign-in or passkey page), until **Stop** or admin mode ends. Also logged.
 
+## Links page icons
+Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos from [Simple Icons](https://simpleicons.org) (CC0). They're stored in the repo (`src/w8lbz_minutes/simple_icons.json`), never loaded from a CDN, and drawn in the club's color like the built-in icons. To update them: `python3 deploy/update-simple-icons.py [VERSION]`.
+
 ## Bylaws
 `/bylaws` shows the club's constitution and bylaws from `bylaws.md` in the data directory (`/var/lib/w8lbz-minutes/bylaws.md` on the server). It's kept out of this public repo.
 

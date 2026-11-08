@@ -35,7 +35,7 @@ class FakeGoogle:
         rest = url.split("/calendars/")[1].split("/")
         return rest[0], (rest[2] if len(rest) > 2 else None)
 
-    def get(self, url, params=None):
+    def get(self, url, params=None, **kw):
         cal, eid = self._split(url)
         if eid:
             return self._ok(next(e for e in self.cals[cal] if e["id"] == eid))
@@ -256,5 +256,8 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     assert anon.get("/calendar", follow_redirects=False).status_code in (302, 303, 307)  # the members' page still needs sign-in
     m = TestClient(web.app)
     m.cookies.set(web.COOKIE, a.new_session("kd8bbb"))
+    home = m.get("/").text  # Home's "Coming up" is the calendar's next two weeks, chow left to its own card
+    coming = home[home.index("Coming up"):]
+    assert "Fox hunt" in coming and "Board dinner" in coming and "Chow: Amy Able" not in coming
     sub = m.get("/calendar/subscribe").text
     assert calview.feed_token("kd8bbb") in sub and "/calendar/public.ics" in sub

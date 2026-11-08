@@ -58,7 +58,7 @@ def _google(club: Club, kind: str, lo: dt.date, hi: dt.date, session) -> list[En
     while True:
         r = session.get(gcal.API.format(cid), params={"timeMin": f"{lo}T00:00:00Z", "timeMax": f"{hi + dt.timedelta(days=1)}T23:59:59Z",
                                                        "singleEvents": "true", "orderBy": "startTime", "maxResults": 250,
-                                                       **({"pageToken": page} if page else {})})
+                                                       **({"pageToken": page} if page else {})}, timeout=8)
         r.raise_for_status()
         j = r.json()
         for e in j.get("items", []):

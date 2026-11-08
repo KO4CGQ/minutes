@@ -31,10 +31,12 @@
   {% if nb %}<p class="muted">New business:</p><ul class="plain">{% for it in nb[:3] %}<li>{{ it.text|truncate(110) }}</li>{% endfor %}</ul>{% endif %}
   <p><a href="/minutes">All minutes</a></p>
 </section>
-{% set ev = latest.sections.get('Upcoming Events') or [] %}
-{% if ev %}<section class="card">
+{% endif %}
+<section class="card">
   <h2>Coming up</h2>
-  <ul class="plain">{% for it in ev %}<li>{{ it.shown|linkify }}</li>{% endfor %}</ul>
-</section>{% endif %}{% endif %}
+  {% if coming %}<ul class="plain">{% for e in coming %}<li><i class="dot k-{{ e.kind }}"></i><b>{{ 'Today' if e.start == today else e.start.strftime('%a %b %-d') }}</b>{% if e.time %} {{ e.time }}{% endif %}: {{ e.title|linkify }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted">Nothing on the calendar for the next two weeks.</p>{% endif %}
+  <p><a href="/calendar">The calendar</a></p>
+</section>
 </div>
 {% endblock %}
