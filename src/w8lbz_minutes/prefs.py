@@ -10,7 +10,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from . import business, chow
+from . import business, calview, chow
 from .club import DATA, Club
 
 # kind: (heading, {choice: what it means}, default), in the order the Email tab shows them. "roster" is for the Secretaries.
@@ -90,21 +90,23 @@ def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str,
         when = "tomorrow" if days == 1 else f"in {days} days"
         out.append((mid, f"chow:{date}:{mid}:{days}", f"Your chow night is {when}: {dt.date.fromisoformat(date).strftime('%A, %B %-d')}",
                     f"Hi {m.first},\n\nA reminder that you're bringing chow on {dt.date.fromisoformat(date).strftime('%A, %B %-d')}.\n\n"
-                    f"Can't make it? Ask someone to swap on the chow page: {url}/chow\n\n{_sign(club)}"))
+                    f"Can't make it? Ask someone to swap on the chow page: {url}/chow\n\n"
+                    f"To change how many days ahead you're reminded, or stop these reminders: {url}/profile/email\n\n{_sign(club)}"))
     return out
 
 
-def digest(club: Club, meetings: list, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:
+def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:
     """The meeting-day email, the morning of each meeting: the time, your chow if it's tonight,
-    the business you're looking after, last meeting's minutes and the upcoming events in them."""
+    the business you're looking after, the calendar until the next meeting, and last meeting's minutes."""
     wd = chow.WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
     if today.weekday() != wd:
         return []
     tonight = chow.load()["nights"].get(today.isoformat(), {})
     items = business.load()["items"]
-    latest = next((m for m in sorted(meetings, key=lambda m: m.date, reverse=True) if m.status == "published" and m.date < today), None)
+    latest = next((m for m in sorted(archive.meetings, key=lambda m: m.date, reverse=True) if m.status == "published" and m.date < today), None)
     at = dt.datetime.strptime(str(club.info.get("meeting_time", "19:30")), "%H:%M").strftime("%-I:%M %p")
-    events = [i.shown for i in latest.items("Upcoming Events")] if latest else []
+    # undated Upcoming Events in the minutes (all of them before events had dates) still count, as written
+    undated = [i.text for i in latest.items("Upcoming Events") if not i.when] if latest else []
     out = []
     for m in emailable(club):
         if get(m.id)["digest"] != "on":
@@ -117,12 +119,14 @@ def digest(club: Club, meetings: list, today: dt.date, url: str) -> list[tuple[s
             lines.append("Club business you're looking after:\n" + "\n".join(
                 f"  - {x['text']}" + (f" (due {dt.date.fromisoformat(x['due']).strftime('%b %-d')})" if x["due"] else "") for x in due)
                 + f"\n  Mark them done at {url}/business")
+        week, _ = calview.entries(club, archive, m.id, today + dt.timedelta(days=1), today + dt.timedelta(days=6))
+        events = [f"{e.start:%a %b %-d}{f' {e.time}' if e.time else ''}: {e.title}" for e in week if e.kind != "chow"][:10] + undated
         if events:
-            lines.append("Upcoming events:\n" + "\n".join(f"  - {e}" for e in events))
+            lines.append("Coming up this week:\n" + "\n".join(f"  - {e}" for e in events) + f"\n  The calendar: {url}/calendar")
         if latest:
             lines.append(f"Last meeting's minutes ({latest.date.strftime('%B %-d')}): {url}/meetings/{latest.slug}")
         out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign', 'W8LBZ')} meeting tonight",
-                    f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nChoose what you get by email: {url}/profile/email\n\n{_sign(club)}"))
+                    f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nTo stop this email, or choose which others you get: {url}/profile/email\n\n{_sign(club)}"))
     return out
 
 

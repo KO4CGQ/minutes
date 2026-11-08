@@ -1490,7 +1490,7 @@ def _repeat_choices(day: str) -> list[tuple[str, str]]:
     lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})  # noqa: E731
     return [("", "Doesn't repeat"), ("weekly", lab("weekly")), ("biweekly", lab("weekly", interval=2)),
             ("monthly_weekday", lab("monthly_weekday")), ("monthly_last", lab("monthly_weekday", last=True)),
-            ("monthly", lab("monthly")), ("yearly", lab("yearly"))]
+            ("monthly", lab("monthly")), ("yearly", lab("yearly")), ("yearly_weekday", lab("yearly_weekday"))]
 
 
 @app.get("/calendar/edit", response_class=HTMLResponse)

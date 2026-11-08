@@ -123,7 +123,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 - **FR-27** On **Submit**, the system:
   1. saves the minutes to the archive (§4.6) as version 1,
   2. renders the PDF in the current visual format (logo, green section bars), named `5-nov-26-minutes.pdf`,
-  3. emails the PDF and the chow list from **the club's Gmail account** to **everyone on the roster** who has an email address, one message per person or BCC, with Reply-To set to the leader,
+  3. emails the PDF (or a link, as each member chooses) from **the club's Gmail account** to **everyone on the roster** who has an email address and hasn't turned it off, one message per person, with Reply-To set to the leader,
   4. (later) posts a Discord summary with a link to the archive (personal items are left out by default, see §4.8).
 - **FR-28** Keep versions. A correction creates v2, updates the archive, and emails a short "Corrected minutes" notice listing what changed. Earlier versions remain viewable.
 
@@ -168,6 +168,10 @@ Members share personal news in their reports (health, jobs, family), and **those
 ### 4.10 Reminders and Discord (later phase)
 - **FR-41** Post a weekly reminder before the meeting: chow person, open action items, upcoming events.
 - **FR-42** After submission, post the summary and link.
+- **FR-42a** (Built, by email) Each member chooses which emails they get: the minutes (PDF, link or off), a meeting-day email (time, their chow, their business items, the week's calendar), chow and business reminders. Every optional email says how to change it.
+
+### 4.11 Club calendars
+- **FR-47** The app keeps the club calendars itself (no Google needed): club events, planning and community, plus the weekly meeting, chow nights, dated Upcoming Events and the birthdays members share. Leaders edit them; members subscribe from their own calendar apps; chosen calendars can be public; events come in from .ics files; a one-way copy to Google Calendar is optional.
 
 ## 5. Non-functional requirements
 

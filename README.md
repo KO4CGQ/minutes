@@ -10,8 +10,9 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROA
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode.
 - **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders.
+- **Calendar:** the club's calendars kept by the app, with .ics import, subscriptions and an optional copy to Google (see Club calendars below).
 - **Chow schedule:** the rotation, swaps, reminders before your night, and who provided, missed or covered each night.
-- **Email preferences:** each member turns each kind of email on or off, including a meeting-day email (the time, your chow, your business items, upcoming events and last meeting's minutes). The daily `reminders` timer (8 am) sends business and chow reminders and the meeting-day email.
+- **Email preferences:** each member turns each kind of email on or off, including a meeting-day email (the time, your chow, your business items, the calendar until the next meeting and last meeting's minutes). Every optional email ends with a link to change it. The daily `reminders` timer (8 am) sends business and chow reminders and the meeting-day email.
 
 ## Run
 ```sh
@@ -75,7 +76,7 @@ Officers and members ticked `minutes_editor` in the roster sheet can lead a meet
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
 
 ## Emailing the minutes
-When a leader submits the minutes, the PDF goes to every roster member with an email address (except Inactive and Silent Key), each getting their own copy. Replies go to the meeting's leader.
+When a leader submits the minutes, they go to every roster member with an email address (except Inactive and Silent Key), each getting their own copy: the PDF attached, or a link, as each member chose on the Email tab of their profile (or not at all, if they turned it off). Replies go to the meeting's leader.
 - **Test mode:** while `club.yaml` has `email.only_to`, only those callsigns or addresses get mail; everyone else is withheld and logged. The submit dialog says which mode is on.
 - Each meeting is emailed once. The outcome is in `emailed.json` beside the minutes, and leaders see it on the minutes page.
 - **Removing a test meeting:** `w8lbz-minutes delete-meeting 2026-12-31`, then `systemctl restart w8lbz-minutes`.
@@ -99,7 +100,7 @@ Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos 
 
 ## Previewing a branch
 `deploy/preview.sh BRANCH` runs a branch on a development machine (ports from 8100) so it can be tried before merging, without touching the live server. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
-- **Preview mode:** a banner on every page; email is recorded on the **outbox** page (`/preview/outbox`) instead of being sent; roster edits go to a local copy of the sheet.
+- **Preview mode:** a banner on every page; email is recorded on the **Email log** page (name menu → Email log, in admin mode) instead of being sent; roster edits go to a local copy of the sheet.
 - Each preview has its own checkout and a fresh copy of `data/` (meetings, roster cache, bylaws) on every update; its sign-ins are kept.
 - `deploy/preview.sh --list` shows running previews; `deploy/preview.sh --stop BRANCH` stops one and deletes its copy.
 - They run as user services (`systemctl --user`), so they stop if this user logs out entirely, unless lingering is enabled (`loginctl enable-linger`).
@@ -114,9 +115,9 @@ Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos 
 ## Club calendars
 The app keeps the club calendars itself (`events.json` in the data folder), so nothing depends on Google: **Club events** (what the club runs or joins: meetings, nets, VE testing, fox hunts), **Planning** (officers' dates, like the annual meeting) and **Community** (what's on in the area). It adds chow nights, the minutes' dated Upcoming Events and the birthdays members share (never private ones, not even for officers). The weekly meeting is put on Club events once, from `meeting_day` and `meeting_time`, as an ordinary repeating event: delete one date for a holiday, or move it.
 
-**Calendar page** (`/calendar`, in the menu): an agenda (8 weeks at a time, earlier or later) or a month grid. Leaders and minutes editors (and admins in admin mode) **add, change and delete** events there: start, optional end (a time, or a last day for several days), where, notes, and **Repeats** (every week, every 2 weeks, monthly on the 2nd Tuesday or the last Tuesday, monthly on a date, yearly; optionally until a date). A repeating event can be changed or deleted for **this date only**, **this and following dates**, or **every date**. Events from the minutes are changed in the leader console. Every change is logged in `calendar-log.jsonl`.
+**Calendar page** (`/calendar`, in the menu): an agenda (8 weeks at a time, earlier or later) or a month grid. Leaders and minutes editors (and admins in admin mode) **add, change and delete** events there: start, optional end (a time, or a last day for several days), where, notes, and **Repeats** (every week, every 2 weeks, monthly on the 2nd Tuesday or the last Tuesday, monthly on a date, yearly on a date or on the 1st Thursday of January; optionally until a date). A repeating event can be changed or deleted for **this date only**, **this and following dates**, or **every date**. Events from the minutes are changed in the leader console. Every change is logged in `calendar-log.jsonl`.
 
-**Import .ics** (Calendar → Import .ics, leaders): events from Google Calendar, Outlook, Apple or anything that exports an .ics file, into the calendar you pick. In Google Calendar: Settings → Import & export → Export (a .zip with one .ics per calendar). Importing the same file again updates what it imported, so nothing is doubled; an event already on the calendar with the same title on the same day is left alone; events that ended before a chosen date are skipped. Repeating events come in when they repeat weekly (several weekdays become one event per day), every few weeks, monthly or yearly; anything else is listed as not imported, to add by hand.
+**Import .ics** (Calendar → Import .ics, leaders): events from Google Calendar, Outlook, Apple or anything that exports an .ics file, into the calendar you pick. In Google Calendar: Settings → Import & export → Export (a .zip with one .ics per calendar). Importing the same file again updates what it imported, so nothing is doubled; an event already on the calendar with the same title on the same day is left alone; events that ended before a chosen date are skipped. Repeating events come in when they repeat weekly (several weekdays become one event per day), every few weeks, monthly or yearly (on a date, or like the 1st Thursday of January); anything else is listed as not imported, to add by hand. Formatted (HTML) descriptions, as Google exports them, come in as plain text.
 
 **Subscribing:** Calendar → "Subscribe in your calendar app" gives each member a private link (`/calendar/feed/SECRET.ics`) for Apple Calendar, Outlook, Google or a phone, a month back and a year ahead; tick what to include (`?show=events,chow`), and subscribe more than once for separate colors. The link works without signing in, so it's secret; "Make a new link" replaces it. It uses the app's HTTPS name, so calendar services on the internet can fetch it (Google refreshes subscribed calendars only every few hours).
 

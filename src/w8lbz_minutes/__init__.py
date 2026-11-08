@@ -89,7 +89,7 @@ def main() -> None:
         # chow reminders and the meeting-day email, each sent once even if this runs twice
         from .store import Archive
         from .club import MEETINGS
-        extra = prefs.chow_reminders(club, today, url) + prefs.digest(club, Archive(MEETINGS, club).meetings, today, url)
+        extra = prefs.chow_reminders(club, today, url) + prefs.digest(club, Archive(MEETINGS, club), today, url)
         new, sent = prefs.unsent([k for _, k, _, _ in extra]), []
         for mid, key, subject, body in extra:
             if key not in new:

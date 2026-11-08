@@ -114,7 +114,8 @@ def _notify(club: Club, e: dict, url: str) -> None:
                    if s != e["by"] and club.members[s].email and prefs.wants(s, "roster") == "now"]
     _send(club, secretaries, f"Roster update: {who}",
           f"{action}. The roster sheet has been updated.\n\n{what}\n\n"
-          f"If this looks wrong, any officer can undo it here: {url}/roster/changes\n\n73,\nW8LBZ Minutes", e)
+          f"If this looks wrong, any officer can undo it here: {url}/roster/changes\n\n"
+          f"You get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\nW8LBZ Minutes", e)
 
     m = club.members[e["member"]]
     member_to = [a for a in dict.fromkeys([m.email, e["old"].get("email")]) if a]  # both, after an email change

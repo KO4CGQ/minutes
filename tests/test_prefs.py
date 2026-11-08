@@ -1,7 +1,7 @@
 import datetime as dt
 from pathlib import Path
 
-from w8lbz_minutes import business, chow, console, prefs
+from w8lbz_minutes import business, chow, console, events, prefs
 from w8lbz_minutes.club import Club
 from w8lbz_minutes.meeting import Item, Meeting
 from w8lbz_minutes.store import Archive
@@ -60,14 +60,21 @@ def test_meeting_day_email(tmp_path, monkeypatch):
         b = business.load()
         business.add(b, "Fix the tower", "kd8bbb", owner="kd8aaa", due="2026-11-20")
         business.save(b)
-    meetings = [Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Upcoming Events": [Item("VE testing Nov 21")]})]
+    Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Upcoming Events": [Item("Hamfest in the spring")]}).save(tmp_path)
+    with events.locked():
+        evs = []
+        events.add(evs, "events", events.from_form({"title": "VE testing", "date": "2026-11-14", "time": "10:00"}), "x")
+        events.add(evs, "events", events.from_form({"title": "Next month", "date": "2026-12-14"}), "x")
+        events.save(evs)
     c = club()
-    assert prefs.digest(c, meetings, THU - dt.timedelta(days=1), URL) == []  # not meeting day
+    arch = Archive(tmp_path, c)
+    assert prefs.digest(c, arch, THU - dt.timedelta(days=1), URL) == []  # not meeting day
     prefs.save("kd8bbb", {"digest": "off"})
-    [(mid, key, subject, body)] = prefs.digest(c, meetings, THU, URL)  # on by default; Bob turned it off
+    [(mid, key, subject, body)] = prefs.digest(c, arch, THU, URL)  # on by default; Bob turned it off
     assert mid == "kd8aaa" and key == "digest:2026-11-12:kd8aaa" and subject.endswith("meeting tonight")
-    for want in ("tonight at 7:30 PM", "bringing chow tonight", "Fix the tower (due Nov 20)", "VE testing Nov 21",
-                 f"{URL}/meetings/2026-11-05", f"{URL}/profile/email"):
+    assert "Next month" not in body and "Chow" not in body
+    for want in ("tonight at 7:30 PM", "bringing chow tonight", "Fix the tower (due Nov 20)", "Sat Nov 14 10:00 AM: VE testing",
+                 "Hamfest in the spring", f"{URL}/calendar", f"{URL}/meetings/2026-11-05", f"{URL}/profile/email"):
         assert want in body, want
 
 

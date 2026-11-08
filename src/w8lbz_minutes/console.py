@@ -274,13 +274,14 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
     body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
             f"{f', led by {leader.name}' if leader else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
-            f"Replies go to {leader.first if leader and leader.email else 'the club'}.\n\n73,\n{club.info.get('callsign', '')}")
+            f"Replies go to {leader.first if leader and leader.email else 'the club'}.\n\n"
+            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.info.get('callsign', '')}")
     subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", leader.email if leader and leader.email else None
     try:
         pdf = make_pdf() if to else None
         sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],
                                only_to=club.email_only_to(), reply_to=reply_to) if to else 0
-        sent += auth.send_email(links, subject, body.replace(" The PDF is attached.", ""), only_to=club.email_only_to(),
+        sent += auth.send_email(links, subject, body.replace(" The PDF is attached.", "").replace("a link instead of the PDF", "the PDF attached instead"), only_to=club.email_only_to(),
                                 reply_to=reply_to) if links else 0
         status = {"at": int(time.time()), "sent": sent, "roster": len(to) + len(links), "test_mode": club.email_only_to() is not None}
     except Exception as e:

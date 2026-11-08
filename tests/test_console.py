@@ -141,7 +141,9 @@ def test_email_minutes_as_pdf_or_link_per_member(tmp_path, monkeypatch):
     assert st["sent"] == 2 and sorted(got) == ["jane@example.org", "sam@example.org"]
     assert [p.get_filename() for p in got["jane@example.org"].iter_attachments()] == ["m.pdf"]
     link = got["sam@example.org"]
-    assert not list(link.iter_attachments()) and "PDF" not in link.get_body().get_content()
+    assert not list(link.iter_attachments()) and "The PDF is attached" not in link.get_body().get_content()
+    assert "To get the PDF attached instead" in link.get_body().get_content()
+    assert "stop these emails: http://x/profile/email" in got["jane@example.org"].get_body().get_content()
     assert "http://x/meetings/2026-11-12" in link.get_body().get_content()
     FakeSMTP.outbox = []
     (tmp_path / "2026-11-12" / "emailed.json").unlink()

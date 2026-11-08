@@ -55,6 +55,15 @@ def test_repeat_rules_and_labels():
     assert days(on31, dt.date(2026, 12, 1), dt.date(2027, 5, 31)) == ["2026-12-31", "2027-01-31", "2027-03-31", "2027-05-31"]
     yearly = events.add([], "planning", events.from_form({"title": "Annual meeting", "date": "2026-11-19", "repeat": "yearly"}), "x")
     assert days(yearly, NOV[0], dt.date(2028, 12, 31)) == ["2026-11-19", "2027-11-19", "2028-11-19"]
+    annual = events.add([], "planning", events.from_form({"title": "Annual meeting", "date": "2027-01-07", "repeat": "yearly_weekday"}), "x")
+    assert days(annual, dt.date(2027, 1, 1), dt.date(2029, 12, 31)) == ["2027-01-07", "2028-01-06", "2029-01-04"]  # 1st Thursdays
+    assert events.repeat_label(annual["start"], annual["repeat"]) == "Every year on the 1st Thursday of January"
+    assert events.form_values(annual, None)["repeat"] == "yearly_weekday"
+    ics = ("BEGIN:VEVENT\nUID:a1\nDTSTART;TZID=America/New_York:20270107T193000\nRRULE:FREQ=YEARLY;BYDAY=1TH;BYMONTH=1\n"
+           "SUMMARY:Annual meeting\nEND:VEVENT\n")
+    evs = []
+    assert events.import_ics(evs, ics, "planning", "x", TZ, NOV[0])["added"] == ["Annual meeting"]
+    assert evs[0]["repeat"]["freq"] == "yearly_weekday"
     fd = events.add([], "events", events.from_form({"title": "Field Day", "date": "2026-11-28", "end_date": "2026-11-29"}), "x")
     assert days(fd, dt.date(2026, 11, 29), dt.date(2026, 11, 30)) == ["2026-11-28"]  # still on, on its second day
 
