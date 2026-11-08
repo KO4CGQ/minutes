@@ -37,22 +37,22 @@ def newer(a: str, b: str) -> bool:
     return _v(a) > _v(b)
 
 
-def deploy_notes(notes: str) -> list[str]:
-    """Lines under a "Deploy notes:" marker in a release's notes (its CHANGELOG section)."""
-    out, on = [], False
+def deploy_notes(notes: str) -> str:
+    """The steps under a "Deploy notes:" marker in a release's notes (its CHANGELOG section), as Markdown:
+    text on the marker's own line, then everything indented under it (numbered steps, code blocks), dedented."""
+    import textwrap
+    first, rest, on = "", [], False
     for line in notes.splitlines():
         m = re.match(r"^\s*[-*]?\s*\**Deploy notes:?\**:?\s*(.*)$", line, re.I)
         if m:
-            on = True
-            if m.group(1).strip():
-                out.append(m.group(1).strip())
+            on, first = True, m.group(1).strip()
             continue
         if on:
-            if line.startswith("  ") and line.strip():
-                out.append(line.strip().lstrip("-* ").strip())
-            elif line.strip():
-                on = False
-    return out
+            if line.startswith("  ") or not line.strip():
+                rest.append(line)
+            else:
+                break
+    return (first + "\n\n" + textwrap.dedent("\n".join(rest))).strip()
 
 
 def latest(fetch=None, force: bool = False) -> dict | None:

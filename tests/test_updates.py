@@ -6,8 +6,12 @@ import pytest
 from w8lbz_minutes import updates
 
 NOTES = """- **Business items are tracked** ...
-- **Deploy notes:** copy business.json to /var/lib/w8lbz-minutes
-  - add `admins:` to club.yaml
+- **Deploy notes:** before updating:
+  1. Copy the business list into the data folder:
+
+          cp business.json /var/lib/w8lbz-minutes/
+
+  2. Add `admins:` to club.yaml.
 - **Reminders** ..."""
 
 
@@ -25,13 +29,15 @@ def env(tmp_path, monkeypatch):
 
 def test_check_and_deploy_notes(env):
     assert updates.newer("0.10.0", "0.9.1") and not updates.newer("0.6.0", "0.6.0")
-    assert updates.deploy_notes(NOTES) == ["copy business.json to /var/lib/w8lbz-minutes", "add `admins:` to club.yaml"]
+    steps = updates.deploy_notes(NOTES)
+    assert steps.startswith("before updating:\n\n1. Copy") and "        cp business.json" in steps and "Reminders" not in steps
+    assert updates.deploy_notes("- **Something** else") == ""
     calls = []
     def fetch():
         calls.append(1)
         return {"tag_name": "v0.7.0", "body": NOTES, "html_url": "https://github.com/x"}
     rel = updates.available(fetch)
-    assert rel["version"] == "0.7.0" and len(rel["deploy_notes"]) == 2
+    assert rel["version"] == "0.7.0" and "admins:" in rel["deploy_notes"]
     updates.available(fetch)
     assert len(calls) == 1                              # cached for a few hours
     assert updates.latest(lambda: (_ for _ in ()).throw(OSError("offline")), force=True)["version"] == "0.7.0"  # keeps the last
@@ -82,7 +88,7 @@ def test_admin_page(env, tmp_path, monkeypatch):
     assert "Version 0.7.0 of the app is available" in page and "Update to 0.7.0" in page and 'class="dot"' in page
     a.set_admin(token, 60)
     page = c.get("/admin/updates").text
-    assert "Version 0.7.0" in page and "copy business.json" in page and "I've done these steps" in page
+    assert "Version 0.7.0" in page and "<pre><code>cp business.json" in page and "I've done these steps" in page  # formatted
     assert "<strong>Business items are tracked</strong>" in page and "<li>" in page            # the notes are rendered
     assert "Version 0.7.0 is available" in c.get("/links").text                  # the admin banner says so
     assert "needs the steps" in c.post("/admin/updates/run", data={"target": "0.7.0"}).text

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a branch as a preview on this machine, reachable from the LAN, without touching CT103.
+# Run a branch as a preview on this machine, reachable from the LAN, without touching the live server.
 #
 #   deploy/preview.sh BRANCH          start or update the preview of BRANCH (prints its address and a sign-in link)
 #   deploy/preview.sh --stop BRANCH   stop it and delete its copy

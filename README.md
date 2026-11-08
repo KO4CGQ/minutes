@@ -34,6 +34,29 @@ curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh 
 Then put `club.yaml` and `google-service-account.json` in `/etc/w8lbz-minutes/`, and data in `/var/lib/w8lbz-minutes/`.
 The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00.
 
+## Server hardening (recommended)
+The app blocks web visitors itself after repeated failed sign-ins (admin **Security** page). For SSH, use fail2ban:
+
+1. Install it:
+
+        apt install fail2ban python3-systemd
+
+2. Create `/etc/fail2ban/jail.d/sshd.local` with this content (on `ignoreip`, list your own LAN and tailnet so you can't lock yourself out):
+
+        [sshd]
+        enabled = true
+        backend = systemd
+        ignoreip = 127.0.0.1/8 ::1 192.168.1.0/24 100.64.0.0/10
+
+3. Restart it and check that the jail is running:
+
+        systemctl restart fail2ban
+        fail2ban-client status sshd
+
+To lift a ban: `fail2ban-client set sshd unbanip ADDRESS`.
+
+Also worth doing: SSH with keys only (`PasswordAuthentication no` in `/etc/ssh/sshd_config`), automatic security updates (`apt install unattended-upgrades`), and a firewall that allows only SSH and the app's port.
+
 ## Login
 Members sign in with a passkey, or with a one-time link emailed to their roster address.
 - **Passkeys** only work at the HTTPS address in `club.yaml` (`auth.rp_id`).
@@ -70,7 +93,7 @@ In admin mode, a member's page has **View the app as …**: the app as that memb
 `/bylaws` shows the club's constitution and bylaws from `bylaws.md` in the data directory (`/var/lib/w8lbz-minutes/bylaws.md` on the server). It's kept out of this public repo.
 
 ## Previewing a branch
-`deploy/preview.sh BRANCH` runs a branch on the dev box (192.168.23.101, ports from 8100) so it can be tried before merging, with no change to CT103. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
+`deploy/preview.sh BRANCH` runs a branch on a development machine (ports from 8100) so it can be tried before merging, without touching the live server. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
 - **Preview mode:** a banner on every page; email is recorded on the **outbox** page (`/preview/outbox`) instead of being sent; roster edits go to a local copy of the sheet.
 - Each preview has its own checkout and a fresh copy of `data/` (meetings, roster cache, bylaws) on every update; its sign-ins are kept.
 - `deploy/preview.sh --list` shows running previews; `deploy/preview.sh --stop BRANCH` stops one and deletes its copy.
@@ -79,7 +102,7 @@ In admin mode, a member's page has **View the app as …**: the app as that memb
 ## Changes and releases
 - Each PR adds a line under "Unreleased" in `CHANGELOG.md`, and removes its item from `ROADMAP.md` if it finishes one.
 - To release: in a PR, rename "Unreleased" to the new version and date and bump `version` in `pyproject.toml` (then `uv lock`). When it merges, the Release workflow tags the merge commit `vX.Y.Z` and publishes a GitHub release with that CHANGELOG section. Deploy with `update.sh`; the footer then shows the new version.
-- **Releases that need steps by hand** (a config change, a data file to copy, a new secret): add a line `- **Deploy notes:** …` to that version's CHANGELOG section, with any further steps indented under it. The admin Updates page shows them and asks the admin to confirm they're done before updating.
+- **Releases that need steps by hand** (a config change, a data file to copy, a new secret): add a line `- **Deploy notes:**` to that version's CHANGELOG section, with the steps indented under it as a numbered list. Put each command or file content in its own code block (indented 8 spaces under its step), one step per action, so they can be followed and copied. The admin Updates page shows them, formatted, and asks the admin to confirm they're done before updating. Only steps the release needs belong here; optional server hardening goes in this README.
 - **Updating from the app:** admins in admin mode see "Version X is available" and an **Updates** page with **Update now**. It writes `update-request.json` in the data folder; the root-owned `w8lbz-minutes-update.path` unit sees it and runs `deploy/update-from-app.sh` (which runs `update.sh` and records the result). `update.sh` installs and enables that unit, so the first update after this feature arrives is still by hand.
 - Every pull request runs the tests (the Tests workflow).
 
