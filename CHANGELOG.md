@@ -4,7 +4,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
-## Unreleased
+## 0.10.0 (2026-11-08)
 - **Mobile first, tested:** a new test opens every page in a real browser at phone width (375px) and fails if any page scrolls sideways; CI runs it. It found and fixed: Your profile → Sign-in & passkeys, About, and the Security page's banned addresses. Long (IPv6) addresses now wrap instead of widening tables.
 - **Passkey rename:** Save and Cancel appear only while you're renaming (a style rule was showing them all the time). The page now says "Sign out everywhere" includes this device.
 - **Signed-in devices** (Security page): filter by member, tick several devices (or Tick all) and sign them out at once, e.g. everywhere for one member.
