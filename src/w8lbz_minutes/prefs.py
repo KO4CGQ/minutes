@@ -15,11 +15,11 @@ from .club import DATA, Club
 
 # kind: (label, choices, default). "roster" is for the Secretaries, who are told about roster changes.
 KINDS = {
-    "minutes": ("The minutes after each meeting", ("now", "digest", "off"), "now"),
-    "business": ("Reminders about club business you look after", ("now", "digest", "off"), "now"),
-    "roster": ("Roster changes and new members (Secretaries)", ("now", "off"), "now"),
+    "minutes": ("The minutes", ("now", "digest", "off"), "now"),
+    "business": ("Business reminders", ("now", "digest", "off"), "now"),
+    "roster": ("Roster changes", ("now", "off"), "now"),
 }
-CHOICES = {"now": "Right away", "digest": "In the weekly digest", "off": "Off"}
+CHOICES = {"now": "Right away", "digest": "Weekly digest", "off": "Off"}
 CHOW_DAYS = (7, 3, 1)  # reminders before your chow night, days ahead
 CHOW_DEFAULT = [3]
 

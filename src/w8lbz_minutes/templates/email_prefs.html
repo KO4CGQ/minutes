@@ -4,12 +4,12 @@
 {% if saved %}<p class="msg ok">Saved.</p>{% endif %}
 <p class="muted">What the club emails you{% if m.email %} at <b>{{ m.email }}</b>{% endif %}. The weekly digest comes on meeting day: your next chow night, the business you're looking after and the latest minutes.</p>
 <form method="post" class="profile">
-{% for k, (label, opts, _) in kinds.items() %}<fieldset><legend>{{ label }}</legend>
+{% for k, (label, opts, _) in kinds.items() %}<fieldset><legend>{{ label }}</legend>{% if k == "roster" %}<p class="muted small">For Secretaries: edits to the roster and new members.</p>{% endif %}
   {% for o in opts %}<label class="check"><input type="radio" name="{{ k }}" value="{{ o }}" {{ 'checked' if p[k] == o }}> {{ choices[o] }}</label>{% endfor %}
 </fieldset>{% endfor %}
-<fieldset><legend>Reminders before your chow night</legend>
+<fieldset><legend>Chow reminders</legend>
   {% for d in chow_days %}<label class="check"><input type="checkbox" name="chow_days" value="{{ d }}" {{ 'checked' if d in p.chow_days }}> {{ 'The day before' if d == 1 else d ~ ' days before' }}</label>{% endfor %}
-  <p class="muted small">Tick none to turn them off.</p>
+  <p class="muted small">Before your chow night. Tick none to turn them off.</p>
 </fieldset>
 <p class="muted small">Always sent: sign-in links, chow swap requests waiting for your answer, changes to your own chow night, and security notices.</p>
 <p><button class="btn">Save</button></p>

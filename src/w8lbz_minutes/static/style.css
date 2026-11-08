@@ -197,7 +197,8 @@ form.profile input[type=email], form.profile input[type=tel], form.profile texta
 form.profile input[type=checkbox] { display: inline-block; margin: 0 .3rem 0 0; }
 form.profile .hint { display: block; font-weight: normal; }
 form.profile fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 1rem 0; padding: .7rem 1rem; background: var(--surface); }
-form.profile legend { font-weight: 600; padding: 0 .3rem; } form.profile label.check { display: inline-flex; align-items: center; margin-right: 1.2rem; font-weight: normal; }
+form.profile legend { font-weight: 600; float: left; width: 100%; padding: 0; margin-bottom: .4rem; }  /* inside the box, so a long one wraps cleanly */
+form.profile legend + * { clear: both; } form.profile label.check { display: inline-flex; align-items: center; margin-right: 1.2rem; font-weight: normal; }
 svg.lock { width: .85em; height: .85em; vertical-align: -.05em; fill: var(--faint); stroke: var(--faint); stroke-width: 2.2; } svg.lock rect { stroke: none; }
 div.change { white-space: pre-line; }
 article.mail { border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; margin: .8rem 0; background: var(--surface); box-shadow: var(--shadow); }
