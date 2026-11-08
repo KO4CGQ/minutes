@@ -366,7 +366,12 @@ nav.top a.start.soon { animation: startpulse 1.6s ease-in-out infinite; }
 .drawer .panel a { color: var(--nav-text); text-decoration: none; padding: .6rem .8rem; border-radius: .5rem; font-size: 1rem; }
 .drawer .panel a:hover { background: var(--nav-hover); } .drawer .panel a.on { background: var(--nav-on); box-shadow: inset 3px 0 0 var(--accent); }
 .drawer .panel .sep { border-top: 1px solid var(--nav-hover); margin: .4rem .2rem; }
-.drawer .panel form { margin: 0 0 .5rem; } .drawer .panel input[type=search] { width: 100%; padding: .5rem .9rem; border-radius: 2rem; border: 0; font-size: 16px; }
+.drawer .panel form { margin: 0 0 .5rem; }
+.drawer .panel input[type=search] { width: 100%; padding: .5rem .9rem; border-radius: 2rem; border: 1px solid transparent; font-size: 16px;
+  background: rgba(255, 255, 255, .92); color: #1b1f17; }  /* the same light pill as the bar's search, in either theme */
+.drawer .dmain { display: flex; flex-direction: column; gap: .1rem; }
+@media (min-width: 1181px) { .drawer .dsearch { display: none; } }
+@media (min-width: 901px) { .drawer .dmain { display: none; } }
 body.drawer-open { overflow: hidden; }
 body.drawer-open .drawer { visibility: visible; transition: visibility 0s; }
 body.drawer-open .drawer .scrim { opacity: 1; } body.drawer-open .drawer .panel { transform: none; }

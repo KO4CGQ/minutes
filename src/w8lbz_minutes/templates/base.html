@@ -32,9 +32,10 @@ try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark"
 </nav>
 {% if me %}<div class="drawer" id="drawer"><div class="scrim"></div>
   <div class="panel" role="dialog" aria-label="All pages">
-    <form action="/search"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
-    {% for href, label in PAGES %}{{ navlink(href, label) }}{% if loop.index == 4 %}<div class="sep"></div>{% endif %}{% endfor %}
-    {% if can_lead and not live %}<div class="sep"></div>{{ navlink('/console', 'Lead a meeting') }}{% endif %}
+    {# only what the bar can't show at this width: search below 1180px, the main pages below 900px #}
+    <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
+    <div class="dmain">{% for href, label in PAGES[:4] %}{{ navlink(href, label) }}{% endfor %}<div class="sep"></div></div>
+    {% for href, label in PAGES[4:] %}{{ navlink(href, label) }}{% endfor %}
   </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
 <form method="post" action="/admin/view-as"><input type="hidden" name="member" value=""><input type="hidden" name="next" value="/members/{{ viewing_as }}"><button type="submit">Stop</button></form></div>{% endif %}
@@ -58,7 +59,7 @@ markTheme();
 (() => { const btn = document.querySelector("nav.top .burger"), drawer = document.getElementById("drawer");
   if (!btn || !drawer) return;
   const set = (open) => { document.body.classList.toggle("drawer-open", open); btn.setAttribute("aria-expanded", open);
-    if (open) drawer.querySelector("a.on, a")?.focus(); else btn.focus(); };
+    if (open) [...drawer.querySelectorAll("a")].find((x) => x.offsetParent)?.focus();  // a link, not search: no phone keyboard popping up else btn.focus(); };
   btn.addEventListener("click", () => set(!document.body.classList.contains("drawer-open")));
   drawer.querySelector(".scrim").addEventListener("click", () => set(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("drawer-open")) set(false); }); })();
