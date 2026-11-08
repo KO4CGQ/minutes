@@ -1,4 +1,4 @@
-"""Email preferences: what each member gets right away, in the weekly digest, or not at all.
+"""Email preferences: which emails each member gets, including the meeting-day email.
 
 Stored in email-prefs.json in the data directory ({member: {kind: choice, "chow_days": [7, 3, 1]}}), with what the
 daily reminders run has already sent in reminders-sent.json. Sign-in links, swap requests waiting for an answer,
@@ -15,11 +15,12 @@ from .club import DATA, Club
 
 # kind: (label, choices, default). "roster" is for the Secretaries, who are told about roster changes.
 KINDS = {
-    "minutes": ("The minutes", ("now", "digest", "off"), "now"),
-    "business": ("Business reminders", ("now", "digest", "off"), "now"),
+    "digest": ("Meeting-day email", ("on", "off"), "on"),
+    "minutes": ("The minutes", ("now", "off"), "now"),
+    "business": ("Business reminders", ("now", "off"), "now"),
     "roster": ("Roster changes", ("now", "off"), "now"),
 }
-CHOICES = {"now": "Right away", "digest": "Weekly digest", "off": "Off"}
+CHOICES = {"now": "Right away", "on": "On", "off": "Off"}
 CHOW_DAYS = (7, 3, 1)  # reminders before your chow night, days ahead
 CHOW_DEFAULT = [3]
 
@@ -87,33 +88,34 @@ def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str,
 
 
 def digest(club: Club, meetings: list, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:
-    """The weekly digest, on meeting day, for everyone who chose it for anything: your next chow night,
-    your open business items with due dates, and the latest minutes."""
+    """The meeting-day email, the morning of each meeting: the time, your chow if it's tonight,
+    the business you're looking after, last meeting's minutes and the upcoming events in them."""
     wd = chow.WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
     if today.weekday() != wd:
         return []
-    s, items = chow.load(), business.load()["items"]
-    latest = next((m for m in sorted(meetings, key=lambda m: m.date, reverse=True) if m.status == "published"), None)
+    tonight = chow.load()["nights"].get(today.isoformat(), {})
+    items = business.load()["items"]
+    latest = next((m for m in sorted(meetings, key=lambda m: m.date, reverse=True) if m.status == "published" and m.date < today), None)
+    at = dt.datetime.strptime(str(club.info.get("meeting_time", "19:30")), "%H:%M").strftime("%-I:%M %p")
+    events = [i.text for i in latest.items("Upcoming Events")] if latest else []
     out = []
     for m in emailable(club):
-        p = get(m.id)
-        if "digest" not in (p["minutes"], p["business"]):
+        if get(m.id)["digest"] != "on":
             continue
-        lines = []
-        mine = next((d for d, x in chow.upcoming(s, today, n=60) if x.get("member") == m.id and x.get("status") != "none"), None)
-        if mine:
-            lines.append(f"Your chow night: {dt.date.fromisoformat(mine).strftime('%A, %B %-d')}" + (" (tonight)" if mine == today.isoformat() else ""))
-        if p["business"] == "digest":
-            due = sorted((x for x in items if x["status"] == "open" and x["owner"] == m.id), key=lambda x: x["due"] or "9999")
-            if due:
-                lines.append("Club business you're looking after:\n" + "\n".join(
-                    f"  - {x['text']}" + (f" (due {dt.date.fromisoformat(x['due']).strftime('%b %-d')})" if x["due"] else "") for x in due)
-                    + f"\n  Mark them done at {url}/business")
-        if p["minutes"] == "digest" and latest:
-            lines.append(f"The latest minutes ({latest.date.strftime('%B %-d')}): {url}/meetings/{latest.slug}")
-        if lines:
-            out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign', 'W8LBZ')} this week",
-                        f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nChoose what you get by email: {url}/profile/email\n\n{_sign(club)}"))
+        lines = [f"The meeting is tonight at {at}."]
+        if tonight.get("member") == m.id and tonight.get("status") != "none":
+            lines.append("You're bringing chow tonight.")
+        due = sorted((x for x in items if x["status"] == "open" and x["owner"] == m.id), key=lambda x: x["due"] or "9999")
+        if due:
+            lines.append("Club business you're looking after:\n" + "\n".join(
+                f"  - {x['text']}" + (f" (due {dt.date.fromisoformat(x['due']).strftime('%b %-d')})" if x["due"] else "") for x in due)
+                + f"\n  Mark them done at {url}/business")
+        if events:
+            lines.append("Upcoming events:\n" + "\n".join(f"  - {e}" for e in events))
+        if latest:
+            lines.append(f"Last meeting's minutes ({latest.date.strftime('%B %-d')}): {url}/meetings/{latest.slug}")
+        out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign', 'W8LBZ')} meeting tonight",
+                    f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nChoose what you get by email: {url}/profile/email\n\n{_sign(club)}"))
     return out
 
 

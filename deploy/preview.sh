@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Run a branch as a preview on this machine, reachable from the LAN, without touching the live server.
 #
-#   deploy/preview.sh BRANCH          start or update the preview of BRANCH (prints its address and a sign-in link)
-#   deploy/preview.sh --stop BRANCH   stop it and delete its copy
+#   deploy/preview.sh BRANCH [NAME]   start or update the preview of BRANCH (prints its address and a sign-in link)
+#                                     NAME (default: the branch) keeps one address while it follows different branches,
+#                                     e.g. `deploy/preview.sh my-branch dev` for a single "dev" preview of the latest work
+#   deploy/preview.sh --stop NAME     stop it and delete its copy
 #   deploy/preview.sh --list          show running previews
 #
 # Each preview gets its own checkout and its own copy of data/ (meetings, roster cache, chow schedule;
@@ -26,10 +28,10 @@ case "${1:-}" in
   ""|-*) sed -n '2,11p' "$0"; exit 1 ;;
 esac
 
-B=$1; DIR=$BASE/$B; U=$(unit "$B")
+B=$1; NAME=${2:-$1}; DIR=$BASE/$NAME; U=$(unit "$NAME")
 mkdir -p "$DIR"
 git -C "$REPO" fetch -q origin
-if [ -d "$DIR/app" ]; then git -C "$DIR/app" reset -q --hard "origin/$B"
+if [ -d "$DIR/app" ]; then git -C "$DIR/app" checkout -q --detach "origin/$B" && git -C "$DIR/app" reset -q --hard "origin/$B"
 else git -C "$REPO" worktree add -q --detach "$DIR/app" "origin/$B"; fi
 
 # Older branches have no preview mode: they would send real email and write to the real roster sheet.

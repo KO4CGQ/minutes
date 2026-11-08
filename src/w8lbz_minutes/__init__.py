@@ -19,7 +19,7 @@ def main() -> None:
     ci.add_argument("--next", help="who the rotation continues with (surname)")
     ci.add_argument("--year", type=int, default=2026, help="year for dates written like 5-Mar")
     ci.add_argument("--write", action="store_true", help="save it (refuses if a chow schedule already exists)")
-    rem = sub.add_parser("reminders", help="daily: business item and chow reminders, and the weekly digest on meeting day")
+    rem = sub.add_parser("reminders", help="daily: business item and chow reminders, and the meeting-day email")
     rem.add_argument("--dry-run", action="store_true", help="print what would be sent; send and record nothing")
     sub.add_parser("ai-ask-about", help="ask the AI for 'ask about' prompts for each member's community report (also runs after each Submit)")
     srv = sub.add_parser("serve", help="run the web UI")
@@ -86,7 +86,7 @@ def main() -> None:
                 print(f"reminded {m.name} about {len(items)} item(s)")
             if not a.dry_run:
                 business.save(s)
-        # chow reminders and the weekly digest (meeting day), each sent once even if this runs twice
+        # chow reminders and the meeting-day email, each sent once even if this runs twice
         from .store import Archive
         from .club import MEETINGS
         extra = prefs.chow_reminders(club, today, url) + prefs.digest(club, Archive(MEETINGS, club).meetings, today, url)

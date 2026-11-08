@@ -227,7 +227,7 @@ def discard(archive: Archive, slug: str) -> None:
 
 def recipients(archive: Archive) -> list[str]:
     """Roster addresses that get the minutes: everyone with an email who isn't Inactive or a Silent Key,
-    and wants them right away (the rest get a link in their weekly digest, or nothing)."""
+    and hasn't turned them off."""
     return sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "minutes") == "now"}, key=str.lower)
 
 
