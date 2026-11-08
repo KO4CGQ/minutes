@@ -109,11 +109,12 @@ In admin mode, a member's page has **View the app as …**: the app as that memb
 - Every pull request runs the tests (the Tests workflow).
 
 ## Club calendars
-The app keeps two Google Calendars current: **Chow** (each chow night at the meeting time, so swaps show up by themselves) and **Meetings & Events** (each Upcoming Event with a date; with a time it's a 2-hour event, without one an all-day event). It syncs a little after any change in the console or to chow, and again in the daily `reminders` run. It only creates, changes or deletes events it made itself, and only from today on, so events added by hand and past events are left alone.
+The app keeps two Google Calendars current: **Chow** (each chow night at the meeting time, so swaps show up by themselves) and the club's **events** calendar, usually the club account's main public calendar (each Upcoming Event with a date: all day, a time range, or several days; a start time with no end is taken as 2 hours). It syncs a little after any change in the console or to chow, and again in the daily `reminders` run. It only creates, changes or deletes events it made itself, and only from today on, so events added by hand and past events are left alone. If someone already added an event by hand with the same title on the same day, the app doesn't add a second copy.
 
 To turn it on:
 1. In Google Calendar, share each calendar with the service account's email (the `client_email` in `private/google-service-account.json`) with **Make changes to events**.
-2. In club.yaml, under `club:`, add `timezone:` and `calendars:` with each calendar's ID (Settings → the calendar → Integrate calendar → Calendar ID); see `club.example.yaml`.
+2. In club.yaml, under `club:`, add `timezone:` and `calendars:` with each calendar's ID (Settings → the calendar → Integrate calendar → Calendar ID; an account's main calendar has the account's email address as its ID); see `club.example.yaml`.
+   Once the chow calendar syncs, delete any chow nights from today on that were entered there by hand, or they'll show twice.
 3. Restart the app. The Security page's **Server** tab shows the last sync, or why it failed.
 
 Previews never sync.

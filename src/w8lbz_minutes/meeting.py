@@ -3,7 +3,8 @@
 The front matter holds structured data (date, attendance, guests, status).
 The body holds one `## Section` per agenda section, each item a bullet.
 Community report bullets may carry an invisible `<!-- member: id -->` tag, and Upcoming Events
-a `<!-- when: 2026-11-21 -->` or `<!-- when: 2026-11-21T10:00 -->` tag (for the club calendar).
+a `<!-- when: 2026-11-21 -->` or `<!-- when: 2026-11-21T10:00 -->` tag (for the club calendar), and optionally
+an end, `<!-- until: 2026-11-22 -->` (the last day) or `<!-- until: 2026-11-21T13:00 -->`.
 """
 from __future__ import annotations
 
@@ -27,6 +28,8 @@ SECTIONS = [
 
 MEMBER_TAG = re.compile(r"\s*<!--\s*member:\s*([\w-]+)\s*-->")
 WHEN_TAG = re.compile(r"\s*<!--\s*when:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
+UNTIL_TAG = re.compile(r"\s*<!--\s*until:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
+EVENT_HOURS = 2  # how long a timed event with no end is taken to last
 
 
 @dataclass
@@ -34,14 +37,34 @@ class Item:
     text: str
     member: str | None = None  # roster id, community reports only
     when: str | None = None  # Upcoming Events: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"
+    until: str | None = None  # its end: the last day, or the end time (same formats)
+
+    def span(self) -> tuple[dt.datetime, dt.datetime, bool]:
+        """(start, end, all_day). All-day: end is the last day (inclusive). Timed: end is the end time; with
+        no end, EVENT_HOURS later; with only an end date, that day at the start's time."""
+        start, timed = dt.datetime.fromisoformat(self.when), "T" in self.when
+        end = dt.datetime.fromisoformat(self.until) if self.until else None
+        if not timed:
+            return start, end if end else start, True
+        if not end:
+            return start, start + dt.timedelta(hours=EVENT_HOURS), False
+        return start, end if "T" in self.until else dt.datetime.combine(end.date(), start.time()), False
 
     @property
     def shown(self) -> str:
-        """The text as readers see it: an event's date (and time) first, e.g. "Sat, Nov 21, 10:00 AM: VE testing"."""
+        """The text as readers see it, dates first: "Sat, Nov 21, 10:00 AM – 1:00 PM: VE testing",
+        "Sat, Jun 27 – Sun, Jun 28: Field Day"."""
         if not self.when:
             return self.text
-        d = dt.datetime.fromisoformat(self.when)
-        return d.strftime("%a, %b %-d" + (", %-I:%M %p" if "T" in self.when else "")) + ": " + self.text
+        start, end, all_day = self.span()
+        day, clock = "%a, %b %-d", "%-I:%M %p"
+        if all_day:
+            when = start.strftime(day) + (end.strftime(" – " + day) if end.date() != start.date() else "")
+        else:
+            when = start.strftime(f"{day}, {clock}")
+            if self.until:
+                when += end.strftime(" – " + (clock if end.date() == start.date() else f"{day}, {clock}"))
+        return f"{when}: {self.text}"
 
 
 @dataclass
@@ -87,7 +110,7 @@ class Meeting:
         for name in SECTIONS:
             out.append(f"## {name}")
             for it in self.items(name):
-                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "")
+                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "")
                 out.append(f"- {it.text}{tag}")
             out.append("")
         return "\n".join(out)
@@ -118,9 +141,10 @@ class Meeting:
                 text = line[2:]
                 tag = MEMBER_TAG.search(text)
                 member = tag.group(1) if tag else None
-                when = WHEN_TAG.search(text)
-                text = WHEN_TAG.sub("", MEMBER_TAG.sub("", text)).strip()
-                m.sections[current].append(Item(text, member, when.group(1) if when else None))
+                when, until = WHEN_TAG.search(text), UNTIL_TAG.search(text)
+                text = UNTIL_TAG.sub("", WHEN_TAG.sub("", MEMBER_TAG.sub("", text))).strip()
+                m.sections[current].append(Item(text, member, when.group(1) if when else None,
+                                                until.group(1) if until and when else None))
             elif current and line.strip() and m.sections[current]:
                 # continuation line of the previous bullet
                 m.sections[current][-1].text += " " + line.strip()

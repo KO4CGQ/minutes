@@ -10,7 +10,7 @@
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",
     "New Business": "Each item you add here is tracked: next week it's in Old Business, and it stays there until it's marked done.",
-    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the club calendar.",
+    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the club calendar. Add an end for a time range or an event over several days.",
     "Winners": "e.g. “50/50 drawing – Amy A $7.50” and “Weekly drawing – Bob B, not registered (up to $62)”.",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
@@ -290,22 +290,33 @@
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
   function eventsSection() {
     const sec = "Upcoming Events";
-    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null }));
+    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null, until: e.until || null }));
     const wrap = h("div", {});
     const draw = () => {
       wrap.replaceChildren(...evs.map((e, i) => {
-        const [d, t] = (e.when || "").split("T");
-        const date = h("input", { type: "date", value: d || "", "aria-label": "Date" });
-        const time = h("input", { type: "time", value: t || "", "aria-label": "Time (optional)" });
-        const setWhen = () => { e.when = date.value ? date.value + (time.value ? "T" + time.value : "") : null; save(); };
-        date.onchange = setWhen; time.onchange = setWhen;
+        const [d, t] = (e.when || "").split("T"), [ed, et] = (e.until || "").split("T");
+        const date = h("input", { type: "date", value: d || "", "aria-label": "Starts" });
+        const time = h("input", { type: "time", value: t || "", "aria-label": "Start time (optional)" });
+        const endDate = h("input", { type: "date", value: ed || "", "aria-label": "Last day (optional)" });
+        const endTime = h("input", { type: "time", value: et || "", "aria-label": "End time (optional)" });
+        // An end time alone means the same day; the server drops an end before the start.
+        const setWhen = () => {
+          e.when = date.value ? date.value + (time.value ? "T" + time.value : "") : null;
+          const day = endDate.value || (endTime.value ? date.value : "");
+          e.until = e.when && day ? day + (endTime.value ? "T" + endTime.value : "") : null;
+          nodate.hidden = !!e.when;
+          save();
+        };
+        [date, time, endDate, endTime].forEach((x) => x.onchange = setWhen);
+        const nodate = h("span", { class: "hint" }, "no date: not on the calendar");
+        nodate.hidden = !!e.when;
         const ta = h("textarea", { rows: 1, placeholder: "What, and where", "aria-label": "Event",
           oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
         ta.value = e.text;
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
             h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, "✖️")),
-          h("div", { class: "row meta" }, h("label", { class: "due" }, "Date ", date), h("label", { class: "due" }, "Time ", time),
-            e.when ? null : h("span", { class: "hint" }, "no date: not on the calendar")));
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, nodate),
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")));
       }), h("button", { class: "btn small ghost", onclick: () => { evs.push({ text: "", member: null, when: null }); draw();
         wrap.querySelectorAll("textarea")[evs.length - 1].focus(); } }, "+ Add event"));
       setTimeout(() => wrap.querySelectorAll("textarea").forEach(grow), 0);

@@ -46,5 +46,6 @@ textarea { resize: vertical; min-height: 2.4rem; }
 .notelead { font-size: 1rem; color: var(--text); line-height: 1.45; margin: .2rem 0 .4rem; }
 .bizitem .combo > input { padding: .25rem 1.8rem .25rem .5rem; border-radius: .4rem; width: 13rem; height: auto; }
 .bizitem input[type=date] { padding: .25rem .45rem; min-width: 9.5rem; min-height: 2rem; } .bizitem label.due { display: inline-flex; align-items: center; gap: .3rem; }
+.bizitem .evlabel { min-width: 3.2rem; align-self: center; }
 .bizitem input[type=time] { padding: .25rem .45rem; min-height: 2rem; }
 .bizitem.motion { display: flex; flex-direction: column; gap: .5rem; } .bizitem.motion textarea { width: 100%; }

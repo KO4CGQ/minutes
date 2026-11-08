@@ -34,8 +34,8 @@ def start(archive: Archive, date: dt.date, leader: str | None) -> Meeting:
         m.sections[sec] = []
     if prev:
         # events already past drop off; undated ones stay until a leader removes them
-        m.sections["Upcoming Events"] = [Item(i.text, when=i.when) for i in prev.items("Upcoming Events")
-                                         if not i.when or i.when[:10] >= date.isoformat()]
+        m.sections["Upcoming Events"] = [Item(i.text, when=i.when, until=i.until) for i in prev.items("Upcoming Events")
+                                         if not i.when or (i.until or i.when)[:10] >= date.isoformat()]
     # Old Business: every tracked item still open (business.py).
     m.sections.update(business_sections(archive, m.slug))
     # The next few chow nights after tonight, from the chow schedule.
@@ -164,7 +164,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
             "in_person": m.in_person, "remote": m.remote, "guests": m.guests, "visitors": m.visitors,
-            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when} for i in m.items(s)] for s in SECTIONS},
+            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until} for i in m.items(s)] for s in SECTIONS},
         },
         "state": load_state(archive, m.slug),
         "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
@@ -189,6 +189,18 @@ def _when(v) -> str | None:
         return None
 
 
+def _span(when, until) -> tuple[str | None, str | None]:
+    """A valid start, and an end only if it's valid and not before the start."""
+    when, until = _when(when), _when(until)
+    if not when or not until:
+        return when, None
+    if len(when) == 10:  # an all-day event ends on a day: its last day, after the first
+        return when, until[:10] if until[:10] > when else None
+    if len(until) == 10:  # a timed event with only an end date: the last day, on or after the start's day
+        return when, until if until >= when[:10] else None
+    return when, until if until > when else None
+
+
 def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     """Save the console's full meeting state (last write wins)."""
     m = archive.by_slug[slug]
@@ -202,7 +214,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
                 for g in d.get("guests", []) if g.get("name", "").strip()]
     m.guests = [g for g in m.guests if not archive.club.is_redacted(g["name"])]
     m.visitors = max(0, int(d.get("visitors") or 0))
-    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, _when(i.get("when")))
+    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")))
                       for i in d.get("sections", {}).get(s, []) if i.get("text", "").strip()]
                   for s in SECTIONS}
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser

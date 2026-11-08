@@ -17,7 +17,7 @@ def club():
 
 
 class FakeCal:
-    """Just enough of the Calendar API: list (only the app's events), insert, patch, delete."""
+    """Just enough of the Calendar API: list, insert, patch, delete."""
     def __init__(self, items=None):
         self.items, self.calls, self.n = {c: list(v) for c, v in (items or {}).items()}, [], 0
 
@@ -28,8 +28,7 @@ class FakeCal:
         return type("R", (), {"raise_for_status": lambda s: None, "json": lambda s: j or {}})()
 
     def get(self, url, params):
-        mine = [e for e in self.items.get(self._cal(url), []) if e.get("extendedProperties", {}).get("private", {}).get("w8lbz") == "1"]
-        return self._ok({"items": mine})
+        return self._ok({"items": list(self.items.get(self._cal(url), []))})
 
     def post(self, url, json):
         self.n += 1
@@ -113,3 +112,27 @@ def test_run_records_failures_and_skips_without_setup(tmp_path, monkeypatch):
     monkeypatch.setattr(gcal, "_session", lambda: (_ for _ in ()).throw(RuntimeError("no key file")))
     st = gcal.run(club(), Archive(tmp_path, club()))
     assert "no key file" in st["error"] and gcal.status()["error"] == st["error"]
+
+
+def test_event_ends_and_multi_day(tmp_path, monkeypatch):
+    evs = [Item("VE testing", when="2026-11-21T10:00", until="2026-11-21T13:00"), Item("Field Day", when="2027-06-26", until="2027-06-27"),
+           Item("Hamcation trip", when="2027-02-11T18:00", until="2027-02-14T14:00")]
+    back = Meeting.from_markdown(Meeting(date=THU, sections={"Upcoming Events": evs}).to_markdown()).items("Upcoming Events")
+    assert [i.shown for i in back] == ["Sat, Nov 21, 10:00 AM – 1:00 PM: VE testing", "Sat, Jun 26 – Sun, Jun 27: Field Day",
+                                       "Thu, Feb 11, 6:00 PM – Sun, Feb 14, 2:00 PM: Hamcation trip"]
+    # an end before the start, or the same as it, is dropped; an all-day event ends on a day
+    assert console._span("2026-11-21T10:00", "2026-11-21T09:00") == ("2026-11-21T10:00", None)
+    assert console._span("2026-11-21", "2026-11-23T09:00") == ("2026-11-21", "2026-11-23")
+    assert console._span("2026-11-21", "2026-11-21") == ("2026-11-21", None)
+    monkeypatch.setattr(chow, "DATA", tmp_path)
+    cal = FakeCal({"events@cal": [{"id": "h1", "summary": "VE  Testing", "start": {"dateTime": "2026-11-21T10:00:00-05:00"},
+                                   "end": {"dateTime": "2026-11-21T12:00:00-05:00"}}]})
+    assert gcal.sync(club(), back, THU, cal)["events"] == {"added": 2, "changed": 0, "removed": 0}  # VE testing was there by hand
+    got = {e["summary"]: e for e in cal.items["events@cal"]}
+    assert got["Field Day"]["end"] == {"date": "2027-06-28"}  # the day after the last day
+    assert got["Hamcation trip"]["end"]["dateTime"] == "2027-02-14T14:00:00"
+    # an event still running (ends after today) isn't dropped at the next meeting
+    Meeting(date=dt.date(2027, 6, 24), status="published", sections={"Upcoming Events": [
+        Item("Field Day", when="2027-06-26", until="2027-06-27"), Item("Old", when="2027-06-20")]}).save(tmp_path)
+    m = console.start(Archive(tmp_path, club()), dt.date(2027, 6, 27), None)
+    assert [i.text for i in m.items("Upcoming Events")] == ["Field Day"]

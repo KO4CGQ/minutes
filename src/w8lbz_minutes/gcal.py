@@ -16,10 +16,10 @@ import time
 
 from . import chow
 from .club import DATA, PREVIEW, Club
+from .meeting import EVENT_HOURS
 
 log = logging.getLogger(__name__)
 API = "https://www.googleapis.com/calendar/v3/calendars/{}/events"
-EVENT_HOURS = 2  # a timed event's length; the minutes only give a start
 
 
 def _session():
@@ -47,20 +47,25 @@ def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict
         out["chow"][f"chow:{date}"] = {"summary": f"Chow: {who}",
                                        **_timed(dt.datetime.combine(dt.date.fromisoformat(date), at), EVENT_HOURS, tz)}
     for e in events:
-        if not e.when or e.when[:10] < today.isoformat():
+        if not e.when or (e.until or e.when)[:10] < today.isoformat():
             continue
-        if "T" in e.when:
-            when = _timed(dt.datetime.fromisoformat(e.when), EVENT_HOURS, tz)
+        start, end, all_day = e.span()
+        if all_day:  # Google's all-day end is the day after the last day
+            when = {"start": {"date": start.date().isoformat()}, "end": {"date": (end.date() + dt.timedelta(days=1)).isoformat()}}
         else:
-            day = dt.date.fromisoformat(e.when)
-            when = {"start": {"date": day.isoformat()}, "end": {"date": (day + dt.timedelta(days=1)).isoformat()}}
+            when = _timed(start, (end - start).total_seconds() / 3600, tz)
         out["events"][f"event:{e.when}:{e.text[:60]}"] = {"summary": e.text, **when}
     return out
 
 
+def _day_title(e: dict) -> tuple[str, str]:
+    return (e["start"].get("date") or e["start"].get("dateTime", ""))[:10], " ".join(e.get("summary", "").lower().split())
+
+
 def _same(have: dict, want: dict) -> bool:
     def key(e):
-        return e.get("summary"), (e["start"].get("dateTime") or "")[:19], e["start"].get("date"), (e["end"].get("dateTime") or "")[:19]
+        return (e.get("summary"), (e["start"].get("dateTime") or "")[:19], e["start"].get("date"),
+                (e["end"].get("dateTime") or "")[:19], e["end"].get("date"))
     return key(have) == key(want)
 
 
@@ -77,9 +82,9 @@ def sync(club: Club, events: list, today: dt.date | None = None, session=None) -
         if not cid:
             continue
         url = API.format(cid)
-        have, page = {}, None
+        have, by_hand, page = {}, set(), None
         while True:
-            r = s.get(url, params={"privateExtendedProperty": "w8lbz=1", "timeMin": f"{today}T00:00:00Z",
+            r = s.get(url, params={"timeMin": f"{today}T00:00:00Z",
                                    "singleEvents": "true", "maxResults": 250, **({"pageToken": page} if page else {})})
             r.raise_for_status()
             j = r.json()
@@ -87,12 +92,18 @@ def sync(club: Club, events: list, today: dt.date | None = None, session=None) -
                 # timeMin is UTC midnight, so last evening's events come back too: leave anything before today alone
                 if (e["start"].get("date") or e["start"].get("dateTime", ""))[:10] < today.isoformat():
                     continue
-                have[e.get("extendedProperties", {}).get("private", {}).get("w8lbz_key", e["id"])] = e
+                mine = e.get("extendedProperties", {}).get("private", {})
+                if mine.get("w8lbz") == "1":
+                    have[mine.get("w8lbz_key", e["id"])] = e
+                else:  # someone added it by hand: never touched, and not added again
+                    by_hand.add(_day_title(e))
             if not (page := j.get("nextPageToken")):
                 break
         c = {"added": 0, "changed": 0, "removed": 0}
         for k, e in want.items():
             body = {**e, "extendedProperties": {"private": {"w8lbz": "1", "w8lbz_key": k}}}
+            if k not in have and _day_title(e) in by_hand:
+                continue
             if k not in have:
                 s.post(url, json=body).raise_for_status()
                 c["added"] += 1
