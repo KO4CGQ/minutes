@@ -77,11 +77,13 @@ def _google(club: Club, kind: str, lo: dt.date, hi: dt.date, session) -> list[En
     return out
 
 
-def _birthdays(club: Club, viewer: str, lo: dt.date, hi: dt.date, elevated: bool) -> list[Entry]:
-    """Birthdays the viewer may see (shared, or the viewer is an officer). A month-only one shows on the 1st."""
+def _birthdays(club: Club, viewer: str, lo: dt.date, hi: dt.date) -> list[Entry]:
+    """Only birthdays members chose to share with everyone (and your own), for every viewer, officers too: the
+    calendar is where a club-wide greeting starts, so a private birthday never shows here. A month-only one
+    shows on the 1st."""
     out = []
     for m in club.members.values():
-        if not m.birthday or m.status.lower() in ("inactive", "silent key") or not club.can_see(viewer, m.id, "birthday", elevated):
+        if not m.birthday or m.status.lower() in ("inactive", "silent key") or ("birthday" not in m.share and m.id != viewer):
             continue
         for year in range(lo.year, hi.year + 1):
             try:
@@ -109,7 +111,7 @@ def entries(club: Club, archive, viewer: str, lo: dt.date, hi: dt.date, elevated
         if x.get("status") != "none":
             day = dt.date.fromisoformat(d)
             out.append(Entry(day, day, f"Chow: {club.name(x['member']) if x.get('member') else 'open'}", "chow", _clock(at)))
-    out += _birthdays(club, viewer, lo, hi, elevated)
+    out += _birthdays(club, viewer, lo, hi)
     cals = club.info.get("calendars") or {}
     google = [k for k in READ if cals.get(k)] if not PREVIEW else []
     if google:

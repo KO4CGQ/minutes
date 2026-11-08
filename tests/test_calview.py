@@ -93,7 +93,9 @@ def test_page_merges_google_chow_and_birthdays(tmp_path):
     assert (net.time, net.where, net.repeats, net.id) == ("8:00 PM", "146.520", True, "net1")
     assert next(e for e in got if e.title == "VE testing").from_minutes
     officer, _ = calview.entries(c, Archive(tmp_path, c), "kd8aaa", *NOV, session=google())
-    assert any(e.title == "Birthday: Cal Cole" for e in officer)  # officers see every birthday
+    assert not any(e.title == "Birthday: Cal Cole" for e in officer)  # private stays private, even for officers
+    cal, _ = calview.entries(c, Archive(tmp_path, c), "kd8ccc", *NOV, session=google())
+    assert any(e.title == "Birthday: Cal Cole" for e in cal)  # but you see your own
 
 
 def test_without_calendars_it_shows_the_app_own_data(tmp_path):

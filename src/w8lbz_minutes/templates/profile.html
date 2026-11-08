@@ -39,7 +39,7 @@
 
   <fieldset><legend>Share with all members</legend>
     <p class="hint">Officers can always see your details; the Secretary keeps the roster. Tick what other members may see on the Roster page.
-    Sharing your birthday also lets the club wish you a happy birthday at the meeting.</p>
+    <b>Birthday:</b> share it and it goes on the club calendar, so the club can wish you a happy birthday. Don't share it and it stays private: it's never on the calendar or announced.</p>
     {% for f in shareable %}<label class="check"><input type="checkbox" name="share" value="{{ f }}" {{ 'checked' if f in m.share }}> {{ f|capitalize }}</label>{% endfor %}
   </fieldset>
   <p><button class="btn" type="submit">Save</button></p>

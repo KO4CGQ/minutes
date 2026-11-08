@@ -117,7 +117,7 @@ To turn it on:
    Once the chow calendar syncs, delete any chow nights from today on that were entered there by hand, or they'll show twice.
 3. Restart the app. The Security page's **Server** tab shows the last sync, or why it failed.
 
-**Calendar page** (`/calendar`, in the menu): every member sees an agenda (the next 8 weeks) or a month grid with the club events, Planning and Community calendars read from Google, chow nights, and birthdays (those a member shares; officers see all). Leaders and minutes editors (and admins in admin mode) can **add, change and delete** events on the club events, Planning and Community calendars there, so nobody else needs the club's Google account. Changes go straight to Google and are logged in `calendar-log.jsonl`. Events that came from the minutes are changed in the leader console instead. Before the calendars are set up, the page shows the weekly meeting, the minutes' dated events, chow and birthdays.
+**Calendar page** (`/calendar`, in the menu): every member sees an agenda (the next 8 weeks) or a month grid with the club events, Planning and Community calendars read from Google, chow nights, and birthdays members share (never private ones, not even for officers). Leaders and minutes editors (and admins in admin mode) can **add, change and delete** events on the club events, Planning and Community calendars there, so nobody else needs the club's Google account. Changes go straight to Google and are logged in `calendar-log.jsonl`. Events that came from the minutes are changed in the leader console instead. Before the calendars are set up, the page shows the weekly meeting, the minutes' dated events, chow and birthdays.
 
 Previews never sync, and their Calendar page doesn't read or edit Google.
 
