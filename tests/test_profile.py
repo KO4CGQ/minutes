@@ -373,3 +373,12 @@ def test_admins_edit_club_links(tmp_path, monkeypatch):
     assert "discord.example" in page and "example.org/net" not in page
     bad = c.post("/links", data={**form, "url": ["javascript:alert(1)", "", ""]}, follow_redirects=False)
     assert "error=" in bad.headers["location"] and len(club.links) == 2      # rejected, nothing changed
+    # brand logos (Simple Icons): searched by name, saved as si:slug, drawn on the Links page; made-up ones are dropped
+    hits = c.get("/links/icons?q=Home Assistant").json()
+    assert hits[0]["name"] == "si:homeassistant" and hits[0]["title"] == "Home Assistant" and hits[0]["path"].startswith("M")
+    assert c.get("/links/icons?q=h").json() == []  # too short
+    c.post("/links", data={"label": ["Home Assistant", "Odd"], "url": ["https://ha.example.org", "https://x.example.org"],
+                           "icon": ["si:homeassistant", "si:not-a-logo"], "show": ["both", "both"]})
+    assert [x.get("icon") for x in club.links] == ["si:homeassistant", None]
+    assert web.brand_path("si:homeassistant") in c.get("/links").text
+    assert ">Home Assistant</small>" in c.get("/links?edit=1").text  # the picker shows the logo's name

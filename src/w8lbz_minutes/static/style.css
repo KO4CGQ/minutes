@@ -429,3 +429,6 @@ table.month li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .feedlink { width: 100%; max-width: 40rem; font-family: ui-monospace, monospace; font-size: .8rem; }
 h2.calrange { font-size: 1.05rem; margin: .3rem 0; }
+.iconpick .iconsearch { grid-column: 1 / -1; width: 100%; padding: .35rem .6rem; }
+.iconpick .brandhits { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: .25rem; max-height: 14rem; overflow-y: auto; }
+.iconpick .brandhits:empty { display: none; } .iconpick .brandhits small { overflow-wrap: anywhere; }

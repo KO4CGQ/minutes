@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import json
 import logging
 import re
@@ -1339,6 +1340,39 @@ def preview_outbox():
 
 ICONS = ("link", "globe", "video", "chat", "mail", "phone", "document", "form", "book", "news", "calendar", "map",
          "users", "radio", "antenna", "play", "code", "cart", "money", "info", "star")  # all drawn in _icons.html
+@functools.cache
+def brands() -> dict[str, list[str]]:
+    """Simple Icons brand logos (slug -> [title, svg path]), stored in the package (deploy/update-simple-icons.py)."""
+    return json.loads((Path(__file__).parent / "simple_icons.json").read_text())
+
+
+def brand_path(name: str) -> str:
+    """The svg path of a brand icon ("si:homeassistant"), or "" if there's no such logo."""
+    return brands().get(name[3:], ["", ""])[1] if name.startswith("si:") else ""
+
+
+templates.env.globals["brand_path"] = brand_path
+templates.env.globals["icon_label"] = lambda name: brands().get(name[3:], [name])[0] if name.startswith("si:") else name
+
+
+def valid_icon(icon: str) -> bool:
+    return icon in ICONS or bool(brand_path(icon))
+
+
+@app.get("/links/icons")
+def link_icons_search(request: Request, q: str = "", mid: str = Depends(me)):
+    """Brand logos matching q (name or slug), best first, for the Links editor's icon search."""
+    if not admin_mode(request):
+        raise HTTPException(403)
+    q = " ".join(q.lower().split())
+    key = re.sub(r"[^a-z0-9]", "", q)
+    if len(key) < 2:
+        return []
+    hits = [(slug, t, p) for slug, (t, p) in brands().items() if key in slug or q in t.lower()]
+    hits.sort(key=lambda h: (h[1].lower() != q and h[0] != key, not h[0].startswith(key), len(h[0]), h[0]))
+    return [{"name": f"si:{slug}", "title": t, "path": p} for slug, t, p in hits[:40]]
+
+
 SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "hidden": (False, False)}
 
 
@@ -1507,7 +1541,7 @@ async def links_save(request: Request, mid: str = Depends(me)):
         if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url):
             return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto: or tel: ({label or url})."), status_code=303)
         page_, minutes_ = SHOW.get(show, (True, True))
-        out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if icon in ICONS else {}), "page": page_, "minutes": minutes_})
+        out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if valid_icon(icon) else {}), "page": page_, "minutes": minutes_})
     archive.club.save_links(out[:40])
     _admin_log(request, links=[x["label"] for x in out])
     return RedirectResponse("/links", status_code=303)
