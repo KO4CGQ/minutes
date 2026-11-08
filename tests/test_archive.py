@@ -192,7 +192,7 @@ def test_bylaws_page(tmp_path, monkeypatch):
 def test_links_page_lists_club_links(monkeypatch):
     from fastapi.testclient import TestClient
     from w8lbz_minutes import web
-    monkeypatch.setattr(web.archive.club, "links", [{"label": "Club Discord", "url": "https://discord.example/x"}])
+    monkeypatch.setattr(web.archive.club, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.example/x"}])
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
     html = TestClient(web.app).get("/links").text
     assert 'href="https://discord.example/x"' in html and "Club Discord" in html and 'href="/links"' in html

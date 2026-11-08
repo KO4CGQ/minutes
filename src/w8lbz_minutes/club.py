@@ -62,7 +62,7 @@ class Club:
         path = path or Path(os.environ.get("W8LBZ_CONFIG", ROOT / "club.yaml"))
         cfg = yaml.safe_load(path.read_text()) or {}
         self.info = cfg.get("club", {})
-        self.links = cfg.get("links", [])
+        self._yaml_links = cfg.get("links", [])  # until an admin edits them on the Links page (links.json)
         self.auth = cfg.get("auth") or {}
         self.email = cfg.get("email") or {}
         self.redact = [_n(x) for x in (cfg.get("privacy") or {}).get("never_record", [])]
@@ -78,6 +78,18 @@ class Club:
             self._mtime = ROSTER_CACHE.stat().st_mtime
             roster = json.loads(ROSTER_CACHE.read_text())
         self._load(roster or [])
+
+    @property
+    def links(self) -> list[dict]:
+        """Club links: label, url, optional icon, and where they show (page / minutes, both by default)."""
+        p = DATA / "links.json"
+        return json.loads(p.read_text()) if p.exists() else self._yaml_links
+
+    def save_links(self, links: list[dict]) -> None:
+        p = DATA / "links.json"
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(links, indent=1))
+        tmp.replace(p)
 
     def _load(self, roster: list[dict]) -> None:
         known = {f.name for f in fields(Member)}

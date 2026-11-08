@@ -377,3 +377,8 @@ body.drawer-open .drawer .scrim { opacity: 1; } body.drawer-open .drawer .panel 
 .homegrid p { margin: .35rem 0; } .homegrid .big { font-size: 1.2rem; font-weight: 600; }
 ul.plain { list-style: none; padding: 0; margin: .3rem 0; } ul.plain li { padding: .3rem 0; border-bottom: 1px solid var(--border); } ul.plain li:last-child { border: 0; }
 nav.top .me .name { margin-right: .35rem; }
+/* Links page editor (admins) */
+form.linkedit input, form.linkedit select { width: 100%; } form.linkedit td { vertical-align: middle; }
+form.linkedit .rowbtns { white-space: nowrap; } form.linkedit .rowbtns .btn { padding: .2rem .5rem; margin-left: .15rem; }
+@media (max-width: 760px) { form.linkedit table, form.linkedit tbody, form.linkedit tr, form.linkedit td { display: block; }
+  form.linkedit thead { display: none; } form.linkedit tr { border-bottom: 1px solid var(--border); padding: .5rem 0; } }

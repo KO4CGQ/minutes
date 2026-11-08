@@ -32,7 +32,7 @@
 
   <footer class="links">
     <h2>Club Links</h2>
-    <ul>{% for l in club.links %}<li>{{ l.label }}: <a href="{{ l.url }}">{{ l.url }}</a></li>{% endfor %}</ul>
+    <ul>{% for l in club.links if l.minutes != false %}<li>{{ l.label }}: <a href="{{ l.url }}">{{ l.url }}</a></li>{% endfor %}</ul>
     <p class="ver">Version {{ m.version }}{% if m.status == 'imported' %} · imported from {{ m.source }}, not yet reviewed{% endif %}{% if m.note and not pdf %} · {{ m.note }}{% endif %}</p>
   </footer>
 </article>

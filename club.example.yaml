@@ -25,6 +25,7 @@ email:
   only_to: [KD8XYZ]
 
 links:  # shown in the "Club Links" footer of the minutes and on the Links page
+  # The starting list: once an admin edits the links on the Links page, links.json in the data folder is used instead.
   # Optional icon: video, chat, globe, document, radio, calendar or link (guessed from the address if left out)
   - label: Teams meeting
     url: https://teams.live.com/meet/REPLACE_ME

@@ -1,7 +1,35 @@
 {% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}Club links{% endblock %}{% block body %}
-<h1>Club links</h1>
-<div class="linkgrid">{% for l in club.links %}
+<div class="headrow"><h1>Club links</h1>{% if admin_until and not edit %}<a class="btn small ghost" href="/links?edit=1">✏️ Edit links</a>{% endif %}</div>
+{% if edit %}
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+<p class="muted">Pick where each link shows: on this page, in the "Club Links" footer of the minutes (and their PDF), both, or neither. Use ↑ ↓ to change the order.
+The icon is guessed from the address unless you pick one. Use full addresses (https://…) so they work in the PDF.</p>
+<form method="post" action="/links" class="linkedit">
+<table class="list"><thead><tr><th>Name</th><th>Address</th><th>Icon</th><th>Shows on</th><th></th></tr></thead>
+<tbody>{% for l in club.links + [{}] %}<tr>
+  <td><input name="label" value="{{ l.label or '' }}" aria-label="Name" placeholder="New link"></td>
+  <td><input name="url" value="{{ l.url or '' }}" aria-label="Address" placeholder="https://"></td>
+  <td><select name="icon" aria-label="Icon"><option value="">Auto</option>{% for i in icons %}<option {{ 'selected' if l.icon == i }}>{{ i }}</option>{% endfor %}</select></td>
+  {% set sh = 'both' if l.page != false and l.minutes != false else 'page' if l.page != false else 'minutes' if l.minutes != false else 'hidden' %}
+  <td><select name="show" aria-label="Shows on">{% for v, t in (('both', 'Page and minutes'), ('page', 'Links page only'), ('minutes', 'Minutes only'), ('hidden', 'Hidden')) %}<option value="{{ v }}" {{ 'selected' if sh == v }}>{{ t }}</option>{% endfor %}</select></td>
+  <td class="rowbtns"><button type="button" class="btn small ghost" data-move="-1" aria-label="Move up">↑</button><button type="button" class="btn small ghost" data-move="1" aria-label="Move down">↓</button><button type="button" class="btn small ghost" data-remove aria-label="Remove">✕</button></td>
+</tr>{% endfor %}</tbody></table>
+<p><button type="button" class="btn small ghost" id="addlink">+ Add a link</button></p>
+<p><button class="btn">Save links</button> <a class="btn ghost" href="/links">Cancel</a></p>
+</form>
+<script>
+const body = document.querySelector("form.linkedit tbody");
+body.addEventListener("click", (e) => { const b = e.target.closest("button"), tr = b?.closest("tr"); if (!tr) return;
+  if (b.dataset.remove !== undefined) { tr.remove(); return; }
+  const d = +b.dataset.move; if (d < 0 && tr.previousElementSibling) tr.after(tr.previousElementSibling);
+  if (d > 0 && tr.nextElementSibling) tr.before(tr.nextElementSibling); b.focus(); });
+document.getElementById("addlink").addEventListener("click", () => { const tr = body.lastElementChild.cloneNode(true);
+  tr.querySelectorAll("input").forEach((i) => i.value = ""); tr.querySelectorAll("select").forEach((s) => s.selectedIndex = 0);
+  body.append(tr); tr.querySelector("input").focus(); });
+</script>
+{% else %}
+<div class="linkgrid">{% for l in club.links if l.page != false %}
 <a class="linkcard" href="{{ l.url }}">{{ icon(l.icon or l.url|link_icon) }}<span class="label">{{ l.label }}</span><span class="host">{{ l.url|link_host }}</span></a>
-{% else %}<p class="muted">No links yet. They're set in club.yaml under <code>links</code>.</p>{% endfor %}</div>
-<p class="muted">These also appear in the "Club Links" footer of every set of minutes.</p>
+{% else %}<p class="muted">No links yet.{% if admin_until %} <a href="/links?edit=1">Add some</a>.{% endif %}</p>{% endfor %}</div>
+{% endif %}
 {% endblock %}

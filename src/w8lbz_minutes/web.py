@@ -1162,9 +1162,34 @@ def preview_outbox():
     return RedirectResponse("/admin/email", status_code=303)
 
 
+ICONS = ("video", "chat", "globe", "document", "radio", "calendar", "link")
+SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "hidden": (False, False)}
+
+
 @app.get("/links", response_class=HTMLResponse)
-def links(request: Request):
-    return page(request, "links.html")
+def links(request: Request, edit: int = 0, error: str = ""):
+    return page(request, "links.html", edit=bool(edit and admin_mode(request)), error=error, icons=ICONS)
+
+
+@app.post("/links")
+async def links_save(request: Request, mid: str = Depends(me)):
+    """Admins (in admin mode) choose the links, their icons, their order, and where each shows."""
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode to edit the club links.")
+    form = await request.form()
+    rows = zip(form.getlist("label"), form.getlist("url"), form.getlist("icon"), form.getlist("show"))
+    out = []
+    for label, url, icon, show in rows:
+        label, url = label.strip(), url.strip()
+        if not label and not url:
+            continue
+        if not label or not re.match(r"^https?://\S+$", url):
+            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https:// ({label or url})."), status_code=303)
+        page_, minutes_ = SHOW.get(show, (True, True))
+        out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if icon in ICONS else {}), "page": page_, "minutes": minutes_})
+    archive.club.save_links(out[:40])
+    _admin_log(request, links=[x["label"] for x in out])
+    return RedirectResponse("/links", status_code=303)
 
 
 @app.get("/stats", response_class=HTMLResponse)
