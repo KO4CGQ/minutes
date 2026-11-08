@@ -1,9 +1,31 @@
 {% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}{{ club.info.callsign ~ ' events' if public else 'Calendar' }}{% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
 {% else %}<p><a href="/calendar/subscribe">Subscribe in your calendar app (phone, Outlook, Apple or Google Calendar)</a></p>{% endif %}
+<script>
+// The legend shows or hides each calendar (remembered in this browser). In the month grid each day keeps showing
+// its first three visible events, with "+N more" for the rest.
+(() => {
+  const KEY = "calendar-hidden", hidden = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+  const apply = () => {
+    document.querySelectorAll(".calkind").forEach((b) => b.setAttribute("aria-pressed", !hidden.has(b.dataset.kind)));
+    document.querySelectorAll("li[data-kind]").forEach((li) => li.hidden = hidden.has(li.dataset.kind));
+    document.querySelectorAll("ul.agenda").forEach((ul) => {  // a day with nothing left shown: hide its heading too
+      const any = [...ul.children].some((li) => !li.hidden); ul.hidden = !any; ul.previousElementSibling.hidden = !any; });
+    document.querySelectorAll("table.month ul").forEach((ul) => {
+      const shown = [...ul.querySelectorAll("li[data-kind]")].filter((li) => !li.hidden), more = ul.querySelector("li.more");
+      shown.forEach((li, i) => li.classList.toggle("extra", i >= 3));
+      more.hidden = shown.length <= 3; more.querySelector("span").textContent = shown.length - 3; });
+    const none = document.getElementById("calnone"); if (none) none.hidden = !!document.querySelector("ul.agenda:not([hidden])") || !document.querySelector("ul.agenda");
+  };
+  document.querySelectorAll(".calkind").forEach((b) => b.onclick = () => {
+    hidden.has(b.dataset.kind) ? hidden.delete(b.dataset.kind) : hidden.add(b.dataset.kind);
+    localStorage.setItem(KEY, JSON.stringify([...hidden])); apply(); });
+  apply();
+})();
+</script>
 {% endblock %}{% block body %}
 <div class="headrow"><h1>{{ club.info.name ~ ' events' if public else 'Calendar' }}</h1>{% if can_edit %}<p class="row"><a class="btn small" href="/calendar/edit">+ Add an event</a><a class="btn small ghost" href="/calendar/import">Import .ics</a></p>{% endif %}</div>
 <nav class="tabs" aria-label="View">{% for v, label in (('agenda', 'Agenda'), ('month', 'Month')) %}<a href="{{ base }}?view={{ v }}{% if v == 'month' %}&month={{ first.strftime('%Y-%m') }}{% endif %}" class="{{ 'on' if view == v }}"{% if view == v %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
-<p class="callegend">{% for k, label in kinds.items() %}<span><i class="dot k-{{ k }}"></i>{{ label }}</span>{% endfor %}</p>
+<p class="callegend">{% for k, label in kinds.items() %}<button type="button" class="calkind" data-kind="{{ k }}" aria-pressed="true" title="Show or hide {{ label }}"><i class="dot k-{{ k }}"></i>{{ label }}</button>{% endfor %}<span class="muted small">tap to show or hide</span></p>
 
 {% macro item(e, d) %}<i class="dot k-{{ e.kind }}"></i>{% if e.time and d == e.start %}<span class="caltime">{{ e.time }}</span> {% endif %}<span class="caltitle">{{ e.title }}</span>{% endmacro %}
 
@@ -12,11 +34,12 @@
 <div class="headrow"><h2 class="calrange">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }}</h2>{{ moves() }}</div>
 {% set days = by_day|dictsort %}
 {% for d, es in days %}<h2 class="calday" id="d{{ d }}">{{ 'Today' if d == today else d.strftime('%A, %B %-d') }}</h2>
-<ul class="agenda">{% for e in es %}<li>{{ item(e, d) }}
+<ul class="agenda">{% for e in es %}<li data-kind="{{ e.kind }}">{{ item(e, d) }}
   {% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}
   {% if e.where %}<span class="muted small"> · {{ e.where }}</span>{% endif %}
   {% if can_edit %}{% if e.from_minutes %}<span class="muted small"> · from the minutes</span>{% elif e.id %} <a class="caledit" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}" title="Edit" aria-label="Edit {{ e.title }}">{{ emoji('✏️', 'pencil') }}</a>{% endif %}{% endif %}</li>{% endfor %}</ul>
 {% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
+{% if by_day %}<p class="muted" id="calnone" hidden>Everything on these weeks is in a calendar you've hidden; tap it in the list above to show it.</p>{% endif %}
 {{ moves() }}
 
 {% else %}
@@ -25,11 +48,33 @@
 <table class="month"><thead><tr>{% for n in ('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat') %}<th>{{ n }}</th>{% endfor %}</tr></thead><tbody>
 {% set ns = namespace(d=lo) %}{% for w in range(((hi - lo).days + 1) // 7) %}<tr>{% for i in range(7) %}{% set d = ns.d %}
 <td class="{{ 'other' if d.month != first.month }}{{ ' today' if d == today }}"><a class="daynum" href="{{ base }}?start={{ d }}" aria-label="{{ d.strftime('%A, %B %-d') }}">{{ d.day }}</a>
-{% set es = by_day.get(d, []) %}{% if es %}<ul>{% for e in es[:3] %}<li title="{{ e.time ~ ' ' if e.time }}{{ e.title }}">{{ item(e, d) }}</li>{% endfor %}{% if es|length > 3 %}<li class="more"><a href="{{ base }}?start={{ d }}">+{{ es|length - 3 }} more</a></li>{% endif %}</ul>{% endif %}</td>
+{% set es = by_day.get(d, []) %}{% if es %}<ul>{% for e in es %}<li data-kind="{{ e.kind }}" title="{{ e.time ~ ' ' if e.time }}{{ e.title }}"{% if loop.index > 3 %} class="extra"{% endif %}>{{ item(e, d) }}</li>{% endfor %}<li class="more"{% if es|length <= 3 %} hidden{% endif %}><a href="{{ base }}?start={{ d }}">+<span>{{ es|length - 3 }}</span> more</a></li></ul>{% endif %}</td>
 {% set ns.d = d + timedelta(days=1) %}{% endfor %}</tr>{% endfor %}
 </tbody></table>
 <p class="muted small">Tap a day to see it in the agenda.</p>
 {% endif %}
 {% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
 {% else %}<p><a href="/calendar/subscribe">Subscribe in your calendar app (phone, Outlook, Apple or Google Calendar)</a></p>{% endif %}
+<script>
+// The legend shows or hides each calendar (remembered in this browser). In the month grid each day keeps showing
+// its first three visible events, with "+N more" for the rest.
+(() => {
+  const KEY = "calendar-hidden", hidden = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+  const apply = () => {
+    document.querySelectorAll(".calkind").forEach((b) => b.setAttribute("aria-pressed", !hidden.has(b.dataset.kind)));
+    document.querySelectorAll("li[data-kind]").forEach((li) => li.hidden = hidden.has(li.dataset.kind));
+    document.querySelectorAll("ul.agenda").forEach((ul) => {  // a day with nothing left shown: hide its heading too
+      const any = [...ul.children].some((li) => !li.hidden); ul.hidden = !any; ul.previousElementSibling.hidden = !any; });
+    document.querySelectorAll("table.month ul").forEach((ul) => {
+      const shown = [...ul.querySelectorAll("li[data-kind]")].filter((li) => !li.hidden), more = ul.querySelector("li.more");
+      shown.forEach((li, i) => li.classList.toggle("extra", i >= 3));
+      more.hidden = shown.length <= 3; more.querySelector("span").textContent = shown.length - 3; });
+    const none = document.getElementById("calnone"); if (none) none.hidden = !!document.querySelector("ul.agenda:not([hidden])") || !document.querySelector("ul.agenda");
+  };
+  document.querySelectorAll(".calkind").forEach((b) => b.onclick = () => {
+    hidden.has(b.dataset.kind) ? hidden.delete(b.dataset.kind) : hidden.add(b.dataset.kind);
+    localStorage.setItem(KEY, JSON.stringify([...hidden])); apply(); });
+  apply();
+})();
+</script>
 {% endblock %}

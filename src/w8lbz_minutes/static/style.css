@@ -439,3 +439,8 @@ a.caledit .ico { width: 1.05rem; height: 1.05rem; }
 /* emoji(): the native emoji where the device draws color emoji (html.emoji, set in base.html), else the app's line icon */
 .emo { display: none; font-size: 1rem; line-height: 1; } html.emoji .emo { display: inline; } html.emoji .emo-alt { display: none; }
 .emo-alt { display: inline-flex; vertical-align: -.2em; } .emo-alt .ico { width: 1.15em; height: 1.15em; } .emoji-wrap { display: inline; }
+button.calkind { font: inherit; display: inline-flex; align-items: center; gap: .1rem; padding: .3rem .55rem; margin: -.3rem -.2rem;
+  border: 1px solid transparent; border-radius: 2rem; background: none; color: inherit; cursor: pointer; }
+button.calkind:hover { border-color: var(--border-strong); } button.calkind[aria-pressed=false] { opacity: .5; text-decoration: line-through; }
+button.calkind[aria-pressed=false] .dot { background: transparent !important; box-shadow: inset 0 0 0 2px var(--muted); }
+table.month li.extra { display: none; }
