@@ -23,6 +23,15 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 - **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 
+## Backups
+Today the server relies on Proxmox snapshots of the container. A backup the app makes itself, kept somewhere else:
+- **What:** the whole data folder (minutes, chow, business items, calendars, settings, the sign-in database), in one archive.
+- **Encrypted** before it leaves the server, with a passphrase only the admins hold, so the storage provider can't read club data.
+- **Where:** Google Drive (the service account already exists), S3 or S3-compatible storage (Backblaze B2, Wasabi), or another server over SFTP; one or more at a time.
+- **Configured from the app** (admin mode): destinations, schedule (e.g. nightly), how many to keep, and the last backup's result, with an email to the admins if one fails.
+- **Download a backup** from the app, encrypted, for safekeeping on your own computer.
+- **Restore:** a documented, tested way to restore onto a fresh server, and a periodic check that a backup actually opens.
+
 ## Admin tools
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
 - **Filter the Admin actions log** by admin, kind of action and date, with paging (it shows the last 50 today).

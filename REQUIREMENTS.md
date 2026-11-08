@@ -140,7 +140,7 @@ The minutes follow a fixed template. The system should generate exactly this str
   - Extract each PDF's text and convert it to the Markdown template with a plain parser (no AI), keeping the original PDF as an attachment ("view original").
   - Where a correction exists, it replaces the original (for example, `1-oct-26-minutes-CORRECTED.txt`).
   - Imported meetings are marked "imported, unverified" until someone gives them a quick review.
-- **FR-34** **Backup.** The archive folder is committed to a **private GitHub repo** in the w8lbz org after each submit (free), as well as being covered by Proxmox snapshots.
+- **FR-34** **Backup.** Today: Proxmox snapshots of the container. Planned (ROADMAP, Backups): encrypted backups of the whole data folder made by the app, to Google Drive, S3-compatible storage or SFTP, set up and downloadable from the app. (The earlier idea of committing the archive to a private GitHub repo wasn't built.)
 - **FR-35** **Members-only.** The archive is behind the member login (§7.3).
 
 ### 4.7 Roster and chow
