@@ -6,6 +6,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 - **Updates page refreshes itself:** while an update is waiting or running, the admin Updates page checks every few seconds and shows the result (the new version and ✅ or ❌) once the app is back, without a manual reload.
+- **Sign-in links can't be redirected:** links in emails (sign-in, swaps, confirmations) now only use the app's own addresses (the HTTPS name, or the LAN address the request really reached). Before, a forged `Host` header could make the app email a member a working sign-in link pointing at someone else's server. Pages also send standard security headers: no framing by other sites, no guessing of file types, no full addresses leaked to other sites, and `noindex` for search engines.
 
 ## 0.8.0 (2026-11-07)
 - **Docs in sync:** the README describes what the app does now, REQUIREMENTS says "leader" throughout (whoever leads that night: an officer or a member ticked `minutes_editor`), and Admin is a separate role. No member names or club email addresses in the repo, its examples or its history.

@@ -128,6 +128,17 @@ async def require_login(request: Request, call_next):
     return JSONResponse({"detail": "Please sign in"}, status_code=401)
 
 
+@app.middleware("http")  # added last, so it runs outermost and covers the login redirects too
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    h = response.headers
+    h.setdefault("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("Referrer-Policy", "same-origin")
+    h.setdefault("X-Robots-Tag", "noindex, nofollow")  # members-only; keep the public hostname out of search engines
+    return response
+
+
 def me(request: Request) -> str:
     return request.state.member
 
@@ -190,9 +201,14 @@ def is_https(request: Request) -> bool:
 
 
 def base_url(request: Request) -> str:
-    """Where this member reached us (LAN address or the HTTPS tailnet name), for links in emails."""
-    host = request.headers.get("host", request.url.netloc)
-    return f"{'https' if is_https(request) else 'http'}://{host}"
+    """Where this member reached us (LAN address or the HTTPS tailnet name), for links in emails.
+    Only our own names count: a forged Host header would otherwise put a working sign-in link
+    pointing at someone else's server into a member's inbox."""
+    host = request.headers.get("host", "")
+    ip, port = request.scope.get("server") or ("", 0)  # the address this connection actually reached
+    if host in (authn.rp_id, f"{ip}:{port}") or (host == ip and port in (80, 443)):
+        return f"{'https' if is_https(request) else 'http'}://{host}"
+    return (authn.base_url or f"http://{ip}:{port}").rstrip("/")
 
 
 def start_session(request: Request, response: Response, member: str) -> Response:

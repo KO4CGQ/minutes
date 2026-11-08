@@ -118,3 +118,20 @@ def test_rename_passkey_and_old_db_upgrade(a, tmp_path):
     con.close()
     Auth(a.club, old)
     assert "aaguid" in [r[1] for r in sqlite3.connect(old).execute("pragma table_info(passkeys)")]
+
+
+def test_email_links_ignore_forged_host(monkeypatch):
+    """A sign-in link must never point at whatever Host header the request carried."""
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    sent = []
+    monkeypatch.setattr(web.authn, "send_link", lambda email, nxt, base_url=None: sent.append(base_url))
+    monkeypatch.setattr(web.authn, "base_url", "https://minutes.example.net")
+    client = TestClient(web.app)
+    r = client.post("/login/email", data={"email": "amy@example.org"}, headers={"host": "evil.example.com"},
+                    follow_redirects=False)
+    assert sent[-1] == "https://minutes.example.net"
+    client.post("/login/email", data={"email": "amy@example.org"}, follow_redirects=False)
+    assert sent[-1] == "http://testserver"  # the address the connection really reached
+    for h in ("Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "X-Robots-Tag"):
+        assert h in r.headers
