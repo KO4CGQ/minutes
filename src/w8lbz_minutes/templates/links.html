@@ -3,13 +3,15 @@
 {% if edit %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 <p class="muted">Pick where each link shows: on this page, in the "Club Links" footer of the minutes (and their PDF), both, or neither. Use ↑ ↓ to change the order.
-The icon is guessed from the address unless you pick one. Use full addresses (https://…) so they work in the PDF.</p>
+Click an icon to change it. <b>Auto</b> picks one from the address: a video camera for Teams or Zoom, a chat bubble for Discord, a document for PDFs and Google Docs, a globe for a plain website, and so on. Use full addresses (https://…) so they work in the PDF; mailto: and tel: addresses work too.</p>
 <form method="post" action="/links" class="linkedit">
 <table class="list"><thead><tr><th>Name</th><th>Address</th><th>Icon</th><th>Shows on</th><th></th></tr></thead>
 <tbody>{% for l in club.links + [{}] %}<tr>
   <td><input name="label" value="{{ l.label or '' }}" aria-label="Name" placeholder="New link"></td>
   <td><input name="url" value="{{ l.url or '' }}" aria-label="Address" placeholder="https://"></td>
-  <td><select name="icon" aria-label="Icon"><option value="">Auto</option>{% for i in icons %}<option {{ 'selected' if l.icon == i }}>{{ i }}</option>{% endfor %}</select></td>
+  <td><input type="hidden" name="icon" value="{{ l.icon or '' }}">
+    <details class="iconpick"><summary title="Pick an icon">{{ icon(l.icon or (l.url or '')|link_icon) }}<small>{{ 'Auto' if not l.icon else l.icon }}</small></summary>
+    <div class="grid"><button type="button" data-icon="" class="auto" title="Guess from the address">Auto<small>from the address</small></button>{% for i in icons %}<button type="button" data-icon="{{ i }}" title="{{ i }}">{{ icon(i) }}<small>{{ i }}</small></button>{% endfor %}</div></details></td>
   {% set sh = 'both' if l.page != false and l.minutes != false else 'page' if l.page != false else 'minutes' if l.minutes != false else 'hidden' %}
   <td><select name="show" aria-label="Shows on">{% for v, t in (('both', 'Page and minutes'), ('page', 'Links page only'), ('minutes', 'Minutes only'), ('hidden', 'Hidden')) %}<option value="{{ v }}" {{ 'selected' if sh == v }}>{{ t }}</option>{% endfor %}</select></td>
   <td class="rowbtns"><button type="button" class="btn small ghost" data-move="-1" aria-label="Move up">↑</button><button type="button" class="btn small ghost" data-move="1" aria-label="Move down">↓</button><button type="button" class="btn small ghost" data-remove aria-label="Remove">✕</button></td>
@@ -23,8 +25,20 @@ body.addEventListener("click", (e) => { const b = e.target.closest("button"), tr
   if (b.dataset.remove !== undefined) { tr.remove(); return; }
   const d = +b.dataset.move; if (d < 0 && tr.previousElementSibling) tr.after(tr.previousElementSibling);
   if (d > 0 && tr.nextElementSibling) tr.before(tr.nextElementSibling); b.focus(); });
+// icon picker: the hidden input holds the choice ("" = Auto, guessed from the address as the server does)
+const GUESSES = {{ guesses|tojson }};
+const guess = (u) => { u = u.toLowerCase(); const g = GUESSES.find(([k]) => u.includes(k));
+  return g ? g[1] : (u.split("/").length - 1 <= 3 ? "globe" : "link"); };
+const svgFor = (name) => document.querySelector(`.iconpick .grid [data-icon="${name}"] svg`).outerHTML;
+const showIcon = (tr) => { const v = tr.querySelector("input[name=icon]").value, s = tr.querySelector(".iconpick summary");
+  s.innerHTML = svgFor(v || guess(tr.querySelector("input[name=url]").value)) + `<small>${v || "Auto"}</small>`; };
+body.addEventListener("click", (e) => { const b = e.target.closest(".iconpick [data-icon]"); if (!b) return;
+  const tr = b.closest("tr"); tr.querySelector("input[name=icon]").value = b.dataset.icon; showIcon(tr);
+  b.closest("details").open = false; });
+body.addEventListener("input", (e) => { if (e.target.name === "url") showIcon(e.target.closest("tr")); });
+document.addEventListener("click", (e) => document.querySelectorAll(".iconpick[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
 document.getElementById("addlink").addEventListener("click", () => { const tr = body.lastElementChild.cloneNode(true);
-  tr.querySelectorAll("input").forEach((i) => i.value = ""); tr.querySelectorAll("select").forEach((s) => s.selectedIndex = 0);
+  tr.querySelectorAll("input").forEach((i) => i.value = ""); tr.querySelectorAll("select").forEach((s) => s.selectedIndex = 0); showIcon(tr);
   body.append(tr); tr.querySelector("input").focus(); });
 </script>
 {% else %}

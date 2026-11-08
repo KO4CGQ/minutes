@@ -382,3 +382,17 @@ form.linkedit input, form.linkedit select { width: 100%; } form.linkedit td { ve
 form.linkedit .rowbtns { white-space: nowrap; } form.linkedit .rowbtns .btn { padding: .2rem .5rem; margin-left: .15rem; }
 @media (max-width: 760px) { form.linkedit table, form.linkedit tbody, form.linkedit tr, form.linkedit td { display: block; }
   form.linkedit thead { display: none; } form.linkedit tr { border-bottom: 1px solid var(--border); padding: .5rem 0; } }
+.iconpick { position: relative; } .iconpick summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .35rem;
+  padding: .25rem .5rem; border: 1px solid var(--border-strong); border-radius: .5rem; background: var(--surface); }
+.iconpick summary::-webkit-details-marker { display: none; } .iconpick summary small { color: var(--muted); }
+.iconpick .ico { width: 1.4rem; height: 1.4rem; color: var(--accent); }
+.iconpick .grid { position: absolute; z-index: 20; top: 2.3rem; left: 0; width: 22rem; max-width: 80vw; display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: .25rem; padding: .4rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-pop); }
+.iconpick .grid button { display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .4rem .2rem; border: 1px solid transparent;
+  border-radius: .45rem; background: none; color: var(--text); cursor: pointer; font: inherit; font-size: .8rem; }
+.iconpick .grid button:hover { background: var(--accent-soft); border-color: var(--accent); }
+.iconpick .grid button small { font-size: .72rem; color: var(--muted); } .iconpick .grid .auto { font-weight: 600; justify-content: center; }
+ul.checklist { list-style: none; padding: 0; margin: .3rem 0; } ul.checklist li { position: relative; padding: .35rem 0 .35rem 1.7rem; line-height: 1.4; }
+ul.checklist li::before { content: ""; position: absolute; left: 0; top: .55rem; width: 1rem; height: 1rem; border: 2px solid var(--border-strong); border-radius: .25rem; }
+ul.checklist li.late::before { border-color: var(--danger); }
+form.linkedit table.list { overflow: visible; }

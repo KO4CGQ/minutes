@@ -231,3 +231,12 @@ def test_roster_opens_as_cards_on_phones_until_a_view_is_picked(client):
     assert 'class="membergrid"' in client.get("/roster", headers=phone).text
     client.get("/roster?view=list")  # remembered in a cookie
     assert 'class="membergrid"' not in client.get("/roster", headers=phone).text
+
+
+def test_every_icon_is_drawn():
+    """ICONS (the Links editor's picker) and _icons.html stay in step: each name has its own drawing."""
+    from w8lbz_minutes import web
+    m = web.templates.env.get_template("_icons.html").module
+    drawn = {name: str(m.icon(name)) for name in web.ICONS}
+    assert len(set(drawn.values())) == len(web.ICONS)
+    assert web.link_icon("mailto:club@example.org") == "mail" and web.link_icon("https://youtu.be/x") == "play"

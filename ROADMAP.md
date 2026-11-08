@@ -54,6 +54,7 @@ For the treasurer, later. The bylaws (VII) set dues at $182/year ($3.50 a week),
 - **Record payments:** dues, initiation fees and certificate purchases, per member, with date and amount. Missed-chow charges show up here as well.
 - **Standing:** who's paid up, who's behind, and who still owes a certificate (the bylaws require the roster to show whether each member has one).
 - **Officers only:** treasurer data is never shown to other members.
+- **On each member's Home page:** what they owe and when (dues, the Certificate of Indebtedness, any missed-chow charges). Only their own figures; other members never see them.
 - **Not a bookkeeping system:** if the treasurer uses QuickBooks (to be confirmed), the app exports what QuickBooks needs rather than duplicating it.
 
 ## AI assistance

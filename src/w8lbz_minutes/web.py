@@ -1088,13 +1088,16 @@ def bylaws(request: Request):
     return page(request, "bylaws.html", html=html)
 
 
-LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"),
+LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"), ("mailto:", "mail"),
+              ("tel:", "phone"), ("youtube.", "play"), ("youtu.be", "play"), ("github.", "code"), ("maps.", "map"),
+              ("/maps", "map"), ("qrz.com", "antenna"), ("repeaterbook.", "antenna"), ("arrl.org", "radio"),
+              ("facebook.", "users"), ("groups.io", "users"), ("amazon.", "cart"), ("forms.", "form"),
               ("/bylaws", "document"), ("docs.google.", "document"), (".pdf", "document"), ("calendar", "calendar"))
 
 
 def link_icon(url: str) -> str:
-    """Icon name for a club link, guessed from its address. In club.yaml a link can set `icon:` to one of
-    video, chat, globe, document, radio, calendar or link."""
+    """Icon name for a club link, guessed from its address ("Auto" on the Links editor): a known site's icon,
+    else a globe for a bare website address, else a chain link. A link can set `icon:` to any name in ICONS."""
     u = url.lower()
     return next((icon for key, icon in LINK_ICONS if key in u), "globe" if u.count("/") <= 3 else "link")
 
@@ -1103,7 +1106,7 @@ templates.env.filters["link_icon"] = link_icon
 
 
 def link_host(url: str) -> str:
-    host = re.sub(r"^https?://(www\.)?", "", url).split("/")[0]
+    host = re.sub(r"^(https?://(www\.)?|mailto:|tel:)", "", url).split("/")[0]
     return "on this site" if host == authn.rp_id else host
 
 
@@ -1162,13 +1165,14 @@ def preview_outbox():
     return RedirectResponse("/admin/email", status_code=303)
 
 
-ICONS = ("video", "chat", "globe", "document", "radio", "calendar", "link")
+ICONS = ("link", "globe", "video", "chat", "mail", "phone", "document", "form", "book", "news", "calendar", "map",
+         "users", "radio", "antenna", "play", "code", "cart", "money", "info", "star")  # all drawn in _icons.html
 SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "hidden": (False, False)}
 
 
 @app.get("/links", response_class=HTMLResponse)
 def links(request: Request, edit: int = 0, error: str = ""):
-    return page(request, "links.html", edit=bool(edit and admin_mode(request)), error=error, icons=ICONS)
+    return page(request, "links.html", edit=bool(edit and admin_mode(request)), error=error, icons=ICONS, guesses=LINK_ICONS)
 
 
 @app.post("/links")
@@ -1183,8 +1187,8 @@ async def links_save(request: Request, mid: str = Depends(me)):
         label, url = label.strip(), url.strip()
         if not label and not url:
             continue
-        if not label or not re.match(r"^https?://\S+$", url):
-            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https:// ({label or url})."), status_code=303)
+        if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url):
+            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto: or tel: ({label or url})."), status_code=303)
         page_, minutes_ = SHOW.get(show, (True, True))
         out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if icon in ICONS else {}), "page": page_, "minutes": minutes_})
     archive.club.save_links(out[:40])
