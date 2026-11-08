@@ -19,9 +19,9 @@ def club():
 
 
 def test_defaults_and_validation():
-    assert prefs.get("kd8aaa") == {"digest": "on", "minutes": "now", "business": "now", "roster": "now", "chow_days": [3]}
-    p = prefs.save("kd8aaa", {"minutes": "off", "business": "nonsense", "roster": "on", "evil": "x", "chow_days": ["7", "1", "5", "x"]})
-    assert p == {"digest": "on", "minutes": "off", "business": "now", "roster": "now", "chow_days": [7, 1]}
+    assert prefs.get("kd8aaa") == {"digest": "on", "minutes": "pdf", "business": "now", "roster": "now", "chow_days": [3]}
+    p = prefs.save("kd8aaa", {"minutes": "link", "business": "nonsense", "roster": "on", "evil": "x", "chow_days": ["7", "1", "5", "x"]})
+    assert p == {"digest": "on", "minutes": "link", "business": "now", "roster": "now", "chow_days": [7, 1]}
     assert prefs.save("kd8aaa", {"chow_days": []})["chow_days"] == []  # none ticked: off
 
 

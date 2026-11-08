@@ -4,7 +4,7 @@
 {% if saved %}<p class="msg ok">Saved.</p>{% endif %}
 <p class="muted">What the club emails you{% if m.email %} at <b>{{ m.email }}</b>{% endif %}.</p>
 <form method="post" class="profile">
-{% for k, (label, opts, _) in kinds.items() %}<fieldset><legend>{{ label }}</legend>{% if k == "roster" %}<p class="muted small">For Secretaries: edits to the roster and new members.</p>{% elif k == "digest" %}<p class="muted small">The morning of each meeting: the time, your chow if it's tonight, the business you're looking after, upcoming events and last meeting's minutes.</p>{% endif %}
+{% for k, (label, opts, _) in kinds.items() %}<fieldset><legend>{{ label }}</legend>{% if k == "roster" %}<p class="muted small">For Secretaries: edits to the roster and new members.</p>{% elif k == "minutes" %}<p class="muted small">Sent when the leader submits them. The meeting-day email links them again (if it's on).</p>{% elif k == "digest" %}<p class="muted small">The morning of each meeting: the time, your chow if it's tonight, the business you're looking after, upcoming events and last meeting's minutes.</p>{% endif %}
   {% for o in opts %}<label class="check"><input type="radio" name="{{ k }}" value="{{ o }}" {{ 'checked' if p[k] == o }}> {{ choices[o] }}</label>{% endfor %}
 </fieldset>{% endfor %}
 <fieldset><legend>Chow reminders</legend>

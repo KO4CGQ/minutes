@@ -130,3 +130,21 @@ def test_email_minutes_records_failure_and_retries(tmp_path, monkeypatch):
     assert "no pango" in console.email_minutes(a, "2026-11-12", broken, "u")["error"]
     assert console.email_status(a, "2026-11-12")["error"]
     assert console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "u")["sent"] == 1
+
+
+def test_email_minutes_as_pdf_or_link_per_member(tmp_path, monkeypatch):
+    from w8lbz_minutes import prefs
+    a = mail_archive(tmp_path, monkeypatch, only_to=None)
+    prefs.save("kim", {"minutes": "link"})
+    st = console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "http://x/meetings/2026-11-12")
+    got = {m["To"]: m for m in FakeSMTP.outbox}
+    assert st["sent"] == 2 and sorted(got) == ["jane@example.org", "sam@example.org"]
+    assert [p.get_filename() for p in got["jane@example.org"].iter_attachments()] == ["m.pdf"]
+    link = got["sam@example.org"]
+    assert not list(link.iter_attachments()) and "PDF" not in link.get_body().get_content()
+    assert "http://x/meetings/2026-11-12" in link.get_body().get_content()
+    FakeSMTP.outbox = []
+    (tmp_path / "2026-11-12" / "emailed.json").unlink()
+    prefs.save("kim", {"minutes": "off"})
+    prefs.save("doe", {"minutes": "off"})
+    assert console.email_minutes(a, "2026-11-12", lambda: 1 / 0, "u")["sent"] == 0  # nobody wants it: no PDF made

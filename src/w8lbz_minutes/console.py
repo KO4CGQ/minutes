@@ -225,10 +225,11 @@ def discard(archive: Archive, slug: str) -> None:
     archive.reload()
 
 
-def recipients(archive: Archive) -> list[str]:
+def recipients(archive: Archive, how: str | None = None) -> list[str]:
     """Roster addresses that get the minutes: everyone with an email who isn't Inactive or a Silent Key,
-    and hasn't turned them off."""
-    return sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "minutes") == "now"}, key=str.lower)
+    and hasn't turned them off. `how` picks those who want the PDF ("pdf") or just a link ("link")."""
+    return sorted({m.email.strip() for m in prefs.emailable(archive.club)
+                   if prefs.wants(m.id, "minutes") in ((how,) if how else ("pdf", "link"))}, key=str.lower)
 
 
 def email_status(archive: Archive, slug: str) -> dict | None:
@@ -245,19 +246,21 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
         return done
     m = archive.by_slug[slug]
     club = archive.club
-    to = recipients(archive)
+    to, links = recipients(archive, "pdf"), recipients(archive, "link")
     leader = club.members.get(m.leader or "")
     date = m.date.strftime("%B %-d, %Y")
     body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
             f"{f', led by {leader.name}' if leader else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
             f"Replies go to {leader.first if leader and leader.email else 'the club'}.\n\n73,\n{club.info.get('callsign', '')}")
+    subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", leader.email if leader and leader.email else None
     try:
-        pdf = make_pdf()
-        sent = auth.send_email(to, f"{club.info.get('callsign', '')} meeting minutes, {date}", body,
-                               attachments=[(pdf[0], pdf[1], "application/pdf")], only_to=club.email_only_to(),
-                               reply_to=leader.email if leader and leader.email else None)
-        status = {"at": int(time.time()), "sent": sent, "roster": len(to), "test_mode": club.email_only_to() is not None}
+        pdf = make_pdf() if to else None
+        sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],
+                               only_to=club.email_only_to(), reply_to=reply_to) if to else 0
+        sent += auth.send_email(links, subject, body.replace(" The PDF is attached.", ""), only_to=club.email_only_to(),
+                                reply_to=reply_to) if links else 0
+        status = {"at": int(time.time()), "sent": sent, "roster": len(to) + len(links), "test_mode": club.email_only_to() is not None}
     except Exception as e:
         log.exception("emailing the minutes of %s failed", slug)
         status = {"at": int(time.time()), "error": str(e)}
