@@ -132,7 +132,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 - **FR-30** **Storage format.** Each meeting is a **Markdown file with YAML front matter**, holding the date, leader, attendance, guests, motions, winners and version. Attachments (images, the original PDF, the chow list) sit next to it. Markdown is human-readable, easy to diff, and doesn't depend on this app surviving.
 - **FR-31** **Viewing.** Each meeting renders as HTML in the web UI, with a **Download PDF** button (or, for minutes imported with their original PDF, **View original** instead) that generates the PDF on demand from the same source.
 - **FR-32** **Search and browse.**
-  - Full-text search across all meetings, and calendar events (title, place, notes) in the same results.
+  - Full-text search across all meetings, and in the same results, grouped by kind: members (name, callsign), guests, business items, upcoming chow nights and calendar events (title, place, notes).
   - Filters by date range, section and member.
   - A **per-member history** ("everything this member has reported").
   - A **per-item history** (for example, every mention of the hex beam or the GMRS repeater).

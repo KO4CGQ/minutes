@@ -6,6 +6,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 - **Event time zones:** a timed event can be kept in another time zone (the club's, from club.yaml, by default). Field Day, for example, is 1800 UTC Saturday to 2059 UTC Sunday: the calendar shows it in club time, and the event's details also give the UTC times. The feeds and Google get club time. Changing one date of a repeating event in another zone keeps it at the time typed.
+- **One search for everything:** the search box also finds members (name, callsign), guests who haven't joined, business items (text, owner) and upcoming chow nights (who's bringing it). Results are grouped: Members, Guests, Business, Chow, Calendar, Minutes. Each links to its page.
 - **Search finds calendar events:** the search box looks through calendar events (title, place, notes) as well as the minutes. Matching events are listed first, each with its next date, linked to that day in the agenda.
 - **Longer agenda:** the agenda shows 8 weeks by default; **Show** can switch it to 3 months, 6 months or a year.
 - **Minutes buttons:** one or the other. Minutes imported with their original PDF have **View original**. All others have **Download PDF**: minutes made in the app, and corrected minutes imported from text.

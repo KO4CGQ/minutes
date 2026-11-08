@@ -1,13 +1,24 @@
 {% extends "base.html" %}{% block body %}
 <h1>Search{% if q %}: “{{ q }}”{% endif %}</h1>
-<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search minutes and calendar…" value="{{ q or '' }}" aria-label="Search minutes and calendar"></form>
+<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search everything…" value="{{ q or '' }}" aria-label="Search minutes, members, business, chow and calendar"></form>
+{% if q and not (results or cal_results or members or guests or items or nights) %}<p class="muted">Nothing found.</p>{% endif %}
+{% if members %}<h2>Members</h2>
+<ul class="results">{% for m in members %}<li><a href="/members/{{ m.id }}">{{ m.name }}</a>{% if m.callsign %} <span class="sec">{{ m.callsign }}</span>{% endif %}{% if m.status != 'Active' %} <span class="muted small">{{ m.status }}</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
+{% if guests %}<h2>Guests</h2>
+<ul class="results">{% for g in guests %}<li><a href="/guests">{{ g.name }}</a>{% if g.callsign %} <span class="sec">{{ g.callsign }}</span>{% endif %}
+<span class="muted small">{{ g.visits|length }} visit{{ 's' if g.visits|length != 1 }}, last {{ g.visits[-1][0]|listdate }}</span></li>{% endfor %}</ul>{% endif %}
+{% if items %}<h2>Business</h2>
+<ul class="results">{% for x in items %}<li><a href="/business{{ '?tab=done' if x.status == 'done' }}#i{{ x.id }}">{{ x.text }}</a>
+<div class="muted small">{{ 'Open' if x.status == 'open' else 'Done' }}{% if x.owner_name %} · {{ x.owner_name }}{% endif %}{% if x.due and x.status == 'open' %} · due {{ x.due }}{% endif %}</div></li>{% endfor %}</ul>{% endif %}
+{% if nights %}<h2>Chow</h2>
+<ul class="results">{% for d, who in nights %}<li><a href="/chow">{{ d.strftime('%a %b %-d, %Y') }}</a> {{ who }}</li>{% endfor %}</ul>{% endif %}
 {% if cal_results %}<h2>Calendar</h2>
 <ul class="results">{% for r in cal_results %}<li><a href="/calendar?start={{ r.date }}">{{ r.date.strftime('%a %b %-d, %Y') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}
-<div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>{% endfor %}</ul>
-<h2>Minutes</h2>{% endif %}
-{% if q %}<p class="muted">{{ results|length }} result{{ 's' if results|length != 1 }}{% if results|length == 100 %} (showing first 100){% endif %}</p>{% endif %}
+<div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>{% endfor %}</ul>{% endif %}
+{% if results %}<h2>Minutes</h2>
+<p class="muted">{{ results|length }} result{{ 's' if results|length != 1 }}{% if results|length == 100 %} (showing first 100){% endif %}</p>
 <ul class="results">{% for r in results %}
 <li><a href="/meetings/{{ r.slug }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>
 {% if r.member %}<a class="who" href="/members/{{ r.member }}">{{ club.short(r.member) }}</a>{% endif %}
-<div>{{ r.snippet|safe }}</div></li>{% endfor %}</ul>
+<div>{{ r.snippet|safe }}</div></li>{% endfor %}</ul>{% endif %}
 {% endblock %}

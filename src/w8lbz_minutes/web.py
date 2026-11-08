@@ -1115,18 +1115,39 @@ def search(request: Request, q: str = ""):
     results = archive.search(q) if q else []
     for r in results:
         r["date"] = archive.by_slug[r["slug"]].date
-    return page(request, "search.html", q=q, results=results, cal_results=_search_calendar(q))
+    return page(request, "search.html", q=q, results=results, cal_results=_search_calendar(q), **_search_lists(q))
+
+
+def _has(q: str, *texts) -> bool:
+    """Every word of q is in one of the texts (any case)."""
+    text = " ".join(t or "" for t in texts).lower()
+    return all(w in text for w in q.lower().split())
+
+
+def _search_lists(q: str) -> dict:
+    """Members (name, callsign), guests not yet members, business items (text, owner) and upcoming chow nights
+    (who's bringing it) that match q. Only what the roster, Guests, Business and Chow pages already show every member."""
+    if not q.split():
+        return {}
+    club = archive.club
+    gone = ("inactive", "silent key")
+    members = sorted((m for m in club.members.values() if _has(q, m.name, m.short, m.callsign, *m.aliases)),
+                     key=lambda m: (m.status.lower() in gone, m.last, m.first))
+    guests = [g for g in archive.guests() if not g["member"] and _has(q, g["name"], g["callsign"])]
+    items = [business.view(club, x, dt.date.today().isoformat()) for x in console.business_state(archive)["items"]]
+    items = sorted((x for x in items if _has(q, x["text"], x["owner_name"])), key=lambda x: (x["status"] != "open", x["opened"]))
+    nights = [(dt.date.fromisoformat(d), club.name(x["member"])) for d, x in chow.upcoming(chow.load(), n=60)
+              if x.get("member") and x.get("status") != "none" and _has(q, club.name(x["member"]))]
+    return {"members": members, "guests": guests, "items": items, "nights": nights}
 
 
 def _search_calendar(q: str) -> list[dict]:
     """Calendar events whose title, place or notes have every word of q, each with its next date (or its last one)."""
-    words = q.lower().split()
-    if not words:
+    if not q.split():
         return []
     today, out = dt.date.today(), []
     for e in events.load():
-        text = " ".join((e["title"], e.get("where", ""), e.get("notes", ""))).lower()
-        if all(w in text for w in words):
+        if _has(q, e["title"], e.get("where"), e.get("notes")):
             ahead = events.dates(e, today, today + dt.timedelta(days=400))
             out.append({"title": e["title"], "where": e.get("where", ""), "cal": events.CALS[e["cal"]],
                         "date": ahead[0] if ahead else dt.date.fromisoformat(e["start"][:10]), "repeat": events.repeat_label(e["start"], e.get("repeat"))})
