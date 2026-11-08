@@ -149,6 +149,7 @@ def test_calendar_pages(tmp_path, monkeypatch):
     t = TestClient(web.app)
     t.cookies.set(web.COOKIE, a.new_session("kd8bbb"))
     r = t.get("/calendar?start=2026-11-01")
+    assert "start=2026-09-06" in r.text and "start=2026-12-27" in r.text  # Earlier (8 weeks back) and Later
     assert "Weekly net" in r.text and "Add an event" not in r.text  # members see; leaders edit
     assert t.get("/calendar?view=month&month=2026-11").status_code == 200
     assert t.get("/calendar/edit").status_code == 403
