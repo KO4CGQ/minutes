@@ -1227,9 +1227,29 @@ SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("fa
                  ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
 
 
+def admin_action(e: dict) -> str:
+    """One line of the admin log in plain words ("Turned on admin mode until 9:22 AM (passkey)")."""
+    clock, name = templates.env.filters["clock"], archive.club.name
+    if "on" in e:
+        return f"Turned on admin mode until {clock(e['until'])} ({e.get('confirmed_by')})" if e["on"] and e.get("until") else "Turned off admin mode"
+    if "view_as" in e:
+        return f"Viewed the site as {name(e['view_as'])}" if e["view_as"] else "Stopped viewing as another member"
+    if "ban" in e:
+        return f"Banned {e['ban']} " + (f"for {e['hours']} hours" if e.get("hours") else "until lifted")
+    words = {"step_up_email": lambda v: "Asked for an admin sign-in email", "update_requested": lambda v: f"Started the update to {v}",
+             "update_cancelled": lambda v: "Cancelled the update", "unban": lambda v: f"Lifted the ban on {v}",
+             "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
+             "links": lambda v: f"Saved the club links ({len(v)})"}
+    rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
+    return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
+
+
+templates.env.filters["admin_action"] = admin_action
+
+
 @app.get("/admin/security", response_class=HTMLResponse)
 @app.get("/admin/security/{tab}", response_class=HTMLResponse)
-def security_page(request: Request, tab: str = "signins", mid: str = Depends(real_me)):
+def security_page(request: Request, tab: str = "signins", member: str = "", mid: str = Depends(real_me)):
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
@@ -1243,7 +1263,7 @@ def security_page(request: Request, tab: str = "signins", mid: str = Depends(rea
     events = authn.events(100)
     return page(request, "security.html", tab=tab, tabs=SECURITY_TABS,
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
-                sessions=authn.all_sessions(), admin_log=admin_log, event_names=authmod.EVENT_NAMES,
+                sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
                 test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
 
@@ -1272,11 +1292,12 @@ def security_unban(request: Request, ip: str = Form(...)):
 
 
 @app.post("/admin/security/signout")
-def security_signout(request: Request, session: int = Form(...)):
+def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):
+    """Sign out one device, or every ticked one."""
     _security_admin(request)
-    who = authn.end_session_id(session)
-    _admin_log(request, signed_out=who)
-    return RedirectResponse("/admin/security/devices", status_code=303)
+    for sid in session:
+        _admin_log(request, signed_out=authn.end_session_id(sid))
+    return RedirectResponse("/admin/security/devices" + (f"?member={quote(member)}" if member else ""), status_code=303)
 
 
 @app.get("/preview/outbox")

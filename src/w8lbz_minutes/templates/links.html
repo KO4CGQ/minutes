@@ -6,7 +6,7 @@
 Click an icon to change it. <b>Auto</b> picks one from the address: a video camera for Teams or Zoom, a chat bubble for Discord, a document for PDFs and Google Docs, a globe for a plain website, and so on. Use full addresses (https://…) so they work in the PDF; mailto: and tel: addresses work too.</p>
 <form method="post" action="/links" class="linkedit">
 <table class="list"><thead><tr><th>Name</th><th>Address</th><th>Icon</th><th>Shows on</th><th></th></tr></thead>
-<tbody>{% for l in club.links + [{}] %}<tr>
+<tbody>{% for l in club.links + [{}] %}<tr{% if l %} class="folded"{% endif %}>
   <td><input name="label" value="{{ l.label or '' }}" aria-label="Name" placeholder="New link"></td>
   <td><input name="url" value="{{ l.url or '' }}" aria-label="Address" placeholder="https://"></td>
   <td><input type="hidden" name="icon" value="{{ l.icon or '' }}">
@@ -14,7 +14,7 @@ Click an icon to change it. <b>Auto</b> picks one from the address: a video came
     <div class="grid"><button type="button" data-icon="" class="auto" title="Guess from the address">Auto<small>from the address</small></button>{% for i in icons %}<button type="button" data-icon="{{ i }}" title="{{ i }}">{{ icon(i) }}<small>{{ i }}</small></button>{% endfor %}</div></details></td>
   {% set sh = 'both' if l.page != false and l.minutes != false else 'page' if l.page != false else 'minutes' if l.minutes != false else 'hidden' %}
   <td><select name="show" aria-label="Shows on">{% for v, t in (('both', 'Page and minutes'), ('page', 'Links page only'), ('minutes', 'Minutes only'), ('hidden', 'Hidden')) %}<option value="{{ v }}" {{ 'selected' if sh == v }}>{{ t }}</option>{% endfor %}</select></td>
-  <td class="rowbtns"><button type="button" class="btn small ghost" data-move="-1" aria-label="Move up">↑</button><button type="button" class="btn small ghost" data-move="1" aria-label="Move down">↓</button><button type="button" class="btn small ghost" data-remove aria-label="Remove">✕</button></td>
+  <td class="rowbtns"><button type="button" class="btn small ghost fold" data-fold aria-label="Show or hide details">⋯</button><button type="button" class="btn small ghost" data-move="-1" aria-label="Move up">↑</button><button type="button" class="btn small ghost" data-move="1" aria-label="Move down">↓</button><button type="button" class="btn small ghost" data-remove aria-label="Remove">✕</button></td>
 </tr>{% endfor %}</tbody></table>
 <p><button type="button" class="btn small ghost" id="addlink">+ Add a link</button></p>
 <p><button class="btn">Save links</button> <a class="btn ghost" href="/links">Cancel</a></p>
@@ -23,6 +23,7 @@ Click an icon to change it. <b>Auto</b> picks one from the address: a video came
 const body = document.querySelector("form.linkedit tbody");
 body.addEventListener("click", (e) => { const b = e.target.closest("button"), tr = b?.closest("tr"); if (!tr) return;
   if (b.dataset.remove !== undefined) { tr.remove(); return; }
+  if (b.dataset.fold !== undefined) { tr.classList.toggle("folded"); return; }
   const d = +b.dataset.move; if (d < 0 && tr.previousElementSibling) tr.after(tr.previousElementSibling);
   if (d > 0 && tr.nextElementSibling) tr.before(tr.nextElementSibling); b.focus(); });
 // icon picker: the hidden input holds the choice ("" = Auto, guessed from the address as the server does)
@@ -37,7 +38,7 @@ body.addEventListener("click", (e) => { const b = e.target.closest(".iconpick [d
   b.closest("details").open = false; });
 body.addEventListener("input", (e) => { if (e.target.name === "url") showIcon(e.target.closest("tr")); });
 document.addEventListener("click", (e) => document.querySelectorAll(".iconpick[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
-document.getElementById("addlink").addEventListener("click", () => { const tr = body.lastElementChild.cloneNode(true);
+document.getElementById("addlink").addEventListener("click", () => { const tr = body.lastElementChild.cloneNode(true); tr.classList.remove("folded");
   tr.querySelectorAll("input").forEach((i) => i.value = ""); tr.querySelectorAll("select").forEach((s) => s.selectedIndex = 0); showIcon(tr);
   body.append(tr); tr.querySelector("input").focus(); });
 </script>

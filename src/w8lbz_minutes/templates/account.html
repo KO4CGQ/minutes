@@ -7,13 +7,13 @@
 </div>{% endif %}
 
 <h2>Passkeys</h2>
-{% if passkeys %}<table class="list"><thead><tr><th>Name</th><th>Added</th><th>Last used</th><th></th></tr></thead><tbody>
+{% if passkeys %}<table class="list"><thead><tr><th>Name</th><th class="opt">Added</th><th>Last used</th><th></th></tr></thead><tbody>
 {% for p in passkeys %}<tr><td><form method="post" action="/account/passkeys/{{ p.id }}/rename" class="rename">
   <span class="pkname">{{ p.label or 'Passkey' }}</span>
   <button type="button" class="btn small ghost edit" title="Rename this passkey">Edit</button>
   <input name="label" value="{{ p.label or 'Passkey' }}" data-orig="{{ p.label or 'Passkey' }}" maxlength="60" aria-label="Passkey name" hidden>
   <button type="submit" class="btn small save" hidden>Save</button>
-  <button type="button" class="btn small ghost cancel" hidden>Cancel</button></form></td><td>{{ p.created|ts }}</td><td>{{ p.last_used|ts }}</td>
+  <button type="button" class="btn small ghost cancel" hidden>Cancel</button></form></td><td class="opt">{{ p.created|ts }}</td><td>{{ p.last_used|ts }}</td>
 <td><form method="post" action="/account/passkeys/{{ p.id }}/remove" onsubmit="return confirm('Remove this passkey?')"><button class="btn small ghost">Remove</button></form></td></tr>{% endfor %}
 </tbody></table><p class="muted small">Name each passkey after where it's saved (e.g. "Bitwarden" or "My phone") so you know which to remove if you lose a device.</p>
 {% else %}<p class="muted">No passkeys yet. You sign in with an emailed link.</p>{% endif %}
@@ -27,10 +27,10 @@
 {% endif %}
 
 <h2>Sign-ins</h2>
-<p>You're signed in on {{ sessions|length }} device{{ 's' if sessions|length != 1 }}.</p>
+<p>You're signed in on {{ sessions|length }} device{{ 's' if sessions|length != 1 }}. "Sign out everywhere" includes this one.</p>
 <div class="row">
   <form method="post" action="/logout"><button class="btn ghost">Sign out</button></form>
-  <form method="post" action="/account/sessions/end-all" onsubmit="return confirm('Sign out on every device?')"><button class="btn ghost">Sign out everywhere</button></form>
+  <form method="post" action="/account/sessions/end-all" onsubmit="return confirm('Sign out on every device, including this one?')"><button class="btn ghost">Sign out everywhere</button></form>
 </div>
 <script src="/static/auth.js?v={{ ASSETS }}"></script>
 <script>

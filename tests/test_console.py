@@ -43,13 +43,13 @@ def test_apply_saves_and_drops_never_record_guests(tmp_path):
     a = archive_with_prev(tmp_path)
     console.start(a, dt.date(2026, 11, 12), "doe")
     data = {"meeting": {"in_person": ["doe", "kim"], "remote": ["kim", "roe"],
-                        "guests": [{"name": "Pat Guest", "callsign": "KE8ABC"}, {"name": "Tiny Visitor"}],
+                        "guests": [{"name": "Pat Guest", "callsign": "KE8ABC", "online": True}, {"name": "Tiny Visitor"}],
                         "visitors": 1,
                         "sections": {"Community Reports": [{"text": "Sam got on HF", "member": "kim"}, {"text": " "}]}},
             "state": {"done": ["kim"]}}
     m = console.apply(a, "2026-11-12", data)
     assert m.in_person == ["doe", "kim"] and m.remote == ["roe"]  # can't be both
-    assert [g["name"] for g in m.guests] == ["Pat Guest"]
+    assert m.guests == [{"name": "Pat Guest", "callsign": "KE8ABC", "online": True}]  # an online guest stays online
     assert m.visitors == 1
     assert [(i.text, i.member) for i in m.items("Community Reports")] == [("Sam got on HF", "kim")]
     console.submit(a, "2026-11-12")

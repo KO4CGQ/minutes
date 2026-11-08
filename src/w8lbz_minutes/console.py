@@ -188,7 +188,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     m.leader = d.get("leader") or m.leader
     m.in_person = list(dict.fromkeys(d.get("in_person", [])))
     m.remote = [x for x in dict.fromkeys(d.get("remote", [])) if x not in m.in_person]
-    m.guests = [{k: v for k, v in g.items() if k in ("name", "callsign", "notes") and v}
+    m.guests = [{k: v for k, v in g.items() if k in ("name", "callsign", "notes", "online") and v}
                 for g in d.get("guests", []) if g.get("name", "").strip()]
     m.guests = [g for g in m.guests if not archive.club.is_redacted(g["name"])]
     m.visitors = max(0, int(d.get("visitors") or 0))

@@ -19,6 +19,7 @@ uv sync
 uv run w8lbz-minutes roster                          # sync people from the roster Google Sheet
 uv run w8lbz-minutes import archive                  # (re)build data/ from archive/
 uv run w8lbz-minutes serve --host 0.0.0.0 --port 8765
+uv run playwright install chromium                  # once: the mobile-first test uses it (skipped without it)
 uv run pytest -q
 ```
 The roster sync needs a Google service-account key at `private/google-service-account.json`. Share the sheet with the account's email as Editor (profile edits are written back to it).

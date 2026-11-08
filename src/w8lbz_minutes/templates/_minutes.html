@@ -17,7 +17,7 @@
     <dt>Online ({{ m.remote|length }})</dt>
     <dd>{% for mid in m.remote|by_last_name %}{{ club.name(mid) }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
     {% if m.guests or m.visitors %}<dt>Guests ({{ m.guests|length + m.visitors }})</dt>
-    <dd>{% for g in m.guests %}{{ g.name }}{% if g.callsign %} <span class="cs">{{ g.callsign }}</span>{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if m.visitors %}{{ ', ' if m.guests }}{{ m.visitors }} visitor{{ 's' if m.visitors > 1 }}{% endif %}</dd>{% endif %}
+    <dd>{% for g in m.guests %}{{ g.name }}{% if g.callsign %} <span class="cs">{{ g.callsign }}</span>{% endif %}{% if g.online %} (online){% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if m.visitors %}{{ ', ' if m.guests }}{{ m.visitors }} visitor{{ 's' if m.visitors > 1 }}{% endif %}</dd>{% endif %}
   </dl>
 
   {% for sec in SECTIONS %}{% set items = m.items(sec) %}

@@ -119,11 +119,15 @@
     const same = (a, b) => (a.callsign && b.callsign && key(a.callsign) === key(b.callsign)) || key(a.name) === key(b.name);
     const here = (g) => M.guests.some((x) => same(x, g));
     const visitNote = (g) => `${ordinal(g.visits + 1)} visit`;
+    // Recent guests cycle like members: absent → in person → online → absent.
     const toggleGuest = (g) => {
-      if (here(g)) M.guests = M.guests.filter((x) => !same(x, g));
-      else M.guests.push({ name: g.name, callsign: g.callsign || "", notes: visitNote(g) });
+      const x = M.guests.find((y) => same(y, g));
+      if (!x) M.guests.push({ name: g.name, callsign: g.callsign || "", notes: visitNote(g) });
+      else if (!x.online) x.online = true;
+      else M.guests = M.guests.filter((y) => y !== x);
       render(); save();
     };
+    const gwhere = (g) => { const x = M.guests.find((y) => same(y, g)); return !x ? "" : x.online ? "online" : "inperson"; };
     const recent = D.past_guests.slice(0, RECENT_GUESTS);
     const datalist = h("datalist", { id: "pastguests" },
       D.past_guests.map((g) => h("option", { value: g.name }, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`].filter(Boolean).join(" · "))));
@@ -152,13 +156,15 @@
       h("div", { class: "grid" }, D.members.map((m) => h("button", { class: "mbtn " + where(m.id), onclick: () => cycle(m.id) },
         m.name, h("small", {}, [m.callsign, where(m.id) === "inperson" ? "in person" : where(m.id) === "online" ? "online" : ""].filter(Boolean).join(" · "))))),
       h("h2", { style: "margin-top:1.4rem" }, "Guests"),
-      recent.length ? [h("p", { class: "hint" }, "Recent guests: tap to add or remove. Type below for anyone else."),
-        h("div", { class: "grid" }, recent.map((g) => h("button", { class: "mbtn " + (here(g) ? "inperson" : ""), onclick: () => toggleGuest(g) },
-          g.name, h("small", {}, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`, here(g) ? "here" : ""].filter(Boolean).join(" · ")),
+      recent.length ? [h("p", { class: "hint" }, "Recent guests: tap to cycle absent → in person → online. Type below for anyone else."),
+        h("div", { class: "grid" }, recent.map((g) => h("button", { class: "mbtn " + gwhere(g), onclick: () => toggleGuest(g) },
+          g.name, h("small", {}, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`, { inperson: "in person", online: "online" }[gwhere(g)]].filter(Boolean).join(" · ")),
           g.visits + 1 >= D.invite_after ? h("span", { class: "invite" }, "invite to join") : null)))] : null,
       datalist,
       M.guests.map((g, i) => h("div", { class: "row" }, h("span", { style: "flex:1" }, `${g.name} ${g.callsign || ""} ${g.notes ? "(" + g.notes + ")" : ""}`,
           inviteDue(g) ? h("span", { class: "invite" }, "invite to join") : null),
+        h("button", { class: "btn small ghost", title: "Switch between in person and online",
+          onclick: () => { if (g.online) delete g.online; else g.online = true; render(); save(); } }, g.online ? "Online" : "In person"),
         h("button", { class: "btn small ghost", onclick: () => { M.guests.splice(i, 1); render(); save(); } }, "Remove"))),
       h("div", { class: "row" }, gname, gcall, gnote, h("button", { class: "btn small", onclick: add }, "Add guest")),
       guestInfo,

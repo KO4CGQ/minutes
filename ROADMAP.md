@@ -21,12 +21,14 @@ The schedule, rotation, swaps, meeting-night records and the minutes' Upcoming C
 ## Look and feel: ideas to consider
 - **Unified search:** one search box for minutes, members (name, callsign), business items and chow nights, with results grouped by kind. Minutes already have full-text search; the others are small lists, so this is a modest change.
 - **Line icons instead of emoji** on buttons and labels: emoji show as empty boxes on computers without an emoji font. The Links page's icon set (`_icons.html`) could cover them.
+- **More link icons, hosted locally:** add [Simple Icons](https://simpleicons.org) (CC0 brand logos: Discord, YouTube, GitHub, Facebook…) as SVGs copied into the repo, never from a CDN, and give the icon picker a search box like the combo box (`combo.js`). Font Awesome Free (CC BY 4.0, credit needed) is the fallback for general icons; Nerd Fonts is a terminal font, and svgl's logos have mixed licenses, so neither fits.
 - **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 - **Abandoned meetings:** a leader can discard a meeting that was started by mistake (today only `w8lbz-minutes delete-meeting` on the server).
 
 ## Admin tools
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
+- **Filter the Admin actions log** by admin, kind of action and date, with paging (it shows the last 50 today).
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Club calendars
