@@ -18,6 +18,14 @@ def archive_with_prev(tmp_path):
     return Archive(tmp_path, club)
 
 
+def test_console_knows_when_club_events_are_public(tmp_path, monkeypatch):
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe")
+    assert console.context(a, m)["events_public"] is False
+    monkeypatch.setitem(a.club.info, "public_calendars", ["events", "community"])
+    assert console.context(a, m)["events_public"] is True  # the Upcoming Events hint warns it's public
+
+
 def test_start_carries_business_forward(tmp_path):
     a = archive_with_prev(tmp_path)
     m = console.start(a, dt.date(2026, 11, 12), "doe")

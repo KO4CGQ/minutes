@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Console reminder:** when Club events is a public calendar, the Upcoming Events step says dated events are public too, so members-only details stay out of them.
 - **Docs:** how to release a stack of PRs (README), and backups on the roadmap.
 
 ## 0.10.0 (2026-11-08)
