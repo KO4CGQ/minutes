@@ -11,7 +11,7 @@ import json
 import logging
 import re
 
-from . import auth, chow, profile
+from . import auth, chow, prefs, profile
 from .club import ROSTER_CACHE, Club
 from .roster import Sheet, SheetError
 
@@ -96,7 +96,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
     # Who added them: in Recent changes (here), the Membership Log note (sheet) and the Secretary's email.
     profile.log_added(mid, by, {k: f[k] for k in ("callsign", "email", "phone", "address", "license_class", "joined") if f[k]})
     log.info("new member %s (%s) added by %s", name, mid, by)
-    to = [club.members[x].email for x in club.secretaries if x != by and club.members[x].email]
+    to = [club.members[x].email for x in club.secretaries if x != by and club.members[x].email and prefs.wants(x, "roster") == "now"]
     if to:
         try:
             auth.send_email(to, f"New member: {name}",

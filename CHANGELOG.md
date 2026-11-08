@@ -10,6 +10,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Signed-in devices** (Security page): filter by member, tick several devices (or Tick all) and sign them out at once, e.g. everywhere for one member.
 - **Admin actions** read as plain words ("Turned on admin mode until 9:22 AM (passkey)", "Signed out a device of Amy Able") and fit on a phone.
 - **Online guests:** in the leader console a recent guest cycles absent → in person → online like a member does, and a typed-in guest has an In person / Online switch. The minutes show "(online)" after their name.
+- **Email preferences:** a new **Email** tab on Your profile. For the minutes and business-item reminders, choose right away, in a weekly digest, or off. Secretaries can also turn off roster-change emails. Pick chow-night reminders 7 days, 3 days and/or the day before (3 days by default). The **weekly digest** goes out on meeting-day morning: your next chow night, the business you're looking after, and the latest minutes. Sign-in links, swap requests, changes to your own chow night and security emails always go. The daily `reminders` run (already on a timer) now also sends chow reminders and the digest, never twice in one day.
 - **Links editor on phones:** each link is its own spaced card, and saved links start folded to their name (⋯ opens one).
 
 ## 0.9.1 (2026-11-08)

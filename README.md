@@ -10,7 +10,8 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROA
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode.
 - **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders.
-- **Chow schedule:** the rotation, swaps, and who provided, missed or covered each night.
+- **Chow schedule:** the rotation, swaps, reminders before your night, and who provided, missed or covered each night.
+- **Email preferences:** each member picks, per kind of email, right away, a weekly digest (on meeting day) or off. The daily `reminders` timer (8 am) sends business and chow reminders and the digest.
 
 ## Run
 ```sh

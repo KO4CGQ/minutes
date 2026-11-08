@@ -12,7 +12,7 @@ import logging
 import shutil
 import time
 
-from . import ai, auth, business, chow
+from . import ai, auth, business, chow, prefs
 from .club import DATA
 from .meeting import SECTIONS, Item, Meeting
 from .store import Archive
@@ -226,9 +226,9 @@ def discard(archive: Archive, slug: str) -> None:
 
 
 def recipients(archive: Archive) -> list[str]:
-    """Roster addresses that get the minutes: everyone with an email who isn't Inactive or a Silent Key."""
-    return sorted({m.email.strip() for m in archive.club.members.values()
-                   if m.email and m.status.lower() not in ("inactive", "silent key")}, key=str.lower)
+    """Roster addresses that get the minutes: everyone with an email who isn't Inactive or a Silent Key,
+    and wants them right away (the rest get a link in their weekly digest, or nothing)."""
+    return sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "minutes") == "now"}, key=str.lower)
 
 
 def email_status(archive: Archive, slug: str) -> dict | None:

@@ -12,7 +12,7 @@ import os
 import secrets
 import time
 
-from . import auth
+from . import auth, prefs
 from .club import DATA, ROSTER_CACHE, Club
 from .roster import EDITABLE, Sheet
 
@@ -110,7 +110,8 @@ def _notify(club: Club, e: dict, url: str) -> None:
     what = "\n".join(f"  {LABELS[f]}: {show(e['old'].get(f))}  ->  {show(v)}" for f, v in e["new"].items())
     action = f"{by} undid an earlier change to {who}'s roster details" if e.get("undoes") else (
         f"{who} updated their roster details" if e["by"] == e["member"] else f"{by} updated {who}'s roster details")
-    secretaries = [club.members[s].email for s in club.secretaries if s != e["by"] and club.members[s].email]
+    secretaries = [club.members[s].email for s in club.secretaries
+                   if s != e["by"] and club.members[s].email and prefs.wants(s, "roster") == "now"]
     _send(club, secretaries, f"Roster update: {who}",
           f"{action}. The roster sheet has been updated.\n\n{what}\n\n"
           f"If this looks wrong, any officer can undo it here: {url}/roster/changes\n\n73,\nW8LBZ Minutes", e)

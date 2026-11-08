@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, chow, console, membership, profile, updates
+from . import ai, avatars, business, chow, console, membership, prefs, profile, updates
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
@@ -783,6 +783,20 @@ def profile_page(request: Request, saved: int = 0, email_sent: str = "", error: 
                  mid: str = Depends(me)):
     return page(request, "profile.html", m=archive.club.members[mid], shareable=SHAREABLE,
                 saved=saved, email_sent=email_sent, error=error, photo=photo)
+
+
+@app.get("/profile/email", response_class=HTMLResponse)
+def email_prefs_page(request: Request, saved: int = 0, mid: str = Depends(me)):
+    kinds = {k: v for k, v in prefs.KINDS.items() if k != "roster" or mid in archive.club.secretaries}
+    return page(request, "email_prefs.html", p=prefs.get(mid), kinds=kinds, choices=prefs.CHOICES, chow_days=prefs.CHOW_DAYS,
+                m=archive.club.members[mid], saved=saved)
+
+
+@app.post("/profile/email")
+async def email_prefs_save(request: Request, mid: str = Depends(me)):
+    form = await request.form()
+    prefs.save(mid, {**{k: form.get(k) for k in prefs.KINDS}, "chow_days": form.getlist("chow_days")})
+    return RedirectResponse("/profile/email?saved=1", status_code=303)
 
 
 @app.post("/profile/photo")
