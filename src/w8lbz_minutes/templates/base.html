@@ -58,8 +58,9 @@ markTheme();
 // ☰ slides the drawer (every page, and search) in from the left; Esc, the dimmed page or a link closes it
 (() => { const btn = document.querySelector("nav.top .burger"), drawer = document.getElementById("drawer");
   if (!btn || !drawer) return;
+  // focus the first visible link, not search, so no phone keyboard pops up
   const set = (open) => { document.body.classList.toggle("drawer-open", open); btn.setAttribute("aria-expanded", open);
-    if (open) [...drawer.querySelectorAll("a")].find((x) => x.offsetParent)?.focus();  // a link, not search: no phone keyboard popping up else btn.focus(); };
+    if (open) [...drawer.querySelectorAll("a")].find((x) => x.offsetParent)?.focus(); else btn.focus(); };
   btn.addEventListener("click", () => set(!document.body.classList.contains("drawer-open")));
   drawer.querySelector(".scrim").addEventListener("click", () => set(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("drawer-open")) set(false); }); })();

@@ -240,3 +240,18 @@ def test_every_icon_is_drawn():
     drawn = {name: str(m.icon(name)) for name in web.ICONS}
     assert len(set(drawn.values())) == len(web.ICONS)
     assert web.link_icon("mailto:club@example.org") == "mail" and web.link_icon("https://youtu.be/x") == "play"
+
+
+def test_inline_scripts_parse(client, tmp_path):
+    """A syntax error in one inline script silently kills the whole page's menus; check them all with node."""
+    import re
+    import shutil
+    import subprocess
+    if not shutil.which("node"):
+        pytest.skip("node isn't installed (GitHub Actions has it)")
+    for path in ("/", "/minutes", "/links", "/chow", "/business", "/profile"):
+        for i, js in enumerate(re.findall(r"<script>(.*?)</script>", client.get(path).text, re.S)):
+            f = tmp_path / f"s{i}.js"
+            f.write_text(js)
+            r = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True)
+            assert r.returncode == 0, f"{path} script {i}: {r.stderr}"
