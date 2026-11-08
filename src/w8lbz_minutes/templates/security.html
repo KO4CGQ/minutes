@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% block title %}Security{% endblock %}{% block body %}
+<h1>Security</h1>
+<p class="muted">Admins only, in admin mode. Times are the server's (club time). "Internet" addresses come in through Tailscale Funnel; you're on {{ my_ip }} ({{ my_ip|where }}).</p>
+<nav class="tabs" aria-label="Sections"><a href="#signins">Sign-ins</a><a href="#sessions">Signed-in devices</a><a href="#failed">Failed attempts</a><a href="#bans">Banned addresses</a><a href="#admin">Admin actions</a><a href="#health">Server</a></nav>
+
+<h2 id="signins">Recent sign-ins</h2>
+{% if signins %}<table class="list"><thead><tr><th>When</th><th>Member</th><th>How</th><th>From</th><th class="opt">Device</th></tr></thead><tbody>
+{% for r in signins %}<tr><td>{{ r.at|tsfull }}</td><td>{{ club.name(r.member) }}</td><td>{{ r.method }}</td><td>{{ r.ip }} <span class="muted">{{ r.ip|where }}</span></td><td class="opt">{{ r.agent|device }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">None recorded yet (recording started with this version).</p>{% endif %}
+
+<h2 id="sessions">Signed-in devices</h2>
+<p class="muted">Each stays signed in for {{ session_days }} days unless signed out. Sign out a lost phone, or someone who left the club.</p>
+<table class="list"><thead><tr><th>Member</th><th>Since</th><th class="opt">Device</th><th>From</th><th></th></tr></thead><tbody>
+{% for r in sessions %}<tr><td>{{ club.name(r.member) }}</td><td>{{ r.created|ts }}</td><td class="opt">{{ r.agent|device }}</td><td>{% if r.ip %}{{ r.ip }} <span class="muted">{{ r.ip|where }}</span>{% else %}<span class="muted">not recorded</span>{% endif %}</td>
+<td><form method="post" action="/admin/security/signout" onsubmit="return confirm('Sign out this device?')"><input type="hidden" name="session" value="{{ r.rowid }}"><button class="btn small ghost">Sign out</button></form></td></tr>{% endfor %}
+</tbody></table>
+
+<h2 id="failed">Failed and suspicious attempts</h2>
+<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned for {{ ban_hours }} hours. LAN and tailnet addresses are never banned automatically.</p>
+{% if events %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
+{% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td>{{ e.ip }} <span class="muted">{{ e.ip|where }}</span></td>
+<td>{% if e.ip and e.ip != my_ip and e.ip not in bans|map(attribute='ip')|list %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">None.</p>{% endif %}
+
+<h2 id="bans">Banned addresses</h2>
+{% if bans %}<table class="list"><thead><tr><th>Address</th><th>Why</th><th>Since</th><th>Until</th><th></th></tr></thead><tbody>
+{% for b in bans %}<tr><td>{{ b.ip }} <span class="muted">{{ b.ip|where }}</span></td><td>{{ b.reason }} <span class="muted">({{ 'automatic' if b.by == 'automatic' else club.name(b.by) }})</span></td><td>{{ b.at|tsfull }}</td><td>{{ b.until|tsfull if b.until else 'until lifted' }}</td>
+<td><form method="post" action="/admin/security/unban"><input type="hidden" name="ip" value="{{ b.ip }}"><button class="btn small">Unban</button></form></td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">No addresses are banned.</p>{% endif %}
+<form method="post" action="/admin/security/ban" class="inline"><label>Ban an address <input name="ip" required placeholder="203.0.113.7" size="18"></label>
+<label>for <select name="hours"><option value="24">24 hours</option><option value="168">a week</option><option value="0">until lifted</option></select></label>
+<input name="reason" placeholder="Why (optional)" size="24"> <button class="btn small">Ban</button></form>
+<p class="muted">SSH bans by fail2ban on the server aren't shown here; lift one on the server with <code>fail2ban-client set sshd unbanip ADDRESS</code>.</p>
+
+<h2 id="admin">Admin actions</h2>
+{% if admin_log %}<table class="list"><thead><tr><th>When</th><th>Admin</th><th>What</th><th>From</th></tr></thead><tbody>
+{% for e in admin_log %}<tr><td>{{ e.at|tsfull }}</td><td>{{ club.name(e.member) if e.member else '' }}</td>
+<td>{% for k, v in e.items() if k not in ('at', 'member', 'ip') %}{{ k|replace('_', ' ') }}: {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}</td><td>{{ e.ip }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">None yet.</p>{% endif %}
+<p><a href="/admin/email">Email log</a> · <a href="/admin/updates">Updates</a></p>
+
+<h2 id="health">Server</h2>
+<ul class="plain">
+<li>Version {{ VERSION }}</li>
+<li>Roster last synced: {{ roster_synced|tsfull if roster_synced else 'never' }}</li>
+<li>Email: {{ 'test mode (only the addresses in email.only_to get mail)' if test_mode else 'sent to members' }}</li>
+<li>Signed-in devices: {{ sessions|length }}</li>
+</ul>
+{% endblock %}

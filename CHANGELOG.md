@@ -6,6 +6,9 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 - **Updates page refreshes itself:** while an update is waiting or running, the admin Updates page checks every few seconds and shows the result (the new version and ✅ or ❌) once the app is back, without a manual reload.
+- **Security page** (admins, in admin mode; name menu → Security): recent sign-ins (who, when, passkey or email link, address, device), every signed-in device with **Sign out**, failed and suspicious sign-in attempts, banned addresses with **Unban** and **Ban**, the admin log, and server basics. Addresses through Funnel are visitors' real internet addresses.
+- **Automatic bans:** an internet address with 10 failed sign-in attempts in an hour (unknown email, used or made-up link, failed passkey, link limit) is blocked for 24 hours. LAN and tailnet addresses are never banned automatically, and an admin can't ban the address they're using.
+  - **Deploy notes:** for SSH, install fail2ban on CT103: `apt install fail2ban python3-systemd`, then put `[sshd]` / `backend = systemd` / `enabled = true` in `/etc/fail2ban/jail.d/sshd.local` and `systemctl restart fail2ban`. Lift an SSH ban with `fail2ban-client set sshd unbanip ADDRESS`.
 - **Sign-in links can't be redirected:** links in emails (sign-in, swaps, confirmations) now only use the app's own addresses (the HTTPS name, or the LAN address the request really reached). Before, a forged `Host` header could make the app email a member a working sign-in link pointing at someone else's server. Pages also send standard security headers: no framing by other sites, no guessing of file types, no full addresses leaked to other sites, and `noindex` for search engines.
 
 ## 0.8.0 (2026-11-07)

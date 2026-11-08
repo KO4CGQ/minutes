@@ -125,7 +125,7 @@ def test_email_links_ignore_forged_host(monkeypatch):
     from fastapi.testclient import TestClient
     from w8lbz_minutes import web
     sent = []
-    monkeypatch.setattr(web.authn, "send_link", lambda email, nxt, base_url=None: sent.append(base_url))
+    monkeypatch.setattr(web.authn, "send_link", lambda email, nxt, base_url=None, **kw: sent.append(base_url))
     monkeypatch.setattr(web.authn, "base_url", "https://minutes.example.net")
     client = TestClient(web.app)
     r = client.post("/login/email", data={"email": "amy@example.org"}, headers={"host": "evil.example.com"},
@@ -135,3 +135,39 @@ def test_email_links_ignore_forged_host(monkeypatch):
     assert sent[-1] == "http://testserver"  # the address the connection really reached
     for h in ("Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "X-Robots-Tag"):
         assert h in r.headers
+
+
+def test_failed_attempts_ban_internet_addresses_only(a):
+    for _ in range(auth_mod.BAN_AFTER - 1):
+        a.send_link("stranger@example.org", ip="9.9.9.9")
+        a.event("bad_link", "192.168.23.50")
+    assert not a.banned("9.9.9.9")
+    a.send_link("nobody@example.org", ip="9.9.9.9")                  # the tenth in an hour
+    assert a.banned("9.9.9.9") and a.bans()[0]["by"] == "automatic"
+    a.event("bad_link", "192.168.23.50")                                 # LAN: logged, never auto-banned
+    assert not a.banned("192.168.23.50") and not a.banned(None)
+    a.unban("9.9.9.9")
+    assert not a.banned("9.9.9.9")
+    a.ban("1.0.0.1", None, "by hand", "kd8aaa")
+    assert a.banned("1.0.0.1")                                       # no end date: until lifted
+    a.new_session("kd8aaa", "Mozilla/5.0 (iPhone) Safari/604.1", "8.8.4.4", "passkey")
+    assert [(r["member"], r["method"], r["ip"]) for r in a.signins()] == [("kd8aaa", "passkey", "8.8.4.4")]
+    sid = a.all_sessions()[0]["rowid"]
+    assert a.end_session_id(sid) == "kd8aaa" and not a.all_sessions()
+
+
+def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8aaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("kd8aaa"))
+    assert c.get("/admin/security").status_code == 404                  # not an admin
+    a.ban("testclient", None, "test", "kd8aaa")                           # the test client's "address"
+    r = c.get("/login")
+    assert r.status_code == 403 and "blocked" in r.text
+    assert web.device("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36") == "Chrome on Windows"
+    assert [web.where(x) for x in ("9.9.9.9", "192.168.23.5", "100.81.37.6", "127.0.0.1")] == \
+        ["internet", "LAN", "tailnet", "this server"]

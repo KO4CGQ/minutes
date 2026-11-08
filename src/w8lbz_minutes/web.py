@@ -104,6 +104,9 @@ templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=versi
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
+    if authn.banned(client_ip(request)):
+        return HTMLResponse("This address has been blocked after repeated failed sign-ins. "
+                            "If that's a mistake, ask a club officer.", status_code=403)
     archive.club.refresh()  # pick up a roster sync without a restart
     token = request.cookies.get(COOKIE)
     real = authn.member_for(token)
@@ -211,8 +214,14 @@ def base_url(request: Request) -> str:
     return (authn.base_url or f"http://{ip}:{port}").rstrip("/")
 
 
-def start_session(request: Request, response: Response, member: str) -> Response:
-    token = authn.new_session(member, request.headers.get("user-agent", ""))
+def client_ip(request: Request) -> str | None:
+    """The visitor's address. Through Tailscale Funnel it's their real internet address (X-Forwarded-For,
+    trusted only from 127.0.0.1); on the LAN, their LAN address."""
+    return request.client.host if request.client else None
+
+
+def start_session(request: Request, response: Response, member: str, method: str) -> Response:
+    token = authn.new_session(member, request.headers.get("user-agent", ""), client_ip(request), method)
     response.set_cookie(COOKIE, token, max_age=authn.session_days * 86400, httponly=True, samesite="lax",
                         secure=is_https(request))
     return response
@@ -236,7 +245,7 @@ def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""
 
 @app.post("/login/email")
 def login_email(request: Request, email: str = Form(...), next: str = Form("/")):
-    authn.send_link(email, next, base_url=base_url(request))
+    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
@@ -244,12 +253,13 @@ def login_email(request: Request, email: str = Form(...), next: str = Form("/"))
 def login_link(request: Request, t: str = ""):
     used = authn.use_link(t)
     if not used:
+        authn.event("bad_link", client_ip(request))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     # Offer a passkey right away to members who don't have one (only possible over HTTPS on the passkey host).
     if not authn.passkeys(member) and request.url.hostname == authn.rp_id:
         next_url = f"/account?welcome=1&next={quote(next_url)}"
-    return start_session(request, RedirectResponse(next_url, status_code=303), member)
+    return start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
 
 
 @app.post("/logout")
@@ -936,10 +946,11 @@ async def passkey_login_verify(request: Request):
     try:
         member = authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"])
     except Exception as e:
+        authn.event("passkey_failed", client_ip(request), detail=str(e)[:120])
         raise HTTPException(400, str(e))
     if not authn.is_active(member):
         raise HTTPException(403, "Your roster entry isn't active.")
-    return start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member)
+    return start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member, "passkey")
 
 
 # ---------------- archive ----------------
@@ -1142,6 +1153,88 @@ def email_log(request: Request, mid: str = Depends(real_me)):
     p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
     mail = [json.loads(line) for line in p.read_text().splitlines() if line.strip()][::-1][:300] if p.exists() else []
     return page(request, "outbox.html", mail=mail, test_mode=archive.club.email_only_to() is not None)
+
+
+# ---------------- security (admins, in admin mode) ----------------
+
+def device(agent: str | None) -> str:
+    """'Chrome on Windows' from a browser's user-agent string, for the Security page."""
+    a = agent or ""
+    os_ = next((n for k, n in (("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"), ("Windows", "Windows"),
+                               ("Mac OS", "Mac"), ("CrOS", "Chromebook"), ("Linux", "Linux")) if k in a), "")
+    br = next((n for k, n in (("Edg/", "Edge"), ("Firefox/", "Firefox"), ("Chrome/", "Chrome"), ("Safari/", "Safari")) if k in a), "")
+    return " on ".join(x for x in (br, os_) if x) or (a[:40] or "unknown")
+
+
+def where(ip: str | None) -> str:
+    """LAN, tailnet or internet, so an admin can tell at a glance."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip or "")
+    except ValueError:
+        return ""
+    return "this server" if a.is_loopback else "tailnet" if a in ipaddress.ip_network("100.64.0.0/10") else \
+        "LAN" if a.is_private else "internet"
+
+
+templates.env.filters["device"] = device
+templates.env.filters["where"] = where
+
+
+def _security_admin(request: Request) -> str:
+    mid = request.state.real_member
+    if not archive.club.is_admin(mid or ""):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")
+    return mid
+
+
+@app.get("/admin/security", response_class=HTMLResponse)
+def security_page(request: Request, mid: str = Depends(real_me)):
+    """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
+    if not archive.club.is_admin(mid):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/admin/security", status_code=303)
+    p = DATA / "admin-log.jsonl"
+    admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
+    roster = DATA / "roster.json"
+    return page(request, "security.html", signins=authn.signins(100), events=authn.events(100), bans=authn.bans(),
+                sessions=authn.all_sessions(), admin_log=admin_log, event_names=authmod.EVENT_NAMES,
+                my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
+                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
+
+
+@app.post("/admin/security/ban")
+def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), reason: str = Form("")):
+    mid = _security_admin(request)
+    import ipaddress
+    try:
+        ip = str(ipaddress.ip_address(ip.strip()))
+    except ValueError:
+        raise HTTPException(400, "That isn't an IP address.")
+    if ip == client_ip(request) or ipaddress.ip_address(ip).is_loopback:
+        raise HTTPException(400, "That's the address you're using (or this server); banning it would lock you out.")
+    authn.ban(ip, hours or None, reason or "banned by an admin", mid)
+    _admin_log(request, ban=ip, hours=hours or None)
+    return RedirectResponse("/admin/security#bans", status_code=303)
+
+
+@app.post("/admin/security/unban")
+def security_unban(request: Request, ip: str = Form(...)):
+    _security_admin(request)
+    authn.unban(ip)
+    _admin_log(request, unban=ip)
+    return RedirectResponse("/admin/security#bans", status_code=303)
+
+
+@app.post("/admin/security/signout")
+def security_signout(request: Request, session: int = Form(...)):
+    _security_admin(request)
+    who = authn.end_session_id(session)
+    _admin_log(request, signed_out=who)
+    return RedirectResponse("/admin/security#sessions", status_code=303)
 
 
 @app.get("/preview/outbox")
