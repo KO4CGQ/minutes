@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import threading
+import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
 from urllib.parse import quote
@@ -104,6 +105,9 @@ templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=versi
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
+    if authn.banned(client_ip(request)):
+        return HTMLResponse("This address has been blocked after repeated failed sign-ins. "
+                            "If that's a mistake, ask a club officer.", status_code=403)
     archive.club.refresh()  # pick up a roster sync without a restart
     token = request.cookies.get(COOKIE)
     real = authn.member_for(token)
@@ -126,6 +130,17 @@ async def require_login(request: Request, call_next):
         target = path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
     return JSONResponse({"detail": "Please sign in"}, status_code=401)
+
+
+@app.middleware("http")  # added last, so it runs outermost and covers the login redirects too
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    h = response.headers
+    h.setdefault("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("Referrer-Policy", "same-origin")
+    h.setdefault("X-Robots-Tag", "noindex, nofollow")  # members-only; keep the public hostname out of search engines
+    return response
 
 
 def me(request: Request) -> str:
@@ -165,6 +180,9 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         "club": archive.club,
         "me": archive.club.members.get(mid) if mid else None,
         "can_lead": (archive.club.can_lead(mid) or admin_mode(request)) if mid else False,
+        # JS weekday (0 = Sunday) and time of the weekly meeting, for the "Start meeting" button
+        "meeting_at": f"{(chow.WEEKDAYS.index(str(archive.club.info.get('meeting_day', 'Thursday')).lower()) + 1) % 7} "
+                      f"{archive.club.info.get('meeting_time', '19:30')}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
@@ -190,13 +208,24 @@ def is_https(request: Request) -> bool:
 
 
 def base_url(request: Request) -> str:
-    """Where this member reached us (LAN address or the HTTPS tailnet name), for links in emails."""
-    host = request.headers.get("host", request.url.netloc)
-    return f"{'https' if is_https(request) else 'http'}://{host}"
+    """Where this member reached us (LAN address or the HTTPS tailnet name), for links in emails.
+    Only our own names count: a forged Host header would otherwise put a working sign-in link
+    pointing at someone else's server into a member's inbox."""
+    host = request.headers.get("host", "")
+    ip, port = request.scope.get("server") or ("", 0)  # the address this connection actually reached
+    if host in (authn.rp_id, f"{ip}:{port}") or (host == ip and port in (80, 443)):
+        return f"{'https' if is_https(request) else 'http'}://{host}"
+    return (authn.base_url or f"http://{ip}:{port}").rstrip("/")
 
 
-def start_session(request: Request, response: Response, member: str) -> Response:
-    token = authn.new_session(member, request.headers.get("user-agent", ""))
+def client_ip(request: Request) -> str | None:
+    """The visitor's address. Through Tailscale Funnel it's their real internet address (X-Forwarded-For,
+    trusted only from 127.0.0.1); on the LAN, their LAN address."""
+    return request.client.host if request.client else None
+
+
+def start_session(request: Request, response: Response, member: str, method: str) -> Response:
+    token = authn.new_session(member, request.headers.get("user-agent", ""), client_ip(request), method)
     response.set_cookie(COOKIE, token, max_age=authn.session_days * 86400, httponly=True, samesite="lax",
                         secure=is_https(request))
     return response
@@ -211,6 +240,11 @@ def get_meeting(slug: str):
 
 # ---------------- login & account ----------------
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return RedirectResponse("/static/favicon.png", status_code=301)  # browsers ask for it regardless of <link rel=icon>
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""):
     if request.state.member:
@@ -220,7 +254,7 @@ def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""
 
 @app.post("/login/email")
 def login_email(request: Request, email: str = Form(...), next: str = Form("/")):
-    authn.send_link(email, next, base_url=base_url(request))
+    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
@@ -228,12 +262,13 @@ def login_email(request: Request, email: str = Form(...), next: str = Form("/"))
 def login_link(request: Request, t: str = ""):
     used = authn.use_link(t)
     if not used:
+        authn.event("bad_link", client_ip(request))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     # Offer a passkey right away to members who don't have one (only possible over HTTPS on the passkey host).
     if not authn.passkeys(member) and request.url.hostname == authn.rp_id:
         next_url = f"/account?welcome=1&next={quote(next_url)}"
-    return start_session(request, RedirectResponse(next_url, status_code=303), member)
+    return start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
 
 
 @app.post("/logout")
@@ -780,10 +815,11 @@ def member_photo_remove(request: Request, who: str, mid: str = Depends(officer))
 @app.get("/avatars/{name}")
 def avatar_file(name: str, mid: str = Depends(me)):
     """Pictures are for signed-in members only; the address changes with the picture, so cache it."""
-    who = name.removesuffix(".jpg")
-    if who not in archive.club.members or not avatars.path(who).exists():
+    who = name.rsplit(".", 1)[0]
+    f = avatars.path(who) if who in archive.club.members else None
+    if not f or not f.exists():
         raise HTTPException(404)
-    return FileResponse(avatars.path(who), media_type="image/jpeg",
+    return FileResponse(f, media_type="image/png" if f.suffix == ".png" else "image/jpeg",
                         headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
@@ -920,10 +956,11 @@ async def passkey_login_verify(request: Request):
     try:
         member = authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"])
     except Exception as e:
+        authn.event("passkey_failed", client_ip(request), detail=str(e)[:120])
         raise HTTPException(400, str(e))
     if not authn.is_active(member):
         raise HTTPException(403, "Your roster entry isn't active.")
-    return start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member)
+    return start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member, "passkey")
 
 
 # ---------------- archive ----------------
@@ -961,6 +998,26 @@ def by_period(period: str) -> tuple[list, str, str]:
 
 
 @app.get("/", response_class=HTMLResponse)
+def home(request: Request, mid: str = Depends(me)):
+    """What's next for this member: the next meeting, their chow night, their business items, the latest minutes."""
+    if request.url.query:  # old bookmarks of the archive (/?period=...)
+        return RedirectResponse(f"/minutes?{request.url.query}", status_code=301)
+    club, today = archive.club, dt.date.today()
+    nights = chow.meeting_nights(club, today, today + dt.timedelta(days=7))
+    s = chow.load()
+    upcoming = chow.upcoming(s, n=60)
+    latest = next((m for m in archive.meetings if m.status != "draft"), None)  # newest first
+    items = [business.view(club, x, today.isoformat()) for x in business.load()["items"]
+             if x["status"] == "open" and x.get("owner") == mid]
+    return page(request, "home.html", next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+                my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
+                swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
+                items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest,
+                today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
+                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
+
+
+@app.get("/minutes", response_class=HTMLResponse)
 def index(request: Request, period: str = "", p: str = Query("1", alias="page"), per: str = ""):
     """Meetings newest first, a page at a time, for a period (this year by default)."""
     ms, period, label = by_period(period)
@@ -1059,13 +1116,16 @@ def bylaws(request: Request):
     return page(request, "bylaws.html", html=html)
 
 
-LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"),
+LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"), ("mailto:", "mail"),
+              ("tel:", "phone"), ("youtube.", "play"), ("youtu.be", "play"), ("github.", "code"), ("maps.", "map"),
+              ("/maps", "map"), ("qrz.com", "antenna"), ("repeaterbook.", "antenna"), ("arrl.org", "radio"),
+              ("facebook.", "users"), ("groups.io", "users"), ("amazon.", "cart"), ("forms.", "form"),
               ("/bylaws", "document"), ("docs.google.", "document"), (".pdf", "document"), ("calendar", "calendar"))
 
 
 def link_icon(url: str) -> str:
-    """Icon name for a club link, guessed from its address. In club.yaml a link can set `icon:` to one of
-    video, chat, globe, document, radio, calendar or link."""
+    """Icon name for a club link, guessed from its address ("Auto" on the Links editor): a known site's icon,
+    else a globe for a bare website address, else a chain link. A link can set `icon:` to any name in ICONS."""
     u = url.lower()
     return next((icon for key, icon in LINK_ICONS if key in u), "globe" if u.count("/") <= 3 else "link")
 
@@ -1074,7 +1134,7 @@ templates.env.filters["link_icon"] = link_icon
 
 
 def link_host(url: str) -> str:
-    host = re.sub(r"^https?://(www\.)?", "", url).split("/")[0]
+    host = re.sub(r"^(https?://(www\.)?|mailto:|tel:)", "", url).split("/")[0]
     return "on this site" if host == authn.rp_id else host
 
 
@@ -1128,14 +1188,131 @@ def email_log(request: Request, mid: str = Depends(real_me)):
     return page(request, "outbox.html", mail=mail, test_mode=archive.club.email_only_to() is not None)
 
 
+# ---------------- security (admins, in admin mode) ----------------
+
+def device(agent: str | None) -> str:
+    """'Chrome on Windows' from a browser's user-agent string, for the Security page."""
+    a = agent or ""
+    os_ = next((n for k, n in (("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"), ("Windows", "Windows"),
+                               ("Mac OS", "Mac"), ("CrOS", "Chromebook"), ("Linux", "Linux")) if k in a), "")
+    br = next((n for k, n in (("Edg/", "Edge"), ("Firefox/", "Firefox"), ("Chrome/", "Chrome"), ("Safari/", "Safari")) if k in a), "")
+    return " on ".join(x for x in (br, os_) if x) or (a[:40] or "unknown")
+
+
+def where(ip: str | None) -> str:
+    """LAN, tailnet or internet, so an admin can tell at a glance."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip or "")
+    except ValueError:
+        return ""
+    return "this server" if a.is_loopback else "tailnet" if a in ipaddress.ip_network("100.64.0.0/10") else \
+        "LAN" if a.is_private else "internet"
+
+
+templates.env.filters["device"] = device
+templates.env.filters["where"] = where
+
+
+def _security_admin(request: Request) -> str:
+    mid = request.state.real_member
+    if not archive.club.is_admin(mid or ""):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")
+    return mid
+
+
+SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
+                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
+
+
+@app.get("/admin/security", response_class=HTMLResponse)
+@app.get("/admin/security/{tab}", response_class=HTMLResponse)
+def security_page(request: Request, tab: str = "signins", mid: str = Depends(real_me)):
+    """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
+    if not archive.club.is_admin(mid):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse(f"/admin/confirm?next=/admin/security/{quote(tab)}", status_code=303)
+    if tab not in dict(SECURITY_TABS):
+        raise HTTPException(404)
+    p = DATA / "admin-log.jsonl"
+    admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
+    roster = DATA / "roster.json"
+    events = authn.events(100)
+    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS,
+                failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
+                sessions=authn.all_sessions(), admin_log=admin_log, event_names=authmod.EVENT_NAMES,
+                my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
+                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
+
+
+@app.post("/admin/security/ban")
+def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), reason: str = Form("")):
+    mid = _security_admin(request)
+    import ipaddress
+    try:
+        ip = str(ipaddress.ip_address(ip.strip()))
+    except ValueError:
+        raise HTTPException(400, "That isn't an IP address.")
+    if ip == client_ip(request) or ipaddress.ip_address(ip).is_loopback:
+        raise HTTPException(400, "That's the address you're using (or this server); banning it would lock you out.")
+    authn.ban(ip, hours or None, reason or "banned by an admin", mid)
+    _admin_log(request, ban=ip, hours=hours or None)
+    return RedirectResponse("/admin/security/bans", status_code=303)
+
+
+@app.post("/admin/security/unban")
+def security_unban(request: Request, ip: str = Form(...)):
+    _security_admin(request)
+    authn.unban(ip)
+    _admin_log(request, unban=ip)
+    return RedirectResponse("/admin/security/bans", status_code=303)
+
+
+@app.post("/admin/security/signout")
+def security_signout(request: Request, session: int = Form(...)):
+    _security_admin(request)
+    who = authn.end_session_id(session)
+    _admin_log(request, signed_out=who)
+    return RedirectResponse("/admin/security/devices", status_code=303)
+
+
 @app.get("/preview/outbox")
 def preview_outbox():
     return RedirectResponse("/admin/email", status_code=303)
 
 
+ICONS = ("link", "globe", "video", "chat", "mail", "phone", "document", "form", "book", "news", "calendar", "map",
+         "users", "radio", "antenna", "play", "code", "cart", "money", "info", "star")  # all drawn in _icons.html
+SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "hidden": (False, False)}
+
+
 @app.get("/links", response_class=HTMLResponse)
-def links(request: Request):
-    return page(request, "links.html")
+def links(request: Request, edit: int = 0, error: str = ""):
+    return page(request, "links.html", edit=bool(edit and admin_mode(request)), error=error, icons=ICONS, guesses=LINK_ICONS)
+
+
+@app.post("/links")
+async def links_save(request: Request, mid: str = Depends(me)):
+    """Admins (in admin mode) choose the links, their icons, their order, and where each shows."""
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode to edit the club links.")
+    form = await request.form()
+    rows = zip(form.getlist("label"), form.getlist("url"), form.getlist("icon"), form.getlist("show"))
+    out = []
+    for label, url, icon, show in rows:
+        label, url = label.strip(), url.strip()
+        if not label and not url:
+            continue
+        if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url):
+            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto: or tel: ({label or url})."), status_code=303)
+        page_, minutes_ = SHOW.get(show, (True, True))
+        out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if icon in ICONS else {}), "page": page_, "minutes": minutes_})
+    archive.club.save_links(out[:40])
+    _admin_log(request, links=[x["label"] for x in out])
+    return RedirectResponse("/links", status_code=303)
 
 
 @app.get("/stats", response_class=HTMLResponse)

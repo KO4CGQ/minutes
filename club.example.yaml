@@ -5,6 +5,7 @@ club:
   name: Example Radio Club
   callsign: W0XYZ
   meeting_day: Thursday
+  meeting_time: "19:30"     # 24-hour; the "Start meeting" button pulses from 30 minutes before
   invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit
   remind_days_before: 3    # business item owners get an email this many days before the due date (and once if overdue)
   date_formats:          # strftime codes; %-d = day without leading zero
@@ -24,6 +25,7 @@ email:
   only_to: [KD8XYZ]
 
 links:  # shown in the "Club Links" footer of the minutes and on the Links page
+  # The starting list: once an admin edits the links on the Links page, links.json in the data folder is used instead.
   # Optional icon: video, chat, globe, document, radio, calendar or link (guessed from the address if left out)
   - label: Teams meeting
     url: https://teams.live.com/meet/REPLACE_ME

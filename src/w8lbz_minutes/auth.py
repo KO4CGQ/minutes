@@ -60,7 +60,24 @@ create table if not exists email_changes (token_hash text primary key, member te
   email text not null, expires integer not null, created integer not null);
 create table if not exists challenges (id text primary key, challenge blob not null, member text,
   kind text not null, expires integer not null);
+create table if not exists signins (at integer not null, member text not null, method text, ip text, agent text);
+create table if not exists events (at integer not null, ip text, kind text not null, member text, detail text);
+create table if not exists bans (ip text primary key, at integer not null, until integer, reason text, by text);
 """
+BAN_AFTER = 10          # failed sign-in attempts from one internet address in an hour...
+BAN_HOURS = 24          # ...ban it for this long (admins can lift it on the Security page)
+EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the roster",
+               "link_limit": "Sign-in link limit reached", "bad_link": "Used, expired or made-up sign-in link",
+               "passkey_failed": "Passkey sign-in failed"}
+
+
+def _public(ip: str) -> bool:
+    """An internet address (not the LAN, the tailnet or this machine): only these are banned automatically."""
+    import ipaddress
+    try:
+        return ipaddress.ip_address(ip).is_global
+    except ValueError:
+        return False
 
 
 def _hash(token: str) -> str:
@@ -89,15 +106,63 @@ class Auth:
             self.db.execute("alter table sessions add column admin_until integer")
         if "view_as" not in session_cols:
             self.db.execute("alter table sessions add column view_as text")
+        for col in ("ip", "method"):
+            if col not in session_cols:
+                self.db.execute(f"alter table sessions add column {col} text")
         os.chmod(path, 0o600)
 
     # ---------------- sessions ----------------
-    def new_session(self, member: str, agent: str = "") -> str:
+    def new_session(self, member: str, agent: str = "", ip: str | None = None, method: str | None = None) -> str:
         token = secrets.token_urlsafe(32)
         now = int(time.time())
-        self.db.execute("insert into sessions (token_hash, member, created, expires, agent) values (?,?,?,?,?)",
-                        (_hash(token), member, now, now + self.session_days * 86400, agent[:200]))
+        self.db.execute("insert into sessions (token_hash, member, created, expires, agent, ip, method) values (?,?,?,?,?,?,?)",
+                        (_hash(token), member, now, now + self.session_days * 86400, agent[:200], ip, method))
+        if method:  # a real sign-in (tests and tools make sessions without one)
+            self.db.execute("insert into signins values (?,?,?,?,?)", (now, member, method, ip, agent[:200]))
         return token
+
+    # ---------------- security log and bans (the admin Security page) ----------------
+    def event(self, kind: str, ip: str | None, member: str | None = None, detail: str = "") -> None:
+        """Record a failed or suspicious sign-in attempt; ban an internet address after BAN_AFTER in an hour."""
+        now = int(time.time())
+        self.db.execute("insert into events values (?,?,?,?,?)", (now, ip, kind, member, detail[:200]))
+        if ip and _public(ip) and not self.banned(ip):
+            n = self.db.execute("select count(*) from events where ip=? and at>?", (ip, now - 3600)).fetchone()[0]
+            if n >= BAN_AFTER:
+                self.ban(ip, BAN_HOURS, f"{n} failed sign-in attempts in an hour", "automatic")
+                log.warning("banned %s after %d failed sign-in attempts", ip, n)
+
+    def banned(self, ip: str | None) -> bool:
+        if not ip:
+            return False
+        row = self.db.execute("select until from bans where ip=?", (ip,)).fetchone()
+        return bool(row and (row["until"] is None or row["until"] > time.time()))
+
+    def ban(self, ip: str, hours: int | None, reason: str, by: str) -> None:
+        now = int(time.time())
+        self.db.execute("insert or replace into bans values (?,?,?,?,?)",
+                        (ip, now, now + hours * 3600 if hours else None, reason[:200], by))
+
+    def unban(self, ip: str) -> None:
+        self.db.execute("delete from bans where ip=?", (ip,))
+
+    def bans(self) -> list[sqlite3.Row]:
+        return self.db.execute("select * from bans where until is null or until>? order by at desc", (time.time(),)).fetchall()
+
+    def signins(self, limit: int = 100) -> list[sqlite3.Row]:
+        return self.db.execute("select * from signins order by at desc limit ?", (limit,)).fetchall()
+
+    def events(self, limit: int = 100) -> list[sqlite3.Row]:
+        return self.db.execute("select * from events order by at desc limit ?", (limit,)).fetchall()
+
+    def all_sessions(self) -> list[sqlite3.Row]:
+        return self.db.execute("select rowid, member, created, expires, agent, ip, method from sessions where expires>? "
+                               "order by member, created desc", (time.time(),)).fetchall()
+
+    def end_session_id(self, rowid: int) -> str | None:
+        row = self.db.execute("select member from sessions where rowid=?", (rowid,)).fetchone()
+        self.db.execute("delete from sessions where rowid=?", (rowid,))
+        return row["member"] if row else None
 
     def member_for(self, token: str | None) -> str | None:
         if not token:
@@ -160,17 +225,19 @@ class Auth:
                 return m.id
         return None
 
-    def send_link(self, email: str, next_url: str = "/", base_url: str | None = None) -> None:
+    def send_link(self, email: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None) -> None:
         """Email a one-time login link. Silent if the address isn't on the roster (no account probing)."""
         member = self.member_by_email(email)
         if not member:
             log.info("login link requested for an address not on the roster")
+            self.event("unknown_email", ip)  # the address itself isn't kept
             return
         now = int(time.time())
         recent = self.db.execute("select count(*) from links where member=? and created>?",
                                  (member, now - 3600)).fetchone()[0]
         if recent >= EMAILS_PER_HOUR:
             log.warning("login link rate limit hit for %s", member)
+            self.event("link_limit", ip, member)
             return
         url = self.create_link(member, next_url, base_url)
         send_email(self.club.members[member].email, "Your W8LBZ Minutes sign-in link", only_to=self.club.email_only_to(),

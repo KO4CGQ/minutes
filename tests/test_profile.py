@@ -300,7 +300,7 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     page = c.get("/members/tess").text
     assert "Viewing the app as <b>Bob Member</b>" in page
     assert "419-555-0142" not in page                     # Bob can't see Tess's unshared phone, so neither can Ann now
-    assert "Bob ▾" in c.get("/links").text and "Ann ▾" not in c.get("/links").text  # the name menu is Bob's
+    assert ">Bob</span>" in c.get("/links").text and ">Ann</span>" not in c.get("/links").text  # the name menu is Bob's
     assert c.post("/profile", data={"phone": "1"}).status_code == 403          # read-only
     assert c.get("/account").status_code == 403                                 # not their sign-ins or passkeys
     assert c.get("/roster/changes").status_code == 403                          # Bob's permissions, not admin's
@@ -338,3 +338,31 @@ def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
         ("Minutes", "sent", ["ann@example.org"], ["amy@example.org"]),
         ("Reminder", "held back (test mode)", [], ["amy@example.org"])]
     assert oct((tmp_path / "email-log.jsonl").stat().st_mode)[-3:] == "600"
+
+
+def test_admins_edit_club_links(tmp_path, monkeypatch):
+    """Links come from club.yaml until an admin edits them; each shows on the Links page, the minutes, both or neither."""
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import club as clubmod, web
+    from w8lbz_minutes.auth import Auth
+    from w8lbz_minutes.store import Archive
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])
+    club.admins = {"kd8adm"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    for mod in (web, clubmod):
+        monkeypatch.setattr(mod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
+    monkeypatch.setattr(web, "authn", a)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("kd8adm"))
+    form = {"label": ["Discord", "Net log", ""], "url": ["https://discord.example/x", "https://example.org/net", ""],
+            "icon": ["chat", "", ""], "show": ["page", "minutes", "both"]}
+    assert c.post("/links", data=form).status_code == 403                  # admin mode first
+    turn_on_admin_mode(c, monkeypatch)
+    c.post("/links", data=form)
+    assert [(x["label"], x["page"], x["minutes"], x.get("icon")) for x in club.links] == [
+        ("Discord", True, False, "chat"), ("Net log", False, True, None)]
+    page = c.get("/links").text
+    assert "discord.example" in page and "example.org/net" not in page
+    bad = c.post("/links", data={**form, "url": ["javascript:alert(1)", "", ""]}, follow_redirects=False)
+    assert "error=" in bad.headers["location"] and len(club.links) == 2      # rejected, nothing changed
