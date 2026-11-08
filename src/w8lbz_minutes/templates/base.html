@@ -11,7 +11,8 @@ try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark"
   <a class="brand" href="/"><img src="/static/logo.png" alt="">W8LBZ Minutes</a>
   {% if me %}{% set here = request.url.path %}
   <button type="button" class="burger" aria-label="Pages and search" aria-expanded="false" aria-controls="navlinks">☰</button>
-  <div class="navlinks" id="navlinks">{% for href, label in (('/', 'Archive'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/business', 'Business'), ('/chow', 'Chow'), ('/guests', 'Guests'), ('/links', 'Links')) + (((('/meetings/' ~ live.slug, '🔴 Live meeting'),) if live else (('/console', 'Lead a meeting'),) if can_lead else ())) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href != '/' and here.startswith(href)) or (href == '/' and here.startswith('/meetings'))) }}">{{ label }}</a>{% endfor %}</div>
+  <div class="navlinks" id="navlinks">{% for href, label in (('/', 'Archive'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/business', 'Business'), ('/chow', 'Chow'), ('/guests', 'Guests'), ('/links', 'Links')) + (((('/meetings/' ~ live.slug, '🔴 Live meeting'),) if live else (('/console', 'Start meeting'),) if can_lead else ())) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href != '/' and here.startswith(href)) or (href == '/' and here.startswith('/meetings'))) }}{{ ' start' if href == '/console' }}"{% if href == '/console' %} data-meets="{{ meeting_at }}"{% endif %}>{{ label }}</a>{% endfor %}</div>
+  <span class="clock" title="Club time"></span>
   <form action="/search"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}"></form>
   <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}{{ me.short or me.first }}{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
     <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">⬆️ Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/email">Email log</a><a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
@@ -44,6 +45,15 @@ markTheme();
 // phones: the ☰ button shows the page links and search
 document.querySelector("nav.top .burger")?.addEventListener("click", (e) => {
   const nav = e.currentTarget.closest("nav"); e.currentTarget.setAttribute("aria-expanded", nav.classList.toggle("open")); });
+// top-bar clock; "Start meeting" pulses from 30 minutes before the weekly meeting until 30 minutes after it starts
+// shortcut: uses the browser's time zone, which is the club's for members at home; pass the club's zone if that changes.
+(() => { const clock = document.querySelector("nav.top .clock"), start = document.querySelector("nav.top a.start");
+  const [day, hh, mm] = (start?.dataset.meets || "").split(/[ :]/).map(Number);
+  const tick = () => { const now = new Date();
+    if (clock) clock.textContent = now.toLocaleTimeString([], {weekday: "short", hour: "numeric", minute: "2-digit"}).replace(/AM|PM/, (m) => m.toLowerCase());
+    if (start) { const mins = (now.getHours() - hh) * 60 + now.getMinutes() - mm;
+      start.classList.toggle("soon", now.getDay() === day && mins >= -30 && mins <= 30); } };
+  tick(); setInterval(tick, 10000); })();
 // close the name menu when clicking elsewhere
 document.addEventListener("click", (e) => document.querySelectorAll("details.menu[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
 </script>

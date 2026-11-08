@@ -1,7 +1,7 @@
 """Members' profile pictures.
 
 A member uploads a photo on their profile; it's turned the right way up, cropped to a square, shrunk to
-256 px and saved as a fresh JPEG, which also drops anything hidden in the original (camera details, GPS
+256 px and saved as a fresh JPEG (PNG if it has transparency, which is kept), which also drops anything hidden in the original (camera details, GPS
 location). Pictures are only served to signed-in members. An officer, or an admin in admin mode, can
 remove one. Without a picture, a coloured circle with the member's initials is shown.
 """
@@ -24,7 +24,9 @@ def _dir():
 
 
 def path(mid: str):
-    return _dir() / f"{mid}.jpg"
+    """The member's picture file: .png when the upload had transparency, else .jpg."""
+    png = _dir() / f"{mid}.png"
+    return png if png.exists() else _dir() / f"{mid}.jpg"
 
 
 def save(mid: str, data: bytes) -> None:
@@ -43,10 +45,12 @@ def save(mid: str, data: bytes) -> None:
         img = ImageOps.exif_transpose(img)
     except UnidentifiedImageError:
         raise ValueError("That file isn't a picture we can read. Use a JPEG, PNG or WebP.")
-    img = ImageOps.fit(img.convert("RGB"), (SIZE, SIZE), Image.LANCZOS, centering=(0.5, 0.4))
+    clear = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
+    img = ImageOps.fit(img.convert("RGBA" if clear else "RGB"), (SIZE, SIZE), Image.LANCZOS, centering=(0.5, 0.4))
     out = io.BytesIO()
-    img.save(out, "JPEG", quality=85, optimize=True)  # a new file: no EXIF, no location
-    p = path(mid)
+    img.save(out, *(("PNG",) if clear else ("JPEG",)), optimize=True, **({} if clear else {"quality": 85}))  # a new file: no EXIF, no location
+    remove(mid)  # the old picture may have the other extension
+    p = _dir() / f"{mid}.{'png' if clear else 'jpg'}"
     tmp = p.with_suffix(".tmp")
     tmp.write_bytes(out.getvalue())
     tmp.chmod(0o600)
@@ -54,11 +58,12 @@ def save(mid: str, data: bytes) -> None:
 
 
 def remove(mid: str) -> bool:
-    p = path(mid)
-    if p.exists():
-        p.unlink()
-        return True
-    return False
+    found = False
+    for p in (_dir() / f"{mid}.jpg", _dir() / f"{mid}.png"):
+        if p.exists():
+            p.unlink()
+            found = True
+    return found
 
 
 def url(mid: str | None) -> str | None:
@@ -68,7 +73,7 @@ def url(mid: str | None) -> str | None:
     p = path(mid)
     if not p.exists():
         return None
-    return f"/avatars/{mid}.jpg?v={int(p.stat().st_mtime)}"
+    return f"/avatars/{p.name}?v={int(p.stat().st_mtime)}"
 
 
 def hue(mid: str) -> int:

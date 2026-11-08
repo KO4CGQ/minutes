@@ -165,6 +165,9 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         "club": archive.club,
         "me": archive.club.members.get(mid) if mid else None,
         "can_lead": (archive.club.can_lead(mid) or admin_mode(request)) if mid else False,
+        # JS weekday (0 = Sunday) and time of the weekly meeting, for the "Start meeting" button
+        "meeting_at": f"{(chow.WEEKDAYS.index(str(archive.club.info.get('meeting_day', 'Thursday')).lower()) + 1) % 7} "
+                      f"{archive.club.info.get('meeting_time', '19:30')}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
@@ -210,6 +213,11 @@ def get_meeting(slug: str):
 
 
 # ---------------- login & account ----------------
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return RedirectResponse("/static/favicon.png", status_code=301)  # browsers ask for it regardless of <link rel=icon>
+
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""):
@@ -780,10 +788,11 @@ def member_photo_remove(request: Request, who: str, mid: str = Depends(officer))
 @app.get("/avatars/{name}")
 def avatar_file(name: str, mid: str = Depends(me)):
     """Pictures are for signed-in members only; the address changes with the picture, so cache it."""
-    who = name.removesuffix(".jpg")
-    if who not in archive.club.members or not avatars.path(who).exists():
+    who = name.rsplit(".", 1)[0]
+    f = avatars.path(who) if who in archive.club.members else None
+    if not f or not f.exists():
         raise HTTPException(404)
-    return FileResponse(avatars.path(who), media_type="image/jpeg",
+    return FileResponse(f, media_type="image/png" if f.suffix == ".png" else "image/jpeg",
                         headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 

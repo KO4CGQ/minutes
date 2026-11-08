@@ -5,6 +5,9 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Start meeting button and clock:** the top bar shows the time, and Lead a meeting is now a Start meeting pill that turns amber and pulses from 30 minutes before the weekly meeting until 30 minutes after it starts (still, for anyone who has reduced motion turned on). The time comes from `club.meeting_time` (default `19:30`). Tablets and narrow laptop windows get the ☰ menu instead of a top bar that wraps onto two lines.
+- **Transparent profile pictures:** a PNG or WebP with a transparent background keeps it (saved as PNG); other pictures are still saved as JPEG.
+- **Favicon for every browser:** `/favicon.ico` points at the club logo, so browsers that ask for it get it instead of an error.
 - **Updates page refreshes itself:** while an update is waiting or running, the admin Updates page checks every few seconds and shows the result (the new version and ✅ or ❌) once the app is back, without a manual reload.
 
 ## 0.8.0 (2026-11-07)

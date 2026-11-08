@@ -327,8 +327,8 @@ div.relnotes { background: var(--surface-2); border-radius: var(--radius-sm); pa
 div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { margin: .3rem 0; } div.relnotes p { margin: .5rem 0; }
 
 /* ---------- phones ---------- */
-@media (max-width: 760px) {
-  /* top bar: one row (logo, ☰, name menu); ☰ opens the page links and search as a list underneath */
+@media (max-width: 1180px) {
+  /* phones and tablets, top bar: one row (logo, clock, ☰, name menu); ☰ opens the page links and search as a list underneath */
   nav.top { padding: .5rem .8rem; row-gap: .45rem; }
   nav.top .brand { margin-right: 0; }
   nav.top .burger { display: block; order: 1; margin-left: auto; }
@@ -338,6 +338,11 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
   nav.top .navlinks a { padding: .6rem .7rem; font-size: 1rem; }
   nav.top.open > form { display: block; order: 4; width: 100%; margin: 0 0 .3rem; }
   nav.top input[type=search] { width: 100%; padding: .5rem .9rem; }
+  nav.top .clock { margin-left: .8rem; font-size: .85rem; }
+  nav.top a.start { margin: .2rem 0 0; text-align: center; }
+}
+@media (max-width: 760px) {
+  nav.top .clock { display: none; }
   /* iOS zooms the page into any field under 16px */
   input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=number], input:not([type]),
   select, textarea { font-size: 16px; }
@@ -355,3 +360,13 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
   .topacts button.act, .itemacts button.act { width: 100%; min-height: 2.4rem; font-size: .9rem; white-space: nowrap; }
   .pager { flex-wrap: wrap; }
 }
+/* top bar: clock, and "Start meeting" as a pill that pulses near meeting time */
+nav.top .clock { color: var(--nav-text); opacity: .8; font-size: .85rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (min-width: 1181px) { nav.top .clock { margin-left: auto; } nav.top .clock + form { margin-left: .6rem; } }
+nav.top a.start { border: 1px solid var(--accent); border-radius: 2rem; margin-left: .3rem; }
+nav.top a.start.soon { background: #f2b33d; color: #2a1d00; border-color: #f2b33d; font-weight: 600; animation: startpulse 1.6s ease-in-out infinite; }
+@keyframes startpulse { 50% { box-shadow: 0 0 0 .4rem transparent; } 0%, 100% { box-shadow: 0 0 0 0 #f2b33daa; } }
+@media (prefers-reduced-motion: reduce) { nav.top a.start.soon { animation: none; } }
+@media (max-width: 1450px) { nav.top input[type=search] { width: 8rem; } }
+@media (min-width: 1181px) and (max-width: 1240px) { nav.top input[type=search] { width: 6.6rem; padding: .38rem .6rem; } nav.top .clock { font-size: .78rem; } }
+
