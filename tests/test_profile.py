@@ -117,6 +117,7 @@ def test_helpers():
     assert [_col(i) for i in (0, 25, 26, 27)] == ["A", "Z", "AA", "AB"]
     assert _month_day("07-04") == "07-04" and _month_day("1961-07-04") == "07-04" and _month_day("") is None
     assert _month_day("25001") == "06-12"  # a Sheets date serial: the year is dropped
+    assert _month_day("07") == "07" and _month_day("7") == "07"  # month only
 
 
 def test_can_see():
@@ -151,6 +152,7 @@ def test_monthday_filter():
     from w8lbz_minutes.web import monthday
     assert monthday("07-04") == "July 4" and monthday("") == "" and monthday(None) == ""
     assert monthday("1961-07-04") == "1961-07-04" and monthday("13-40") == "13-40"
+    assert monthday("07") == "July" and monthday("13") == "13"
 
 
 def test_club_reloads_roster_after_a_sync(tmp_path, monkeypatch):
@@ -190,6 +192,11 @@ def test_multiline_addresses_keep_their_line_breaks(env, monkeypatch):
     c.post("/profile", data=form, follow_redirects=False)
     assert fake.rows[2][4] == "100 Main St #13\nAnytown, OH 44000"
     assert "#13 / Anytown" in sent[-1][2]  # readable in the Secretary's email
+    form["bmonth"] = "7"  # just a month
+    c.post("/profile", data=form, follow_redirects=False)
+    assert ("H3", "07") in fake.writes
+    form.update(bmonth="", bday="4")  # a day with no month
+    assert "error=" in c.post("/profile", data=form, follow_redirects=False).headers["location"]
 
 
 def test_preview_mode_never_sends_or_touches_the_real_sheet(tmp_path, monkeypatch):

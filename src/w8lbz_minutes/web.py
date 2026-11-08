@@ -63,8 +63,10 @@ templates.env.filters["listdate"] = lambda d: d.strftime(DATES["list"])
 templates.env.filters["by_last_name"] = by_last_name
 templates.env.filters["clock"] = lambda t: dt.datetime.fromtimestamp(t).strftime("%-I:%M %p")
 def monthday(md: str | None) -> str:
-    """'07-04' -> 'July 4'. Anything else (e.g. a full date typed into the sheet) is shown as is."""
+    """'07-04' -> 'July 4', '07' (month only) -> 'July'. Anything else (e.g. a full date typed into the sheet) is shown as is."""
     try:
+        if md and len(md) == 2:
+            return dt.date(2000, int(md), 1).strftime("%B")
         return dt.date(2000, int(md[:2]), int(md[3:5])).strftime("%B %-d") if md and len(md) == 5 else (md or "")
     except ValueError:
         return md
@@ -846,9 +848,11 @@ async def profile_save(request: Request, mid: str = Depends(me)):
         address = m.address or ""
     try:
         bm, bd = int(form.get("bmonth") or 0), int(form.get("bday") or 0)
-        birthday = f"{bm:02d}-{bd:02d}" if bm and bd and dt.date(2000, bm, bd) else ""
+        if bd and not bm:
+            raise ValueError
+        birthday = f"{bm:02d}-{bd:02d}" if bm and bd and dt.date(2000, bm, bd) else f"{bm:02d}" if bm and dt.date(2000, bm, 1) else ""
     except ValueError:
-        return RedirectResponse("/profile?error=" + quote("That birthday isn't a real date."), status_code=303)
+        return RedirectResponse("/profile?error=" + quote("That birthday isn't a real date. Pick a month, or a month and a day."), status_code=303)
     new = {"phone": form.get("phone", "").strip()[:40], "address": address, "birthday": birthday,
            "share": ", ".join(f for f in SHAREABLE if f in form.getlist("share"))}
     try:

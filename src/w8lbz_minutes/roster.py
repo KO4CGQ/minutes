@@ -5,7 +5,7 @@ Columns used: callsign, full_name, email, Title(s), is_officer, is_board, Class,
 minutes_editor (may lead meetings and edit minutes), Status (Active / Inactive /
 Silent Key / Prospect) and aliases (comma-separated spellings seen in old minutes).
 
-Also phone, address, birthday (MM-DD) and share (which of email, phone, address,
+Also phone, address, birthday (MM-DD, or MM for a month only) and share (which of email, phone, address,
 birthday the member shows to all members; officers always see them). The cache
 file is readable only by the app.
 
@@ -239,10 +239,12 @@ def _iso_date(v: str) -> str | None:
 
 
 def _month_day(v: str) -> str | None:
-    """Birthday as MM-DD (the year is never kept), from MM-DD, a typed date or a Sheets date serial."""
+    """Birthday as MM-DD, or MM for a month only (the year is never kept), from those, a typed date or a Sheets date serial."""
     v = v.strip()
     if re.fullmatch(r"\d{2}-\d{2}", v):
         return v
+    if re.fullmatch(r"\d{1,2}", v) and 1 <= int(v) <= 12:
+        return f"{int(v):02d}"
     iso = _iso_date(v) if v else None
     return iso[5:] if iso and re.fullmatch(r"\d{4}-\d{2}-\d{2}", iso) else None
 
