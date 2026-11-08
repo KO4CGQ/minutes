@@ -14,7 +14,6 @@ try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark"
   {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
   <a class="brand" href="/"><img src="/static/logo.png" alt=""><span>W8LBZ Minutes</span></a>
   {% if me %}
-  <div class="mainlinks">{% for href, label in PAGES[:4] %}{{ navlink(href, label) }}{% endfor %}</div>
   <span class="spacer"></span>
   {% if live %}<a class="start live" href="/meetings/{{ live.slug }}">🔴 Live meeting</a>
   {% elif can_lead %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console" data-meets="{{ meeting_at }}">Start meeting</a>{% endif %}
@@ -32,10 +31,9 @@ try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark"
 </nav>
 {% if me %}<div class="drawer" id="drawer"><div class="scrim"></div>
   <div class="panel" role="dialog" aria-label="All pages">
-    {# only what the bar can't show at this width: search below 1180px, the main pages below 900px #}
+    {# search only below 820px, where the bar has no room for it #}
     <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
-    <div class="dmain">{% for href, label in PAGES[:4] %}{{ navlink(href, label) }}{% endfor %}<div class="sep"></div></div>
-    {% for href, label in PAGES[4:] %}{{ navlink(href, label) }}{% endfor %}
+    {% for href, label in PAGES %}{{ navlink(href, label) }}{% if loop.index == 4 %}<div class="sep"></div>{% endif %}{% endfor %}
   </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
 <form method="post" action="/admin/view-as"><input type="hidden" name="member" value=""><input type="hidden" name="next" value="/members/{{ viewing_as }}"><button type="submit">Stop</button></form></div>{% endif %}
