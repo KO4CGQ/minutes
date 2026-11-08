@@ -1,17 +1,18 @@
 {% extends "base.html" %}{% block title %}Email{% endblock %}{% block body %}
 <h1>Your profile</h1>
 {% include "_profile_tabs.html" %}
-{% if saved %}<p class="msg ok">Saved.</p>{% endif %}
-<p class="muted">What the club emails you{% if m.email %} at <b>{{ m.email }}</b>{% endif %}.</p>
+{% if saved %}<p class="msg ok">Your email choices are saved.</p>{% endif %}
+<p>Choose which emails the club sends you{% if m.email %} at <b>{{ m.email }}</b>{% endif %}. You can change these any time.</p>
 <form method="post" class="profile">
-{% for k, (label, opts, _) in kinds.items() %}<fieldset><legend>{{ label }}</legend>{% if k == "roster" %}<p class="muted small">For Secretaries: edits to the roster and new members.</p>{% elif k == "minutes" %}<p class="muted small">Sent when the leader submits them. The meeting-day email links them again (if it's on).</p>{% elif k == "digest" %}<p class="muted small">The morning of each meeting: the time, your chow if it's tonight, the business you're looking after, upcoming events and last meeting's minutes.</p>{% endif %}
-  {% for o in opts %}<label class="check"><input type="radio" name="{{ k }}" value="{{ o }}" {{ 'checked' if p[k] == o }}> {{ choices[o] }}</label>{% endfor %}
+{% for k, (label, opts, _) in kinds.items() %}
+{% if k == "business" %}<fieldset><legend>Your chow night</legend>
+  <p class="muted small">Reminders before it's your turn to bring food. Tick as many as you like, or none.</p>
+  {% for d in chow_days %}<label class="check"><input type="checkbox" name="chow_days" value="{{ d }}" {{ 'checked' if d in p.chow_days }}> {{ 'The day before' if d == 1 else 'A week before' if d == 7 else d ~ ' days before' }}</label>{% endfor %}
+</fieldset>{% endif %}
+<fieldset><legend>{{ label }}</legend><p class="muted small">{{ help[k] }}</p>
+  {% for o, text in opts.items() %}<label class="check"><input type="radio" name="{{ k }}" value="{{ o }}" {{ 'checked' if p[k] == o }}> {{ text }}</label>{% endfor %}
 </fieldset>{% endfor %}
-<fieldset><legend>Chow reminders</legend>
-  {% for d in chow_days %}<label class="check"><input type="checkbox" name="chow_days" value="{{ d }}" {{ 'checked' if d in p.chow_days }}> {{ 'The day before' if d == 1 else d ~ ' days before' }}</label>{% endfor %}
-  <p class="muted small">Before your chow night. Tick none to turn them off.</p>
-</fieldset>
-<p class="muted small">Always sent: sign-in links, chow swap requests waiting for your answer, changes to your own chow night, and security notices.</p>
-<p><button class="btn">Save</button></p>
+<p class="muted small">Some emails always come, because you need them: sign-in links, chow swap requests from other members, changes to your chow night, and security alerts.</p>
+<p><button class="btn">Save my choices</button></p>
 </form>
 {% endblock %}

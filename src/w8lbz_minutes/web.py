@@ -788,7 +788,7 @@ def profile_page(request: Request, saved: int = 0, email_sent: str = "", error: 
 @app.get("/profile/email", response_class=HTMLResponse)
 def email_prefs_page(request: Request, saved: int = 0, mid: str = Depends(me)):
     kinds = {k: v for k, v in prefs.KINDS.items() if k != "roster" or mid in archive.club.secretaries}
-    return page(request, "email_prefs.html", p=prefs.get(mid), kinds=kinds, choices=prefs.CHOICES, chow_days=prefs.CHOW_DAYS,
+    return page(request, "email_prefs.html", p=prefs.get(mid), kinds=kinds, help=prefs.HELP, chow_days=prefs.CHOW_DAYS,
                 m=archive.club.members[mid], saved=saved)
 
 
