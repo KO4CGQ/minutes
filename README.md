@@ -10,7 +10,9 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROA
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode.
 - **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders.
-- **Chow schedule:** the rotation, swaps, and who provided, missed or covered each night.
+- **Calendar:** the club's calendars kept by the app, with .ics import, subscriptions and an optional copy to Google (see Club calendars below).
+- **Chow schedule:** the rotation, swaps, reminders before your night, and who provided, missed or covered each night.
+- **Email preferences:** each member turns each kind of email on or off, including a meeting-day email (the time, your chow, your business items, the calendar until the next meeting and last meeting's minutes). Every optional email ends with a link to change it. The daily `reminders` timer (8 am) sends business and chow reminders and the meeting-day email.
 
 ## Run
 ```sh
@@ -19,6 +21,7 @@ uv sync
 uv run w8lbz-minutes roster                          # sync people from the roster Google Sheet
 uv run w8lbz-minutes import archive                  # (re)build data/ from archive/
 uv run w8lbz-minutes serve --host 0.0.0.0 --port 8765
+uv run playwright install chromium                  # once: the mobile-first test uses it (skipped without it)
 uv run pytest -q
 ```
 The roster sync needs a Google service-account key at `private/google-service-account.json`. Share the sheet with the account's email as Editor (profile edits are written back to it).
@@ -73,7 +76,7 @@ Officers and members ticked `minutes_editor` in the roster sheet can lead a meet
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
 
 ## Emailing the minutes
-When a leader submits the minutes, the PDF goes to every roster member with an email address (except Inactive and Silent Key), each getting their own copy. Replies go to the meeting's leader.
+When a leader submits the minutes, they go to every roster member with an email address (except Inactive and Silent Key), each getting their own copy: the PDF attached, or a link, as each member chose on the Email tab of their profile (or not at all, if they turned it off). Replies go to the meeting's leader.
 - **Test mode:** while `club.yaml` has `email.only_to`, only those callsigns or addresses get mail; everyone else is withheld and logged. The submit dialog says which mode is on.
 - Each meeting is emailed once. The outcome is in `emailed.json` beside the minutes, and leaders see it on the minutes page.
 - **Removing a test meeting:** `w8lbz-minutes delete-meeting 2026-12-31`, then `systemctl restart w8lbz-minutes`.
@@ -83,18 +86,22 @@ Members edit their own email, phone, address, birthday and sharing choices at `/
 - **Setup:** share the roster sheet with the service account as **Editor**, and add `birthday` and `share` columns to the Member Roster tab (headers exactly; any position).
 - Each change is logged in `profile-changes.jsonl` in the data directory, emailed to members whose title includes Secretary, and can be undone by any officer at `/roster/changes`.
 - Officers see all contact details; other members see only what each member shares.
+- **Email** and **Settings** tabs: which emails each member gets (`email-prefs.json`) and how the app shows things to them, e.g. the first day of the week (`settings.json`), both in the data directory.
 
 ## Admin mode
 Callsigns listed under `admins:` in `club.yaml` get **Turn on admin mode** in the name menu. For an hour (or until turned off) that sign-in can see and do what officers can, with a red banner showing. Each switch is logged in `admin-log.jsonl` in the data directory.
 
 In admin mode, a member's page has **View the app as …**: the app as that member sees it, read-only (no changes, and not their sign-in or passkey page), until **Stop** or admin mode ends. Also logged.
 
+## Links page icons
+Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos from [Simple Icons](https://simpleicons.org) (CC0). They're stored in the repo (`src/w8lbz_minutes/simple_icons.json`), never loaded from a CDN, and drawn in the club's color like the built-in icons. To update them: `python3 deploy/update-simple-icons.py [VERSION]`.
+
 ## Bylaws
 `/bylaws` shows the club's constitution and bylaws from `bylaws.md` in the data directory (`/var/lib/w8lbz-minutes/bylaws.md` on the server). It's kept out of this public repo.
 
 ## Previewing a branch
 `deploy/preview.sh BRANCH` runs a branch on a development machine (ports from 8100) so it can be tried before merging, without touching the live server. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
-- **Preview mode:** a banner on every page; email is recorded on the **outbox** page (`/preview/outbox`) instead of being sent; roster edits go to a local copy of the sheet.
+- **Preview mode:** a banner on every page; email is recorded on the **Email log** page (name menu → Email log, in admin mode) instead of being sent; roster edits go to a local copy of the sheet.
 - Each preview has its own checkout and a fresh copy of `data/` (meetings, roster cache, bylaws) on every update; its sign-ins are kept.
 - `deploy/preview.sh --list` shows running previews; `deploy/preview.sh --stop BRANCH` stops one and deletes its copy.
 - They run as user services (`systemctl --user`), so they stop if this user logs out entirely, unless lingering is enabled (`loginctl enable-linger`).
@@ -105,6 +112,24 @@ In admin mode, a member's page has **View the app as …**: the app as that memb
 - **Releases that need steps by hand** (a config change, a data file to copy, a new secret): add a line `- **Deploy notes:**` to that version's CHANGELOG section, with the steps indented under it as a numbered list. Put each command or file content in its own code block (indented 8 spaces under its step), one step per action, so they can be followed and copied. The admin Updates page shows them, formatted, and asks the admin to confirm they're done before updating. Only steps the release needs belong here; optional server hardening goes in this README.
 - **Updating from the app:** admins in admin mode see "Version X is available" and an **Updates** page with **Update now**. It writes `update-request.json` in the data folder; the root-owned `w8lbz-minutes-update.path` unit sees it and runs `deploy/update-from-app.sh` (which runs `update.sh` and records the result). `update.sh` installs and enables that unit, so the first update after this feature arrives is still by hand.
 - Every pull request runs the tests (the Tests workflow).
+
+## Club calendars
+The app keeps the club calendars itself (`events.json` in the data folder), so nothing depends on Google: **Club events** (what the club runs or joins: meetings, nets, VE testing, fox hunts), **Planning** (officers' dates, like the annual meeting) and **Community** (what's on in the area). It adds chow nights, the minutes' dated Upcoming Events and the birthdays members share (never private ones, not even for officers). The weekly meeting is put on Club events once, from `meeting_day` and `meeting_time`, as an ordinary repeating event: delete one date for a holiday, or move it.
+
+**Calendar page** (`/calendar`, in the menu): an agenda (8 weeks at a time, earlier or later) or a month grid. Leaders and minutes editors (and admins in admin mode) **add, change and delete** events there: start, optional end (a time, or a last day for several days), where, notes, and **Repeats** (every week, every 2 weeks, monthly on the 2nd Tuesday or the last Tuesday, monthly on a date, yearly on a date or on the 1st Thursday of January; optionally until a date). A repeating event can be changed or deleted for **this date only**, **this and following dates**, or **every date**. Events from the minutes are changed in the leader console. Every change is logged in `calendar-log.jsonl`.
+
+**Import .ics** (Calendar → Import .ics, leaders): events from Google Calendar, Outlook, Apple or anything that exports an .ics file, into the calendar you pick. In Google Calendar: Settings → Import & export → Export (a .zip with one .ics per calendar). Importing the same file again updates what it imported, so nothing is doubled; an event already on the calendar with the same title on the same day is left alone; events that ended before a chosen date are skipped. Repeating events come in when they repeat weekly (several weekdays become one event per day), every few weeks, monthly or yearly (on a date, or like the 1st Thursday of January); anything else is listed as not imported, to add by hand. Formatted (HTML) descriptions, as Google exports them, come in as plain text.
+
+**Subscribing:** Calendar → "Subscribe in your calendar app" gives each member a private link (`/calendar/feed/SECRET.ics`) for Apple Calendar, Outlook, Google or a phone, a month back and a year ahead; tick what to include (`?show=events,chow`), and subscribe more than once for separate colors. The link works without signing in, so it's secret; "Make a new link" replaces it. It uses the app's HTTPS name, so calendar services on the internet can fetch it (Google refreshes subscribed calendars only every few hours).
+
+**Public calendars:** `public_calendars: [events]` (any of events, planning, community) under `club:` shows those calendars to anyone, signed in or not, at `/calendar/public`, with a public feed at `/calendar/public.ics`. Chow nights and birthdays are never public. Empty by default.
+
+**Copy to Google Calendar (optional):** for people who follow the club in Google Calendar, the app can copy its calendars there, one way: chow nights, Club events, Planning, Community (each date of a repeating event, a year ahead) and the minutes' dated events. It copies a little after any change and in the daily `reminders` run, only touches events it made, only from today on, and doesn't add an event someone typed into Google by hand with the same title on the same day. Google being down changes nothing in the app. To turn it on:
+1. Share each Google calendar with the service account's email (the `client_email` in `private/google-service-account.json`), with **Make changes to events**.
+2. In club.yaml, under `club:`, add `timezone:` and `calendars:` with the IDs of the ones to copy to (`chow`, `events`, `planning`, `community`; Settings → the calendar → Integrate calendar → Calendar ID; an account's main calendar has the account's email address as its ID). See `club.example.yaml`.
+3. Restart. The Security page's **Server** tab shows the last copy, or why it failed.
+
+Previews never copy to Google.
 
 ## Chow schedule
 `/chow` is the chow list; the app is the source of truth (state in `chow.json`, every change in `chow-log.jsonl`, both in the data directory).

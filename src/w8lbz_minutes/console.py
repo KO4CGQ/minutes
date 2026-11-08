@@ -12,7 +12,7 @@ import logging
 import shutil
 import time
 
-from . import ai, auth, business, chow
+from . import ai, auth, business, chow, prefs
 from .club import DATA
 from .meeting import SECTIONS, Item, Meeting
 from .store import Archive
@@ -33,7 +33,9 @@ def start(archive: Archive, date: dt.date, leader: str | None) -> Meeting:
     for sec in SECTIONS:
         m.sections[sec] = []
     if prev:
-        m.sections["Upcoming Events"] = [Item(i.text) for i in prev.items("Upcoming Events")]
+        # events already past drop off; undated ones stay until a leader removes them
+        m.sections["Upcoming Events"] = [Item(i.text, when=i.when, until=i.until) for i in prev.items("Upcoming Events")
+                                         if not i.when or (i.until or i.when)[:10] >= date.isoformat()]
     # Old Business: every tracked item still open (business.py).
     m.sections.update(business_sections(archive, m.slug))
     # The next few chow nights after tonight, from the chow schedule.
@@ -162,7 +164,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
             "in_person": m.in_person, "remote": m.remote, "guests": m.guests, "visitors": m.visitors,
-            "sections": {s: [{"text": i.text, "member": i.member} for i in m.items(s)] for s in SECTIONS},
+            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until} for i in m.items(s)] for s in SECTIONS},
         },
         "state": load_state(archive, m.slug),
         "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
@@ -179,6 +181,26 @@ def context(archive: Archive, m: Meeting) -> dict:
     }
 
 
+def _when(v) -> str | None:
+    """An event's date, or date and time, from the browser; anything else is dropped."""
+    try:
+        return v if v and dt.datetime.fromisoformat(v) and len(v) in (10, 16) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _span(when, until) -> tuple[str | None, str | None]:
+    """A valid start, and an end only if it's valid and not before the start."""
+    when, until = _when(when), _when(until)
+    if not when or not until:
+        return when, None
+    if len(when) == 10:  # an all-day event ends on a day: its last day, after the first
+        return when, until[:10] if until[:10] > when else None
+    if len(until) == 10:  # a timed event with only an end date: the last day, on or after the start's day
+        return when, until if until >= when[:10] else None
+    return when, until if until > when else None
+
+
 def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     """Save the console's full meeting state (last write wins)."""
     m = archive.by_slug[slug]
@@ -188,11 +210,11 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     m.leader = d.get("leader") or m.leader
     m.in_person = list(dict.fromkeys(d.get("in_person", [])))
     m.remote = [x for x in dict.fromkeys(d.get("remote", [])) if x not in m.in_person]
-    m.guests = [{k: v for k, v in g.items() if k in ("name", "callsign", "notes") and v}
+    m.guests = [{k: v for k, v in g.items() if k in ("name", "callsign", "notes", "online") and v}
                 for g in d.get("guests", []) if g.get("name", "").strip()]
     m.guests = [g for g in m.guests if not archive.club.is_redacted(g["name"])]
     m.visitors = max(0, int(d.get("visitors") or 0))
-    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None)
+    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")))
                       for i in d.get("sections", {}).get(s, []) if i.get("text", "").strip()]
                   for s in SECTIONS}
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser
@@ -225,10 +247,11 @@ def discard(archive: Archive, slug: str) -> None:
     archive.reload()
 
 
-def recipients(archive: Archive) -> list[str]:
-    """Roster addresses that get the minutes: everyone with an email who isn't Inactive or a Silent Key."""
-    return sorted({m.email.strip() for m in archive.club.members.values()
-                   if m.email and m.status.lower() not in ("inactive", "silent key")}, key=str.lower)
+def recipients(archive: Archive, how: str | None = None) -> list[str]:
+    """Roster addresses that get the minutes: everyone with an email who isn't Inactive or a Silent Key,
+    and hasn't turned them off. `how` picks those who want the PDF ("pdf") or just a link ("link")."""
+    return sorted({m.email.strip() for m in prefs.emailable(archive.club)
+                   if prefs.wants(m.id, "minutes") in ((how,) if how else ("pdf", "link"))}, key=str.lower)
 
 
 def email_status(archive: Archive, slug: str) -> dict | None:
@@ -245,19 +268,22 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
         return done
     m = archive.by_slug[slug]
     club = archive.club
-    to = recipients(archive)
+    to, links = recipients(archive, "pdf"), recipients(archive, "link")
     leader = club.members.get(m.leader or "")
     date = m.date.strftime("%B %-d, %Y")
     body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
             f"{f', led by {leader.name}' if leader else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
-            f"Replies go to {leader.first if leader and leader.email else 'the club'}.\n\n73,\n{club.info.get('callsign', '')}")
+            f"Replies go to {leader.first if leader and leader.email else 'the club'}.\n\n"
+            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.info.get('callsign', '')}")
+    subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", leader.email if leader and leader.email else None
     try:
-        pdf = make_pdf()
-        sent = auth.send_email(to, f"{club.info.get('callsign', '')} meeting minutes, {date}", body,
-                               attachments=[(pdf[0], pdf[1], "application/pdf")], only_to=club.email_only_to(),
-                               reply_to=leader.email if leader and leader.email else None)
-        status = {"at": int(time.time()), "sent": sent, "roster": len(to), "test_mode": club.email_only_to() is not None}
+        pdf = make_pdf() if to else None
+        sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],
+                               only_to=club.email_only_to(), reply_to=reply_to) if to else 0
+        sent += auth.send_email(links, subject, body.replace(" The PDF is attached.", "").replace("a link instead of the PDF", "the PDF attached instead"), only_to=club.email_only_to(),
+                                reply_to=reply_to) if links else 0
+        status = {"at": int(time.time()), "sent": sent, "roster": len(to) + len(links), "test_mode": club.email_only_to() is not None}
     except Exception as e:
         log.exception("emailing the minutes of %s failed", slug)
         status = {"at": int(time.time()), "error": str(e)}

@@ -19,7 +19,7 @@ def main() -> None:
     ci.add_argument("--next", help="who the rotation continues with (surname)")
     ci.add_argument("--year", type=int, default=2026, help="year for dates written like 5-Mar")
     ci.add_argument("--write", action="store_true", help="save it (refuses if a chow schedule already exists)")
-    rem = sub.add_parser("reminders", help="email owners about business items coming due or past due (run daily)")
+    rem = sub.add_parser("reminders", help="daily: business item and chow reminders, and the meeting-day email")
     rem.add_argument("--dry-run", action="store_true", help="print what would be sent; send and record nothing")
     sub.add_parser("ai-ask-about", help="ask the AI for 'ask about' prompts for each member's community report (also runs after each Submit)")
     srv = sub.add_parser("serve", help="run the web UI")
@@ -61,7 +61,7 @@ def main() -> None:
         print(f"Deleted {d}. Restart the web service so it drops it from memory.")
     elif a.cmd == "reminders":
         import datetime as dt
-        from . import auth, business
+        from . import auth, business, prefs
         from .club import Club
         club = Club()
         url = f"https://{club.auth.get('rp_id')}"
@@ -71,7 +71,7 @@ def main() -> None:
             due = business.due_reminders(s, today, int(club.info.get("remind_days_before", 3)))
             for mid, items in due.items():
                 m = club.members.get(mid)
-                if not m or not m.email or m.status.lower() in ("inactive", "silent key"):
+                if not m or not m.email or m.status.lower() in ("inactive", "silent key") or prefs.wants(mid, "business") != "now":
                     continue
                 subject, body = business.reminder_email(club, mid, items, today, url)
                 if a.dry_run:
@@ -86,8 +86,32 @@ def main() -> None:
                 print(f"reminded {m.name} about {len(items)} item(s)")
             if not a.dry_run:
                 business.save(s)
-        if not due:
+        # chow reminders and the meeting-day email, each sent once even if this runs twice
+        from .store import Archive
+        from .club import MEETINGS
+        extra = prefs.chow_reminders(club, today, url) + prefs.digest(club, Archive(MEETINGS, club), today, url)
+        new, sent = prefs.unsent([k for _, k, _, _ in extra]), []
+        for mid, key, subject, body in extra:
+            if key not in new:
+                continue
+            m = club.members[mid]
+            if a.dry_run:
+                print(f"--- to {m.name} <{m.email}>: {subject}\n{body}\n")
+                continue
+            try:
+                auth.send_email(m.email, subject, body, only_to=club.email_only_to())
+            except Exception as e:  # one bad address shouldn't stop the others
+                print(f"couldn't email {m.name}: {e}")
+                continue
+            sent.append(key)
+            print(f"{key.split(':')[0]} to {m.name}")
+        if sent:
+            prefs.mark_sent(sent, today)
+        if not due and not new:
             print("nothing to remind")
+        if not a.dry_run:  # the daily catch-up for the club calendars (they also sync after each change)
+            from . import gcal
+            print("calendars:", gcal.run(club, Archive(MEETINGS, club)) or "not set up")
     elif a.cmd == "ai-ask-about":
         from . import console
         from .club import Club, MEETINGS

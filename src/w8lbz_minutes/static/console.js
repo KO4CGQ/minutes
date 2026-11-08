@@ -10,7 +10,7 @@
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",
     "New Business": "Each item you add here is tracked: next week it's in Old Business, and it stays there until it's marked done.",
-    "Upcoming Events": "Carried forward from last meeting. Delete past events, add new ones.",
+    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the club calendar. Add an end for a time range or an event over several days.",
     "Winners": "e.g. “50/50 drawing – Amy A $7.50” and “Weekly drawing – Bob B, not registered (up to $62)”.",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
@@ -80,7 +80,7 @@
           body: JSON.stringify({ meeting: M, state: S }),
         });
         if (!r.ok) throw new Error(await r.text());
-        saved.textContent = "Saved ✅"; saved.className = "saved";
+        saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved";
       } catch (e) { saved.textContent = "Not saved: " + e.message; saved.className = "saved err"; }
       waiters.splice(0).forEach((r) => r());
     }, now ? 0 : 700);
@@ -119,11 +119,15 @@
     const same = (a, b) => (a.callsign && b.callsign && key(a.callsign) === key(b.callsign)) || key(a.name) === key(b.name);
     const here = (g) => M.guests.some((x) => same(x, g));
     const visitNote = (g) => `${ordinal(g.visits + 1)} visit`;
+    // Recent guests cycle like members: absent → in person → online → absent.
     const toggleGuest = (g) => {
-      if (here(g)) M.guests = M.guests.filter((x) => !same(x, g));
-      else M.guests.push({ name: g.name, callsign: g.callsign || "", notes: visitNote(g) });
+      const x = M.guests.find((y) => same(y, g));
+      if (!x) M.guests.push({ name: g.name, callsign: g.callsign || "", notes: visitNote(g) });
+      else if (!x.online) x.online = true;
+      else M.guests = M.guests.filter((y) => y !== x);
       render(); save();
     };
+    const gwhere = (g) => { const x = M.guests.find((y) => same(y, g)); return !x ? "" : x.online ? "online" : "inperson"; };
     const recent = D.past_guests.slice(0, RECENT_GUESTS);
     const datalist = h("datalist", { id: "pastguests" },
       D.past_guests.map((g) => h("option", { value: g.name }, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`].filter(Boolean).join(" · "))));
@@ -152,13 +156,15 @@
       h("div", { class: "grid" }, D.members.map((m) => h("button", { class: "mbtn " + where(m.id), onclick: () => cycle(m.id) },
         m.name, h("small", {}, [m.callsign, where(m.id) === "inperson" ? "in person" : where(m.id) === "online" ? "online" : ""].filter(Boolean).join(" · "))))),
       h("h2", { style: "margin-top:1.4rem" }, "Guests"),
-      recent.length ? [h("p", { class: "hint" }, "Recent guests: tap to add or remove. Type below for anyone else."),
-        h("div", { class: "grid" }, recent.map((g) => h("button", { class: "mbtn " + (here(g) ? "inperson" : ""), onclick: () => toggleGuest(g) },
-          g.name, h("small", {}, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`, here(g) ? "here" : ""].filter(Boolean).join(" · ")),
+      recent.length ? [h("p", { class: "hint" }, "Recent guests: tap to cycle absent → in person → online. Type below for anyone else."),
+        h("div", { class: "grid" }, recent.map((g) => h("button", { class: "mbtn " + gwhere(g), onclick: () => toggleGuest(g) },
+          g.name, h("small", {}, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`, { inperson: "in person", online: "online" }[gwhere(g)]].filter(Boolean).join(" · ")),
           g.visits + 1 >= D.invite_after ? h("span", { class: "invite" }, "invite to join") : null)))] : null,
       datalist,
       M.guests.map((g, i) => h("div", { class: "row" }, h("span", { style: "flex:1" }, `${g.name} ${g.callsign || ""} ${g.notes ? "(" + g.notes + ")" : ""}`,
           inviteDue(g) ? h("span", { class: "invite" }, "invite to join") : null),
+        h("button", { class: "btn small ghost", title: "Switch between in person and online",
+          onclick: () => { if (g.online) delete g.online; else g.online = true; render(); save(); } }, g.online ? "Online" : "In person"),
         h("button", { class: "btn small ghost", onclick: () => { M.guests.splice(i, 1); render(); save(); } }, "Remove"))),
       h("div", { class: "row" }, gname, gcall, gnote, h("button", { class: "btn small", onclick: add }, "Add guest")),
       guestInfo,
@@ -263,7 +269,7 @@
       ...arr.map((t, i) => {
         const ta = h("textarea", { rows: 1, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
         ta.value = t;
-        return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, "✖️"));
+        return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
       }),
       h("button", { class: "btn small ghost", onclick: () => { arr.push(""); setArr(arr); draw(); wrap.querySelectorAll("textarea")[arr.length - 1].focus(); } }, "+ Add item"));
     draw();
@@ -273,13 +279,50 @@
   function listSection(sec) {
     if (sec === "Upcoming Chow") return chowSection();
     if (sec === "Old Business" || sec === "New Business") return businessSection(sec);
+    if (sec === "Upcoming Events") return eventsSection();
     const arr = (M.sections[sec] || []).map((i) => i.text);
     const set = (a) => { M.sections[sec] = a.map((t) => ({ text: t, member: null })); };
     const rows = itemRows(arr, set);
-    const motion = sec === "New Business" || sec === "Old Business" ? h("button", { class: "btn small ghost", onclick: () => {
-      arr.push("Motion: ___ moved to ___, seconded by ___. Passed."); set(arr); render(); save(); } }, "+ Motion") : null;
     const hint = [HINTS[sec], EMPTY_NOTE].filter(Boolean).join(" ");
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), rows, motion);
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), rows);
+  }
+
+  // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
+  function eventsSection() {
+    const sec = "Upcoming Events";
+    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null, until: e.until || null }));
+    const wrap = h("div", {});
+    const draw = () => {
+      wrap.replaceChildren(...evs.map((e, i) => {
+        const [d, t] = (e.when || "").split("T"), [ed, et] = (e.until || "").split("T");
+        const date = h("input", { type: "date", value: d || "", "aria-label": "Starts" });
+        const time = h("input", { type: "time", value: t || "", "aria-label": "Start time (optional)" });
+        const endDate = h("input", { type: "date", value: ed || "", "aria-label": "Last day (optional)" });
+        const endTime = h("input", { type: "time", value: et || "", "aria-label": "End time (optional)" });
+        // An end time alone means the same day; the server drops an end before the start.
+        const setWhen = () => {
+          e.when = date.value ? date.value + (time.value ? "T" + time.value : "") : null;
+          const day = endDate.value || (endTime.value ? date.value : "");
+          e.until = e.when && day ? day + (endTime.value ? "T" + endTime.value : "") : null;
+          nodate.hidden = !!e.when;
+          save();
+        };
+        [date, time, endDate, endTime].forEach((x) => x.onchange = setWhen);
+        const nodate = h("span", { class: "hint" }, "no date: not on the calendar");
+        nodate.hidden = !!e.when;
+        const ta = h("textarea", { rows: 1, placeholder: "What, and where", "aria-label": "Event",
+          oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
+        ta.value = e.text;
+        return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
+            h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, emo("✖️", "x"))),
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, nodate),
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")));
+      }), h("button", { class: "btn small ghost", onclick: () => { evs.push({ text: "", member: null, when: null }); draw();
+        wrap.querySelectorAll("textarea")[evs.length - 1].focus(); } }, "+ Add event"));
+      setTimeout(() => wrap.querySelectorAll("textarea").forEach(grow), 0);
+    };
+    draw();
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap);
   }
 
   // ---------- business: tracked items (business.py); every change is saved on the server at once ----------
@@ -291,7 +334,7 @@
         body: new URLSearchParams({ meeting: M.slug, ...data }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return; }
-      D.business = j; saved.textContent = "Saved ✅"; saved.className = "saved"; draw();
+      D.business = j; saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved"; draw();
     };
     const fmtDate = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const row = (x) => {
@@ -304,24 +347,47 @@
         value: x.owner ? (people[x.owner]?.name || "") : "", class: "ownerbox",
         onchange: (e) => send(`/business/${x.id}/edit`, { owner: e.target.value.trim() }) }),
         D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), { empty: "(no owner)" });
-      const due = h("input", { type: "date", value: x.due || "", title: "Due date",
+      // An empty date box looks like nothing at all on some phones, so until there's a date it's a button.
+      const dateBox = h("input", { type: "date", value: x.due || "", "aria-label": "Due date",
         onchange: (e) => send(`/business/${x.id}/edit`, { due: e.target.value }) });
+      const due = x.due ? h("label", { class: "due" }, "Due ", dateBox) : h("button", { class: "btn small ghost", type: "button",
+        onclick: (e) => { const l = h("label", { class: "due" }, "Due ", dateBox); e.target.replaceWith(l); dateBox.focus();
+          try { dateBox.showPicker(); } catch (_) { /* older browsers: the focused box is enough */ } } }, "+ Due date");
       return h("div", { class: "bizitem" + (done ? " done" : "") + (x.overdue ? " overdue" : "") },
         h("div", { class: "row" }, ta,
           h("button", { class: "btn small" + (done ? "" : " ghost"), title: done ? "Not done after all" : "Mark done",
-            onclick: () => send(`/business/${x.id}/done`, { done: done ? 0 : 1 }) }, done ? "✅ Done" : "Done"),
+            onclick: () => send(`/business/${x.id}/done`, { done: done ? 0 : 1 }) }, done ? [emo("✅", "check"), " Done"] : "Done"),
           isNew ? h("button", { class: "btn small ghost", title: "Delete (added by mistake)",
-            onclick: () => { if (confirm("Delete this item?")) send(`/business/${x.id}/delete`, {}); } }, "✖️") : null),
-        h("div", { class: "row meta" }, owner, " due ", due,
+            onclick: () => { if (confirm("Delete this item?")) send(`/business/${x.id}/delete`, {}); } }, emo("✖️", "x")) : null),
+        h("div", { class: "row meta" }, owner, due,
           x.overdue ? h("span", { class: "badge warn" }, `overdue since ${fmtDate(x.due)}`) : null,
-          !isNew ? h("span", { class: "hint" }, ` since ${fmtDate(x.opened)}`) : null),
+          !isNew ? h("span", { class: "hint" }, `first mentioned ${fmtDate(x.opened)}`) : null),
         (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, `${c.name}: `), c.text)));
     };
     const add = () => {
       const ta = h("textarea", { rows: 1, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });
       const go = () => { if (ta.value.trim()) send("/business/add", { text: ta.value }); };
       return h("div", {}, h("div", { class: "row" }, ta, h("button", { class: "btn small", onclick: go }, "+ Add item")),
-        h("button", { class: "btn small ghost", onclick: () => { ta.value = "Motion: ___ moved to ___, seconded by ___. Passed."; ta.focus(); grow(ta); } }, "+ Motion"));
+        h("button", { class: "btn small ghost", onclick: (e) => e.target.replaceWith(motionForm()) }, "+ Motion"));
+    };
+    // A motion: who moved it, what, who seconded, and how it went (no default: the leader picks the result).
+    const motionForm = () => {
+      const person = (label) => makeCombo(h("input", { placeholder: label, "aria-label": label, class: "ownerbox" }),
+        D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), { empty: "(nobody)" });
+      const mover = person("Moved by"), second = person("Seconded by");
+      const what = h("textarea", { rows: 1, placeholder: "buy a new antenna for the repeater", "aria-label": "Moved to", oninput: (e) => grow(e.target) });
+      const result = h("select", { "aria-label": "Result" }, ["", "Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second"]
+        .map((v) => h("option", { value: v }, v || "Result…")));
+      const val = (w) => w.querySelector("input").value.trim();
+      const go = () => {
+        if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
+        const r = result.value, s = val(second);
+        send("/business/add", { text: `Motion: ${val(mover)} moved to ${what.value.trim().replace(/^to\s+/i, "").replace(/\.$/, "")}` +
+          (s ? `, seconded by ${s}. ${r}.` : r.startsWith("Died") ? `. The motion died for lack of a second.` : `. ${r}.`) });
+      };
+      return h("div", { class: "bizitem motion" }, h("b", {}, "Motion"),
+        h("div", { class: "row" }, mover, h("span", {}, "moved to")), what,
+        h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
     };
     const draw = () => {
       const items = isNew ? D.business.new : D.business.old;
@@ -354,9 +420,9 @@
       const what = h("input", { placeholder: "What they brought (optional)", value: C.note || "", size: 26 });
       const cover = h("select", {}, h("option", { value: "" }, "Who brought it?"),
         D.members.filter((m) => m.id !== C.member).map((m) => h("option", { value: m.id, selected: m.id === C.covered_by }, m.name)));
-      const done = { provided: "✅ provided", missed: "❌ not provided", covered: "brought by someone else" }[C.status];
+      const done = { provided: [emo("✅", "check"), " provided"], missed: [emo("❌", "xcircle"), " not provided"], covered: "brought by someone else" }[C.status];
       box.replaceChildren(
-        h("div", {}, h("b", {}, "Chow tonight: "), C.name, done ? h("span", { class: "badge" }, " " + done) : null,
+        h("div", {}, h("b", {}, "Chow tonight: "), C.name, done ? h("span", { class: "badge" }, " ", done) : null,
           C.status === "covered" && C.covered_by ? ` (${people[C.covered_by]?.name || C.covered_by})` : "",
           C.note ? `: ${C.note}` : ""),
         h("div", { class: "row" }, what,

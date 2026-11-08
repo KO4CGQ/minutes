@@ -354,7 +354,8 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
     subject = f"{club.info.get('callsign', 'W8LBZ')} club business: " + ("past due" if late else "coming due")
     body = (f"Hi {m.first},\n\nA reminder about club business you're looking after:\n\n{lines}\n\n"
             f"If it's finished, mark it done (or change the date) here: {url}/business\n"
-            f"Or just bring it up at the next meeting.\n\n73,\n{club.info.get('callsign', 'W8LBZ')} Minutes")
+            f"Or just bring it up at the next meeting.\n\n"
+            f"To stop these reminders, or choose which emails you get: {url}/profile/email\n\n73,\n{club.info.get('callsign', 'W8LBZ')} Minutes")
     return subject, body
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import json
 import logging
 import re
@@ -17,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, chow, console, membership, profile, updates
+from . import ai, avatars, business, calview, chow, console, events, gcal, membership, prefs, profile, updates
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
@@ -43,7 +44,8 @@ if not _log.handlers:
 
 COOKIE = "w8lbz_session"
 CHALLENGE_COOKIE = "w8lbz_pk"
-PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico")
+PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico",
+                "/calendar/public", "/calendar/feed/")  # public calendars (if any are made public); private feeds carry their own secret
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
 
 
@@ -63,8 +65,10 @@ templates.env.filters["listdate"] = lambda d: d.strftime(DATES["list"])
 templates.env.filters["by_last_name"] = by_last_name
 templates.env.filters["clock"] = lambda t: dt.datetime.fromtimestamp(t).strftime("%-I:%M %p")
 def monthday(md: str | None) -> str:
-    """'07-04' -> 'July 4'. Anything else (e.g. a full date typed into the sheet) is shown as is."""
+    """'07-04' -> 'July 4', '07' (month only) -> 'July'. Anything else (e.g. a full date typed into the sheet) is shown as is."""
     try:
+        if md and len(md) == 2:
+            return dt.date(2000, int(md), 1).strftime("%B")
         return dt.date(2000, int(md[:2]), int(md[3:5])).strftime("%B %-d") if md and len(md) == 5 else (md or "")
     except ValueError:
         return md
@@ -130,6 +134,19 @@ async def require_login(request: Request, call_next):
         target = path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
     return JSONResponse({"detail": "Please sign in"}, status_code=401)
+
+
+CALENDAR_PATHS = ("/chow", "/api/meetings", "/console", "/calendar")  # changes here can move chow nights or events
+
+
+@app.middleware("http")
+async def calendar_after_changes(request: Request, call_next):
+    """After a chow or console change, sync the club calendars a little later (see gcal.soon)."""
+    response = await call_next(request)
+    if (request.method != "GET" and response.status_code < 400 and request.url.path.startswith(CALENDAR_PATHS)
+            and getattr(request.state, "member", None)):  # signed-in changes only
+        gcal.soon(lambda: archive.club, lambda: archive)
+    return response
 
 
 @app.middleware("http")  # added last, so it runs outermost and covers the login redirects too
@@ -785,6 +802,32 @@ def profile_page(request: Request, saved: int = 0, email_sent: str = "", error: 
                 saved=saved, email_sent=email_sent, error=error, photo=photo)
 
 
+@app.get("/profile/email", response_class=HTMLResponse)
+def email_prefs_page(request: Request, saved: int = 0, mid: str = Depends(me)):
+    kinds = {k: v for k, v in prefs.KINDS.items() if k != "roster" or mid in archive.club.secretaries}
+    return page(request, "email_prefs.html", p=prefs.get(mid), kinds=kinds, help=prefs.HELP, chow_days=prefs.CHOW_DAYS,
+                m=archive.club.members[mid], saved=saved)
+
+
+@app.post("/profile/email")
+async def email_prefs_save(request: Request, mid: str = Depends(me)):
+    form = await request.form()
+    prefs.save(mid, {**{k: form.get(k) for k in prefs.KINDS}, "chow_days": form.getlist("chow_days")})
+    return RedirectResponse("/profile/email?saved=1", status_code=303)
+
+
+@app.get("/profile/settings", response_class=HTMLResponse)
+def settings_page(request: Request, saved: int = 0, mid: str = Depends(me)):
+    return page(request, "settings.html", s=prefs.settings(mid), options=prefs.SETTINGS, saved=saved)
+
+
+@app.post("/profile/settings")
+async def settings_save(request: Request, mid: str = Depends(me)):
+    form = await request.form()
+    prefs.save_settings(mid, {k: form.get(k) for k in prefs.SETTINGS})
+    return RedirectResponse("/profile/settings?saved=1", status_code=303)
+
+
 @app.post("/profile/photo")
 async def profile_photo(request: Request, mid: str = Depends(me)):
     """Upload (or replace) your own profile picture."""
@@ -832,9 +875,11 @@ async def profile_save(request: Request, mid: str = Depends(me)):
         address = m.address or ""
     try:
         bm, bd = int(form.get("bmonth") or 0), int(form.get("bday") or 0)
-        birthday = f"{bm:02d}-{bd:02d}" if bm and bd and dt.date(2000, bm, bd) else ""
+        if bd and not bm:
+            raise ValueError
+        birthday = f"{bm:02d}-{bd:02d}" if bm and bd and dt.date(2000, bm, bd) else f"{bm:02d}" if bm and dt.date(2000, bm, 1) else ""
     except ValueError:
-        return RedirectResponse("/profile?error=" + quote("That birthday isn't a real date."), status_code=303)
+        return RedirectResponse("/profile?error=" + quote("That birthday isn't a real date. Pick a month, or a month and a day."), status_code=303)
     new = {"phone": form.get("phone", "").strip()[:40], "address": address, "birthday": birthday,
            "share": ", ".join(f for f in SHAREABLE if f in form.getlist("share"))}
     try:
@@ -1009,10 +1054,15 @@ def home(request: Request, mid: str = Depends(me)):
     latest = next((m for m in archive.meetings if m.status != "draft"), None)  # newest first
     items = [business.view(club, x, today.isoformat()) for x in business.load()["items"]
              if x["status"] == "open" and x.get("owner") == mid]
+    # the calendar's next two weeks, without what Home already shows (chow nights; the weekly meeting the app makes up)
+    coming, _ = calview.entries(club, archive, mid, today, today + dt.timedelta(days=13))
+    coming = [e for e in coming if e.kind != "chow"][:8]
+    # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
+    undated = [i.text for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
     return page(request, "home.html", next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
-                items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest,
+                items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
                 today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
                 fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
 
@@ -1227,9 +1277,29 @@ SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("fa
                  ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
 
 
+def admin_action(e: dict) -> str:
+    """One line of the admin log in plain words ("Turned on admin mode until 9:22 AM (passkey)")."""
+    clock, name = templates.env.filters["clock"], archive.club.name
+    if "on" in e:
+        return f"Turned on admin mode until {clock(e['until'])} ({e.get('confirmed_by')})" if e["on"] and e.get("until") else "Turned off admin mode"
+    if "view_as" in e:
+        return f"Viewed the site as {name(e['view_as'])}" if e["view_as"] else "Stopped viewing as another member"
+    if "ban" in e:
+        return f"Banned {e['ban']} " + (f"for {e['hours']} hours" if e.get("hours") else "until lifted")
+    words = {"step_up_email": lambda v: "Asked for an admin sign-in email", "update_requested": lambda v: f"Started the update to {v}",
+             "update_cancelled": lambda v: "Cancelled the update", "unban": lambda v: f"Lifted the ban on {v}",
+             "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
+             "links": lambda v: f"Saved the club links ({len(v)})"}
+    rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
+    return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
+
+
+templates.env.filters["admin_action"] = admin_action
+
+
 @app.get("/admin/security", response_class=HTMLResponse)
 @app.get("/admin/security/{tab}", response_class=HTMLResponse)
-def security_page(request: Request, tab: str = "signins", mid: str = Depends(real_me)):
+def security_page(request: Request, tab: str = "signins", member: str = "", mid: str = Depends(real_me)):
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
@@ -1243,9 +1313,9 @@ def security_page(request: Request, tab: str = "signins", mid: str = Depends(rea
     events = authn.events(100)
     return page(request, "security.html", tab=tab, tabs=SECURITY_TABS,
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
-                sessions=authn.all_sessions(), admin_log=admin_log, event_names=authmod.EVENT_NAMES,
+                sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
+                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
 
 
 @app.post("/admin/security/ban")
@@ -1272,11 +1342,12 @@ def security_unban(request: Request, ip: str = Form(...)):
 
 
 @app.post("/admin/security/signout")
-def security_signout(request: Request, session: int = Form(...)):
+def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):
+    """Sign out one device, or every ticked one."""
     _security_admin(request)
-    who = authn.end_session_id(session)
-    _admin_log(request, signed_out=who)
-    return RedirectResponse("/admin/security/devices", status_code=303)
+    for sid in session:
+        _admin_log(request, signed_out=authn.end_session_id(sid))
+    return RedirectResponse("/admin/security/devices" + (f"?member={quote(member)}" if member else ""), status_code=303)
 
 
 @app.get("/preview/outbox")
@@ -1286,7 +1357,247 @@ def preview_outbox():
 
 ICONS = ("link", "globe", "video", "chat", "mail", "phone", "document", "form", "book", "news", "calendar", "map",
          "users", "radio", "antenna", "play", "code", "cart", "money", "info", "star")  # all drawn in _icons.html
+@functools.cache
+def brands() -> dict[str, list[str]]:
+    """Simple Icons brand logos (slug -> [title, svg path]), stored in the package (deploy/update-simple-icons.py)."""
+    return json.loads((Path(__file__).parent / "simple_icons.json").read_text())
+
+
+def brand_path(name: str) -> str:
+    """The svg path of a brand icon ("si:homeassistant"), or "" if there's no such logo."""
+    return brands().get(name[3:], ["", ""])[1] if name.startswith("si:") else ""
+
+
+templates.env.globals["brand_path"] = brand_path
+templates.env.globals["icon_label"] = lambda name: brands().get(name[3:], [name])[0] if name.startswith("si:") else name
+
+
+def valid_icon(icon: str) -> bool:
+    return icon in ICONS or bool(brand_path(icon))
+
+
+@app.get("/links/icons")
+def link_icons_search(request: Request, q: str = "", mid: str = Depends(me)):
+    """Brand logos matching q (name or slug), best first, for the Links editor's icon search."""
+    if not admin_mode(request):
+        raise HTTPException(403)
+    q = " ".join(q.lower().split())
+    key = re.sub(r"[^a-z0-9]", "", q)
+    if len(key) < 2:
+        return []
+    hits = [(slug, t, p) for slug, (t, p) in brands().items() if key in slug or q in t.lower()]
+    hits.sort(key=lambda h: (h[1].lower() != q and h[0] != key, not h[0].startswith(key), len(h[0]), h[0]))
+    return [{"name": f"si:{slug}", "title": t, "path": p} for slug, t, p in hits[:40]]
+
+
 SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "hidden": (False, False)}
+
+
+# ---------------- calendar ----------------
+
+@app.get("/calendar", response_class=HTMLResponse)
+def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", mid: str = Depends(me)):
+    """Agenda (from a day, 8 weeks) or month grid: club calendars, chow nights and birthdays."""
+    return _calendar(request, view, start, month, mid)
+
+
+@app.get("/calendar/public", response_class=HTMLResponse)
+def calendar_public(request: Request, view: str = "agenda", start: str = "", month: str = ""):
+    """The calendars an admin made public, for anyone (no chow, no birthdays)."""
+    if not calview.public_kinds(archive.club):
+        raise HTTPException(404)
+    return _calendar(request, view, start, month, None)
+
+
+def _calendar(request: Request, view: str, start: str, month: str, mid: str | None) -> HTMLResponse:
+    today = dt.date.today()
+    try:
+        first = dt.date.fromisoformat(month + "-01") if month else today.replace(day=1)
+        start_day = dt.date.fromisoformat(start) if start else today
+    except ValueError:
+        raise HTTPException(404)
+    ws = 0 if prefs.settings(mid)["week_start"] == "monday" else 6  # the weekday a week starts on (Monday is 0)
+    if view == "month":
+        lo = first - dt.timedelta(days=(first.weekday() - ws) % 7)
+        last = (first + dt.timedelta(days=32)).replace(day=1) - dt.timedelta(days=1)
+        hi = last + dt.timedelta(days=(ws + 6 - last.weekday()) % 7)
+    else:
+        view, lo, hi = "agenda", start_day, start_day + dt.timedelta(days=55)
+    public = mid is None
+    items, note = calview.entries(archive.club, archive, mid, lo, hi, public=public)
+    by_day: dict[dt.date, list] = {}
+    for e in items:
+        for d in e.days(lo, hi):
+            by_day.setdefault(d, []).append(e)
+    kinds = {k: v for k, v in calview.KINDS.items() if not public or k in calview.public_kinds(archive.club)}
+    repeats = {e["id"]: events.repeat_label(e["start"], e["repeat"]) for e in events.load() if e.get("repeat")}
+    return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
+                items=items, repeats=repeats, weekdays=[dt.date(2024, 1, 1 + (ws + i) % 7).strftime("%a") for i in range(7)],
+                kinds=kinds, base="/calendar/public" if public else "/calendar",
+                can_edit=not public and can_lead_now(request),
+                prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
+                timedelta=dt.timedelta)
+
+
+def _feed_url(request: Request, path: str) -> str:
+    """The feed's address on the app's HTTPS name, which calendar services (Google, Outlook) can reach."""
+    return f"https://{authn.rp_id}{path}" if authn.rp_id and not PREVIEW else str(request.base_url).rstrip("/") + path
+
+
+@app.get("/calendar/subscribe", response_class=HTMLResponse)
+def calendar_subscribe(request: Request, mid: str = Depends(me)):
+    kinds = calview.KINDS
+    return page(request, "calendar_subscribe.html", private=_feed_url(request, f"/calendar/feed/{calview.feed_token(mid)}.ics"), kinds=kinds,
+                public=_feed_url(request, "/calendar/public.ics") if calview.public_kinds(archive.club) else None,
+                public_page=_feed_url(request, "/calendar/public") if calview.public_kinds(archive.club) else None)
+
+
+@app.post("/calendar/subscribe/reset")
+def calendar_subscribe_reset(mid: str = Depends(me)):
+    calview.feed_token(mid, reset=True)
+    return RedirectResponse("/calendar/subscribe", status_code=303)
+
+
+def _ics(items: list, name: str) -> Response:
+    return Response(calview.ics(items, name, str(archive.club.info.get("timezone", "America/New_York"))),
+                    media_type="text/calendar; charset=utf-8", headers={"Cache-Control": "private, max-age=900"})
+
+
+@app.get("/calendar/feed/{token}.ics")
+def calendar_feed(token: str, show: str = ""):
+    """A member's private feed: the club calendars, chow nights and shared birthdays, a month back and a year ahead.
+    show=events,chow (any of calview.KINDS) narrows it; empty means everything."""
+    mid = calview.member_for_feed(token)
+    if not mid or not authn.is_active(mid):
+        raise HTTPException(404)
+    today = dt.date.today()
+    items, _ = calview.entries(archive.club, archive, mid, today - dt.timedelta(days=31), today + dt.timedelta(days=365))
+    if kinds := [k for k in show.split(",") if k in calview.KINDS]:
+        items = [e for e in items if e.kind in kinds]
+    name = " & ".join(calview.KINDS[k] for k in kinds) if 0 < len(kinds) < 3 else "calendar"
+    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} {name}")
+
+
+@app.get("/calendar/public.ics")
+def calendar_public_feed():
+    if not calview.public_kinds(archive.club):
+        raise HTTPException(404)
+    today = dt.date.today()
+    items, _ = calview.entries(archive.club, archive, None, today - dt.timedelta(days=31), today + dt.timedelta(days=365), public=True)
+    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} events")
+
+
+def _calendar_editor(request: Request) -> None:
+    if not can_lead_now(request):
+        raise HTTPException(403, "Only leaders and minutes editors can change the club calendars.")
+
+
+def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
+    r = page(request, "calendar_edit.html", f=f, id=id, d=d, cals=events.CALS, error=error, repeats=repeats, scopes=events.SCOPES,
+             repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()))
+    r.status_code = status
+    return r
+
+
+def _repeat_choices(day: str) -> list[tuple[str, str]]:
+    """The Repeats menu, worded for the start day ("Monthly on the 2nd Tuesday")."""
+    start = day[:10]
+    lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})  # noqa: E731
+    return [("", "Doesn't repeat"), ("weekly", lab("weekly")), ("biweekly", lab("weekly", interval=2)),
+            ("monthly_weekday", lab("monthly_weekday")), ("monthly_last", lab("monthly_weekday", last=True)),
+            ("monthly", lab("monthly")), ("yearly", lab("yearly")), ("yearly_weekday", lab("yearly_weekday"))]
+
+
+@app.get("/calendar/edit", response_class=HTMLResponse)
+def calendar_edit(request: Request, id: str = "", d: str = "", date: str = "", cal: str = "events", mid: str = Depends(me)):
+    """Add an event (no id), or change one (on date d, for a repeating event)."""
+    _calendar_editor(request)
+    if not id:
+        return _event_form(request, {"cal": cal if cal in events.CALS else "events", "date": date or dt.date.today().isoformat()})
+    try:
+        e = events.get(events.load(), id)
+    except KeyError:
+        raise HTTPException(404, "That event isn't on the calendar any more.")
+    return _event_form(request, events.form_values(e, d or None), id, d, repeats=bool(e.get("repeat")))
+
+
+@app.post("/calendar/save")
+async def calendar_save(request: Request, mid: str = Depends(me)):
+    _calendar_editor(request)
+    f = dict((await request.form()).items())
+    eid, d, cal, scope = f.get("id", ""), f.get("d", ""), f.get("cal", ""), f.get("scope") or "all"
+    if cal not in events.CALS or scope not in events.SCOPES:
+        raise HTTPException(404)
+    try:
+        v = events.from_form(f)
+        with events.locked():
+            evs = events.load()
+            if eid:
+                events.change(evs, eid, d or None, cal, v, scope)
+                action = "changed" if not d else {"this": "changed one date of", "following": "changed this and following dates of",
+                                                  "all": "changed every date of"}[scope]
+            else:
+                events.add(evs, cal, v, mid)
+                action = "added"
+            events.save(evs)
+    except ValueError as x:
+        return _event_form(request, f, eid, d, str(x), repeats=bool(f.get("was_repeating")), status=400)
+    except KeyError:
+        raise HTTPException(404, "That event isn't on the calendar any more.")
+    events.log(mid, action, {"cal": cal, **v})
+    return RedirectResponse(f"/calendar?start={v['start'][:10]}", status_code=303)
+
+
+@app.post("/calendar/delete")
+def calendar_delete(request: Request, id: str = Form(...), d: str = Form(""), scope: str = Form("all"), mid: str = Depends(me)):
+    _calendar_editor(request)
+    if scope not in events.SCOPES:
+        raise HTTPException(404)
+    with events.locked():
+        evs = events.load()
+        try:
+            e = events.delete(evs, id, d or None, scope)
+        except KeyError:
+            raise HTTPException(404, "That event isn't on the calendar any more.")
+        events.save(evs)
+    events.log(mid, "deleted" if not d else {"this": "deleted one date of", "following": "deleted this and following dates of",
+                                             "all": "deleted every date of"}[scope], e)
+    return RedirectResponse("/calendar", status_code=303)
+
+
+@app.get("/calendar/import", response_class=HTMLResponse)
+def calendar_import_form(request: Request, mid: str = Depends(me)):
+    _calendar_editor(request)
+    return page(request, "calendar_import.html", cals=events.CALS, report=None,
+                since=(dt.date.today() - dt.timedelta(days=365)).isoformat())
+
+
+@app.post("/calendar/import", response_class=HTMLResponse)
+async def calendar_import(request: Request, mid: str = Depends(me)):
+    """Add the events of an .ics file (exported from Google, Outlook, Apple...) to one of the club calendars."""
+    _calendar_editor(request)
+    form = await request.form()
+    cal, f = form.get("cal", ""), form.get("file")
+    if cal not in events.CALS or f is None or not hasattr(f, "read"):
+        raise HTTPException(400, "Pick a calendar and an .ics file.")
+    raw = await f.read(10_000_001)
+    try:
+        if len(raw) > 10_000_000:
+            raise ValueError("That file is over 10 MB.")
+        text = raw.decode("utf-8-sig")
+        if "BEGIN:VCALENDAR" not in text[:2000].upper():
+            raise ValueError("That isn't an .ics calendar file.")
+        since = dt.date.fromisoformat(form.get("since") or "1900-01-01")
+    except (UnicodeDecodeError, ValueError) as x:
+        return page(request, "calendar_import.html", cals=events.CALS, report=None, error=str(x) if isinstance(x, ValueError) else
+                    "That file isn't text; is it an .ics file?", since=form.get("since", ""))
+    with events.locked():
+        evs = events.load()
+        report = events.import_ics(evs, text, cal, mid, str(archive.club.info.get("timezone", "America/New_York")), since)
+        events.save(evs)
+    events.log(mid, f"imported {len(report['added'])} new and {len(report['updated'])} updated events into", {"cal": cal, "title": f.filename})
+    gcal.soon(lambda: archive.club, lambda: archive)
+    return page(request, "calendar_import.html", cals=events.CALS, report=report, cal=cal, since=form.get("since", ""))
 
 
 @app.get("/links", response_class=HTMLResponse)
@@ -1309,7 +1620,7 @@ async def links_save(request: Request, mid: str = Depends(me)):
         if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url):
             return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto: or tel: ({label or url})."), status_code=303)
         page_, minutes_ = SHOW.get(show, (True, True))
-        out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if icon in ICONS else {}), "page": page_, "minutes": minutes_})
+        out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if valid_icon(icon) else {}), "page": page_, "minutes": minutes_})
     archive.club.save_links(out[:40])
     _admin_log(request, links=[x["label"] for x in out])
     return RedirectResponse("/links", status_code=303)

@@ -193,3 +193,14 @@ def test_security_page_tabs(tmp_path, monkeypatch):
     assert c.get("/admin/security/nope").status_code == 404
     r = c.post("/admin/security/unban", data={"ip": "9.9.9.9"}, follow_redirects=False)
     assert r.headers["location"] == "/admin/security/bans" and not a.banned("9.9.9.9")
+    # devices: filter by member, sign out several at once
+    other = [a.new_session("kd8adm", "Firefox/1", "192.168.1.11"), a.new_session("kd8adm", "Firefox/2", "192.168.1.12")]
+    assert c.get("/admin/security/devices?member=kd8adm").text.count('name="session"') == 3
+    ids = [r["rowid"] for r in a.all_sessions() if r["agent"].startswith("Firefox")]
+    r = c.post("/admin/security/signout", data={"session": ids, "member": "kd8adm"}, follow_redirects=False)
+    assert r.headers["location"] == "/admin/security/devices?member=kd8adm"
+    assert not any(a.member_for(t) for t in other) and a.member_for(tok) == "kd8adm"
+    # admin actions read as plain words
+    assert web.admin_action({"on": True, "until": 1794143748, "confirmed_by": "passkey"}).startswith("Turned on admin mode until ")
+    assert web.admin_action({"on": False, "until": None}) == "Turned off admin mode"
+    assert web.admin_action({"signed_out": "kd8adm"}) == "Signed out a device of Ann Admin"

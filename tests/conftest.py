@@ -19,6 +19,25 @@ def fresh_business(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def fresh_prefs(tmp_path, monkeypatch):
+    """Email preferences and the reminders' sent list start empty in each test."""
+    from w8lbz_minutes import prefs
+    d = tmp_path / "prefs-data"
+    d.mkdir()
+    monkeypatch.setattr(prefs, "DATA", d)
+
+
+@pytest.fixture(autouse=True)
+def fresh_events(tmp_path, monkeypatch):
+    """The club calendars (events.json) and the calendar log start empty in each test."""
+    from w8lbz_minutes import events
+    d = tmp_path / "events-data"
+    d.mkdir()
+    (d / "events-meeting-added").write_text("")  # tests add the weekly meeting themselves when they want it
+    monkeypatch.setattr(events, "DATA", d)
+
+
+@pytest.fixture(autouse=True)
 def no_update_check(monkeypatch):
     """Pages for admins in admin mode check GitHub for a new release; never from the tests."""
     from w8lbz_minutes import updates

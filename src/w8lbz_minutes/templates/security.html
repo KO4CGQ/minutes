@@ -5,29 +5,34 @@
 
 {% if tab == 'signins' %}
 {% if signins %}<table class="list"><thead><tr><th>When</th><th>Member</th><th>How</th><th>From</th><th class="opt">Device</th></tr></thead><tbody>
-{% for r in signins %}<tr><td>{{ r.at|tsfull }}</td><td>{{ club.name(r.member) }}</td><td>{{ r.method }}</td><td>{{ r.ip }} <span class="muted">{{ r.ip|where }}</span></td><td class="opt">{{ r.agent|device }}</td></tr>{% endfor %}
+{% for r in signins %}<tr><td>{{ r.at|tsfull }}</td><td>{{ club.name(r.member) }}</td><td>{{ r.method }}</td><td><span class="ip">{{ r.ip }}</span> <span class="muted">{{ r.ip|where }}</span></td><td class="opt">{{ r.agent|device }}</td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">None recorded yet (recording started with this version).</p>{% endif %}
 
 {% endif %}
 {% if tab == 'devices' %}
 <p class="muted">Each stays signed in for {{ session_days }} days unless signed out. Sign out a lost phone, or someone who left the club.</p>
-<table class="list"><thead><tr><th>Member</th><th>Since</th><th class="opt">Device</th><th>From</th><th></th></tr></thead><tbody>
-{% for r in sessions %}<tr><td>{{ club.name(r.member) }}</td><td>{{ r.created|ts }}</td><td class="opt">{{ r.agent|device }}</td><td>{% if r.ip %}{{ r.ip }} <span class="muted">{{ r.ip|where }}</span>{% else %}<span class="muted">not recorded</span>{% endif %}</td>
-<td><form method="post" action="/admin/security/signout" onsubmit="return confirm('Sign out this device?')"><input type="hidden" name="session" value="{{ r.rowid }}"><button class="btn small ghost">Sign out</button></form></td></tr>{% endfor %}
+{% set rows = sessions|selectattr('member', 'equalto', who)|list if who else sessions %}
+<form method="get" class="filter"><label>Member <select name="member" onchange="this.form.submit()"><option value="">Everyone</option>
+{% for m in sessions|map(attribute='member')|unique|by_last_name %}<option value="{{ m }}" {{ 'selected' if m == who }}>{{ club.name(m) }}</option>{% endfor %}</select></label><noscript><button class="btn small">Show</button></noscript></form>
+<form method="post" action="/admin/security/signout" id="devices" onsubmit="return confirm('Sign out the ticked devices?')"><input type="hidden" name="member" value="{{ who }}">
+<table class="list"><thead><tr><th></th><th>Member</th><th>Since</th><th class="opt">Device</th><th>From</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><input type="checkbox" name="session" value="{{ r.rowid }}" aria-label="Select {{ club.name(r.member) }}, {{ r.agent|device }}"></td><td>{{ club.name(r.member) }}</td><td>{{ r.created|ts }}</td><td class="opt">{{ r.agent|device }}</td><td>{% if r.ip %}<span class="ip">{{ r.ip }}</span> <span class="muted">{{ r.ip|where }}</span>{% else %}<span class="muted">not recorded</span>{% endif %}</td></tr>{% endfor %}
 </tbody></table>
+<div class="row"><button type="button" class="btn small ghost" onclick="this.form.querySelectorAll('[name=session]').forEach((c) => c.checked = true)">Tick all {{ rows|length }}</button>
+<button class="btn small">Sign out ticked</button></div></form>
 
 {% endif %}
 {% if tab == 'failed' %}
 <p class="muted">An internet address with {{ ban_after }} of these in an hour is banned for {{ ban_hours }} hours. LAN and tailnet addresses are never banned automatically.</p>
 {% if events %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
-{% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td>{{ e.ip }} <span class="muted">{{ e.ip|where }}</span></td>
+{% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td><span class="ip">{{ e.ip }}</span> <span class="muted">{{ e.ip|where }}</span></td>
 <td>{% if e.ip and e.ip != my_ip and e.ip not in bans|map(attribute='ip')|list %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}</td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">None.</p>{% endif %}
 
 {% endif %}
 {% if tab == 'bans' %}
-{% if bans %}<table class="list"><thead><tr><th>Address</th><th>Why</th><th>Since</th><th>Until</th><th></th></tr></thead><tbody>
-{% for b in bans %}<tr><td>{{ b.ip }} <span class="muted">{{ b.ip|where }}</span></td><td>{{ b.reason }} <span class="muted">({{ 'automatic' if b.by == 'automatic' else club.name(b.by) }})</span></td><td>{{ b.at|tsfull }}</td><td>{{ b.until|tsfull if b.until else 'until lifted' }}</td>
+{% if bans %}<table class="list"><thead><tr><th>Address</th><th>Why</th><th class="opt">Since</th><th>Until</th><th></th></tr></thead><tbody>
+{% for b in bans %}<tr><td><span class="ip">{{ b.ip }}</span> <span class="muted">{{ b.ip|where }}</span></td><td>{{ b.reason }} <span class="muted">({{ 'automatic' if b.by == 'automatic' else club.name(b.by) }})</span></td><td class="opt">{{ b.at|tsfull }}</td><td>{{ b.until|tsfull if b.until else 'until lifted' }}</td>
 <td><form method="post" action="/admin/security/unban"><input type="hidden" name="ip" value="{{ b.ip }}"><button class="btn small">Unban</button></form></td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">No addresses are banned.</p>{% endif %}
 <form method="post" action="/admin/security/ban" class="inline"><label>Ban an address <input name="ip" required placeholder="203.0.113.7" size="18"></label>
@@ -37,9 +42,9 @@
 
 {% endif %}
 {% if tab == 'admin' %}
-{% if admin_log %}<table class="list"><thead><tr><th>When</th><th>Admin</th><th>What</th><th>From</th></tr></thead><tbody>
+{% if admin_log %}<table class="list"><thead><tr><th>When</th><th>Admin</th><th>What</th><th class="opt">From</th></tr></thead><tbody>
 {% for e in admin_log %}<tr><td>{{ e.at|tsfull }}</td><td>{{ club.name(e.member) if e.member else '' }}</td>
-<td>{% for k, v in e.items() if k not in ('at', 'member', 'ip') %}{{ k|replace('_', ' ') }}: {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}</td><td>{{ e.ip }}</td></tr>{% endfor %}
+<td>{{ e|admin_action }}</td><td class="opt"><span class="ip">{{ e.ip or '' }}</span></td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">None yet.</p>{% endif %}
 <p><a href="/admin/email">Email log</a> · <a href="/admin/updates">Updates</a></p>
 
@@ -50,6 +55,7 @@
 <li>Roster last synced: {{ roster_synced|tsfull if roster_synced else 'never' }}</li>
 <li>Email: {{ 'test mode (only the addresses in email.only_to get mail)' if test_mode else 'sent to members' }}</li>
 <li>Signed-in devices: {{ sessions|length }}</li>
+<li>Copy to Google Calendar (optional): {% if not calendars %}off (<code>club.calendars</code> in club.yaml turns it on){% elif not calendar %}not copied yet{% elif calendar.error %}<b>last sync failed</b> {{ calendar.at|tsfull }}: {{ calendar.error }}{% else %}synced {{ calendar.at|tsfull }}{% for k, c in calendar.counts.items() %}; {{ k }}: {{ c.added }} added, {{ c.changed }} changed, {{ c.removed }} removed{% endfor %}{% endif %}</li>
 </ul>
 {% endif %}
 {% endblock %}

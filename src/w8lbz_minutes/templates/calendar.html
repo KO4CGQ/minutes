@@ -1,0 +1,76 @@
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}{{ club.info.callsign ~ ' events' if public else 'Calendar' }}{% endblock %}{% block body %}
+<div class="headrow"><h1>{{ club.info.name ~ ' events' if public else 'Calendar' }}</h1>{% if can_edit %}<p class="row"><a class="btn small" href="/calendar/edit">+ Add an event</a><a class="btn small ghost" href="/calendar/import">Import .ics</a></p>{% endif %}</div>
+<nav class="tabs" aria-label="View">{% for v, label in (('agenda', 'Agenda'), ('month', 'Month')) %}<a href="{{ base }}?view={{ v }}{% if v == 'month' %}&month={{ first.strftime('%Y-%m') }}{% endif %}" class="{{ 'on' if view == v }}"{% if view == v %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+<p class="callegend">{% for k, label in kinds.items() %}<button type="button" class="calkind" data-kind="{{ k }}" aria-pressed="true" title="Show or hide {{ label }}"><i class="dot k-{{ k }}"></i>{{ label }}</button>{% endfor %}<span class="muted small">tap to show or hide</span></p>
+
+{# each event opens a dialog with its details (and Edit, for leaders); n points at its <template> below #}
+{% macro open(e) %}<button type="button" class="calopen" data-ev="{{ items.index(e) }}">{{ caller() }}</button>{% endmacro %}
+
+{% if view == 'agenda' %}
+{% macro moves() %}<p class="row"><a class="btn small ghost" href="{{ base }}?start={{ lo - timedelta(days=56) }}">← Earlier</a>{% if lo != today %}<a class="btn small ghost" href="{{ base }}">Back to today</a>{% endif %}<a class="btn small ghost" href="{{ base }}?start={{ hi + timedelta(days=1) }}">Later →</a></p>{% endmacro %}
+<div class="headrow"><h2 class="calrange">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }}</h2>{{ moves() }}</div>
+{% for d, es in by_day|dictsort %}<h2 class="calday" id="d{{ d }}">{{ 'Today' if d == today else d.strftime('%A, %B %-d') }}</h2>
+<ul class="agenda">{% for e in es %}<li data-kind="{{ e.kind }}">{% call open(e) %}<span class="caltime">{{ e.time if e.time and d == e.start else 'All day' if not e.time else '' }}</span><i class="dot k-{{ e.kind }}"></i><span class="caltitle">{{ e.title }}{% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}</span>{% endcall %}</li>{% endfor %}</ul>
+{% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
+{% if by_day %}<p class="muted" id="calnone" hidden>Everything on these weeks is in a calendar you've hidden; tap it in the list above to show it.</p>{% endif %}
+{{ moves() }}
+
+{% else %}
+<div class="headrow"><h2>{{ first.strftime('%B %Y') }}</h2><p class="row"><a class="btn small ghost" href="{{ base }}?view=month&month={{ prev_month }}" aria-label="Previous month">←</a>
+<a class="btn small ghost" href="{{ base }}?view=month">Today</a><a class="btn small ghost" href="{{ base }}?view=month&month={{ next_month }}" aria-label="Next month">→</a></p></div>
+<table class="month"><thead><tr>{% for n in weekdays %}<th>{{ n }}</th>{% endfor %}</tr></thead><tbody>
+{% set ns = namespace(d=lo) %}{% for w in range(((hi - lo).days + 1) // 7) %}<tr>{% for i in range(7) %}{% set d = ns.d %}
+<td class="{{ 'other' if d.month != first.month }}{{ ' today' if d == today }}"><a class="daynum" href="{{ base }}?start={{ d }}" aria-label="{{ d.strftime('%A, %B %-d') }}">{{ d.day }}</a>
+{% set es = by_day.get(d, []) %}{% if es %}<ul>{% for e in es %}<li data-kind="{{ e.kind }}" title="{{ e.time ~ ' ' if e.time }}{{ e.title }}"{% if loop.index > 3 %} class="extra"{% endif %}>{% call open(e) %}<i class="dot k-{{ e.kind }}"></i>{% if e.time and d == e.start %}<span class="caltime">{{ e.time }}</span> {% endif %}<span class="caltitle">{{ e.title }}</span>{% endcall %}</li>{% endfor %}<li class="more"{% if es|length <= 3 %} hidden{% endif %}><a href="{{ base }}?start={{ d }}">+<span>{{ es|length - 3 }}</span> more</a></li></ul>{% endif %}</td>
+{% set ns.d = d + timedelta(days=1) %}{% endfor %}</tr>{% endfor %}
+</tbody></table>
+<p class="muted small">Tap an event for details, or a day to see it in the agenda.</p>
+{% endif %}
+{% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
+{% else %}<p><a href="/calendar/subscribe">Subscribe in your calendar app (phone, Outlook, Apple or Google Calendar)</a></p>{% endif %}
+
+{% for e in items %}<template id="ev{{ loop.index0 }}">
+<p class="calcal"><i class="dot k-{{ e.kind }}"></i>{{ kinds.get(e.kind, '') }}</p>
+<h2>{{ e.title }}</h2>
+<p class="calwhen">{% if e.starts %}{% if e.starts.date() == e.ends.date() %}{{ e.starts.strftime('%A, %B %-d') }}<br>{{ e.time }} – {{ e.ends.strftime('%-I:%M %p') }}
+  {% else %}{{ e.starts.strftime('%a, %b %-d, %-I:%M %p') }} –<br>{{ e.ends.strftime('%a, %b %-d, %-I:%M %p') }}{% endif %}
+{% elif e.end != e.start %}{{ e.start.strftime('%a, %b %-d') }} – {{ e.end.strftime('%a, %b %-d') }}, all day
+{% else %}{{ e.start.strftime('%A, %B %-d') }}, all day{% endif %}</p>
+{% if e.repeats and repeats.get(e.id) %}<p class="muted">{{ emoji('🔁', 'repeat') }} {{ repeats[e.id] }}</p>{% endif %}
+{% if e.where %}<p><b>Where</b><br>{{ e.where|linkify }}</p>{% endif %}
+{% if e.notes %}<p class="calnotes">{{ e.notes|linkify }}</p>{% endif %}
+{% if e.from_minutes %}<p class="muted small">From the last meeting's Upcoming Events{% if can_edit %}; change it in the leader console{% endif %}.</p>{% endif %}
+{% if can_edit and e.id %}<p class="row"><a class="btn small" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}">{{ emoji('✏️', 'pencil') }} Edit</a></p>{% endif %}
+</template>{% endfor %}
+<dialog id="calmodal" aria-labelledby="calmodal-title"><form method="dialog"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form><div class="body"></div></dialog>
+
+<script>
+// The legend shows or hides each calendar (remembered in this browser). In the month grid each day keeps showing
+// its first three visible events, with "+N more" for the rest. Agenda rows are shaded every other visible row.
+(() => {
+  const KEY = "calendar-hidden", hidden = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+  const apply = () => {
+    document.querySelectorAll(".calkind").forEach((b) => b.setAttribute("aria-pressed", !hidden.has(b.dataset.kind)));
+    document.querySelectorAll("li[data-kind]").forEach((li) => li.hidden = hidden.has(li.dataset.kind));
+    document.querySelectorAll("ul.agenda").forEach((ul) => {  // a day with nothing left shown: hide its heading too
+      const any = [...ul.children].some((li) => !li.hidden); ul.hidden = !any; ul.previousElementSibling.hidden = !any; });
+    [...document.querySelectorAll("ul.agenda li")].filter((li) => !li.hidden).forEach((li, i) => li.classList.toggle("alt", i % 2 === 1));
+    document.querySelectorAll("table.month ul").forEach((ul) => {
+      const shown = [...ul.querySelectorAll("li[data-kind]")].filter((li) => !li.hidden), more = ul.querySelector("li.more");
+      shown.forEach((li, i) => li.classList.toggle("extra", i >= 3));
+      more.hidden = shown.length <= 3; more.querySelector("span").textContent = shown.length - 3; });
+    const none = document.getElementById("calnone"); if (none) none.hidden = !!document.querySelector("ul.agenda:not([hidden])") || !document.querySelector("ul.agenda");
+  };
+  document.querySelectorAll(".calkind").forEach((b) => b.onclick = () => {
+    hidden.has(b.dataset.kind) ? hidden.delete(b.dataset.kind) : hidden.add(b.dataset.kind);
+    localStorage.setItem(KEY, JSON.stringify([...hidden])); apply(); });
+  apply();
+  // an event's details in a dialog; Esc, ✖ or a tap outside closes it
+  const dlg = document.getElementById("calmodal"), body = dlg.querySelector(".body");
+  document.querySelectorAll(".calopen").forEach((b) => b.onclick = () => {
+    body.replaceChildren(document.getElementById("ev" + b.dataset.ev).content.cloneNode(true));
+    body.querySelector("h2").id = "calmodal-title"; dlg.showModal(); });
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+})();
+</script>
+{% endblock %}

@@ -64,10 +64,11 @@ code { background: var(--surface-3); border-radius: .3rem; padding: .05rem .35re
 hr { border: 0; border-top: 1px solid var(--border); }
 
 /* form fields everywhere */
-input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=number], input:not([type]),
+input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
 select, textarea {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm); padding: .45rem .65rem; }
+fieldset { min-width: 0; }  select { max-width: 100%; }  /* long option text ("Every year on the 1st Thursday of January") mustn't widen a phone page */
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
 input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1rem; height: 1rem; }
 textarea { resize: vertical; line-height: 1.45; }
@@ -156,6 +157,8 @@ tr.yearrow th { text-align: left; padding: .9rem .85rem .45rem; font-size: 1rem;
 .pager { display: flex; gap: .75rem; align-items: center; color: var(--muted); }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; } @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
 .row { display: flex; gap: .5rem; flex-wrap: wrap; }
+[hidden] { display: none !important; }  /* .btn's display: inline-flex would otherwise show hidden buttons */
+.ip { word-break: break-all; }  /* IPv6 addresses wrap instead of widening the table */
 nav.tabs { display: flex; gap: .25rem; margin: .4rem 0 1.2rem; flex-wrap: wrap; background: var(--surface-3); padding: .25rem;
   border-radius: .7rem; width: fit-content; max-width: 100%; }
 nav.tabs a { padding: .4rem .9rem; border-radius: .5rem; text-decoration: none; color: var(--muted); font-weight: 500; font-size: .93rem; }
@@ -185,9 +188,9 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .or { color: var(--faint); margin: 1rem 0; }
 
 /* account, profile, about, member pages */
-.rename { display: flex; gap: .4rem; align-items: center; } .rename .pkname { min-width: 8rem; } .rename input { min-width: 10rem; padding: .25rem .45rem; }
+.rename { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; } .rename .pkname { flex: 1 1 6rem; } .rename input { flex: 1 1 8rem; min-width: 0; padding: .25rem .45rem; }
 .about dl, .contactcard { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.2rem; }
-.about dt, .contactcard dt { color: var(--muted); } .contactcard dd { margin: 0; } .contactcard dd.address { white-space: pre-line; }
+.about dt, .contactcard dt { color: var(--muted); } .about dd, .contactcard dd { margin: 0; min-width: 0; overflow-wrap: anywhere; } .contactcard dd.address { white-space: pre-line; }
 .changelog h2 { font-size: 1.05rem; margin: 1.2rem 0 .3rem; } .changelog li { margin: .2rem 0; }
 form.profile { max-width: 36rem; } form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
@@ -195,7 +198,8 @@ form.profile input[type=email], form.profile input[type=tel], form.profile texta
 form.profile input[type=checkbox] { display: inline-block; margin: 0 .3rem 0 0; }
 form.profile .hint { display: block; font-weight: normal; }
 form.profile fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 1rem 0; padding: .7rem 1rem; background: var(--surface); }
-form.profile legend { font-weight: 600; padding: 0 .3rem; } form.profile label.check { display: inline-flex; align-items: center; margin-right: 1.2rem; font-weight: normal; }
+form.profile legend { font-weight: 600; float: left; width: 100%; padding: 0; margin-bottom: .4rem; }  /* inside the box, so a long one wraps cleanly */
+form.profile legend + * { clear: both; } form.profile label.check { display: inline-flex; align-items: center; margin-right: 1.2rem; font-weight: normal; }
 svg.lock { width: .85em; height: .85em; vertical-align: -.05em; fill: var(--faint); stroke: var(--faint); stroke-width: 2.2; } svg.lock rect { stroke: none; }
 div.change { white-space: pre-line; }
 article.mail { border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; margin: .8rem 0; background: var(--surface); box-shadow: var(--shadow); }
@@ -323,7 +327,7 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
 /* ---------- phones ---------- */
 @media (max-width: 760px) {
   /* iOS zooms the page into any field under 16px */
-  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=number], input:not([type]),
+  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
   select, textarea { font-size: 16px; }
   main { margin-top: 1.1rem; padding: 0 .8rem; }
   .pagesearch { display: block; margin-bottom: .6rem; }
@@ -384,7 +388,12 @@ nav.top .me .name { margin-right: .35rem; }
 form.linkedit input, form.linkedit select { width: 100%; } form.linkedit td { vertical-align: middle; }
 form.linkedit .rowbtns { white-space: nowrap; } form.linkedit .rowbtns .btn { padding: .2rem .5rem; margin-left: .15rem; }
 @media (max-width: 760px) { form.linkedit table, form.linkedit tbody, form.linkedit tr, form.linkedit td { display: block; }
-  form.linkedit thead { display: none; } form.linkedit tr { border-bottom: 1px solid var(--border); padding: .5rem 0; } }
+  form.linkedit table.list { background: none; border: 0; box-shadow: none; }
+  form.linkedit thead { display: none; } form.linkedit tr { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: .4rem; margin-bottom: 1.1rem; }
+  form.linkedit tbody tr td { border: 0; background: none !important; padding: .3rem; }
+  form.linkedit tr.folded td:not(:first-child):not(.rowbtns) { display: none; } }
+@media (min-width: 761px) { form.linkedit .fold { display: none; } }
 .iconpick { position: relative; } .iconpick summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .35rem;
   padding: .25rem .5rem; border: 1px solid var(--border-strong); border-radius: .5rem; background: var(--surface); }
 .iconpick summary::-webkit-details-marker { display: none; } .iconpick summary small { color: var(--muted); }
@@ -399,3 +408,53 @@ ul.checklist { list-style: none; padding: 0; margin: .3rem 0; } ul.checklist li 
 ul.checklist li::before { content: ""; position: absolute; left: 0; top: .55rem; width: 1rem; height: 1rem; border: 2px solid var(--border-strong); border-radius: .25rem; }
 ul.checklist li.late::before { border-color: var(--danger); }
 form.linkedit table.list { overflow: visible; }
+/* calendar page */
+.callegend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .85rem; color: var(--muted); }
+.callegend span { display: inline-flex; align-items: center; gap: .3rem; }
+.dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; flex: none; margin-right: .35rem; vertical-align: middle; }
+.k-events { background: var(--accent); } .k-chow { background: #d9932b; } .k-planning { background: #7b4fb0; }
+.k-community { background: #2f7fc1; } .k-birthday { background: #d24f86; }
+h2.calday { font-size: 1rem; margin: 1.1rem 0 .3rem; color: var(--accent-text); }
+ul.agenda { list-style: none; padding: 0; margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+ul.agenda li + li { border-top: 1px solid var(--border); } ul.agenda li.alt { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.caltime { font-variant-numeric: tabular-nums; color: var(--muted); }
+/* an event: the whole row opens its details */
+button.calopen { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; width: 100%; }
+ul.agenda button.calopen { display: flex; align-items: baseline; gap: .5rem; padding: .65rem .75rem; min-height: 2.75rem; }
+ul.agenda button.calopen:hover { background: var(--accent-soft); } button.calopen:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+ul.agenda .caltime { flex: none; width: 4.6rem; font-size: .9rem; } ul.agenda .dot { align-self: center; margin-right: 0; } ul.agenda .caltitle { min-width: 0; overflow-wrap: anywhere; }
+table.month button.calopen { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; }
+table.month button.calopen:hover { background: var(--accent-soft); }
+/* the details dialog */
+dialog#calmodal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
+  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop { background: rgba(0,0,0,.45); }
+dialog#calmodal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
+dialog#calmodal form { position: absolute; top: .5rem; right: .5rem; margin: 0; }
+button.calclose { font: inherit; background: none; border: 0; cursor: pointer; min-width: 2.5rem; min-height: 2.5rem; border-radius: 50%; color: var(--muted); }
+button.calclose:hover { background: var(--accent-soft); }
+.calcal { margin: 0; font-size: .85rem; color: var(--muted); } .calwhen { font-weight: 600; } .calnotes { white-space: pre-line; overflow-wrap: anywhere; }
+table.month { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+table.month th { font-size: .75rem; color: var(--muted); padding: .3rem; font-weight: 600; }
+table.month td { border: 1px solid var(--border); vertical-align: top; height: 5.5rem; padding: .2rem .25rem; overflow: hidden; }
+table.month td.other { background: var(--surface-2); color: var(--faint); } table.month td.today .daynum { background: var(--accent); color: #fff; }
+table.month .daynum { display: inline-block; min-width: 1.5rem; text-align: center; border-radius: 1rem; font-size: .85rem; text-decoration: none; }
+table.month ul { list-style: none; padding: 0; margin: .15rem 0 0; font-size: .75rem; line-height: 1.25; }
+table.month li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) {  /* phones: a dot per event; tap the day for the details */
+  table.month td { height: 3.4rem; padding: .15rem; } table.month li { display: inline; } table.month .caltime, table.month .caltitle, table.month li.more { display: none; }
+  table.month .dot { margin-right: .1rem; } table.month button.calopen { display: inline; }
+}
+.feedlink { width: 100%; max-width: 40rem; font-family: ui-monospace, monospace; font-size: .8rem; }
+h2.calrange { font-size: 1.05rem; margin: .3rem 0; }
+.iconpick .iconsearch { grid-column: 1 / -1; width: 100%; padding: .35rem .6rem; }
+.iconpick .brandhits { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: .25rem; max-height: 14rem; overflow-y: auto; }
+.iconpick .brandhits:empty { display: none; } .iconpick .brandhits small { overflow-wrap: anywhere; }
+form.profile label.until { display: block; margin-top: .5rem; }
+/* emoji(): the native emoji where the device draws color emoji (html.emoji, set in base.html), else the app's line icon */
+.emo { display: none; font-size: 1rem; line-height: 1; } html.emoji .emo { display: inline; } html.emoji .emo-alt { display: none; }
+.emo-alt { display: inline-flex; vertical-align: -.2em; } .emo-alt .ico { width: 1.15em; height: 1.15em; } .emoji-wrap { display: inline; }
+button.calkind { font: inherit; display: inline-flex; align-items: center; gap: .1rem; padding: .3rem .55rem; margin: -.3rem -.2rem;
+  border: 1px solid transparent; border-radius: 2rem; background: none; color: inherit; cursor: pointer; }
+button.calkind:hover { border-color: var(--border-strong); } button.calkind[aria-pressed=false] { opacity: .5; text-decoration: line-through; }
+button.calkind[aria-pressed=false] .dot { background: transparent !important; box-shadow: inset 0 0 0 2px var(--muted); }
+table.month li.extra { display: none; }
