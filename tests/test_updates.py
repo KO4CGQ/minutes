@@ -87,7 +87,12 @@ def test_admin_page(env, tmp_path, monkeypatch):
     assert "Version 0.7.0 is available" in c.get("/links").text                  # the admin banner says so
     assert "needs the steps" in c.post("/admin/updates/run", data={"target": "0.7.0"}).text
     c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1})
-    assert (tmp_path / "update-request.json").exists() and "Waiting to update to 0.7.0" in c.get("/admin/updates").text
+    page = c.get("/admin/updates").text
+    assert (tmp_path / "update-request.json").exists() and "Waiting to update to 0.7.0" in page
+    assert 'id="updating"' in page and "setInterval" in page                    # the page watches for the result itself
+    updates.cancel()
+    assert 'id="updating"' not in c.get("/admin/updates").text                  # gone once nothing is pending: the poller reloads
+    c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1})
     c.cookies.set(web.COOKIE, a.new_session("bob"))
     assert "of the app is available" not in c.get("/links").text                 # not for members
     assert c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1}).status_code == 403
