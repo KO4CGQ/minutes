@@ -300,7 +300,7 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     page = c.get("/members/tess").text
     assert "Viewing the app as <b>Bob Member</b>" in page
     assert "419-555-0142" not in page                     # Bob can't see Tess's unshared phone, so neither can Ann now
-    assert "Bob ▾" in c.get("/links").text and "Ann ▾" not in c.get("/links").text  # the name menu is Bob's
+    assert ">Bob</span>" in c.get("/links").text and ">Ann</span>" not in c.get("/links").text  # the name menu is Bob's
     assert c.post("/profile", data={"phone": "1"}).status_code == 403          # read-only
     assert c.get("/account").status_code == 403                                 # not their sign-ins or passkeys
     assert c.get("/roster/changes").status_code == 403                          # Bob's permissions, not admin's

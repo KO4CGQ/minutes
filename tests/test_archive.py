@@ -126,18 +126,25 @@ def rows(html):
     return html.count('<tr><td data-sort=')
 
 
+def test_home_page_and_old_archive_links(client):
+    html = client.get("/").text
+    assert "Next meeting" in html and "Your chow night" in html and "Latest minutes" in html
+    r = client.get("/?period=all", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/minutes?period=all"
+
+
 def test_archive_periods_pages_and_page_size(client):
-    html = client.get("/").text  # this year by default
+    html = client.get("/minutes").text  # this year by default
     assert rows(html) == 1 and '<option selected>%d</option>' % dt.date.today().year in html
-    html = client.get("/?period=all").text
+    html = client.get("/minutes?period=all").text
     assert rows(html) == 25 and "Page 1 of 2" in html and html.count('class="yearrow"') == 3  # this year, 2025, 2024
-    assert rows(client.get("/?period=all&page=2").text) == 8
-    assert rows(client.get("/?period=all&per=0").text) == 33 and rows(client.get("/?period=all&per=10&page=4").text) == 3
-    p1, p2 = client.get("/?period=2024").text, client.get("/?period=2024&page=2").text
+    assert rows(client.get("/minutes?period=all&page=2").text) == 8
+    assert rows(client.get("/minutes?period=all&per=0").text) == 33 and rows(client.get("/minutes?period=all&per=10&page=4").text) == 3
+    p1, p2 = client.get("/minutes?period=2024").text, client.get("/minutes?period=2024&page=2").text
     assert rows(p1) == 25 and rows(p2) == 5 and "Page 2 of 2" in p2
-    assert rows(client.get("/?period=2024&page=99").text) == 5  # clamped to the last page
-    assert rows(client.get("/?period=6m").text) == 1 and rows(client.get("/?period=12m").text) == 1
-    for junk in ("/?period=", "/?period=abc", "/?period=2024&page=x", "/?per=7", "/?per=x"):
+    assert rows(client.get("/minutes?period=2024&page=99").text) == 5  # clamped to the last page
+    assert rows(client.get("/minutes?period=6m").text) == 1 and rows(client.get("/minutes?period=12m").text) == 1
+    for junk in ("/minutes?period=", "/minutes?period=abc", "/minutes?period=2024&page=x", "/minutes?per=7", "/minutes?per=x"):
         r = client.get(junk)
         assert r.status_code == 200 and "Period" in r.text
 

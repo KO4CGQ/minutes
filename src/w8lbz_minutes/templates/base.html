@@ -7,14 +7,20 @@ try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark"
 <link rel="icon" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="/static/style.css?v={{ ASSETS }}"><link rel="stylesheet" href="/static/minutes.css?v={{ ASSETS }}"></head>
 <body>
+{% set PAGES = (('/', 'Home'), ('/minutes', 'Minutes'), ('/chow', 'Chow'), ('/business', 'Business'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/guests', 'Guests'), ('/links', 'Links')) %}
+{% set here = request.url.path %}
+{% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
 <nav class="top">
-  <a class="brand" href="/"><img src="/static/logo.png" alt="">W8LBZ Minutes</a>
-  {% if me %}{% set here = request.url.path %}
-  <button type="button" class="burger" aria-label="Pages and search" aria-expanded="false" aria-controls="navlinks">☰</button>
-  <div class="navlinks" id="navlinks">{% for href, label in (('/', 'Archive'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/business', 'Business'), ('/chow', 'Chow'), ('/guests', 'Guests'), ('/links', 'Links')) + (((('/meetings/' ~ live.slug, '🔴 Live meeting'),) if live else (('/console', 'Start meeting'),) if can_lead else ())) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href != '/' and here.startswith(href)) or (href == '/' and here.startswith('/meetings'))) }}{{ ' start' if href == '/console' }}"{% if href == '/console' %} data-meets="{{ meeting_at }}"{% endif %}>{{ label }}</a>{% endfor %}</div>
+  {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
+  <a class="brand" href="/"><img src="/static/logo.png" alt=""><span>W8LBZ Minutes</span></a>
+  {% if me %}
+  <div class="mainlinks">{% for href, label in PAGES[:4] %}{{ navlink(href, label) }}{% endfor %}</div>
+  <span class="spacer"></span>
+  {% if live %}<a class="start live" href="/meetings/{{ live.slug }}">🔴 Live meeting</a>
+  {% elif can_lead %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console" data-meets="{{ meeting_at }}">Start meeting</a>{% endif %}
   <span class="clock" title="Club time"></span>
-  <form action="/search"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}"></form>
-  <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}{{ me.short or me.first }}{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
+  <form action="/search" class="barsearch"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
+  <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}<span class="name">{{ me.short or me.first }}</span>{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
     <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">⬆️ Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/email">Email log</a><a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
     {% if is_admin %}<form method="post" action="/admin/mode"><input type="hidden" name="on" value="{{ 0 if admin_until else 1 }}"><input type="hidden" name="next" value="{{ request.url.path }}">
       <button type="submit"><span class="ico">🛡️</span>{{ 'Turn off admin mode' if admin_until else 'Turn on admin mode' }}</button></form>{% endif %}
@@ -24,6 +30,12 @@ try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark"
     <form method="post" action="/logout"><button type="submit">Sign out</button></form></div>
   </details>{% endif %}
 </nav>
+{% if me %}<div class="drawer" id="drawer"><div class="scrim"></div>
+  <div class="panel" role="dialog" aria-label="All pages">
+    <form action="/search"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
+    {% for href, label in PAGES %}{{ navlink(href, label) }}{% if loop.index == 4 %}<div class="sep"></div>{% endif %}{% endfor %}
+    {% if can_lead and not live %}<div class="sep"></div>{{ navlink('/console', 'Lead a meeting') }}{% endif %}
+  </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
 <form method="post" action="/admin/view-as"><input type="hidden" name="member" value=""><input type="hidden" name="next" value="/members/{{ viewing_as }}"><button type="submit">Stop</button></form></div>{% endif %}
 {% if admin_until %}<div class="adminbar">Admin mode is on until {{ admin_until|clock }}: you can see and change what officers can.{% if update_available %} <a href="/admin/updates" class="updlink">Version {{ update_available }} is available</a>{% endif %}
@@ -42,9 +54,14 @@ document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener
   markTheme();
 }));
 markTheme();
-// phones: the ☰ button shows the page links and search
-document.querySelector("nav.top .burger")?.addEventListener("click", (e) => {
-  const nav = e.currentTarget.closest("nav"); e.currentTarget.setAttribute("aria-expanded", nav.classList.toggle("open")); });
+// ☰ slides the drawer (every page, and search) in from the left; Esc, the dimmed page or a link closes it
+(() => { const btn = document.querySelector("nav.top .burger"), drawer = document.getElementById("drawer");
+  if (!btn || !drawer) return;
+  const set = (open) => { document.body.classList.toggle("drawer-open", open); btn.setAttribute("aria-expanded", open);
+    if (open) drawer.querySelector("a.on, a")?.focus(); else btn.focus(); };
+  btn.addEventListener("click", () => set(!document.body.classList.contains("drawer-open")));
+  drawer.querySelector(".scrim").addEventListener("click", () => set(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("drawer-open")) set(false); }); })();
 // top-bar clock; "Start meeting" pulses from 30 minutes before the weekly meeting until 30 minutes after it starts
 // shortcut: uses the browser's time zone, which is the club's for members at home; pass the club's zone if that changes.
 (() => { const clock = document.querySelector("nav.top .clock"), start = document.querySelector("nav.top a.start");

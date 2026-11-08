@@ -970,6 +970,26 @@ def by_period(period: str) -> tuple[list, str, str]:
 
 
 @app.get("/", response_class=HTMLResponse)
+def home(request: Request, mid: str = Depends(me)):
+    """What's next for this member: the next meeting, their chow night, their business items, the latest minutes."""
+    if request.url.query:  # old bookmarks of the archive (/?period=...)
+        return RedirectResponse(f"/minutes?{request.url.query}", status_code=301)
+    club, today = archive.club, dt.date.today()
+    nights = chow.meeting_nights(club, today, today + dt.timedelta(days=7))
+    s = chow.load()
+    upcoming = chow.upcoming(s, n=60)
+    latest = next((m for m in archive.meetings if m.status != "draft"), None)  # newest first
+    items = [business.view(club, x, today.isoformat()) for x in business.load()["items"]
+             if x["status"] == "open" and x.get("owner") == mid]
+    return page(request, "home.html", next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+                my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
+                swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
+                items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest,
+                today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
+                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
+
+
+@app.get("/minutes", response_class=HTMLResponse)
 def index(request: Request, period: str = "", p: str = Query("1", alias="page"), per: str = ""):
     """Meetings newest first, a page at a time, for a period (this year by default)."""
     ms, period, label = by_period(period)
