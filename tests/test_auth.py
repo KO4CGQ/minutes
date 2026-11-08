@@ -27,9 +27,9 @@ def link_token(body: str) -> str:
 
 
 def test_email_link_flow(a):
-    a.send_link("  jane@example.ORG ", "/console", base_url="http://192.168.23.100:8000")
+    a.send_link("  jane@example.ORG ", "/console", base_url="http://192.168.1.100:8000")
     (to, body), = a.sent
-    assert to == "Jane@Example.org" and "http://192.168.23.100:8000/login/link?t=" in body
+    assert to == "Jane@Example.org" and "http://192.168.1.100:8000/login/link?t=" in body
     t = link_token(body)
     assert a.use_link(t) == ("kd8aaa", "/console")
     assert a.use_link(t) is None  # one use only
@@ -140,12 +140,12 @@ def test_email_links_ignore_forged_host(monkeypatch):
 def test_failed_attempts_ban_internet_addresses_only(a):
     for _ in range(auth_mod.BAN_AFTER - 1):
         a.send_link("stranger@example.org", ip="9.9.9.9")
-        a.event("bad_link", "192.168.23.50")
+        a.event("bad_link", "192.168.1.50")
     assert not a.banned("9.9.9.9")
     a.send_link("nobody@example.org", ip="9.9.9.9")                  # the tenth in an hour
     assert a.banned("9.9.9.9") and a.bans()[0]["by"] == "automatic"
-    a.event("bad_link", "192.168.23.50")                                 # LAN: logged, never auto-banned
-    assert not a.banned("192.168.23.50") and not a.banned(None)
+    a.event("bad_link", "192.168.1.50")                                 # LAN: logged, never auto-banned
+    assert not a.banned("192.168.1.50") and not a.banned(None)
     a.unban("9.9.9.9")
     assert not a.banned("9.9.9.9")
     a.ban("1.0.0.1", None, "by hand", "kd8aaa")
@@ -169,7 +169,7 @@ def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, mo
     r = c.get("/login")
     assert r.status_code == 403 and "blocked" in r.text
     assert web.device("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36") == "Chrome on Windows"
-    assert [web.where(x) for x in ("9.9.9.9", "192.168.23.5", "100.81.37.6", "127.0.0.1")] == \
+    assert [web.where(x) for x in ("9.9.9.9", "192.168.1.5", "100.64.0.5", "127.0.0.1")] == \
         ["internet", "LAN", "tailnet", "this server"]
 
 
@@ -181,7 +181,7 @@ def test_security_page_tabs(tmp_path, monkeypatch):
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
-    tok = a.new_session("kd8adm", "Mozilla/5.0 (Windows NT 10.0) Chrome/130.0", "192.168.23.10", "passkey")
+    tok = a.new_session("kd8adm", "Mozilla/5.0 (Windows NT 10.0) Chrome/130.0", "192.168.1.10", "passkey")
     a.set_admin(tok, 60)
     a.ban("9.9.9.9", 24, "test", "automatic")
     c = TestClient(web.app)
