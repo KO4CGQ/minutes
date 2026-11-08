@@ -4,6 +4,11 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
+## 0.9.1 (2026-11-08)
+- **Readable deploy notes:** the Updates page shows a release's steps by hand formatted (numbered steps, commands in code blocks) instead of run-together lines. The README covers how to write them, and has a new **Server hardening** section (fail2ban for SSH, keys-only SSH, automatic updates, a firewall).
+- **No club-specific server names in the repo:** docs, scripts and tests say "the server" and use example addresses.
+- **0.9.0's notes fixed:** fail2ban was listed as a 0.9.0 deploy step; it's optional, and is now in the README's Server hardening section.
+
 ## 0.9.0 (2026-11-07)
 - **New top bar:** ☰ sits on the left on every screen and slides out a drawer (Esc, a tap outside it or a link closes it). Every page is in the drawer; the bar keeps the logo (which goes Home), Start meeting, the clock, search and your name. On narrower screens search moves into the drawer, so nothing appears twice. The bar never wraps onto two lines.
 - **Start meeting button:** for leaders, Lead a meeting is now a Start meeting pill that stays in the top bar even on phones. It turns amber and pulses from 30 minutes before the weekly meeting until 30 minutes after it starts (no pulse with reduced motion). The time comes from `club.meeting_time` (default `19:30`). While a meeting is being taken it becomes 🔴 Live meeting for everyone.
@@ -15,7 +20,6 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Security page** (admins, in admin mode; name menu → Security), in tabs: recent sign-ins (who, when, passkey or email link, address, device), every signed-in device with **Sign out**, failed and suspicious sign-in attempts, banned addresses with **Unban** and **Ban**, the admin log, and server basics. Addresses through Funnel are visitors' real internet addresses.
 - **Automatic bans:** an internet address with 10 failed sign-in attempts in an hour (unknown email, used or made-up link, failed passkey, link limit) is blocked for 24 hours. LAN and tailnet addresses are never banned automatically, and an admin can't ban the address they're using.
   For SSH, see "Server hardening" in the README (fail2ban).
-- **Readable deploy notes:** the Updates page shows a release's steps by hand formatted (numbered steps, commands in code blocks) instead of run-together lines. The README covers how to write them, and has a new **Server hardening** section (fail2ban for SSH, keys-only SSH, automatic updates, a firewall).
 - **Sign-in links can't be redirected:** links in emails (sign-in, swaps, confirmations) now only use the app's own addresses (the HTTPS name, or the LAN address the request really reached). Before, a forged `Host` header could make the app email a member a working sign-in link pointing at someone else's server. Pages also send standard security headers: no framing by other sites, no guessing of file types, no full addresses leaked to other sites, and `noindex` for search engines.
 
 ## 0.8.0 (2026-11-07)
