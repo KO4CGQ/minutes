@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, chow, console, membership, prefs, profile, updates
+from . import ai, avatars, business, chow, console, gcal, membership, prefs, profile, updates
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
@@ -132,6 +132,19 @@ async def require_login(request: Request, call_next):
         target = path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
     return JSONResponse({"detail": "Please sign in"}, status_code=401)
+
+
+CALENDAR_PATHS = ("/chow", "/api/meetings", "/console")  # changes here can move chow nights or Upcoming Events
+
+
+@app.middleware("http")
+async def calendar_after_changes(request: Request, call_next):
+    """After a chow or console change, sync the club calendars a little later (see gcal.soon)."""
+    response = await call_next(request)
+    if (request.method != "GET" and response.status_code < 400 and request.url.path.startswith(CALENDAR_PATHS)
+            and getattr(request.state, "member", None)):  # signed-in changes only
+        gcal.soon(lambda: archive.club, lambda: archive)
+    return response
 
 
 @app.middleware("http")  # added last, so it runs outermost and covers the login redirects too
@@ -1283,7 +1296,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", mid:
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
+                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
 
 
 @app.post("/admin/security/ban")

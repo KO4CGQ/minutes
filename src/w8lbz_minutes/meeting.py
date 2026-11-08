@@ -2,7 +2,8 @@
 
 The front matter holds structured data (date, attendance, guests, status).
 The body holds one `## Section` per agenda section, each item a bullet.
-Community report bullets may carry an invisible `<!-- member: id -->` tag.
+Community report bullets may carry an invisible `<!-- member: id -->` tag, and Upcoming Events
+a `<!-- when: 2026-11-21 -->` or `<!-- when: 2026-11-21T10:00 -->` tag (for the club calendar).
 """
 from __future__ import annotations
 
@@ -25,12 +26,22 @@ SECTIONS = [
 ]
 
 MEMBER_TAG = re.compile(r"\s*<!--\s*member:\s*([\w-]+)\s*-->")
+WHEN_TAG = re.compile(r"\s*<!--\s*when:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
 
 
 @dataclass
 class Item:
     text: str
     member: str | None = None  # roster id, community reports only
+    when: str | None = None  # Upcoming Events: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"
+
+    @property
+    def shown(self) -> str:
+        """The text as readers see it: an event's date (and time) first, e.g. "Sat, Nov 21, 10:00 AM: VE testing"."""
+        if not self.when:
+            return self.text
+        d = dt.datetime.fromisoformat(self.when)
+        return d.strftime("%a, %b %-d" + (", %-I:%M %p" if "T" in self.when else "")) + ": " + self.text
 
 
 @dataclass
@@ -76,7 +87,7 @@ class Meeting:
         for name in SECTIONS:
             out.append(f"## {name}")
             for it in self.items(name):
-                tag = f" <!-- member: {it.member} -->" if it.member else ""
+                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "")
                 out.append(f"- {it.text}{tag}")
             out.append("")
         return "\n".join(out)
@@ -107,8 +118,9 @@ class Meeting:
                 text = line[2:]
                 tag = MEMBER_TAG.search(text)
                 member = tag.group(1) if tag else None
-                text = MEMBER_TAG.sub("", text).strip()
-                m.sections[current].append(Item(text, member))
+                when = WHEN_TAG.search(text)
+                text = WHEN_TAG.sub("", MEMBER_TAG.sub("", text)).strip()
+                m.sections[current].append(Item(text, member, when.group(1) if when else None))
             elif current and line.strip() and m.sections[current]:
                 # continuation line of the previous bullet
                 m.sections[current][-1].text += " " + line.strip()

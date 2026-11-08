@@ -109,6 +109,9 @@ def main() -> None:
             prefs.mark_sent(sent, today)
         if not due and not new:
             print("nothing to remind")
+        if not a.dry_run:  # the daily catch-up for the club calendars (they also sync after each change)
+            from . import gcal
+            print("calendars:", gcal.run(club, Archive(MEETINGS, club)) or "not set up")
     elif a.cmd == "ai-ask-about":
         from . import console
         from .club import Club, MEETINGS

@@ -10,7 +10,7 @@
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",
     "New Business": "Each item you add here is tracked: next week it's in Old Business, and it stays there until it's marked done.",
-    "Upcoming Events": "Carried forward from last meeting. Delete past events, add new ones.",
+    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the club calendar.",
     "Winners": "e.g. “50/50 drawing – Amy A $7.50” and “Weekly drawing – Bob B, not registered (up to $62)”.",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
@@ -279,11 +279,39 @@
   function listSection(sec) {
     if (sec === "Upcoming Chow") return chowSection();
     if (sec === "Old Business" || sec === "New Business") return businessSection(sec);
+    if (sec === "Upcoming Events") return eventsSection();
     const arr = (M.sections[sec] || []).map((i) => i.text);
     const set = (a) => { M.sections[sec] = a.map((t) => ({ text: t, member: null })); };
     const rows = itemRows(arr, set);
     const hint = [HINTS[sec], EMPTY_NOTE].filter(Boolean).join(" ");
     return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), rows);
+  }
+
+  // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
+  function eventsSection() {
+    const sec = "Upcoming Events";
+    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null }));
+    const wrap = h("div", {});
+    const draw = () => {
+      wrap.replaceChildren(...evs.map((e, i) => {
+        const [d, t] = (e.when || "").split("T");
+        const date = h("input", { type: "date", value: d || "", "aria-label": "Date" });
+        const time = h("input", { type: "time", value: t || "", "aria-label": "Time (optional)" });
+        const setWhen = () => { e.when = date.value ? date.value + (time.value ? "T" + time.value : "") : null; save(); };
+        date.onchange = setWhen; time.onchange = setWhen;
+        const ta = h("textarea", { rows: 1, placeholder: "What, and where", "aria-label": "Event",
+          oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
+        ta.value = e.text;
+        return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
+            h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, "✖️")),
+          h("div", { class: "row meta" }, h("label", { class: "due" }, "Date ", date), h("label", { class: "due" }, "Time ", time),
+            e.when ? null : h("span", { class: "hint" }, "no date: not on the calendar")));
+      }), h("button", { class: "btn small ghost", onclick: () => { evs.push({ text: "", member: null, when: null }); draw();
+        wrap.querySelectorAll("textarea")[evs.length - 1].focus(); } }, "+ Add event"));
+      setTimeout(() => wrap.querySelectorAll("textarea").forEach(grow), 0);
+    };
+    draw();
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap);
   }
 
   // ---------- business: tracked items (business.py); every change is saved on the server at once ----------

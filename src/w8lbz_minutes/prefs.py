@@ -104,7 +104,7 @@ def digest(club: Club, meetings: list, today: dt.date, url: str) -> list[tuple[s
     items = business.load()["items"]
     latest = next((m for m in sorted(meetings, key=lambda m: m.date, reverse=True) if m.status == "published" and m.date < today), None)
     at = dt.datetime.strptime(str(club.info.get("meeting_time", "19:30")), "%H:%M").strftime("%-I:%M %p")
-    events = [i.text for i in latest.items("Upcoming Events")] if latest else []
+    events = [i.shown for i in latest.items("Upcoming Events")] if latest else []
     out = []
     for m in emailable(club):
         if get(m.id)["digest"] != "on":

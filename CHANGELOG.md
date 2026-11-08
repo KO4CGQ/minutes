@@ -16,6 +16,8 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Birthday, month only:** on Your profile you can give just the month of your birthday (the day is optional). It shows as "July", and is saved to the roster sheet as `07`.
 - **Leader console, business items:** with no due date, an item shows a **+ Due date** button that opens the date picker. An empty date box was easy to miss, especially on phones. "since Nov 5" now reads "first mentioned Nov 5", in the console and on the Business page.
 - **Motions:** **+ Motion** opens a short form: who moved it (pick a member), what it was, who seconded it, and the result (Passed, Failed, Tabled, Withdrawn or Died for lack of a second). There's no default result, so it can't be recorded as passed by accident. It adds "Motion: Bob Baker moved to buy a new antenna, seconded by Amy Able. Passed." as a New Business item, as before.
+- **Club calendars:** the app can keep the club's **Chow** and **Meetings & Events** Google Calendars current: each chow night (who's bringing it, updated after swaps) and each Upcoming Event that has a date. It only touches events it created. It's off until the calendars are named in club.yaml; the README's "Club calendars" section has the steps. The Security page's Server tab shows the last sync.
+- **Upcoming Events have dates:** in the leader console each event gets a date and an optional time. The minutes show them first ("Sat, Nov 21, 10:00 AM: VE testing"), and events whose date has passed drop off when the next meeting starts. Events without a date work as before; they just don't go on the calendar.
 - **Links editor on phones:** each link is its own spaced card, and saved links start folded to their name (⋯ opens one).
 
 ## 0.9.1 (2026-11-08)

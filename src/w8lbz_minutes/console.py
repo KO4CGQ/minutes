@@ -33,7 +33,9 @@ def start(archive: Archive, date: dt.date, leader: str | None) -> Meeting:
     for sec in SECTIONS:
         m.sections[sec] = []
     if prev:
-        m.sections["Upcoming Events"] = [Item(i.text) for i in prev.items("Upcoming Events")]
+        # events already past drop off; undated ones stay until a leader removes them
+        m.sections["Upcoming Events"] = [Item(i.text, when=i.when) for i in prev.items("Upcoming Events")
+                                         if not i.when or i.when[:10] >= date.isoformat()]
     # Old Business: every tracked item still open (business.py).
     m.sections.update(business_sections(archive, m.slug))
     # The next few chow nights after tonight, from the chow schedule.
@@ -162,7 +164,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
             "in_person": m.in_person, "remote": m.remote, "guests": m.guests, "visitors": m.visitors,
-            "sections": {s: [{"text": i.text, "member": i.member} for i in m.items(s)] for s in SECTIONS},
+            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when} for i in m.items(s)] for s in SECTIONS},
         },
         "state": load_state(archive, m.slug),
         "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
@@ -179,6 +181,14 @@ def context(archive: Archive, m: Meeting) -> dict:
     }
 
 
+def _when(v) -> str | None:
+    """An event's date, or date and time, from the browser; anything else is dropped."""
+    try:
+        return v if v and dt.datetime.fromisoformat(v) and len(v) in (10, 16) else None
+    except (TypeError, ValueError):
+        return None
+
+
 def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     """Save the console's full meeting state (last write wins)."""
     m = archive.by_slug[slug]
@@ -192,7 +202,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
                 for g in d.get("guests", []) if g.get("name", "").strip()]
     m.guests = [g for g in m.guests if not archive.club.is_redacted(g["name"])]
     m.visitors = max(0, int(d.get("visitors") or 0))
-    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None)
+    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, _when(i.get("when")))
                       for i in d.get("sections", {}).get(s, []) if i.get("text", "").strip()]
                   for s in SECTIONS}
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser

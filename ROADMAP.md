@@ -5,12 +5,11 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Next
-- **Chow list, what's left** (see below): the calendar and the printable chow list.
+- **Chow list, what's left** (see below): the printable chow list.
 - **Email the minutes to the whole club:** remove test mode (`email.only_to`) once the club is ready.
 
 ## Chow list, what's left
 The schedule, rotation, swaps, reminders, meeting-night records and the minutes' Upcoming Chow section are done.
-- **Calendar:** each chow night is mirrored to the club's "Chow" Google Calendar, so swaps update it automatically.
 - **Printable chow list:** a PDF of the nights still to come, emailed only when the list is released or changes (not with every set of minutes), replacing the Secretary's spreadsheet.
 
 ## Leader console
@@ -24,7 +23,6 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 - **More link icons, hosted locally:** add [Simple Icons](https://simpleicons.org) (CC0 brand logos: Discord, YouTube, GitHub, Facebook…) as SVGs copied into the repo, never from a CDN, and give the icon picker a search box like the combo box (`combo.js`). Font Awesome Free (CC BY 4.0, credit needed) is the fallback for general icons; Nerd Fonts is a terminal font, and svgl's logos have mixed licenses, so neither fits.
 - **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
-- **Abandoned meetings:** a leader can discard a meeting that was started by mistake (today only `w8lbz-minutes delete-meeting` on the server).
 
 ## Admin tools
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
@@ -32,9 +30,9 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Club calendars
-The club's Google calendars ("Meetings & Events", "Chow", "Community Events", "Planning") aren't relied on yet; the app keeping them current would make them something members can trust.
-- **Meetings & Events:** the weekly meeting, plus dated club events from Upcoming Events. This needs Upcoming Events entered with real fields (date, time, place, title) in the console instead of free text, kept as data from week to week like business items.
-- **Chow:** written by the chow module (see above).
+Chow nights and dated Upcoming Events are synced (see the README). Still to do:
+- **The weekly meeting** on Meetings & Events, if the club doesn't already keep it there as a recurring event (then the app would only add cancellations, e.g. holidays).
+- **Upcoming Events between meetings:** today they're edited in the console during a meeting; an officer might add or fix one on the Home page or a small Events page in between.
 - **Planning:** due dates of tracked business items.
 - **Community Events:** non-club happenings in the area; the app could show them, edited in Google Calendar.
 - The service account is added to each calendar with "Make changes to events"; the app only touches events it created.

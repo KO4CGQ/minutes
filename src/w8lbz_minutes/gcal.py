@@ -1,0 +1,146 @@
+"""Keep the club's Google Calendars current: chow nights on the "Chow" calendar, dated Upcoming Events on
+"Meetings & Events".
+
+club.yaml names the calendars (`calendars: {chow: ID, events: ID}`); each is shared with the service account
+("Make changes to events"). The app marks the events it creates (a private `w8lbz` property) and only ever
+changes or deletes those, from today on, so people can keep adding their own events by hand and past events
+stay as they were. Each sync compares what should be there with what is, so it's safe to run any time.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import json
+import logging
+import threading
+import time
+
+from . import chow
+from .club import DATA, PREVIEW, Club
+
+log = logging.getLogger(__name__)
+API = "https://www.googleapis.com/calendar/v3/calendars/{}/events"
+EVENT_HOURS = 2  # a timed event's length; the minutes only give a start
+
+
+def _session():
+    import google.auth.transport.requests as gr
+    from google.oauth2 import service_account
+    from .roster import KEY_FILE
+    creds = service_account.Credentials.from_service_account_file(KEY_FILE, scopes=["https://www.googleapis.com/auth/calendar.events"])
+    return gr.AuthorizedSession(creds)
+
+
+def _timed(start: dt.datetime, hours: float, tz: str) -> dict:
+    return {"start": {"dateTime": start.isoformat(timespec="seconds"), "timeZone": tz},
+            "end": {"dateTime": (start + dt.timedelta(hours=hours)).isoformat(timespec="seconds"), "timeZone": tz}}
+
+
+def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict]]:
+    """Calendar kind -> {key: event} for everything from today on: chow nights and dated Upcoming Events."""
+    tz = str(club.info.get("timezone", "America/New_York"))
+    at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
+    out: dict[str, dict[str, dict]] = {"chow": {}, "events": {}}
+    for date, x in chow.upcoming(chow.load(), today, n=60):
+        if x.get("status") == "none":
+            continue
+        who = club.name(x["member"]) if x.get("member") else "open, nobody yet"
+        out["chow"][f"chow:{date}"] = {"summary": f"Chow: {who}",
+                                       **_timed(dt.datetime.combine(dt.date.fromisoformat(date), at), EVENT_HOURS, tz)}
+    for e in events:
+        if not e.when or e.when[:10] < today.isoformat():
+            continue
+        if "T" in e.when:
+            when = _timed(dt.datetime.fromisoformat(e.when), EVENT_HOURS, tz)
+        else:
+            day = dt.date.fromisoformat(e.when)
+            when = {"start": {"date": day.isoformat()}, "end": {"date": (day + dt.timedelta(days=1)).isoformat()}}
+        out["events"][f"event:{e.when}:{e.text[:60]}"] = {"summary": e.text, **when}
+    return out
+
+
+def _same(have: dict, want: dict) -> bool:
+    def key(e):
+        return e.get("summary"), (e["start"].get("dateTime") or "")[:19], e["start"].get("date"), (e["end"].get("dateTime") or "")[:19]
+    return key(have) == key(want)
+
+
+def sync(club: Club, events: list, today: dt.date | None = None, session=None) -> dict:
+    """Create, update and delete the app's own events so each calendar matches. Returns counts per calendar."""
+    ids = club.info.get("calendars") or {}
+    today = today or dt.date.today()
+    if not ids:
+        return {}
+    s = session or _session()
+    counts = {}
+    for kind, want in wanted(club, events, today).items():
+        cid = ids.get(kind)
+        if not cid:
+            continue
+        url = API.format(cid)
+        have, page = {}, None
+        while True:
+            r = s.get(url, params={"privateExtendedProperty": "w8lbz=1", "timeMin": f"{today}T00:00:00Z",
+                                   "singleEvents": "true", "maxResults": 250, **({"pageToken": page} if page else {})})
+            r.raise_for_status()
+            j = r.json()
+            for e in j.get("items", []):
+                # timeMin is UTC midnight, so last evening's events come back too: leave anything before today alone
+                if (e["start"].get("date") or e["start"].get("dateTime", ""))[:10] < today.isoformat():
+                    continue
+                have[e.get("extendedProperties", {}).get("private", {}).get("w8lbz_key", e["id"])] = e
+            if not (page := j.get("nextPageToken")):
+                break
+        c = {"added": 0, "changed": 0, "removed": 0}
+        for k, e in want.items():
+            body = {**e, "extendedProperties": {"private": {"w8lbz": "1", "w8lbz_key": k}}}
+            if k not in have:
+                s.post(url, json=body).raise_for_status()
+                c["added"] += 1
+            elif not _same(have[k], e):
+                s.patch(f"{url}/{have[k]['id']}", json=body).raise_for_status()
+                c["changed"] += 1
+        for k, e in have.items():
+            if k not in want:
+                s.delete(f"{url}/{e['id']}").raise_for_status()
+                c["removed"] += 1
+        counts[kind] = c
+    return counts
+
+
+def latest_events(archive) -> list:
+    """The Upcoming Events of the most recent meeting (a draft being taken counts: it's the newest list)."""
+    return archive.meetings[0].items("Upcoming Events") if archive.meetings else []
+
+
+def run(club: Club, archive) -> dict:
+    """Sync now and record how it went (the Security page's Server tab shows it). Never raises."""
+    if PREVIEW or not club.info.get("calendars"):
+        return {}
+    try:
+        status = {"at": int(time.time()), "counts": sync(club, latest_events(archive))}
+    except Exception as e:  # a calendar problem must never break a page or the daily run
+        log.exception("calendar sync failed")
+        status = {"at": int(time.time()), "error": str(e)[:300]}
+    (DATA / "calendar-sync.json").write_text(json.dumps(status))
+    return status
+
+
+def status() -> dict | None:
+    p = DATA / "calendar-sync.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+_pending = threading.Event()
+
+
+def soon(club_fn, archive_fn, delay: float = 20) -> None:
+    """Sync in the background a little after a change; a burst of changes (console autosave) makes one sync."""
+    if _pending.is_set():
+        return
+    _pending.set()
+
+    def go():
+        time.sleep(delay)
+        _pending.clear()
+        run(club_fn(), archive_fn())
+    threading.Thread(target=go, daemon=True).start()

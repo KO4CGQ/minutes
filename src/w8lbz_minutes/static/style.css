@@ -64,7 +64,7 @@ code { background: var(--surface-3); border-radius: .3rem; padding: .05rem .35re
 hr { border: 0; border-top: 1px solid var(--border); }
 
 /* form fields everywhere */
-input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=number], input:not([type]),
+input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
 select, textarea {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm); padding: .45rem .65rem; }
@@ -326,7 +326,7 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
 /* ---------- phones ---------- */
 @media (max-width: 760px) {
   /* iOS zooms the page into any field under 16px */
-  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=number], input:not([type]),
+  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
   select, textarea { font-size: 16px; }
   main { margin-top: 1.1rem; padding: 0 .8rem; }
   .pagesearch { display: block; margin-bottom: .6rem; }
