@@ -244,6 +244,8 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     assert f"DTEND;VALUE=DATE:{(today + dt.timedelta(days=6)):%Y%m%d}" in body  # Board dinner: two days, end is the day after
     assert all(len(line.encode()) <= 75 for line in body.split("\r\n"))
     assert anon.get("/calendar/feed/wrong.ics").status_code == 404
+    only = anon.get(f"/calendar/feed/{tok}.ics?show=chow").text  # just my chow nights
+    assert "Chow: Amy Able" in only and "Fox hunt" not in only and "X-WR-CALNAME:W0TST Chow" in only
     assert calview.feed_token("kd8bbb", reset=True) != tok and anon.get(f"/calendar/feed/{tok}.ics").status_code == 404
     # public: only the calendars an admin chose; never chow or birthdays
     c.info["public_calendars"] = ["events", "chow"]  # chow is never public, even if listed

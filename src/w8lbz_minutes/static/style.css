@@ -428,3 +428,4 @@ table.month li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   table.month .dot { margin-right: .1rem; }
 }
 .feedlink { width: 100%; max-width: 40rem; font-family: ui-monospace, monospace; font-size: .8rem; }
+h2.calrange { font-size: 1.05rem; margin: .3rem 0; }

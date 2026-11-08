@@ -9,7 +9,8 @@
 {% macro item(e, d) %}<i class="dot k-{{ e.kind }}"></i>{% if e.time and d == e.start %}<span class="caltime">{{ e.time }}</span> {% endif %}<span class="caltitle">{{ e.title }}</span>{% endmacro %}
 
 {% if view == 'agenda' %}
-<p class="muted small">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }} · <a href="{{ base }}?start={{ lo - timedelta(days=56) }}">Earlier</a></p>
+{% macro moves() %}<p class="row"><a class="btn small ghost" href="{{ base }}?start={{ lo - timedelta(days=56) }}">← Earlier</a>{% if lo != today %}<a class="btn small ghost" href="{{ base }}">Back to today</a>{% endif %}<a class="btn small ghost" href="{{ base }}?start={{ hi + timedelta(days=1) }}">Later →</a></p>{% endmacro %}
+<div class="headrow"><h2 class="calrange">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }}</h2>{{ moves() }}</div>
 {% set days = by_day|dictsort %}
 {% for d, es in days %}<h2 class="calday" id="d{{ d }}">{{ 'Today' if d == today else d.strftime('%A, %B %-d') }}</h2>
 <ul class="agenda">{% for e in es %}<li>{{ item(e, d) }}
@@ -17,7 +18,7 @@
   {% if e.where %}<span class="muted small"> · {{ e.where }}</span>{% endif %}
   {% if can_edit and e.id and e.kind in ('events', 'planning', 'community') %}{% if e.from_minutes %}<span class="muted small"> · from the minutes</span>{% else %} <a class="small" href="/calendar/edit?cal={{ e.kind }}&id={{ e.id }}">Edit</a>{% endif %}{% endif %}</li>{% endfor %}</ul>
 {% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
-<p class="row"><a class="btn small ghost" href="{{ base }}?start={{ lo - timedelta(days=56) }}">← Earlier</a>{% if lo != today %}<a class="btn small ghost" href="{{ base }}">Back to today</a>{% endif %}<a class="btn small ghost" href="{{ base }}?start={{ hi + timedelta(days=1) }}">Later →</a></p>
+{{ moves() }}
 
 {% else %}
 <div class="headrow"><h2>{{ first.strftime('%B %Y') }}</h2><p class="row"><a class="btn small ghost" href="{{ base }}?view=month&month={{ prev_month }}" aria-label="Previous month">←</a>

@@ -1392,7 +1392,9 @@ def _feed_url(request: Request, path: str) -> str:
 
 @app.get("/calendar/subscribe", response_class=HTMLResponse)
 def calendar_subscribe(request: Request, mid: str = Depends(me)):
-    return page(request, "calendar_subscribe.html", private=_feed_url(request, f"/calendar/feed/{calview.feed_token(mid)}.ics"),
+    kinds = {k: v for k, v in calview.KINDS.items() if k in ("chow", "birthday") or k in calview.editable(archive.club) or
+             (k == "events" and not calview.editable(archive.club))}  # the calendars this club has
+    return page(request, "calendar_subscribe.html", private=_feed_url(request, f"/calendar/feed/{calview.feed_token(mid)}.ics"), kinds=kinds,
                 public=_feed_url(request, "/calendar/public.ics") if calview.public_kinds(archive.club) else None,
                 public_page=_feed_url(request, "/calendar/public") if calview.public_kinds(archive.club) else None)
 
@@ -1409,14 +1411,18 @@ def _ics(items: list, name: str) -> Response:
 
 
 @app.get("/calendar/feed/{token}.ics")
-def calendar_feed(token: str):
-    """A member's private feed: the club calendars, chow nights and shared birthdays, a month back and a year ahead."""
+def calendar_feed(token: str, show: str = ""):
+    """A member's private feed: the club calendars, chow nights and shared birthdays, a month back and a year ahead.
+    show=events,chow (any of calview.KINDS) narrows it; empty means everything."""
     mid = calview.member_for_feed(token)
     if not mid or not authn.is_active(mid):
         raise HTTPException(404)
     today = dt.date.today()
     items, _ = calview.entries(archive.club, archive, mid, today - dt.timedelta(days=31), today + dt.timedelta(days=365))
-    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} calendar")
+    if kinds := [k for k in show.split(",") if k in calview.KINDS]:
+        items = [e for e in items if e.kind in kinds]
+    name = " & ".join(calview.KINDS[k] for k in kinds) if 0 < len(kinds) < 3 else "calendar"
+    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} {name}")
 
 
 @app.get("/calendar/public.ics")

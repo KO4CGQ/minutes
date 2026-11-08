@@ -121,7 +121,7 @@ To turn it on:
 
 A repeating event (a weekly net) can be changed or deleted for **this date only**, **this and following dates** (the old series ends the day before and a new one starts) or **every date** (moving every date to another weekday moves the repeat day too).
 
-**Subscribing:** Calendar → "Subscribe in your calendar app" gives each member a private link (`/calendar/feed/SECRET.ics`) for Apple Calendar, Outlook, Google or a phone: the club calendars, chow nights and shared birthdays, a month back and a year ahead. The link works without signing in, so it's secret; "Make a new link" replaces it. It uses the app's HTTPS name, so calendar services on the internet can fetch it (Google refreshes subscribed calendars only every few hours).
+**Subscribing:** Calendar → "Subscribe in your calendar app" gives each member a private link (`/calendar/feed/SECRET.ics`) for Apple Calendar, Outlook, Google or a phone: the club calendars, chow nights and shared birthdays, a month back and a year ahead; `?show=events,chow` (ticked on that page) narrows it. The link works without signing in, so it's secret; "Make a new link" replaces it. It uses the app's HTTPS name, so calendar services on the internet can fetch it (Google refreshes subscribed calendars only every few hours).
 
 **Public calendars:** `public_calendars: [events]` (any of events, planning, community) under `club:` shows those calendars to anyone, signed in or not, at `/calendar/public`, with a public feed at `/calendar/public.ics`. Chow nights and birthdays are never public. Empty by default.
 

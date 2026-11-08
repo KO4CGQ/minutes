@@ -3,11 +3,29 @@
 <p>Add the club calendar to the calendar app you already use, and it stays up to date by itself.</p>
 
 <h2>Your own link</h2>
-<p>The club events, chow nights and the birthdays members share, from a month ago to a year ahead. <b>Keep this link to yourself:</b> anyone who has it can see what you see here.</p>
-<p><input type="text" readonly value="{{ private }}" aria-label="Your calendar link" onclick="this.select()" class="feedlink">
-<button type="button" class="btn small" onclick="navigator.clipboard.writeText('{{ private }}').then(() => this.textContent = 'Copied')">Copy</button></p>
+<p>From a month ago to a year ahead. <b>Keep this link to yourself:</b> anyone who has it can see what you see here.</p>
+<form class="profile" onsubmit="return false"><fieldset><legend>What to include</legend>
+  {% for k, label in kinds.items() %}<label class="check"><input type="checkbox" class="feedkind" value="{{ k }}" checked> <i class="dot k-{{ k }}"></i>{{ label }}</label>{% endfor %}
+  <p class="muted small">Want each in its own color in your calendar app? Tick one, copy the link and subscribe; then the next.</p></fieldset></form>
+<p><input type="text" readonly value="{{ private }}" aria-label="Your calendar link" onclick="this.select()" class="feedlink" id="feedlink">
+<button type="button" class="btn small" id="feedcopy">Copy</button> <a id="feedwebcal" href="{{ private|replace('https://', 'webcal://') }}">Open in my calendar app</a></p>
+<p id="feednone" class="msg err" hidden>Tick at least one.</p>
+<script>
+// The link names what's ticked (?show=events,chow); all ticked is the plain link.
+(() => {
+  const base = {{ private|tojson }}, box = document.getElementById("feedlink"), boxes = [...document.querySelectorAll(".feedkind")];
+  const update = () => {
+    const on = boxes.filter((b) => b.checked).map((b) => b.value);
+    box.value = on.length === boxes.length ? base : base + "?show=" + on.join(",");
+    document.getElementById("feedwebcal").href = box.value.replace(/^https?:/, "webcal:");
+    document.getElementById("feednone").hidden = on.length > 0;
+  };
+  boxes.forEach((b) => b.onchange = update);
+  document.getElementById("feedcopy").onclick = (e) => navigator.clipboard.writeText(box.value).then(() => e.target.textContent = "Copied");
+})();
+</script>
 <ul>
-  <li><b>iPhone or iPad:</b> Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar, and paste the link. Or <a href="{{ private|replace('https://', 'webcal://') }}">open it here</a>.</li>
+  <li><b>iPhone or iPad:</b> tap "Open in my calendar app" above, or Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar, and paste the link.</li>
   <li><b>Google Calendar</b> (on a computer): Other calendars → + → From URL, and paste the link. Google only checks it every few hours.</li>
   <li><b>Outlook:</b> Add calendar → Subscribe from web, and paste the link.</li>
 </ul>
