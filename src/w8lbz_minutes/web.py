@@ -1387,7 +1387,8 @@ def calendar_edit(request: Request, cal: str = "events", id: str = "", date: str
     if e and e.get("extendedProperties", {}).get("private", {}).get("w8lbz") == "1":
         raise HTTPException(409, "This event comes from the minutes' Upcoming Events; change it in the leader console.")
     f = calview.form_values(e) if e else {"title": "", "where": "", "notes": "", "date": date, "time": "", "end_date": "", "end_time": ""}
-    return page(request, "calendar_edit.html", f=f, cal=cal, id=id, cals=cals, error=error, repeats=bool(e and e.get("recurringEventId")))
+    return page(request, "calendar_edit.html", f=f, cal=cal, id=id, cals=cals, error=error, repeats=bool(e and e.get("recurringEventId")),
+                scopes=calview.SCOPES)
 
 
 @app.post("/calendar/save")
@@ -1395,7 +1396,7 @@ async def calendar_save(request: Request, mid: str = Depends(me)):
     cals = _calendar_editor(request)
     form = dict((await request.form()).items())
     cal, eid, old = form.get("cal", ""), form.get("id", ""), form.get("old_cal", "")
-    if cal not in cals or (old and old not in cals):
+    if cal not in cals or (old and old not in cals) or form.get("scope", "this") not in calview.SCOPES:
         raise HTTPException(404)
     try:
         b = calview.save(archive.club, cal, eid or None, form, by=mid, old_kind=old or None)
@@ -1409,11 +1410,15 @@ async def calendar_save(request: Request, mid: str = Depends(me)):
 
 
 @app.post("/calendar/delete")
-def calendar_delete(request: Request, cal: str = Form(...), id: str = Form(...), mid: str = Depends(me)):
+def calendar_delete(request: Request, old_cal: str = Form(...), id: str = Form(...), scope: str = Form("this"), mid: str = Depends(me)):
     cals = _calendar_editor(request)
-    if cal not in cals:
+    if old_cal not in cals or scope not in calview.SCOPES:
         raise HTTPException(404)
-    calview.delete(archive.club, cal, id, by=mid)
+    try:
+        calview.delete(archive.club, old_cal, id, by=mid, scope=scope)
+    except Exception as e:
+        _log.exception("calendar delete failed")
+        return RedirectResponse(f"/calendar/edit?cal={quote(old_cal)}&id={quote(id)}&error=" + quote(f"Google Calendar didn't delete it ({e}).")[:1500], status_code=303)
     return RedirectResponse("/calendar", status_code=303)
 
 

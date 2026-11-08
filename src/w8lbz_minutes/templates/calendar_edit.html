@@ -1,9 +1,11 @@
 {% extends "base.html" %}{% block title %}{{ 'Change' if id else 'Add' }} an event{% endblock %}{% block body %}
 <h1>{{ 'Change' if id else 'Add' }} an event</h1>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-{% if repeats %}<p class="msg">This is one date of a repeating event. Changes here apply to this date only.</p>{% endif %}
 <form method="post" action="/calendar/save" class="profile">
 <input type="hidden" name="id" value="{{ id }}"><input type="hidden" name="old_cal" value="{{ cal if id else '' }}">
+{% if repeats %}<fieldset><legend>This event repeats</legend><p class="muted small">What should a change (or Delete) apply to?</p>
+  {% for k, label in scopes.items() %}<label class="check"><input type="radio" name="scope" value="{{ k }}" {{ 'checked' if k == 'this' }}> {{ label }}</label>{% endfor %}
+  <p class="muted small">For more than this date, the dates shown below are this date's; every other date moves by the same amount.</p></fieldset>{% endif %}
 <label>Calendar <select name="cal">{% for k, label in cals.items() %}<option value="{{ k }}" {{ 'selected' if k == cal }}>{{ label }}</option>{% endfor %}</select></label>
 <p class="muted small">Club events are what the club runs or joins. Community is what's on in the area. Planning is for officers' dates, like the annual meeting.</p>
 <label>Title <input name="title" value="{{ f.title }}" maxlength="200" required></label>
@@ -15,8 +17,7 @@
   <p class="muted small">Optional. An end time alone means the same day; a later date for an event over several days. With a start time and no end, it's taken as 2 hours.</p></fieldset>
 <label>Where <input name="where" value="{{ f.where }}" maxlength="200"></label>
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
-<p class="row"><button class="btn">Save</button> <a class="btn ghost" href="/calendar{% if f.date %}?start={{ f.date }}{% endif %}">Cancel</a></p>
+<p class="row"><button class="btn">Save</button> <a class="btn ghost" href="/calendar{% if f.date %}?start={{ f.date }}{% endif %}">Cancel</a>
+{% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate onclick="return confirm('Delete this event from the calendar?')">Delete</button>{% endif %}</p>
 </form>
-{% if id %}<form method="post" action="/calendar/delete" onsubmit="return confirm('Delete this event from the calendar?{{ ' (This date only.)' if repeats }}')">
-<input type="hidden" name="cal" value="{{ cal }}"><input type="hidden" name="id" value="{{ id }}"><button class="btn ghost">Delete this event</button></form>{% endif %}
 {% endblock %}

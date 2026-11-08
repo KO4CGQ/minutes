@@ -48,7 +48,7 @@ class FakeGoogle:
 
     def patch(self, url, json):
         cal, eid = self._split(url)
-        self.cals[cal] = [{**json, "id": eid} if e["id"] == eid else e for e in self.cals[cal]]
+        self.cals[cal] = [{**e, **json, "id": eid} if e["id"] == eid else e for e in self.cals[cal]]  # PATCH merges
         return self._ok()
 
     def delete(self, url):
@@ -156,3 +156,57 @@ def test_calendar_pages(tmp_path, monkeypatch):
     assert "Add an event" in t.get("/calendar?start=2026-11-01").text
     assert 'value="Weekly net"' in t.get("/calendar/edit?cal=events&id=net1").text
     assert t.get("/calendar/edit?cal=events&id=app1").status_code == 409  # from the minutes: edit in the console
+
+
+def series():
+    """A weekly Tuesday net (the series) and its Nov 17 date, as Google returns them."""
+    master = {"id": "net", "summary": "Weekly net", "recurrence": ["RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=52"],
+              "start": {"dateTime": "2026-11-03T20:00:00-05:00"}, "end": {"dateTime": "2026-11-03T21:00:00-05:00"}}
+    inst = {"id": "net_17", "summary": "Weekly net", "recurringEventId": "net", "originalStartTime": {"dateTime": "2026-11-17T20:00:00-05:00"},
+            "start": {"dateTime": "2026-11-17T20:00:00-05:00"}, "end": {"dateTime": "2026-11-17T21:00:00-05:00"}}
+    return FakeGoogle({"club@cal": [master, inst]})
+
+
+def by_id(g, eid):
+    return next(e for e in g.cals["club@cal"] if e["id"] == eid)
+
+
+def test_repeating_event_this_following_all():
+    c = club()
+    form = {"title": "Weekly net (new frequency)", "date": "2026-11-17", "time": "20:30", "end_time": "21:30"}
+    g = series()  # this date only: just the occurrence
+    calview.save(c, "events", "net_17", {**form, "scope": "this"}, by="kd8aaa", old_kind="events", session=g)
+    assert by_id(g, "net_17")["start"]["dateTime"] == "2026-11-17T20:30:00" and by_id(g, "net")["summary"] == "Weekly net"
+    g = series()  # every date: the series moves by the same 30 minutes, from its own first date
+    calview.save(c, "events", "net_17", {**form, "scope": "all"}, by="kd8aaa", old_kind="events", session=g)
+    m = by_id(g, "net")
+    assert (m["summary"], m["start"]["dateTime"], m["end"]["dateTime"]) == ("Weekly net (new frequency)", "2026-11-03T20:30:00", "2026-11-03T21:30:00")
+    g = series()  # this and following: the old series ends the day before, a new one starts here
+    calview.save(c, "events", "net_17", {**form, "scope": "following"}, by="kd8aaa", old_kind="events", session=g)
+    assert by_id(g, "net")["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=TU;UNTIL=20261118T005959Z"]  # 7:59:59 PM Nov 17, Eastern
+    new = g.cals["club@cal"][-1]
+    assert new["summary"] == "Weekly net (new frequency)" and new["start"]["dateTime"] == "2026-11-17T20:30:00"
+    assert new["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=52"]
+    g = series()  # moving every date to Wednesday moves BYDAY too
+    calview.save(c, "events", "net_17", {**form, "date": "2026-11-18", "scope": "all"}, by="kd8aaa", old_kind="events", session=g)
+    assert by_id(g, "net")["recurrence"] == ["RRULE:FREQ=WEEKLY;BYDAY=WE;COUNT=52"] and by_id(g, "net")["start"]["dateTime"].startswith("2026-11-04")
+
+
+def test_repeating_event_delete_scopes_and_limits():
+    c = club()
+    g = series()
+    calview.delete(c, "events", "net_17", by="kd8aaa", scope="following", session=g)
+    assert "UNTIL=20261118T005959Z" in by_id(g, "net")["recurrence"][0]
+    g = series()
+    calview.delete(c, "events", "net_17", by="kd8aaa", scope="all", session=g)
+    assert [e["id"] for e in g.cals["club@cal"]] == ["net_17"]  # (Google drops the dates with the series)
+    g = series()
+    calview.delete(c, "events", "net_17", by="kd8aaa", scope="this", session=g)
+    assert [e["id"] for e in g.cals["club@cal"]] == ["net"]
+    g = series()
+    by_id(g, "net")["recurrence"] = ["RRULE:FREQ=WEEKLY;BYDAY=TU,TH"]
+    with pytest.raises(ValueError, match="more than one day"):
+        calview.save(c, "events", "net_17", {"title": "Net", "date": "2026-11-18", "time": "20:00", "scope": "all"}, by="kd8aaa",
+                     old_kind="events", session=g)
+    with pytest.raises(ValueError, match="one date at a time"):
+        calview.save(c, "community", "net_17", {"title": "Net", "date": "2026-11-17", "scope": "all"}, by="kd8aaa", old_kind="events", session=g)
