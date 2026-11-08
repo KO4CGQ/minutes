@@ -75,5 +75,7 @@ markTheme();
   tick(); setInterval(tick, 10000); })();
 // close the name menu when clicking elsewhere
 document.addEventListener("click", (e) => document.querySelectorAll("details.menu[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }));
+document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return;
+  document.querySelectorAll("details.menu[open], details.iconpick[open]").forEach((d) => { d.open = false; d.querySelector("summary").focus(); }); });
 </script>
 </body></html>
