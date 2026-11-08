@@ -119,6 +119,12 @@ To turn it on:
 
 **Calendar page** (`/calendar`, in the menu): every member sees an agenda (the next 8 weeks) or a month grid with the club events, Planning and Community calendars read from Google, chow nights, and birthdays members share (never private ones, not even for officers). Leaders and minutes editors (and admins in admin mode) can **add, change and delete** events on the club events, Planning and Community calendars there, so nobody else needs the club's Google account. Changes go straight to Google and are logged in `calendar-log.jsonl`. Events that came from the minutes are changed in the leader console instead. Before the calendars are set up, the page shows the weekly meeting, the minutes' dated events, chow and birthdays.
 
+A repeating event (a weekly net) can be changed or deleted for **this date only**, **this and following dates** (the old series ends the day before and a new one starts) or **every date** (moving every date to another weekday moves the repeat day too).
+
+**Subscribing:** Calendar → "Subscribe in your calendar app" gives each member a private link (`/calendar/feed/SECRET.ics`) for Apple Calendar, Outlook, Google or a phone: the club calendars, chow nights and shared birthdays, a month back and a year ahead. The link works without signing in, so it's secret; "Make a new link" replaces it. It uses the app's HTTPS name, so calendar services on the internet can fetch it (Google refreshes subscribed calendars only every few hours).
+
+**Public calendars:** `public_calendars: [events]` (any of events, planning, community) under `club:` shows those calendars to anyone, signed in or not, at `/calendar/public`, with a public feed at `/calendar/public.ics`. Chow nights and birthdays are never public. Empty by default.
+
 Previews never sync, and their Calendar page doesn't read or edit Google.
 
 ## Chow schedule

@@ -210,3 +210,48 @@ def test_repeating_event_delete_scopes_and_limits():
                      old_kind="events", session=g)
     with pytest.raises(ValueError, match="one date at a time"):
         calview.save(c, "community", "net_17", {"title": "Net", "date": "2026-11-17", "scope": "all"}, by="kd8aaa", old_kind="events", session=g)
+
+
+def test_feeds_and_public_calendar(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    s = chow.load()
+    s["nights"] = {(dt.date.today() + dt.timedelta(days=2)).isoformat(): {"member": "kd8aaa"}}
+    chow.save(s)
+    c = club()
+    today = dt.date.today()
+    g = google()
+    g.cals["club@cal"].append({"id": "pub", "summary": "Fox hunt; bring a radio, and snacks", "location": "City park",
+                               "start": {"dateTime": f"{today + dt.timedelta(days=3)}T14:00:00-05:00"},
+                               "end": {"dateTime": f"{today + dt.timedelta(days=3)}T16:00:00-05:00"}})
+    g.cals["plan@cal"].append({"id": "pl", "summary": "Board dinner", "start": {"date": f"{today + dt.timedelta(days=4)}"},
+                               "end": {"date": f"{today + dt.timedelta(days=6)}"}})
+    a = Auth(c, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", c)
+    monkeypatch.setattr(gcal, "_session", lambda: g)
+    anon = TestClient(web.app)
+    assert anon.get("/calendar/public", follow_redirects=False).status_code == 404  # nothing public yet
+    # a member's private feed: no sign-in, the secret is the link
+    tok = calview.feed_token("kd8bbb")
+    r = anon.get(f"/calendar/feed/{tok}.ics")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/calendar")
+    body = r.text
+    assert "SUMMARY:Fox hunt\; bring a radio\\, and snacks" in body and "LOCATION:City park" in body
+    assert "DTSTART;TZID=America/New_York:" in body and "SUMMARY:Chow: Amy Able" in body
+    assert f"DTEND;VALUE=DATE:{(today + dt.timedelta(days=6)):%Y%m%d}" in body  # Board dinner: two days, end is the day after
+    assert all(len(line.encode()) <= 75 for line in body.split("\r\n"))
+    assert anon.get("/calendar/feed/wrong.ics").status_code == 404
+    assert calview.feed_token("kd8bbb", reset=True) != tok and anon.get(f"/calendar/feed/{tok}.ics").status_code == 404
+    # public: only the calendars an admin chose; never chow or birthdays
+    c.info["public_calendars"] = ["events", "chow"]  # chow is never public, even if listed
+    page = anon.get("/calendar/public")
+    assert page.status_code == 200 and "Fox hunt" in page.text and "Chow" not in page.text and "Board dinner" not in page.text
+    feed = anon.get("/calendar/public.ics").text
+    assert "Fox hunt" in feed and "Chow" not in feed and "Birthday" not in feed and "Board dinner" not in feed
+    assert anon.get("/calendar", follow_redirects=False).status_code in (302, 303, 307)  # the members' page still needs sign-in
+    m = TestClient(web.app)
+    m.cookies.set(web.COOKIE, a.new_session("kd8bbb"))
+    sub = m.get("/calendar/subscribe").text
+    assert calview.feed_token("kd8bbb") in sub and "/calendar/public.ics" in sub

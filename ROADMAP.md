@@ -32,9 +32,8 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 ## Club calendars
 Chow nights and dated Upcoming Events are synced (see the README). Still to do:
 - **The weekly meeting** on Meetings & Events, if the club doesn't already keep it there as a recurring event (then the app would only add cancellations, e.g. holidays).
-- **Repeating events from the Calendar page:** today it changes one date of a repeating event (a weekly net); creating a new repeating event, or changing every date at once, still needs Google Calendar.
+- **New repeating events from the Calendar page:** changing one date, this and following, or every date works; creating a new repeating event (a new net) still needs Google Calendar.
 - **Calendar editors:** editing is for leaders and minutes editors; a separate `calendar_editor` tick on the roster sheet could let others (e.g. the net manager) edit too.
-- **Calendar feed (.ics):** a private link per member so Apple Calendar, Outlook or a phone can subscribe to the club calendars plus their own chow nights.
 - **Who changed what:** a page for officers listing `calendar-log.jsonl`.
 - **Planning:** due dates of tracked business items.
 - **Community Events:** non-club happenings in the area; the app could show them, edited in Google Calendar.

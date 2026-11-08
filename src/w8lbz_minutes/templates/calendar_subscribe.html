@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block title %}Subscribe to the calendar{% endblock %}{% block body %}
+<h1>Subscribe to the calendar</h1>
+<p>Add the club calendar to the calendar app you already use, and it stays up to date by itself.</p>
+
+<h2>Your own link</h2>
+<p>The club events, chow nights and the birthdays members share, from a month ago to a year ahead. <b>Keep this link to yourself:</b> anyone who has it can see what you see here.</p>
+<p><input type="text" readonly value="{{ private }}" aria-label="Your calendar link" onclick="this.select()" class="feedlink">
+<button type="button" class="btn small" onclick="navigator.clipboard.writeText('{{ private }}').then(() => this.textContent = 'Copied')">Copy</button></p>
+<ul>
+  <li><b>iPhone or iPad:</b> Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar, and paste the link. Or <a href="{{ private|replace('https://', 'webcal://') }}">open it here</a>.</li>
+  <li><b>Google Calendar</b> (on a computer): Other calendars → + → From URL, and paste the link. Google only checks it every few hours.</li>
+  <li><b>Outlook:</b> Add calendar → Subscribe from web, and paste the link.</li>
+</ul>
+<form method="post" action="/calendar/subscribe/reset" onsubmit="return confirm('Make a new link? The old one stops working, so update any calendar app that uses it.')">
+<button class="btn small ghost">Make a new link</button> <span class="muted small">if you shared it by mistake.</span></form>
+
+{% if public %}<h2>The public calendar</h2>
+<p>For anyone, even people who aren't members: the club's public events, no names. Share it freely.</p>
+<p><input type="text" readonly value="{{ public }}" aria-label="Public calendar link" onclick="this.select()" class="feedlink"></p>
+<p>As a web page: <a href="{{ public_page }}">{{ public_page }}</a></p>{% endif %}
+{% endblock %}

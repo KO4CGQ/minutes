@@ -14,6 +14,8 @@ club:
                                                # dated Upcoming Events are added here; leaders edit it on the Calendar page
     planning: def456@group.calendar.google.com   # officers' dates (the annual meeting); shown and edited on the Calendar page
     community: ghi789@group.calendar.google.com  # what's on in the area; shown and edited on the Calendar page
+  public_calendars: []     # e.g. [events, community]: shown to anyone at /calendar/public and /calendar/public.ics
+                           # (never chow or birthdays). Leave empty to keep every calendar members-only.
   remind_days_before: 3    # business item owners get an email this many days before the due date (and once if overdue)
   date_formats:          # strftime codes; %-d = day without leading zero
     list: "%b %-d, %Y"    # tables, e.g. Nov 5, 2026

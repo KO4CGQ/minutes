@@ -43,7 +43,8 @@ if not _log.handlers:
 
 COOKIE = "w8lbz_session"
 CHALLENGE_COOKIE = "w8lbz_pk"
-PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico")
+PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico",
+                "/calendar/public", "/calendar/feed/")  # public calendars (if any are made public); private feeds carry their own secret
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
 
 
@@ -1346,6 +1347,18 @@ SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "
 @app.get("/calendar", response_class=HTMLResponse)
 def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", mid: str = Depends(me)):
     """Agenda (from a day, 8 weeks) or month grid: club calendars, chow nights and birthdays."""
+    return _calendar(request, view, start, month, mid)
+
+
+@app.get("/calendar/public", response_class=HTMLResponse)
+def calendar_public(request: Request, view: str = "agenda", start: str = "", month: str = ""):
+    """The calendars an admin made public, for anyone (no chow, no birthdays)."""
+    if not calview.public_kinds(archive.club):
+        raise HTTPException(404)
+    return _calendar(request, view, start, month, None)
+
+
+def _calendar(request: Request, view: str, start: str, month: str, mid: str | None) -> HTMLResponse:
     today = dt.date.today()
     try:
         first = dt.date.fromisoformat(month + "-01") if month else today.replace(day=1)
@@ -1358,15 +1371,61 @@ def calendar_page(request: Request, view: str = "agenda", start: str = "", month
         hi = nxt + dt.timedelta(days=(5 - nxt.weekday()) % 7)
     else:
         view, lo, hi = "agenda", start_day, start_day + dt.timedelta(days=55)
-    items, note = calview.entries(archive.club, archive, request.state.member, lo, hi, elevated=admin_mode(request))
+    public = mid is None
+    items, note = calview.entries(archive.club, archive, mid, lo, hi, public=public)
     by_day: dict[dt.date, list] = {}
     for e in items:
         for d in e.days(lo, hi):
             by_day.setdefault(d, []).append(e)
-    return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note,
-                kinds=calview.KINDS, can_edit=can_lead_now(request) and bool(calview.editable(archive.club)),
+    kinds = {k: v for k, v in calview.KINDS.items() if not public or k in calview.public_kinds(archive.club)}
+    return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
+                kinds=kinds, base="/calendar/public" if public else "/calendar",
+                can_edit=not public and can_lead_now(request) and bool(calview.editable(archive.club)),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
                 timedelta=dt.timedelta)
+
+
+def _feed_url(request: Request, path: str) -> str:
+    """The feed's address on the app's HTTPS name, which calendar services (Google, Outlook) can reach."""
+    return f"https://{authn.rp_id}{path}" if authn.rp_id else str(request.base_url).rstrip("/") + path
+
+
+@app.get("/calendar/subscribe", response_class=HTMLResponse)
+def calendar_subscribe(request: Request, mid: str = Depends(me)):
+    return page(request, "calendar_subscribe.html", private=_feed_url(request, f"/calendar/feed/{calview.feed_token(mid)}.ics"),
+                public=_feed_url(request, "/calendar/public.ics") if calview.public_kinds(archive.club) else None,
+                public_page=_feed_url(request, "/calendar/public") if calview.public_kinds(archive.club) else None)
+
+
+@app.post("/calendar/subscribe/reset")
+def calendar_subscribe_reset(mid: str = Depends(me)):
+    calview.feed_token(mid, reset=True)
+    return RedirectResponse("/calendar/subscribe", status_code=303)
+
+
+def _ics(items: list, name: str) -> Response:
+    return Response(calview.ics(items, name, str(archive.club.info.get("timezone", "America/New_York"))),
+                    media_type="text/calendar; charset=utf-8", headers={"Cache-Control": "private, max-age=900"})
+
+
+@app.get("/calendar/feed/{token}.ics")
+def calendar_feed(token: str):
+    """A member's private feed: the club calendars, chow nights and shared birthdays, a month back and a year ahead."""
+    mid = calview.member_for_feed(token)
+    if not mid or not authn.is_active(mid):
+        raise HTTPException(404)
+    today = dt.date.today()
+    items, _ = calview.entries(archive.club, archive, mid, today - dt.timedelta(days=31), today + dt.timedelta(days=365))
+    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} calendar")
+
+
+@app.get("/calendar/public.ics")
+def calendar_public_feed():
+    if not calview.public_kinds(archive.club):
+        raise HTTPException(404)
+    today = dt.date.today()
+    items, _ = calview.entries(archive.club, archive, None, today - dt.timedelta(days=31), today + dt.timedelta(days=365), public=True)
+    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} events")
 
 
 def _calendar_editor(request: Request) -> dict:

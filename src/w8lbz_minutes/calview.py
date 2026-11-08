@@ -33,6 +33,8 @@ class Entry:
     id: str | None = None  # Google event id (editable on the page), else None
     repeats: bool = False  # one occurrence of a repeating event
     from_minutes: bool = False  # put there by the sync from the minutes' Upcoming Events
+    starts: dt.datetime | None = None  # timed events: exact start and end (club time), for the calendar feed
+    ends: dt.datetime | None = None
 
     def days(self, lo: dt.date, hi: dt.date) -> list[dt.date]:
         """The days it covers within lo..hi (a long event is listed on each day, up to two weeks)."""
@@ -66,11 +68,12 @@ def _google(club: Club, kind: str, lo: dt.date, hi: dt.date, session) -> list[En
             if "date" in s:  # all day; Google's end is the day after
                 a, b, at = dt.date.fromisoformat(s["date"]), dt.date.fromisoformat(f["date"]) - dt.timedelta(days=1), None
             else:
-                sa, sb = dt.datetime.fromisoformat(s["dateTime"]), dt.datetime.fromisoformat(f["dateTime"])
+                sa = dt.datetime.fromisoformat(s["dateTime"]).replace(tzinfo=None)  # club time, as Google gives it
+                sb = dt.datetime.fromisoformat(f["dateTime"]).replace(tzinfo=None)
                 a, b, at = sa.date(), max(sa.date(), (sb - dt.timedelta(seconds=1)).date()), _clock(sa)
             mine = e.get("extendedProperties", {}).get("private", {}).get("w8lbz") == "1"
             out.append(Entry(a, b, e.get("summary", "(no title)"), kind, at, e.get("location"), e["id"],
-                             bool(e.get("recurringEventId")), mine))
+                             bool(e.get("recurringEventId")), mine, *((sa, sb) if at else (None, None))))
         if not (page := j.get("nextPageToken")):
             break
     _cache[key] = (time.time(), out)
@@ -101,16 +104,36 @@ def _birthdays(club: Club, viewer: str, lo: dt.date, hi: dt.date) -> list[Entry]
     return out
 
 
-def entries(club: Club, archive, viewer: str, lo: dt.date, hi: dt.date, elevated: bool = False, session=None) -> tuple[list[Entry], str | None]:
-    """Everything between lo and hi (inclusive), sorted, and a note if the Google Calendars couldn't be read."""
+def public_kinds(club: Club) -> list[str]:
+    """The Google Calendars an admin made public (`club.public_calendars`): shown without signing in."""
+    cals = club.info.get("calendars") or {}
+    return [k for k in club.info.get("public_calendars") or [] if k in READ and cals.get(k)]
+
+
+def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, session=None,
+            public: bool = False) -> tuple[list[Entry], str | None]:
+    """Everything between lo and hi (inclusive), sorted, and a note if the Google Calendars couldn't be read.
+    public: only the public calendars; never chow nights or birthdays (members' names)."""
     out, note = [], None
+    if public:
+        try:
+            s = session or gcal._session()
+            for k in public_kinds(club):
+                out += _google(club, k, lo, hi, s)
+        except Exception as e:
+            log.warning("couldn't read the public calendars: %s", e)
+            note = "The club calendar can't be reached just now. Please try again later."
+        out.sort(key=_order)
+        return out, note
     at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
     for d, x in chow.upcoming(chow.load(), lo, n=400):
         if d > hi.isoformat():
             break
         if x.get("status") != "none":
             day = dt.date.fromisoformat(d)
-            out.append(Entry(day, day, f"Chow: {club.name(x['member']) if x.get('member') else 'open'}", "chow", _clock(at)))
+            t = dt.datetime.combine(day, at)
+            out.append(Entry(day, day, f"Chow: {club.name(x['member']) if x.get('member') else 'open'}", "chow", _clock(at),
+                             starts=t, ends=t + dt.timedelta(hours=2)))
     out += _birthdays(club, viewer, lo, hi)
     cals = club.info.get("calendars") or {}
     google = [k for k in READ if cals.get(k)] if not PREVIEW else []
@@ -126,15 +149,21 @@ def entries(club: Club, archive, viewer: str, lo: dt.date, hi: dt.date, elevated
         wd = chow.WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
         d = lo + dt.timedelta(days=(wd - lo.weekday()) % 7)
         while d <= hi:
-            out.append(Entry(d, d, "Club meeting", "events", _clock(at)))
+            t = dt.datetime.combine(d, at)
+            out.append(Entry(d, d, "Club meeting", "events", _clock(at), starts=t, ends=t + dt.timedelta(hours=2)))
             d += dt.timedelta(days=7)
         for e in gcal.latest_events(archive):
             if e.when:
                 s, f, all_day = e.span()
                 if s.date() <= hi and f.date() >= lo:
-                    out.append(Entry(s.date(), f.date(), e.text, "events", None if all_day else _clock(s)))
-    out.sort(key=lambda e: (e.start, e.time is not None, dt.datetime.strptime(e.time, "%I:%M %p").time() if e.time else dt.time(), e.title))
+                    out.append(Entry(s.date(), f.date(), e.text, "events", None if all_day else _clock(s),
+                                     starts=None if all_day else s, ends=None if all_day else f))
+    out.sort(key=_order)
     return out, note
+
+
+def _order(e: Entry):
+    return e.start, e.time is not None, dt.datetime.strptime(e.time, "%I:%M %p").time() if e.time else dt.time(), e.title
 
 
 # ---------------- leaders editing the club calendars ----------------
@@ -297,3 +326,62 @@ def _log(by: str, action: str, kind: str, e: dict) -> None:
 def history(n: int = 50) -> list[dict]:
     p = DATA / "calendar-log.jsonl"
     return [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:n] if p.exists() else []
+
+
+# ---------------- subscribing from a calendar app (.ics feeds) ----------------
+
+def feed_token(mid: str, reset: bool = False) -> str:
+    """The secret in a member's private feed address (calendar-feeds.json). reset: a new one; the old link stops working."""
+    import secrets
+    p = DATA / "calendar-feeds.json"
+    tokens = json.loads(p.read_text()) if p.exists() else {}
+    if reset or mid not in tokens:
+        tokens[mid] = secrets.token_urlsafe(24)
+        p.write_text(json.dumps(tokens))
+        p.chmod(0o600)
+    return tokens[mid]
+
+
+def member_for_feed(token: str) -> str | None:
+    import hmac
+    p = DATA / "calendar-feeds.json"
+    tokens = json.loads(p.read_text()) if p.exists() else {}
+    return next((m for m, t in tokens.items() if hmac.compare_digest(t, token)), None)
+
+
+def _ics_text(v: str) -> str:
+    return v.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _fold(line: str) -> str:
+    """iCalendar lines are at most 75 bytes; longer ones continue on lines starting with a space."""
+    out, b = [], line.encode()
+    while len(b) > 75:
+        cut = 75 if not out else 74
+        while cut and (b[cut] & 0xC0) == 0x80:  # don't split a UTF-8 character
+            cut -= 1
+        out.append(b[:cut].decode())
+        b = b[cut:]
+    out.append(b.decode())
+    return "\r\n ".join(out)
+
+
+def ics(items: list[Entry], name: str, tz: str) -> str:
+    """An iCalendar file of these entries, for Apple Calendar, Outlook, Google and phones to subscribe to."""
+    import hashlib
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//W8LBZ Minutes//Club calendar//EN", "CALSCALE:GREGORIAN",
+             f"X-WR-CALNAME:{_ics_text(name)}", f"X-WR-TIMEZONE:{tz}", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H"]
+    for e in items:
+        uid = hashlib.sha1(f"{e.kind}|{e.id or e.title}|{e.start}".encode()).hexdigest()
+        lines += ["BEGIN:VEVENT", f"UID:{uid}@w8lbz-minutes", f"DTSTAMP:{stamp}", f"SUMMARY:{_ics_text(e.title)}",
+                  f"CATEGORIES:{_ics_text(KINDS[e.kind])}"]
+        if e.starts:
+            lines += [f"DTSTART;TZID={tz}:{e.starts:%Y%m%dT%H%M%S}", f"DTEND;TZID={tz}:{e.ends:%Y%m%dT%H%M%S}"]
+        else:
+            lines += [f"DTSTART;VALUE=DATE:{e.start:%Y%m%d}", f"DTEND;VALUE=DATE:{e.end + dt.timedelta(days=1):%Y%m%d}"]
+        if e.where:
+            lines.append(f"LOCATION:{_ics_text(e.where)}")
+        lines.append("END:VEVENT")
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(_fold(x) for x in lines) + "\r\n"

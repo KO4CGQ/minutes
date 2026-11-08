@@ -427,3 +427,4 @@ table.month li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   table.month td { height: 3.4rem; padding: .15rem; } table.month li { display: inline; } table.month .caltime, table.month .caltitle, table.month li.more { display: none; }
   table.month .dot { margin-right: .1rem; }
 }
+.feedlink { width: 100%; max-width: 40rem; font-family: ui-monospace, monospace; font-size: .8rem; }
