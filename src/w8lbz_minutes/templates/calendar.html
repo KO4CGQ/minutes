@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon %}{% block title %}{{ club.info.callsign ~ ' events' if public else 'Calendar' }}{% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}{{ club.info.callsign ~ ' events' if public else 'Calendar' }}{% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
 {% else %}<p><a href="/calendar/subscribe">Subscribe in your calendar app (phone, Outlook, Apple or Google Calendar)</a></p>{% endif %}
 {% endblock %}{% block body %}
 <div class="headrow"><h1>{{ club.info.name ~ ' events' if public else 'Calendar' }}</h1>{% if can_edit %}<p class="row"><a class="btn small" href="/calendar/edit">+ Add an event</a><a class="btn small ghost" href="/calendar/import">Import .ics</a></p>{% endif %}</div>
@@ -15,7 +15,7 @@
 <ul class="agenda">{% for e in es %}<li>{{ item(e, d) }}
   {% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}
   {% if e.where %}<span class="muted small"> · {{ e.where }}</span>{% endif %}
-  {% if can_edit %}{% if e.from_minutes %}<span class="muted small"> · from the minutes</span>{% elif e.id %} <a class="caledit" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}" title="Edit" aria-label="Edit {{ e.title }}">{{ icon('pencil') }}</a>{% endif %}{% endif %}</li>{% endfor %}</ul>
+  {% if can_edit %}{% if e.from_minutes %}<span class="muted small"> · from the minutes</span>{% elif e.id %} <a class="caledit" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}" title="Edit" aria-label="Edit {{ e.title }}">{{ emoji('✏️', 'pencil') }}</a>{% endif %}{% endif %}</li>{% endfor %}</ul>
 {% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
 {{ moves() }}
 

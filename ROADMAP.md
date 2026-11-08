@@ -19,7 +19,7 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 
 ## Look and feel: ideas to consider
 - **Unified search:** one search box for minutes, members (name, callsign), business items and chow nights, with results grouped by kind. Minutes already have full-text search; the others are small lists, so this is a modest change.
-- **Line icons instead of emoji** on buttons and labels: emoji show as empty boxes on computers without an emoji font. The Links page's icon set (`_icons.html`) could cover them.
+- **Emoji with a fallback everywhere:** the `emoji()` helper (`_icons.html`) shows a native emoji where the device draws color emoji and the app's own line icon elsewhere; the calendar's ✏️ uses it. Other buttons and labels with emoji (📅, ✅, ✖️, 🔴…) could switch to it, each with a matching line icon.
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
 - **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.

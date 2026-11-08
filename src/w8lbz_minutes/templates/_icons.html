@@ -24,3 +24,6 @@
 {% elif name == 'form' %}<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4"/>
 {% else %}<path d="M10 14a4 4 0 0 0 5.7 0l3.5-3.5a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3.5 3.5a4 4 0 0 0 5.7 5.7l1-1"/>{% endif %}
 </svg>{% endif %}{% endmacro %}
+
+{# A native emoji where the device draws color emoji (base.html sets html.emoji), else the app's own icon. #}
+{% macro emoji(char, name) %}<span class="emo" aria-hidden="true">{{ char }}</span><span class="emo-alt">{{ icon(name) }}</span>{% endmacro %}
