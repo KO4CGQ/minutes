@@ -31,7 +31,8 @@ esac
 B=$1; NAME=${2:-$1}; DIR=$BASE/$NAME; U=$(unit "$NAME")
 mkdir -p "$DIR"
 git -C "$REPO" fetch -q origin
-if [ -d "$DIR/app" ]; then git -C "$DIR/app" checkout -q --detach "origin/$B" && git -C "$DIR/app" reset -q --hard "origin/$B"
+# the preview's checkout is a throwaway copy: any edits made in it are discarded (and a failure stops here)
+if [ -d "$DIR/app" ]; then git -C "$DIR/app" checkout -q --force --detach "origin/$B"; git -C "$DIR/app" reset -q --hard "origin/$B"
 else git -C "$REPO" worktree add -q --detach "$DIR/app" "origin/$B"; fi
 
 # Older branches have no preview mode: they would send real email and write to the real roster sheet.
