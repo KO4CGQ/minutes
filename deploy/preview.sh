@@ -25,7 +25,7 @@ case "${1:-}" in
     B=${2:?branch}; systemctl --user stop "$(unit "$B")" 2>/dev/null || true
     git -C "$REPO" worktree remove --force "$BASE/$B/app" 2>/dev/null || true
     rm -rf "${BASE:?}/$B"; echo "Stopped and removed the preview of $B"; exit 0 ;;
-  ""|-*) sed -n '2,11p' "$0"; exit 1 ;;
+  ""|-*) sed -n '2,14p' "$0"; exit 1 ;;
 esac
 
 B=$1; NAME=${2:-$1}; DIR=$BASE/$NAME; U=$(unit "$NAME")

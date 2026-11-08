@@ -12,6 +12,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Online guests:** in the leader console a recent guest cycles absent → in person → online like a member does, and a typed-in guest has an In person / Online switch. The minutes show "(online)" after their name.
 - **Email preferences:** a new **Email** tab on Your profile turns each kind of email on or off: the minutes, business-item reminders, and (for Secretaries) roster changes. Chow-night reminders go 7 days, 3 days and/or the day before (3 days by default). Sign-in links, swap requests, changes to your own chow night and security emails always go.
 - **Meeting-day email** (on by default, can be turned off): the morning of each meeting, the time, "you're bringing chow tonight" when you are, the business you're looking after, upcoming events and a link to last meeting's minutes. The daily `reminders` run (already on a timer) sends it along with chow reminders, never twice in one day.
+- **One preview for ongoing work:** `deploy/preview.sh BRANCH NAME` keeps one address (NAME) while it moves between branches.
 - **Links editor on phones:** each link is its own spaced card, and saved links start folded to their name (⋯ opens one).
 
 ## 0.9.1 (2026-11-08)
