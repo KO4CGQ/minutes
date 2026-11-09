@@ -45,6 +45,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
     {# search only below 820px, where the bar has no room for it #}
     <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business, chow and calendar"></form>
     {% for href, label in PAGES %}{{ navlink(href, label) }}{% if loop.index == 4 %}<div class="sep"></div>{% endif %}{% endfor %}
+    {% if me.officer or admin_until %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}
   </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
 <form method="post" action="/admin/view-as"><input type="hidden" name="member" value=""><input type="hidden" name="next" value="/members/{{ viewing_as }}"><button type="submit">Stop</button></form></div>{% endif %}

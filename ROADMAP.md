@@ -43,13 +43,11 @@ Nobody uses the sheet directly any more; one other club tool on the same server 
 - **Now:** a link in the app (Club Links) to the Google Doc version.
 - **Later:** the bylaws as text under version control, with each amendment tied to the meeting and motion that adopted it, and a history page showing what changed and when. Open question: members-only or public.
 
-## Treasurer: dues and Certificates of Indebtedness
-For the treasurer, later. The bylaws (VII) set dues at $182/year ($3.50 a week), a $25 initiation fee, and a $100 Certificate of Indebtedness within two years of joining; members four weeks in arrears can be suspended.
-- **Record payments:** dues, initiation fees and certificate purchases, per member, with date and amount. Missed-chow charges show up here as well.
-- **Standing:** who's paid up, who's behind, and who still owes a certificate (the bylaws require the roster to show whether each member has one).
-- **Officers only:** treasurer data is never shown to other members.
-- **On each member's Home page:** what they owe and when (dues, the Certificate of Indebtedness, any missed-chow charges). Only their own figures; other members never see them.
-- **Not a bookkeeping system:** if the treasurer uses QuickBooks (to be confirmed), the app exports what QuickBooks needs rather than duplicating it.
+## Treasurer
+Built (README → Treasurer): who owes what, payments, missed-chow charges, certificates, bills from the minutes, and each member's own figures on Home. Next:
+- **Monthly report:** the bylaws (IV.C) want a report at the first meeting of each month; fill the Financial Report step from the recorded money, with account balances.
+- **Certificate on the roster:** show whether each member has bought one on the Roster page (bylaws VII.E).
+- **Bookkeeping, if wanted:** every entry already has an account and whole-cent amounts, so a proper ledger (opening balances, transfers between accounts) or a QuickBooks export can be built on it without re-keying.
 
 ## AI assistance
 Suggested follow-ups are done. Next, using the typed minutes we already have (no audio needed):

@@ -18,6 +18,13 @@
   {% if my_chow %}<p class="big">{{ fmt(my_chow[0]) }}</p><p class="muted">Can't make it? <a href="/chow">Ask someone to swap</a>.</p>
   {% else %}<p class="muted">You don't have an upcoming chow night scheduled. <a href="/chow">See the chow schedule</a>.</p>{% endif %}
 </section>
+{% if dues %}<section class="card">
+  <h2>Your dues</h2>
+  {% if dues.owed > 0 %}<p class="big{{ ' late' if dues.behind }}">You owe {{ money(dues.owed) }}</p>
+  <p class="muted">That's about {{ dues.weeks_behind }} week{{ 's' if dues.weeks_behind != 1 }} of dues{% if dues.missed_chow %}, including {{ dues.missed_chow|length }} missed chow night{{ 's' if dues.missed_chow|length != 1 }}{% endif %}. Pay the Treasurer at a meeting.</p>
+  {% else %}<p class="big">Paid up{% if dues.owed < 0 %} ({{ money(-dues.owed) }} ahead){% endif %}</p>{% endif %}
+  {% if not dues.certificate %}<p{% if dues.certificate_late %} class="late"{% endif %}>Certificate of Indebtedness: not bought yet{% if dues.certificate_due %}, due by {{ fmt(dues.certificate_due) }}{% endif %}.</p>{% endif %}
+</section>{% endif %}
 <section class="card">
   <h2>Your business items</h2>
   {% if items %}<ul class="checklist">{% for x in items %}<li class="{{ 'late' if x.overdue }}">{{ x.text }}{% if x.due %} <span class="chip{{ ' late' if x.overdue }}">due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}</li>{% endfor %}</ul>

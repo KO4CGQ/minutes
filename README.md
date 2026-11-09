@@ -109,7 +109,7 @@ Members edit their own email, phone, address, birthday and sharing choices at `/
 - Each change is logged in `profile-changes.jsonl` in the data directory, emailed to members whose title includes Secretary, and can be undone by any officer at `/roster/changes`.
 - Officers see all contact details; other members see only what each member shares.
 - **Roster keepers edit the roster** (Secretary and Treasurer by default, `roster_keepers:`; admins in admin mode): **Edit roster details** on a member's page (`/members/ID/edit`) changes name, class, status, email, phone, address, titles, aliases and the `is_officer`, `is_board`, `minutes_editor` and `calendar_editor` ticks, through the same path as members' own edits (values only, logged, undoable, emailed). It also adds Membership Log rows. Not birthday or sharing (the member's own choices).
-- **Callsign changes** (same page, **New callsign**): the callsign is the member's id across the data folder, so a change renames it everywhere (`callsign.py`): current state (`chow.json`, `business.json`, `events.json`, `calendar-feeds.json`, `ask-about.json`, `email-prefs.json`, `settings.json`, drafts' `console.json`), the minutes' front matter and report tags (never their text), the sign-in database and the picture. Logs (`*.jsonl`) keep the old id as history. It needs the backup passphrase (a backup is taken first and kept as `…-before-NEWCALL.tar.gz.enc`); the old call goes into `aliases` on the sheet, so `Club.canonical` maps it to the member (club.yaml's `admins:` and `email.only_to` included). Needs `aliases`, `minutes_editor` and `calendar_editor` columns on the sheet to change those.
+- **Callsign changes** (same page, **New callsign**): the callsign is the member's id across the data folder, so a change renames it everywhere (`callsign.py`): current state (`chow.json`, `business.json`, `events.json`, `calendar-feeds.json`, `ask-about.json`, `email-prefs.json`, `settings.json`, `treasurer.json`, drafts' `console.json`), the minutes' front matter and report tags (never their text), the sign-in database and the picture. Logs (`*.jsonl`) keep the old id as history. It needs the backup passphrase (a backup is taken first and kept as `…-before-NEWCALL.tar.gz.enc`); the old call goes into `aliases` on the sheet, so `Club.canonical` maps it to the member (club.yaml's `admins:` and `email.only_to` included). Needs `aliases`, `minutes_editor` and `calendar_editor` columns on the sheet to change those.
 - **Roster API** (`GET /api/roster`), for the club's other tools on the same server: active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON. Off until `W8LBZ_ROSTER_API_TOKEN=...` (a long random string) is in `/etc/w8lbz-minutes/env`; then it answers only requests with `Authorization: Bearer <token>` from the server itself or an address in `W8LBZ_ROSTER_API_ALLOW` (comma-separated; the Discord bot's container), and never through the web proxy. E.g. from the bot's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`. Give the bot's container a fixed IP, and ideally limit port 8000 to it with the Proxmox firewall. Every call, allowed or not, is logged in `api-log.jsonl` in the data directory.
 - **Offices** (`/offices`, linked from the Roster): the offices in club.yaml's `offices:` (a title is an officer's office with one seat; `{title: Trustee, officer: false, seats: 3}` is a board seat), who holds each, and who held them when, from the Membership Log's "Took office" / "Left office" rows (the office in the `note` column). An admin in admin mode changes a holder in one step: the app writes `Title(s)`, `is_officer` and `is_board` for both members (officer if any office they hold is an officer's, board if any is in the list; other titles are kept), adds the log rows, and emails the officers. "Add a past term" adds history only.
 - **Email** and **Settings** tabs: which emails each member gets (`email-prefs.json`) and how the app shows things to them, e.g. the first day of the week (`settings.json`), both in the data directory.
@@ -172,6 +172,26 @@ Previews never copy to Google.
 - One-time import of the Secretary's spreadsheet: `w8lbz-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
 - Members ask each other to swap; leaders edit directly; the console records provided, missed or covered on meeting night.
 - The printable list (`/chow/list.pdf`): every night still to come. Officers email it to members from the Chow page (each member can turn it off); the page shows whether the schedule changed since it was last sent.
+
+## Treasurer
+**Treasurer** in the menu (`/treasurer`), for officers; whoever holds Treasurer, and admins in admin mode, record the money (`treasurer.py`, `treasurer.json` in the data folder, every change logged in `treasurer-log.jsonl`).
+- **Who owes what** is worked out, never typed: dues for each meeting night since tracking started (or since the member joined), the initiation fee for members who joined since then, a charge for each chow night marked missed, plus adjustments, minus payments. Four weeks or more behind shows in red. It also shows who still owes a Certificate of Indebtedness, and by when.
+- **Money in and out:** payments (dues, initiation fee, missed chow, certificate), adjustments (a charge, or a credit when negative: a balance from before the app, a night with no meeting) and expenses, each with a date and an account. Delete fixes a mistake; the log keeps it.
+- **Bills:** each Bills and Communications item with a $ amount (`Gas Bill $81`) since tracking started waits for the Treasurer to mark it paid (an expense) or not a bill.
+- **Home** shows each member their own figures, never anyone else's.
+- **Config** under `club:` in club.yaml; only `start` is needed, the rest default to the bylaws (VII):
+
+      treasurer:
+        start: 2026-11-12        # nothing is owed before this date
+        accounts: [Checking, Cash]
+        dues_weekly: 3.50
+        initiation: 25
+        certificate: 100
+        certificate_years: 2
+        missed_chow: 35
+        arrears_weeks: 4
+
+Not a bookkeeping system: there are no account balances or transfers yet (ROADMAP → Treasurer).
 
 ## License
 Copyright © 2026 James Flattery, KO4CGQ.

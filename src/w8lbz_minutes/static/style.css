@@ -389,6 +389,7 @@ body.drawer-open .drawer .scrim { opacity: 1; } body.drawer-open .drawer .panel 
 .homegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr)); gap: 1rem; align-items: start; margin-top: 1rem; }
 .homegrid h2 { font-size: 1.02rem; margin: 0 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .homegrid p { margin: .35rem 0; } .homegrid .big { font-size: 1.2rem; font-weight: 600; }
+.homegrid p.late, table.list tr.late td, table.list span.late { color: var(--danger-text); }
 ul.plain { list-style: none; padding: 0; margin: .3rem 0; } ul.plain li { padding: .3rem 0; border-bottom: 1px solid var(--border); } ul.plain li:last-child { border: 0; }
 nav.top .me .name { margin-right: .35rem; }
 /* Links page editor (admins) */

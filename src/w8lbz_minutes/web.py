@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, updates
+from . import ai, avatars, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
@@ -615,6 +615,64 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
                 log=chow.history(30) if leader else [], fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
 
 
+_money_lock = threading.Lock()
+
+
+def is_treasurer(request: Request) -> bool:
+    """Recording money: whoever holds Treasurer, and admins in admin mode. Other officers only look."""
+    m = archive.club.members.get(request.state.member or "")
+    return bool(m and m.role and "treasurer" in m.role.lower()) or admin_mode(request)
+
+
+def treasurer_only(request: Request) -> str:
+    if not is_treasurer(request):
+        raise HTTPException(403, "Only the Treasurer can do that.")
+    return request.state.member
+
+
+@app.get("/treasurer", response_class=HTMLResponse)
+def treasurer_page(request: Request, tab: str = "standing", error: str = "", mid: str = Depends(officer)):
+    """Officers see who owes what; the Treasurer records payments, expenses and bills."""
+    if tab not in ("standing", "money", "bills"):
+        raise HTTPException(404)
+    club, s = archive.club, treasurer.load()
+    c = treasurer.config(club)
+    members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
+                     key=lambda m: (m.last, m.first))
+    return page(request, "treasurer.html", tab=tab, error=error, cfg=c, edit=is_treasurer(request), members=members,
+                standings=treasurer.standings(club, s), entries=sorted(s["entries"], key=lambda e: (e["date"], e["at"]), reverse=True),
+                bills=treasurer.bills(archive, s, c["start"]), labels=treasurer.LABELS, kinds=treasurer.KINDS, cents=treasurer.cents,
+                money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
+
+
+def money_change(fn, tab: str):
+    with _money_lock:
+        s = treasurer.load()
+        try:
+            fn(s)
+        except ValueError as e:
+            return RedirectResponse(f"/treasurer?tab={tab}&error=" + quote(str(e)), status_code=303)
+        treasurer.save(s)
+    return RedirectResponse(f"/treasurer?tab={tab}", status_code=303)
+
+
+@app.post("/treasurer/record")
+def treasurer_record(kind: str = Form(...), amount: str = Form(...), date: str = Form(...), account: str = Form(...),
+                     member: str = Form(""), note: str = Form(""), bill: str = Form(""), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.record(archive.club, s, mid, kind, amount, date, account, owner_id(member),
+                                                   note, bill or None), "bills" if bill else "money")
+
+
+@app.post("/treasurer/entries/{eid}/delete")
+def treasurer_delete(eid: str, mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.delete(s, eid, mid), "money")
+
+
+@app.post("/treasurer/bills/dismiss")
+def treasurer_dismiss(key: str = Form(...), undo: int = Form(0), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.dismiss_bill(s, key, mid, bool(undo)), "bills")
+
+
 def _form_date(v: str) -> None:
     try:
         dt.date.fromisoformat(v)
@@ -1180,7 +1238,7 @@ def home(request: Request, mid: str = Depends(me)):
     coming = [e for e in coming if e.kind != "chow"][:8]
     # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
     undated = [i.text for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
-    return page(request, "home.html", next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+    return page(request, "home.html", dues=treasurer.standing(club, treasurer.load(), mid), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,

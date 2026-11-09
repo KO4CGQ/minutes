@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% block title %}Treasurer{% endblock %}{% block body %}
+<h1>Treasurer</h1>
+<p class="muted">Dues, fees and the club's bills (bylaws VII). Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
+<nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills')) %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+{% if not cfg.start %}<p class="msg err">Nothing is tracked yet: an admin sets the date tracking starts, <code>treasurer: {start: YYYY-MM-DD}</code> under <code>club:</code> in club.yaml (README → Treasurer).</p>{% endif %}
+
+{% if tab == 'standing' %}
+<p class="hint">Dues are {{ money(cents(cfg.dues_weekly)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(cents(cfg.missed_chow)) }} for each missed chow night and the {{ money(cents(cfg.initiation)) }} initiation fee for new members. Four weeks or more behind is in red.</p>
+<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th><th class="n opt">Missed chow</th><th>Certificate</th></tr></thead>
+<tbody>{% for x in standings %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a></td>
+  <td class="n" data-sort="{{ x.owed }}">{{ money(x.owed) if x.owed else '—' }}</td><td class="n">{{ x.weeks_behind or '' }}</td>
+  <td class="n opt">{{ x.missed_chow|length or '' }}</td>
+  <td>{% if x.certificate %}bought{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No one yet.</td></tr>{% endfor %}</tbody></table>
+
+{% elif tab == 'money' %}
+{% if edit %}<form method="post" action="/treasurer/record" class="modern card">
+  <div class="formrow">
+    <label>What for<select name="kind" required>{% for k in kinds %}<option value="{{ k }}">{{ labels[k] }}</option>{% endfor %}</select></label>
+    <label>Member<input name="member" data-combo="roster-names" placeholder="Type a name… (not for an expense)"></label>
+  </div>
+  <div class="formrow">
+    <label>Amount<input name="amount" inputmode="decimal" required placeholder="3.50"></label>
+    <label>Date<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
+    <label>Account<select name="account">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+  </div>
+  <label>Note<input name="note" maxlength="300" placeholder="e.g. paid through December"></label>
+  <p class="hint">An adjustment charges a member (e.g. a balance from before the app); a negative one is a credit (e.g. a night with no meeting).</p>
+  <div class="formrow"><button class="btn small">Record</button></div>
+</form>{% endif %}
+<table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th>{% if edit %}<th></th>{% endif %}</tr></thead>
+<tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ fmt(e.date) }}</td><td>{{ labels[e.kind] }}</td>
+  <td>{% if e.member %}<a href="/members/{{ e.member }}">{{ club.name(e.member) }}</a>{% endif %}</td>
+  <td class="n" data-sort="{{ -e.cents if e.kind == 'expense' else e.cents }}">{{ money(-e.cents) if e.kind == 'expense' else money(e.cents) }}</td>
+  <td class="opt">{{ e.account }}</td><td class="opt">{{ e.note }}</td>
+  {% if edit %}<td><form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form></td>{% endif %}</tr>
+{% else %}<tr><td colspan="7" class="muted">Nothing recorded yet.</td></tr>{% endfor %}</tbody></table>
+
+{% elif tab == 'bills' %}
+<p class="hint">Items read under Bills and Communications with a $ amount{% if cfg.start %}, since {{ fmt(cfg.start) }}{% endif %}. Mark each one paid (it becomes an expense) or not a bill.</p>
+<div class="cards">{% for b in bills %}<article class="card{{ ' done' if b.status != 'waiting' }}">
+  <div class="card-text">{{ b.text }}</div>
+  <div class="card-meta"><span class="chip"><a href="/meetings/{{ b.meeting }}">{{ fmt(b.meeting) }}</a></span><span class="chip">{{ money(b.cents) }}</span>
+    <span class="chip{{ ' warn' if b.status == 'waiting' }}">{{ {'waiting': 'waiting', 'paid': 'paid', 'dismissed': 'not a bill'}[b.status] }}</span></div>
+  {% if edit and b.status == 'waiting' %}<form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="expense"><input type="hidden" name="bill" value="{{ b.key }}">
+    <input type="hidden" name="note" value="{{ b.text[:300] }}">
+    <div class="formrow"><label>Paid<input name="amount" inputmode="decimal" required value="{{ '%d.%02d'|format(b.cents // 100, b.cents % 100) }}"></label>
+      <label>On<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
+      <label>From<select name="account">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+      <button class="btn small">Mark paid</button></div></form>
+  <form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><button class="btn small ghost">Not a bill</button></form>
+  {% elif edit and b.status == 'dismissed' %}<form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><input type="hidden" name="undo" value="1"><button class="linkbtn">Undo</button></form>{% endif %}
+</article>{% else %}<p class="muted">No bills with amounts yet.</p>{% endfor %}</div>
+{% endif %}
+
+<datalist id="roster-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>
+<script src="/static/combo.js?v={{ ASSETS }}"></script>
+{% endblock %}

@@ -8,6 +8,12 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Attendance:** a chart of each meeting's attendance (in person, online, guests) over the chosen period, above the tables. Hover or tap a bar for its numbers; click to open that meeting.
 - **Business cards, calmer:** History and Comment sit with the other buttons and stay faded until the card is hovered, tapped or reached with the keyboard; the intro is one line.
 - **Celebrations:** the leader console's Attendance step opens with the week's shared birthdays ("Happy birthday, …"; a month-only birthday at the month's first meeting) and membership anniversaries ("5 years as a member").
+- **Treasurer** (officers' menu): who owes what, worked out from the bylaws ($3.50 a meeting night, the $25 initiation fee, $35 for each missed chow night, and the $100 Certificate of Indebtedness within two years); payments, adjustments and expenses, each with an account; and the bills read under Bills and Communications, picked up by their $ amount for the Treasurer to mark paid or not a bill. Officers look; the Treasurer (and admins in admin mode) record. Each member sees their own figures on Home.
+- **Deploy notes:** set the date tracking starts, under `club:` in club.yaml (nothing is owed before it):
+
+          treasurer:
+            start: 2026-11-12
+            accounts: [Checking, Cash]
 
 ## 0.12.1 (2026-11-09)
 - **Motions:** Moved by and Seconded by each leave out whoever is picked in the other (leader console and Business → Motions).
