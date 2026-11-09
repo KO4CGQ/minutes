@@ -71,7 +71,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 Officers and members ticked `minutes_editor` in the roster sheet can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
 
 ## Config
-`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the club links, the roster sheet's address and the private never-record list. People, offices and who may lead come from the roster sheet.
+`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the club links, the roster sheet's address and the private never-record list. People, their titles and who may lead come from the roster sheet; the list of offices is `offices:` in club.yaml.
 
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
 
@@ -86,6 +86,7 @@ Members edit their own email, phone, address, birthday and sharing choices at `/
 - **Setup:** share the roster sheet with the service account as **Editor**, and add `birthday` and `share` columns to the Member Roster tab (headers exactly; any position).
 - Each change is logged in `profile-changes.jsonl` in the data directory, emailed to members whose title includes Secretary, and can be undone by any officer at `/roster/changes`.
 - Officers see all contact details; other members see only what each member shares.
+- **Offices** (`/offices`, linked from the Roster): the offices in club.yaml's `offices:` (a title is an officer's office with one seat; `{title: Trustee, officer: false, seats: 3}` is a board seat), who holds each, and who held them when, from the Membership Log's "Took office" / "Left office" rows (the office in the `note` column). An admin in admin mode changes a holder in one step: the app writes `Title(s)`, `is_officer` and `is_board` for both members (officer if any office they hold is an officer's, board if any is in the list; other titles are kept), adds the log rows, and emails the officers. "Add a past term" adds history only.
 - **Email** and **Settings** tabs: which emails each member gets (`email-prefs.json`) and how the app shows things to them, e.g. the first day of the week (`settings.json`), both in the data directory.
 
 ## Admin mode

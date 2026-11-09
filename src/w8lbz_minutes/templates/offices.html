@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% from "_avatar.html" import avatar %}{% block title %}Offices{% endblock %}{% block body %}
+<h1>Offices</h1>
+<p class="muted">The club's offices from the bylaws, who holds each now, and who held them before (from the roster's Membership Log).
+{% if can_change %}Changing a holder updates their title and officer and board ticks on the roster sheet, adds the dates to its Membership Log, and emails the officers.{% else %}After an election or a resignation, an admin records the change here.{% endif %}</p>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+{% macro day(d) %}{{ (d|isodate)|listdate if d else '?' }}{% endmacro %}
+
+<div class="cards">{% for o in rows %}<article class="card" id="{{ o.title|replace(' ', '-') }}">
+  <div class="card-head"><div class="card-text"><b>{{ o.title }}</b>{% if o.seats > 1 %} <span class="muted small">({{ o.seats }} seats)</span>{% endif %}{% if not o.officer %} <span class="muted small">board, not an officer</span>{% endif %}</div>
+    {% if can_change %}<div class="topacts"><button type="button" class="act" data-panel="c{{ loop.index }}">Change</button>
+      <button type="button" class="act" data-panel="t{{ loop.index }}">Add a past term</button></div>{% endif %}</div>
+  <div class="card-meta">{% for h in o.holders %}<span class="chip">{{ avatar(h, 'xs') }}<a href="/members/{{ h }}">{{ club.name(h) }}</a></span>{% endfor %}
+    {% for _ in range(o.seats - o.holders|length) %}<span class="chip muted">vacant</span>{% endfor %}</div>
+  {% if o.terms %}<ul class="small">{% for t in o.terms %}<li>{{ club.name(t.member) }}: {% if t.start %}{{ day(t.start) }}{% else %}before the records{% endif %} – {% if t.end %}{{ day(t.end) }}{% elif t.open %}now{% else %}?{% endif %}</li>{% endfor %}</ul>{% endif %}
+  {% if can_change %}<div class="panel" id="c{{ loop.index }}" hidden><form method="post" action="/offices/change" class="modern" data-confirm="Change who holds {{ o.title }}? The roster sheet is updated and the officers are emailed.">
+    <input type="hidden" name="title" value="{{ o.title }}">
+    <div class="formrow">
+      <label>Leaving<select name="out"><option value="">(nobody{{ ': a vacant seat' if o.holders|length < o.seats }})</option>{% for h in o.holders %}<option value="{{ h }}" {{ 'selected' if loop.first and o.holders|length >= o.seats }}>{{ club.name(h) }}</option>{% endfor %}</select></label>
+      <label>Taking over<input name="new" data-combo="office-names" placeholder="(nobody: leave it vacant)"></label>
+      <label>As of<input type="date" name="date" value="{{ today }}" required></label>
+    </div>
+    <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>
+  <div class="panel" id="t{{ loop.index }}" hidden><form method="post" action="/offices/term" class="modern">
+    <input type="hidden" name="title" value="{{ o.title }}">
+    <p class="hint">A term from before the app kept the history. It's added to the Membership Log only; nobody's title changes.</p>
+    <div class="formrow">
+      <label>Member<input name="member" data-combo="office-names" required placeholder="Type a name…"></label>
+      <label>From<input type="date" name="start" required></label>
+      <label>To<input type="date" name="end" required max="{{ today }}"></label>
+    </div>
+    <div class="formrow"><button class="btn small">Add the term</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>{% endif %}
+</article>{% endfor %}</div>
+{% if can_change %}<datalist id="office-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>
+<script src="/static/combo.js?v={{ ASSETS }}"></script>
+<script nonce="{{ csp_nonce }}">
+// One panel (Change / Add a past term) open at a time in each card.
+document.querySelectorAll("button.act[data-panel]").forEach((b) => b.addEventListener("click", () => {
+  const p = document.getElementById(b.dataset.panel), wasOpen = !p.hidden;
+  b.closest(".card").querySelectorAll(".panel").forEach((x) => (x.hidden = true));
+  p.hidden = wasOpen;
+}));
+document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => (b.closest(".panel").hidden = true)));
+</script>{% endif %}
+{% endblock %}

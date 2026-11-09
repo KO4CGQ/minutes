@@ -37,7 +37,7 @@ The Google Sheet is the source of truth today; the app writes values back to it 
 Nobody uses the sheet directly any more; one other club tool on the same server reads four columns from it (callsign, name, email, officer). Serve that from the app and the app can own the roster outright, with no Google dependency left.
 - **Roster API:** `GET /api/roster`, read-only: active members' callsign, name, email and officer flag. It answers only requests made on the server itself (not through the web proxy) that carry a token kept on the server, outside the repo; every call is logged.
 - **Edit everything in the app:** roster keepers (Secretary, Treasurer) and admins edit what the sheet holds today: name, callsign, email, titles, officer and board, license class, status, aliases, `minutes_editor` / `calendar_editor`, member since and the Membership Log. Members keep editing their own contact details. Every change logged, with undo, as profile changes are now.
-- **Offices:** a page listing the club's offices (President, Vice President, Secretary, Treasurer, board seats; the list from the bylaws, kept in club.yaml) and who holds each. Changing a holder (after an election, or a resignation) is one step: pick the member, give the date, and the app sets their title and officer/board flags, takes them off the previous holder, and records both as Membership Log events. That's the "Officer history" item below, built in. Who may change offices: admins in admin mode, with the change emailed to the officers (open question: also the Secretary?).
+- **Offices:** built (Roster → Offices). Open question: should the Secretary also change offices, not only admins?
 - **Move over once:** import the sheet and its Membership Log tab, show what differs, then turn off the sync and the write-back. The sheet stays as a read-only archive.
 - **Then remove** the Google Sheets code and the service account's access to the sheet. With no copy to Google Calendar either (decided 2026-11-08), the app needs no Google account at all.
 - **Before this:** Backups (below). Once the roster lives only in the app, the app's own encrypted, off-server backup is the only copy.
@@ -45,7 +45,6 @@ Nobody uses the sheet directly any more; one other club tool on the same server 
 - **Celebrations:** birthdays (opt-in; a month-only birthday at the first meeting of that month) and membership anniversaries shown in the console on meeting night ("Happy birthday, …", "5 years as a member").
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".
 - **Associate members** (GMRS or unlicensed), only if the bylaws add them; today a member must hold an amateur license.
-- **Officer history:** when someone starts or ends an office, recorded as Membership Log events, so the app can show who held each office when.
 - **Admin page for officers:** sync the roster now, email test mode on/off, delete test minutes, review imported minutes.
 
 ## Bylaws

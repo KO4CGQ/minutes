@@ -131,7 +131,8 @@ class Sheet:
 class PreviewSheet:
     """Preview mode's stand-in for the Sheets API: local grids (preview-sheet.json, one per tab) built from
     the roster cache, so roster edits can be tried without touching the real sheet."""
-    HEADER = ["callsign", "full_name", "email", "Phone", "Address", "Class", "Title(s)", "Status", "birthday", "share"]
+    HEADER = ["callsign", "full_name", "email", "Phone", "Address", "Class", "Title(s)", "Status", "birthday", "share",
+              "is_officer", "is_board"]
     LOG_HEADER = ["callsign", "full_name", "date", "event", "note"]
 
     def __init__(self):
@@ -140,7 +141,8 @@ class PreviewSheet:
             people = json.loads(CACHE.read_text()) if CACHE.exists() else []
             rows = [[p.get("callsign") or "", f"{p['first']} {p['last']}", p.get("email") or "", p.get("phone") or "",
                      p.get("address") or "", p.get("license_class") or "", p.get("role") or "",
-                     p.get("status") or "Active", p.get("birthday") or "", ", ".join(p.get("share") or [])]
+                     p.get("status") or "Active", p.get("birthday") or "", ", ".join(p.get("share") or []),
+                     bool(p.get("officer")), bool(p.get("board"))]
                     for p in people]
             self.path.write_text(json.dumps({"Member Roster": [self.HEADER] + rows, "Membership Log": [self.LOG_HEADER]}))
 

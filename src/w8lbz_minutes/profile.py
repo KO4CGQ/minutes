@@ -17,7 +17,7 @@ from .club import DATA, ROSTER_CACHE, Club
 from .roster import EDITABLE, Sheet
 
 log = logging.getLogger("w8lbz.profile")
-LABELS = {"callsign": "Callsign", "license_class": "License class", "joined": "Joined", "email": "Email", "phone": "Phone", "address": "Address", "birthday": "Birthday", "share": "Shared with members"}
+LABELS = {"callsign": "Callsign", "license_class": "License class", "joined": "Joined", "email": "Email", "phone": "Phone", "address": "Address", "birthday": "Birthday", "share": "Shared with members", "role": "Title(s)"}
 
 
 def log_path():
@@ -93,7 +93,7 @@ def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | No
 def undo(club: Club, change_id: str, by: str, sheet: Sheet | None = None, url: str = "") -> dict:
     """Put back the old values of a change, unless the member has changed those fields again since."""
     e = next((x for x in history(10_000) if x["id"] == change_id), None)
-    if not e or e["undone"] or e.get("undoes") or e.get("added"):
+    if not e or e["undone"] or e.get("undoes") or e.get("added") or e.get("office"):
         raise ValueError("That change can't be undone.")
     m = club.members[e["member"]]
     if any(as_cell(f, getattr(m, f)) != v for f, v in e["new"].items()):

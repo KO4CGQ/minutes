@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, calview, chow, console, events, gcal, membership, prefs, profile, updates
+from . import ai, avatars, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, updates
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
@@ -989,6 +989,54 @@ async def roster_add(request: Request, mid: str = Depends(roster_keeper)):
                     classes=membership.CLASSES, today=dt.date.today().isoformat(),
                     invite_after=archive.club.info.get("invite_after_visits", 3))
     return RedirectResponse(f"/members/{new}?added=1", status_code=303)
+
+
+# ---------------- offices: who holds each, who held them when, and changing a holder ----------------
+
+def office_admin(request: Request) -> str:
+    """Changing offices: admins, in admin mode."""
+    if not admin_mode(request):
+        raise HTTPException(403, "Only an admin, in admin mode, can change who holds an office.")
+    return request.state.member
+
+
+@app.get("/offices", response_class=HTMLResponse)
+def offices_page(request: Request, error: str = "", note: str = "", mid: str = Depends(me)):
+    club = archive.club
+    rows = [{**o, "holders": offices.holders(club, o["title"]), "terms": offices.terms(club, o["title"])}
+            for o in offices.offices(club)]
+    members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
+                     key=lambda m: (m.last, m.first))
+    return page(request, "offices.html", rows=rows, members=members, error=error, note=note,
+                can_change=admin_mode(request), today=dt.date.today().isoformat())
+
+
+def _office_change(request: Request, fn, note: str):
+    try:
+        fn()
+    except (ValueError, SheetError) as e:
+        return RedirectResponse("/offices?error=" + quote(str(e)), status_code=303)
+    return RedirectResponse("/offices?note=" + quote(note), status_code=303)
+
+
+@app.post("/offices/change")
+def offices_change(request: Request, title: str = Form(...), out: str = Form(""), new: str = Form(""),
+                   date: str = Form(""), mid: str = Depends(office_admin)):
+    """Hand an office over (after an election), fill a vacancy, or record a resignation."""
+    def run():
+        offices.change(archive.club, title, out or None, owner_id(new), date, mid, url=base_url(request))
+        _admin_log(request, office=title, left=out or None, took=owner_id(new), date=date)
+    return _office_change(request, run, f"{title} updated.")
+
+
+@app.post("/offices/term")
+def offices_term(request: Request, title: str = Form(...), member: str = Form(...), start: str = Form(""),
+                 end: str = Form(""), mid: str = Depends(office_admin)):
+    """A past term, from before the app kept the history."""
+    def run():
+        offices.record_term(archive.club, title, owner_id(member) or "", start, end, mid)
+        _admin_log(request, office=title, past_term=owner_id(member), date=f"{start}..{end}")
+    return _office_change(request, run, "Past term recorded.")
 
 
 @app.get("/roster/changes", response_class=HTMLResponse)

@@ -70,6 +70,7 @@ class Club:
         self.ai = cfg.get("ai") or {}  # AI assistance (ai.py): model, and whether it's on
         self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
         # Offices whose holders add new members to the roster (bylaws IV.C: the Secretary keeps it).
+        self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
 
         self._mtime = None  # set when the people come from the roster cache, so refresh() can notice a sync
