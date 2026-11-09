@@ -1,0 +1,7 @@
+# gitleaks (Security workflow): the default rules, minus files that only look like secrets.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Simple Icons brand logos: long SVG path strings, public data (see README → Links page icons)"
+paths = ['''^src/w8lbz_minutes/simple_icons\.json$''']
