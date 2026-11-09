@@ -50,12 +50,52 @@
 
 {% endif %}
 {% if tab == 'backups' %}
-<p class="muted">Every night at 2:30 the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one archive, encrypts it with the backup passphrase, checks it opens, keeps the last 7 here and sends it off the server. Restoring: README → Backups.</p>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+<p class="muted">On the schedule below the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one compressed archive, encrypts it with the backup passphrase, checks it opens, keeps the newest here and sends it to the places ticked below. If it fails, the admins get an email. Restoring: README → Backups.</p>
 <ul class="plain">
-<li>Last backup: {% if not backup_status %}none yet{% elif backup_status.ok %}{{ backup_status.at|tsfull }}, {{ backup_status.files }} files, {{ (backup_status.size / 1048576)|round(1) }} MB{% if backup_status.sent_to %}, sent to {{ backup_status.sent_to }}{% endif %}{% else %}<b>failed</b> {{ backup_status.at|tsfull }}: {{ backup_status.error }}{% endif %}</li>
-<li>Off the server: {% if s3 %}{{ s3.endpoint }}, bucket {{ s3.bucket }}{% elif s3_error %}<b>{{ s3_error }}</b>{% else %}not set up (<code>backup.s3</code> in club.yaml){% endif %}</li>
+<li>Passphrase: {% if passphrase_set %}set{% else %}<b>not set</b>: put <code>W8LBZ_BACKUP_PASSPHRASE=…</code> (12+ characters) in <code>/etc/w8lbz-minutes/env</code> and restart. Keep a copy off the server: without it no backup opens.{% endif %}</li>
+<li>The data now: {{ (data_size / 1048576)|round(1) }} MB before compression{% if backup_status.size %}; the last backup came to {{ (backup_status.size / 1048576)|round(1) }} MB compressed{% endif %}.</li>
+<li>Last backup: {% if not backup_status %}none yet{% elif backup_status.ok %}{{ backup_status.at|tsfull }}, {{ backup_status.files }} files, {{ (backup_status.size / 1048576)|round(1) }} MB{% if backup_status.sent_to %}, sent to {{ backup_status.sent_to|join(' and ') }}{% else %}, on the server only{% endif %}{% else %}<b>failed</b> {{ backup_status.at|tsfull }}: {{ backup_status.error }}{% endif %}</li>
 </ul>
-<form method="post" action="/admin/security/backup" class="inline"><button class="btn small">Back up now</button></form> <span class="hint">Takes a few seconds; reload this page to see it.</span>
+<div class="formrow"><form method="post" action="/admin/security/backup" class="inline"><button class="btn small">Back up now</button></form>
+<form method="post" action="/admin/security/backups/download" class="inline"><button class="btn small ghost">Download a backup now</button></form></div>
+<p class="hint">Back up now runs the usual backup (kept here and sent off); reload the page to see it. Download makes a fresh one and saves it on your computer: a compressed archive, encrypted with the passphrase, so it's safe on a laptop or USB stick. To open it: <code>w8lbz-minutes restore FILE FOLDER</code>.</p>
+
+<h2>Schedule and how many to keep</h2>
+<p class="hint"><b>Recommended:</b> daily at {{ rec.hour }}:00, keep {{ rec.keep_local }} on the server, {{ rec.drive_keep }} on Google Drive, and {{ rec.s3_days }} days on S3 (the bucket's lifecycle rule). At this size{% if backup_status.size %} (about {{ (backup_status.size / 1048576)|round(1) }} MB each){% endif %}, a year of daily backups is a few GB at most: pennies on B2, well within a Shared Drive. Daily means at most a day of changes could be lost; the server copies cover a mistake noticed within the week, the off-server copies a lost server or one noticed later.</p>
+
+<form method="post" action="/admin/security/backups/settings" class="modern card">
+  <div class="formrow">
+    <label>Back up<select name="every">{% for v, label in (('daily', 'Every day'), ('weekly', 'Every week'), ('off', 'Only when I click Back up now')) %}<option value="{{ v }}" {{ 'selected' if bs.schedule.every == v }}>{{ label }}</option>{% endfor %}</select></label>
+    <label>At<select name="hour">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if bs.schedule.hour == h }}>{{ '%d:00'|format(h) }}</option>{% endfor %}</select></label>
+    <label>Keep on the server<input name="keep_local" type="number" min="1" max="60" value="{{ bs.keep_local }}" size="4"></label>
+  </div>
+  <h3>Where backups go</h3>
+  <label class="check"><input type="checkbox" name="s3_on" value="1" {{ 'checked' if bs.s3.on }}> <b>S3-compatible storage</b> (Backblaze B2, AWS, Wasabi)</label>
+  <p class="hint">A private bucket, and a key limited to it with read and write. How long backups are kept there is the bucket's lifecycle rule (README → Backups).</p>
+  <div class="formrow">
+    <label>Endpoint<input name="s3_endpoint" value="{{ bs.s3.endpoint or '' }}" placeholder="https://s3.us-west-004.backblazeb2.com"></label>
+    <label>Region<input name="s3_region" value="{{ bs.s3.region or '' }}" placeholder="us-west-004" size="12"></label>
+  </div>
+  <div class="formrow">
+    <label>Bucket<input name="s3_bucket" value="{{ bs.s3.bucket or '' }}"></label>
+    <label>Folder in the bucket<input name="s3_prefix" value="{{ bs.s3.prefix or 'minutes/' }}" size="12"></label>
+  </div>
+  <div class="formrow">
+    <label>Key ID<input name="s3_key_id" value="{{ bs.s3.key_id or '' }}" autocomplete="off"></label>
+    <label>Secret key<input name="s3_secret" type="password" autocomplete="new-password" placeholder="{{ '(saved; leave blank to keep it)' if bs.s3.secret else '' }}"></label>
+  </div>
+  {% if env_s3 %}<p class="hint">The key in <code>/etc/w8lbz-minutes/env</code> is used instead of these.</p>{% endif %}
+  <hr>
+  <label class="check"><input type="checkbox" name="drive_on" value="1" {{ 'checked' if bs.drive.on }}> <b>Google Drive</b>, with the app's service account</label>
+  <p class="hint">The folder must be in a <b>Shared Drive</b> (Google Workspace): Google gives service accounts no storage of their own, so a folder in someone's My Drive won't work. Add the service account to the Shared Drive as <b>Content manager</b> (so it can delete old backups).{% if not drive_key %} <b>The service-account key isn't on the server.</b>{% endif %}</p>
+  <div class="formrow">
+    <label>Folder link or ID<input name="drive_folder" value="{{ bs.drive.folder or '' }}" placeholder="https://drive.google.com/drive/folders/…"></label>
+    <label>Keep the last<input name="drive_keep" type="number" min="1" max="365" value="{{ bs.drive.keep or 30 }}" size="4"></label>
+  </div>
+  <div class="formrow"><button class="btn small">Save</button></div>
+</form>
+
 <h2>On the server</h2>
 <p class="hint">Download one to keep on your own computer. It's encrypted: it opens only with the passphrase.</p>
 <ul class="plain">{% for name, size in local_backups %}<li><a href="/admin/security/backups/{{ name }}">{{ name }}</a> <span class="muted small">{{ (size / 1048576)|round(1) }} MB</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}</ul>

@@ -1,5 +1,5 @@
 [Unit]
-Description=Nightly encrypted backup of the W8LBZ minutes data (backup.py)
+Description=Encrypted backup of the W8LBZ minutes data, when the Backups page schedule says one is due
 
 [Service]
 Type=oneshot
@@ -10,4 +10,4 @@ Environment=W8LBZ_CONFIG=/etc/w8lbz-minutes/club.yaml
 Environment=W8LBZ_DATA=/var/lib/w8lbz-minutes
 # W8LBZ_BACKUP_PASSPHRASE, and W8LBZ_S3_KEY_ID / W8LBZ_S3_SECRET to send it off the server
 EnvironmentFile=-/etc/w8lbz-minutes/env
-ExecStart=/opt/w8lbz-minutes/.venv/bin/w8lbz-minutes backup
+ExecStart=/opt/w8lbz-minutes/.venv/bin/w8lbz-minutes backup --if-due

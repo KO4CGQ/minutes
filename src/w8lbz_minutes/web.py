@@ -5,6 +5,7 @@ import datetime as dt
 import functools
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -22,7 +23,7 @@ from . import ai, avatars, backup, business, calview, chow, console, events, gca
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
-from .roster import COLUMNS, SHAREABLE, SheetError
+from .roster import COLUMNS, KEY_FILE, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
 from .meeting import SECTIONS
@@ -1505,7 +1506,8 @@ templates.env.filters["admin_action"] = admin_action
 
 @app.get("/admin/security", response_class=HTMLResponse)
 @app.get("/admin/security/{tab}", response_class=HTMLResponse)
-def security_page(request: Request, tab: str = "signins", member: str = "", mid: str = Depends(real_me)):
+def security_page(request: Request, tab: str = "signins", member: str = "", error: str = "", note: str = "",
+                  mid: str = Depends(real_me)):
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
@@ -1517,13 +1519,12 @@ def security_page(request: Request, tab: str = "signins", member: str = "", mid:
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
     roster = DATA / "roster.json"
     events = authn.events(100)
-    try:
-        s3 = backup.s3_config(archive.club)
-        s3_error = None
-    except backup.BackupError as e:
-        s3, s3_error = None, str(e)
-    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS, backup_status=backup.status(),
-                local_backups=[(p.name, p.stat().st_size) for p in backup.local_copies()], s3=s3, s3_error=s3_error,
+    bs = backup.settings()
+    bs["s3"] = {**bs["s3"], "secret": bool(bs["s3"].get("secret"))}  # never sent back to the browser
+    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS, backup_status=backup.status(), bs=bs, error=error, note=note,
+                local_backups=[(p.name, p.stat().st_size) for p in backup.local_copies()], env_s3=bool(os.environ.get("W8LBZ_S3_SECRET")),
+                passphrase_set=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12, drive_key=KEY_FILE.exists(),
+                data_size=backup.data_size() if tab == "backups" else 0, rec=backup.RECOMMENDED,
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
@@ -1543,6 +1544,30 @@ def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), re
     authn.ban(ip, hours or None, reason or "banned by an admin", mid)
     _admin_log(request, ban=ip, hours=hours or None)
     return RedirectResponse("/admin/security/bans", status_code=303)
+
+
+@app.post("/admin/security/backups/settings")
+async def security_backup_settings(request: Request):
+    _security_admin(request)
+    form = dict(await request.form())
+    try:
+        s = backup.save_settings(form)
+    except backup.BackupError as e:
+        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, backup_settings=", ".join(k for k in ("s3", "drive") if s[k]["on"]) or "server only")
+    return RedirectResponse("/admin/security/backups?note=" + quote("Saved. Back up now to try it."), status_code=303)
+
+
+@app.post("/admin/security/backups/download")
+def security_backup_download_now(request: Request):
+    """A fresh backup straight to the admin's computer: compressed and encrypted, like the others."""
+    _security_admin(request)
+    try:
+        name, blob, _ = backup.make()
+    except backup.BackupError as e:
+        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, backup_downloaded=name)
+    return Response(blob, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @app.post("/admin/security/backup")

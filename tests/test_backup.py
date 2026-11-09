@@ -1,4 +1,5 @@
 """Backups: the data folder encrypted, checked, kept, sent to S3-compatible storage; restore into an empty folder."""
+import json
 import sqlite3
 from pathlib import Path
 
@@ -42,30 +43,68 @@ def test_backup_round_trip(data, tmp_path):
         backup.restore(blob, PW, out)
 
 
+class FakeDrive:
+    """Drive's upload, list and delete, in memory."""
+    def __init__(self, quota=False):
+        self.files, self.quota, self.n = [], quota, 0
+
+    def _r(self, code=200, data=None, text=""):
+        return type("R", (), {"status_code": code, "text": text, "json": lambda self: data or {}})()
+
+    def post(self, url, params, data, headers, timeout):
+        if self.quota:
+            return self._r(403, text='{"reason": "storageQuotaExceeded"}')
+        name = json.loads(data.split(b"\r\n\r\n", 1)[1].split(b"\r\n", 1)[0])["name"]
+        self.n += 1
+        self.files.append({"id": str(self.n), "name": name})
+        return self._r()
+
+    def get(self, url, params, timeout):
+        return self._r(data={"files": sorted(self.files, key=lambda f: f["name"], reverse=True)})
+
+    def delete(self, url, params, timeout):
+        self.files = [f for f in self.files if f["id"] != url.rsplit("/", 1)[1]]
+        return self._r(204)
+
+
 def test_nightly_run_keeps_sends_and_reports(data, monkeypatch):
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org"}])
     club.admins = {"kd8adm"}
-    club.backup = {"s3": {"endpoint": "https://s3.us-west-004.backblazeb2.com", "bucket": "club-backups",
-                          "region": "us-west-004", "prefix": "minutes/"}}
-    monkeypatch.setenv("W8LBZ_S3_KEY_ID", "keyid")
-    monkeypatch.setenv("W8LBZ_S3_SECRET", "secret")
-    put = []
+    backup.save_settings({"s3_on": "1", "s3_endpoint": "https://s3.us-west-004.backblazeb2.com", "s3_bucket": "club-backups",
+                          "s3_region": "us-west-004", "s3_prefix": "minutes/", "s3_key_id": "keyid", "s3_secret": "secret",
+                          "drive_on": "1", "drive_folder": "https://drive.google.com/drive/folders/0ABcd-123?usp=sharing", "drive_keep": "3"})
+    s = backup.settings()
+    assert s["drive"]["folder"] == "0ABcd-123" and s["s3"]["secret"] == "secret"
+    backup.save_settings({**{f"s3_{k}": v for k, v in s["s3"].items()}, "s3_on": "1", "s3_secret": "", "drive_on": "1",
+                          "drive_folder": "0ABcd-123", "drive_keep": "3"})
+    assert backup.settings()["s3"]["secret"] == "secret"  # a blank secret keeps the saved one
+    with pytest.raises(backup.BackupError):
+        backup.save_settings({"s3_on": "1", "s3_endpoint": "http://insecure.example", "s3_bucket": "b"})
+    put, drive = [], FakeDrive()
     monkeypatch.setattr("httpx.put", lambda url, content, headers, timeout: put.append((url, headers))
                         or type("R", (), {"status_code": 200, "text": ""})())
+    monkeypatch.setattr(backup, "drive_session", lambda: drive)
+    names = iter(f"w8lbz-minutes-2026-11-{d:02d}-0230.tar.gz.enc" for d in range(1, 30))
+    real_make = backup.make
+    monkeypatch.setattr(backup, "make", lambda: (next(names), *real_make()[1:]))
     for _ in range(backup.KEEP_LOCAL + 2):
         st = backup.run(club)
-    assert st["ok"] and st["sent_to"].startswith("club-backups/minutes/w8lbz-minutes-")
-    assert len(backup.local_copies()) <= backup.KEEP_LOCAL and not list(data.glob("backups/backups"))
+    assert st["ok"] and st["sent_to"][0].startswith("club-backups/minutes/w8lbz-minutes-") and "Google Drive" in st["sent_to"][1]
+    assert len(backup.local_copies()) <= backup.KEEP_LOCAL and [f["name"][14:24] for f in drive.files] == [
+        "2026-11-07", "2026-11-08", "2026-11-09"]  # the newest 3 on Drive
     url, h = put[-1]
     assert url.startswith("https://s3.us-west-004.backblazeb2.com/club-backups/minutes/")
     assert h["authorization"].startswith("AWS4-HMAC-SHA256 Credential=keyid/") and "/us-west-004/s3/aws4_request" in h["authorization"]
-    assert "backups/" not in str(backup.members((data / "backups" / backup.local_copies()[0].name).read_bytes(), PW))
+    assert "backup-settings.json" not in backup.members(backup.local_copies()[0].read_bytes(), PW)  # the secret stays out
     sent = []
     monkeypatch.setattr("w8lbz_minutes.auth.send_email", lambda to, subject, body, **kw: sent.append((to, subject)))
+    drive.quota = True  # a My Drive folder: kept on the server and sent to S3, but reported
+    st = backup.run(club)
+    assert not st["ok"] and "Shared Drive" in st["error"] and st["sent_to"] and backup.local_copies()
     monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "short")
     st = backup.run(club)
     assert not st["ok"] and "W8LBZ_BACKUP_PASSPHRASE" in st["error"] and backup.status()["ok"] is False
-    assert sent[0][0] == ["amy@example.org"] and "backup failed" in sent[0][1]
+    assert len(sent) == 2 and sent[0][0] == ["amy@example.org"] and "backup failed" in sent[0][1]
 
 
 def test_sigv4_matches_botocore():
@@ -76,3 +115,30 @@ def test_sigv4_matches_botocore():
     url, h = backup.s3_request(cfg, "PUT", "minutes/w8lbz a.enc", b"x", now=dt.datetime(2026, 11, 9, 3, 6, 57, tzinfo=dt.timezone.utc))
     assert url == "https://s3.us-west-004.backblazeb2.com/club-backups/minutes/w8lbz%20a.enc"
     assert h["authorization"].endswith("Signature=723393ff098d298c48a161b085e26c52035aabb0b57248f1fb2d6d1bc31051fb")
+
+
+def test_schedule_and_page(data, tmp_path, monkeypatch):
+    import datetime as dt
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    assert backup.due(dt.datetime(2026, 11, 9, 3)) and not backup.due(dt.datetime(2026, 11, 9, 1))  # daily at 2 by default
+    (data / "backup-status.json").write_text('{"at": %d, "ok": false}' % dt.datetime(2026, 11, 9, 2, 5).timestamp())
+    assert not backup.due(dt.datetime(2026, 11, 9, 23)) and backup.due(dt.datetime(2026, 11, 10, 2))  # one try a day
+    backup.save_settings({"every": "weekly", "hour": "4", "keep_local": "3"})
+    assert not backup.due(dt.datetime(2026, 11, 14, 5)) and backup.due(dt.datetime(2026, 11, 16, 4))
+    backup.save_settings({"every": "off"})
+    assert not backup.due(dt.datetime(2026, 12, 1, 12))
+    assert backup.data_size() > 0
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"}])
+    club.admins = {"kd8adm"}
+    monkeypatch.setattr(web.archive, "club", club)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "kd8adm")
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = TestClient(web.app)
+    page = c.get("/admin/security/backups").text
+    assert "Recommended:" in page and "The data now:" in page and "Only when I click" in page
+    r = c.post("/admin/security/backups/download")
+    assert r.status_code == 200 and r.content.startswith(backup.MAGIC) and "attachment" in r.headers["content-disposition"]
+    c.post("/admin/security/backups/settings", data={"every": "daily", "hour": "2", "keep_local": "7", "drive_on": "1", "drive_folder": "bad folder!"})
+    assert backup.settings()["schedule"]["every"] == "off"  # refused: nothing saved

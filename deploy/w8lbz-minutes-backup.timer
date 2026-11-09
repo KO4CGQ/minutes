@@ -1,8 +1,8 @@
 [Unit]
-Description=Nightly encrypted backup of the minutes data, at 2:30 am
+Description=Check hourly whether a backup is due (the schedule is on the Backups page)
 
 [Timer]
-OnCalendar=*-*-* 02:30
+OnCalendar=hourly
 Persistent=true
 
 [Install]

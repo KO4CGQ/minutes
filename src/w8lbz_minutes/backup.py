@@ -8,9 +8,10 @@
   Without the passphrase a backup can't be read, by the storage provider or anyone else; lose it and the
   backups are useless.
 - Checked: each backup is decrypted and its file list read back before it's kept or sent.
-- Where: the last KEEP_LOCAL in data/backups/ on the server, and S3-compatible storage (Backblaze B2) when
-  club.yaml has backup.s3 and the environment has W8LBZ_S3_KEY_ID / W8LBZ_S3_SECRET. How many to keep there is
-  the bucket's lifecycle setting.
+- Where: the last KEEP_LOCAL in data/backups/ on the server, and either or both of S3-compatible storage
+  (Backblaze B2; how long they're kept is the bucket's lifecycle rule) and a Google Drive folder in a Shared
+  Drive (the app keeps the last `keep` there). Admins choose on the Backups page (backup-settings.json, which
+  holds the S3 secret and is left out of the backups; W8LBZ_S3_KEY_ID / W8LBZ_S3_SECRET override it).
 - Restore: `w8lbz-minutes restore FILE DIR` (README -> Backups).
 """
 from __future__ import annotations
@@ -32,9 +33,12 @@ from .club import DATA, Club
 
 log = logging.getLogger("w8lbz.backup")
 MAGIC = b"W8LBZ-BACKUP-1\n"
-KEEP_LOCAL = 7
+KEEP_LOCAL = 7  # the default; the Backups page changes it
+# What the Backups page recommends: the data folder is small (MBs), so daily backups cost next to nothing.
+RECOMMENDED = {"every": "daily", "hour": 2, "keep_local": 7, "drive_keep": 30, "s3_days": 90}
 SKIP_SUFFIXES = (".lock", ".tmp")
 SKIP_DIRS = ("backups",)
+SKIP_FILES = ("backup-settings.json",)  # holds the S3 secret: re-enter it after a restore
 
 
 class BackupError(Exception):
@@ -78,7 +82,7 @@ def archive(data: Path = None) -> bytes:
     with tarfile.open(fileobj=buf, mode="w:gz") as tar, tempfile.TemporaryDirectory() as tmp:
         for p in sorted(data.rglob("*")):
             rel = p.relative_to(data)
-            if not p.is_file() or rel.parts[0] in SKIP_DIRS or p.suffix in SKIP_SUFFIXES or p.name.endswith(("-wal", "-shm")):
+            if not p.is_file() or rel.parts[0] in SKIP_DIRS or p.name in SKIP_FILES or p.suffix in SKIP_SUFFIXES or p.name.endswith(("-wal", "-shm")):
                 continue
             if p.suffix == ".sqlite":
                 copy = Path(tmp) / p.name
@@ -119,16 +123,89 @@ def restore(blob: bytes, pw: str, dest: Path) -> int:
         return len(tar.getnames())
 
 
+# ---------------- settings (the Backups page) ----------------
+SETTINGS = "backup-settings.json"
+DRIVE_KEEP = 30
+
+
+def settings() -> dict:
+    p = DATA / SETTINGS
+    s = json.loads(p.read_text()) if p.exists() else {}
+    s.setdefault("s3", {})
+    s.setdefault("drive", {})
+    s.setdefault("schedule", {"every": RECOMMENDED["every"], "hour": RECOMMENDED["hour"]})
+    s.setdefault("keep_local", KEEP_LOCAL)
+    return s
+
+
+def _int(v, lo: int, hi: int, default: int) -> int:
+    try:
+        return max(lo, min(int(v), hi))
+    except (TypeError, ValueError):
+        return default
+
+
+def due(now: dt.datetime | None = None) -> bool:
+    """The hourly timer asks this: is a scheduled backup due? One try per day (or week) from the chosen hour on,
+    counting a failed try too, so a broken destination means one email a day, not one an hour."""
+    now = now or dt.datetime.now()
+    sch = settings()["schedule"]
+    if sch.get("every") == "off" or now.hour < sch.get("hour", 2):
+        return False
+    last = status().get("at")
+    if not last:
+        return True
+    last = dt.datetime.fromtimestamp(last)
+    return now - last >= dt.timedelta(days=6, hours=12) if sch.get("every") == "weekly" else last.date() < now.date()
+
+
+def data_size(data: Path = None) -> int:
+    """Bytes in what a backup takes (before compression)."""
+    data = data or DATA
+    return sum(p.stat().st_size for p in data.rglob("*") if p.is_file() and p.relative_to(data).parts[0] not in SKIP_DIRS
+               and p.name not in SKIP_FILES)
+
+
+def save_settings(form: dict) -> dict:
+    """From the Backups page (a trust boundary): which destinations are on, and their details. A blank secret
+    keeps the saved one."""
+    from urllib.parse import urlparse
+    old = settings()
+    s3 = {k: " ".join(str(form.get(f"s3_{k}", "")).split()) for k in ("endpoint", "region", "bucket", "prefix", "key_id")}
+    s3["on"] = bool(form.get("s3_on"))
+    s3["secret"] = str(form.get("s3_secret") or "").strip() or old["s3"].get("secret", "")
+    drive = {"on": bool(form.get("drive_on")), "folder": str(form.get("drive_folder", "")).strip(),
+             "keep": _int(form.get("drive_keep"), 1, 365, DRIVE_KEEP)}
+    every = form.get("every") if form.get("every") in ("daily", "weekly", "off") else RECOMMENDED["every"]
+    schedule = {"every": every, "hour": _int(form.get("hour"), 0, 23, RECOMMENDED["hour"])}
+    if "/folders/" in drive["folder"]:  # a pasted folder link
+        drive["folder"] = drive["folder"].split("/folders/")[1].split("?")[0].split("/")[0]
+    if s3["on"]:
+        if urlparse(s3["endpoint"]).scheme != "https" or not s3["bucket"]:
+            raise BackupError("S3 needs an https endpoint and a bucket.")
+        s3["region"] = s3["region"] or "us-east-1"
+    if drive["on"] and not drive["folder"].replace("-", "").replace("_", "").isalnum():
+        raise BackupError("Paste the Google Drive folder's link or ID.")
+    s = {"s3": s3, "drive": drive, "schedule": schedule, "keep_local": _int(form.get("keep_local"), 1, 60, KEEP_LOCAL)}
+    p = DATA / SETTINGS
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(s, indent=1))
+    os.chmod(tmp, 0o600)
+    tmp.replace(p)
+    return s
+
+
 # ---------------- S3-compatible storage (Backblaze B2, AWS, Wasabi): one signed PUT ----------------
 
-def s3_config(club: Club) -> dict | None:
-    s3 = ((club.backup or {}).get("s3") or {})
-    if not s3.get("bucket"):
+def s3_config(s: dict | None = None) -> dict | None:
+    s3 = (s or settings())["s3"]
+    if not s3.get("on"):
         return None
-    key_id, secret = os.environ.get("W8LBZ_S3_KEY_ID"), os.environ.get("W8LBZ_S3_SECRET")
+    key_id = os.environ.get("W8LBZ_S3_KEY_ID") or s3.get("key_id")
+    secret = os.environ.get("W8LBZ_S3_SECRET") or s3.get("secret")
     if not (key_id and secret):
-        raise BackupError("backup.s3 is set in club.yaml, but W8LBZ_S3_KEY_ID / W8LBZ_S3_SECRET aren't in the environment.")
-    return {"endpoint": s3["endpoint"].rstrip("/"), "bucket": s3["bucket"], "region": s3.get("region", "us-east-1"),
+        raise BackupError("S3 is on, but its key ID or secret is missing.")
+    return {"endpoint": s3["endpoint"].rstrip("/"), "bucket": s3["bucket"], "region": s3.get("region") or "us-east-1",
             "prefix": s3.get("prefix", ""), "key_id": key_id, "secret": secret}
 
 
@@ -155,7 +232,7 @@ def s3_request(cfg: dict, method: str, key: str, body: bytes = b"", now: dt.date
     return cfg["endpoint"] + path, headers
 
 
-def upload(cfg: dict, name: str, blob: bytes) -> str:
+def s3_upload(cfg: dict, name: str, blob: bytes) -> str:
     import httpx
     key = f"{cfg['prefix']}{name}"
     url, headers = s3_request(cfg, "PUT", key, blob)
@@ -163,6 +240,48 @@ def upload(cfg: dict, name: str, blob: bytes) -> str:
     if r.status_code >= 300:
         raise BackupError(f"Upload to {cfg['bucket']} failed: HTTP {r.status_code} {r.text[:200]}")
     return f"{cfg['bucket']}/{key}"
+
+
+# ---------------- Google Drive: the service account, into a folder in a Shared Drive ----------------
+DRIVE = "https://www.googleapis.com/drive/v3/files"
+
+
+def drive_session():
+    import google.auth.transport.requests as gr
+    from google.oauth2 import service_account
+    from .roster import KEY_FILE
+    creds = service_account.Credentials.from_service_account_file(KEY_FILE, scopes=["https://www.googleapis.com/auth/drive"])
+    return gr.AuthorizedSession(creds)
+
+
+def _drive_error(r) -> BackupError:
+    if "storageQuotaExceeded" in r.text or "do not have storage quota" in r.text:
+        return BackupError("Google Drive refused: the service account has no storage of its own. The folder must be in a "
+                           "Shared Drive (Google Workspace), with the service account added as Content manager.")
+    return BackupError(f"Google Drive: HTTP {r.status_code} {r.text[:200]}")
+
+
+def drive_upload(folder: str, name: str, blob: bytes, keep: int = DRIVE_KEEP, session=None) -> str:
+    """Upload into the folder, then delete all but the newest `keep` of the app's backups there."""
+    s = session or drive_session()
+    boundary = "w8lbz" + os.urandom(8).hex()
+    meta = json.dumps({"name": name, "parents": [folder]}).encode()
+    body = (f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".encode() + meta +
+            f"\r\n--{boundary}\r\nContent-Type: application/octet-stream\r\n\r\n".encode() + blob + f"\r\n--{boundary}--".encode())
+    r = s.post("https://www.googleapis.com/upload/drive/v3/files", params={"uploadType": "multipart", "supportsAllDrives": "true"},
+               data=body, headers={"Content-Type": f"multipart/related; boundary={boundary}"}, timeout=300)
+    if r.status_code >= 300:
+        raise _drive_error(r)
+    r = s.get(DRIVE, params={"q": f"'{folder}' in parents and name contains 'w8lbz-minutes-' and trashed = false",
+                             "orderBy": "name desc", "fields": "files(id,name)", "pageSize": 1000,
+                             "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"}, timeout=60)
+    if r.status_code >= 300:
+        raise _drive_error(r)
+    for f in r.json().get("files", [])[keep:]:  # names sort by date
+        d = s.delete(f"{DRIVE}/{f['id']}", params={"supportsAllDrives": "true"}, timeout=60)
+        if d.status_code >= 300:
+            raise _drive_error(d)
+    return f"Google Drive folder {folder}"
 
 
 # ---------------- the nightly run (`w8lbz-minutes backup`) and its status ----------------
@@ -186,14 +305,25 @@ def run(club: Club, url: str = "") -> dict:
         d.mkdir(mode=0o700, exist_ok=True)
         (d / name).write_bytes(blob)
         os.chmod(d / name, 0o600)
-        for old in local_copies()[KEEP_LOCAL:]:
+        for old in local_copies()[settings()["keep_local"]:]:
             old.unlink()
-        st.update(ok=True, name=name, size=len(blob), files=n)
-        if cfg := s3_config(club):
-            st["sent_to"] = upload(cfg, name, blob)
+        st.update(ok=True, name=name, size=len(blob), files=n, sent_to=[])
+        s, errors = settings(), []
+        for dest in ("S3", "Google Drive"):
+            try:  # one destination failing doesn't stop the other
+                if dest == "S3" and (cfg := s3_config(s)):
+                    st["sent_to"].append(s3_upload(cfg, name, blob))
+                elif dest == "Google Drive" and s["drive"].get("on"):
+                    st["sent_to"].append(drive_upload(s["drive"]["folder"], name, blob, s["drive"].get("keep", DRIVE_KEEP)))
+            except Exception as e:
+                log.exception("sending the backup to %s failed", dest)
+                errors.append(f"{dest}: {e}")
+        if errors:
+            st.update(ok=False, error="Kept on the server, but " + "; ".join(errors))
     except Exception as e:  # anything at all: the admins must hear about it
         log.exception("backup failed")
         st.update(ok=False, error=str(e))
+    if not st["ok"]:
         _tell_admins(club, st, url)
     p = DATA / "backup-status.json"
     p.write_text(json.dumps(st))

@@ -24,7 +24,8 @@ def main() -> None:
     rem = sub.add_parser("reminders", help="daily: business item and chow reminders, and the meeting-day email")
     rem.add_argument("--dry-run", action="store_true", help="print what would be sent; send and record nothing")
     sub.add_parser("ai-ask-about", help="ask the AI for 'ask about' prompts for each member's community report (also runs after each Submit)")
-    sub.add_parser("backup", help="nightly: an encrypted backup of the data folder, checked, kept and sent off the server")
+    bk = sub.add_parser("backup", help="an encrypted backup of the data folder, checked, kept and sent off the server")
+    bk.add_argument("--if-due", action="store_true", help="only if the schedule on the Backups page says one is due (the hourly timer)")
     rs = sub.add_parser("restore", help="unpack a backup into an empty folder (asks for the passphrase)")
     rs.add_argument("file", type=Path)
     rs.add_argument("dest", type=Path)
@@ -41,6 +42,8 @@ def main() -> None:
     elif a.cmd == "backup":
         from . import backup
         from .club import Club
+        if a.if_due and not backup.due():
+            return
         club = Club()
         st = backup.run(club, f"https://{club.auth.get('rp_id', 'localhost')}")
         print(json.dumps(st))

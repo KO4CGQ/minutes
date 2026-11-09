@@ -35,20 +35,18 @@ curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh 
 /opt/w8lbz-minutes/deploy/update.sh                                                    # after each merge to main
 ```
 Then put `club.yaml` and `google-service-account.json` in `/etc/w8lbz-minutes/`, and data in `/var/lib/w8lbz-minutes/`.
-The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00; backups run at 02:30 (see Backups).
+The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00; backups run on the schedule set on the Backups page.
 
 ## Backups
-Every night at 2:30 (`w8lbz-minutes-backup.timer`) the app puts the whole data folder (minutes, chow, business, calendars, settings, logs, the roster cache, and a consistent copy of the sign-in database) into one `.tar.gz`, encrypts it (scrypt + AES-256-GCM) with a passphrase only the admins hold, decrypts it again to check it opens, keeps the last 7 in `backups/` in the data folder, and sends it to S3-compatible storage. If anything fails, the admins get an email. Admin mode → Security → **Backups** shows the last result, runs one now, and downloads the local copies (still encrypted).
+The app backs up its whole data folder (minutes, chow, business, calendars, settings, logs, the roster cache, and a consistent copy of the sign-in database) into one compressed `.tar.gz`, encrypts it (scrypt + AES-256-GCM) with a passphrase only the admins hold, and decrypts it again to check it opens. It keeps the newest on the server (`backups/` in the data folder) and sends each to **S3-compatible storage** (Backblaze B2), a **Google Drive** folder, or both. If anything fails, the admins get an email.
+
+Admin mode → Security → **Backups** has everything else: the size of the data and of the last backup, Back up now, **Download a backup now** (a fresh one, compressed and encrypted, to your computer), the server's copies, the **schedule** (daily, weekly, or only by hand, at a chosen hour; the `w8lbz-minutes-backup.timer` checks hourly), **how many to keep** on the server and on Drive, and the S3 and Drive settings, with the recommended values: daily, 7 on the server, 30 on Drive, 90 days on S3. The settings are in `backup-settings.json`, which holds the S3 secret and is left out of the backups (re-enter it after a restore).
 
 **Setup:**
-1. A long passphrase in `/etc/w8lbz-minutes/env`: `W8LBZ_BACKUP_PASSPHRASE=...`. Keep a copy somewhere other than the server (a password manager the admins share): without it no backup can be opened.
-2. Backblaze B2 (or any S3-compatible storage): a private bucket, and an application key limited to that bucket with read and write access. In club.yaml:
-   ```yaml
-   backup:
-     s3: {endpoint: https://s3.us-west-004.backblazeb2.com, region: us-west-004, bucket: BUCKET, prefix: minutes/}
-   ```
-   and in `/etc/w8lbz-minutes/env`: `W8LBZ_S3_KEY_ID=...` and `W8LBZ_S3_SECRET=...`. How long backups are kept there is the bucket's lifecycle rule (B2: Lifecycle Settings → custom rule for `minutes/`: hide files 90 days after upload, delete them 1 day after hiding), so the app never deletes anything there.
-3. `systemctl start w8lbz-minutes-backup` (or Back up now) and check the Backups tab.
+1. A long passphrase in `/etc/w8lbz-minutes/env`: `W8LBZ_BACKUP_PASSPHRASE=...`, then restart. Keep a copy somewhere other than the server (a password manager the admins share): without it no backup can be opened. It's not set from the app on purpose: it has to exist outside the server.
+2. **S3 / Backblaze B2:** a private bucket with a lifecycle rule for the folder (B2: Lifecycle Settings → custom rule for `minutes/`: hide files 90 days after upload, delete them 1 day after hiding), and an application key limited to that bucket with read and write. Enter the endpoint, region, bucket, key ID and secret on the Backups page (`W8LBZ_S3_KEY_ID` / `W8LBZ_S3_SECRET` in the env file override them). The app never deletes anything there.
+3. **Google Drive:** a folder in a **Shared Drive** (Google Workspace). Google gives service accounts no storage of their own, so a folder in someone's My Drive fails with a storage-quota error. Add the service account (its email is in `google-service-account.json`) to the Shared Drive as **Content manager**, so it can delete backups beyond the number to keep, and paste the folder's link on the Backups page.
+4. Back up now, and check the page says where it was sent.
 
 **Restore** (onto this server or a fresh one set up with `setup.sh`):
 ```sh

@@ -17,10 +17,9 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 
 ## Backups
-The nightly encrypted backup to S3-compatible storage is built (README → Backups). Later, if wanted:
-- **Configured from the app** (admin mode) instead of club.yaml and the env file: destinations and schedule.
-- **More destinations:** another server over SFTP, alongside S3.
-- **A restore drill:** a periodic test restore onto a scratch container, beyond the nightly check that each backup opens.
+Built (README → Backups): encrypted, scheduled and configured from the app, to S3 and/or Google Drive. Later, if wanted:
+- **SFTP** to another server, as a third destination.
+- **A restore drill:** a periodic test restore onto a scratch container, beyond the check that each backup opens.
 
 ## Admin tools
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
