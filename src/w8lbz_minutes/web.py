@@ -537,6 +537,9 @@ def business_done(request: Request, iid: str, done: int = Form(1), meeting: str 
 
 @app.post("/business/{iid}/delete")
 def business_delete(request: Request, iid: str, meeting: str = Form(...), mid: str = Depends(leader)):
+    m = archive.by_slug.get(meeting)
+    if not m or m.status != "draft":  # deleting leaves no trace, so only while that meeting is still being written
+        raise HTTPException(403, "Items can only be deleted at a meeting that's still being written.")
     return business_change(request, lambda s: business.remove(s, iid, meeting), meeting)
 
 

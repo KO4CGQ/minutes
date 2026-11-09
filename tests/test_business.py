@@ -222,6 +222,14 @@ def test_motions_are_records(env, monkeypatch):
     old = business.motions(business.load())[1]
     assert (old["opened"], old["status"]) == ("2026-10-22", "done")
     assert "open the books" not in str(business.for_meeting(business.load(), "2026-11-12"))
+    # a past motion can't be deleted: no meeting is being written that day, and the record refuses it anyway
+    assert c.post(f"/business/{old['id']}/delete", data={"meeting": "2026-10-22"}).status_code == 403
+    with pytest.raises(ValueError):
+        business.remove(business.load(), old["id"], "2026-10-22")
+    j = c.post("/business/add", data={"text": "oops", "meeting": "2026-11-05"}, headers={"Accept": "application/json"}).json()
+    oops = next(x for x in j["new"] if x["text"] == "oops")  # but an item added by mistake at a live meeting can be
+    assert "oops" not in str(c.post(f"/business/{oops['id']}/delete", data={"meeting": "2026-11-05"},
+                                    headers={"Accept": "application/json"}).json())
     # a tabled motion's later result; a died motion drops its seconder
     c.post(f"/business/{old['id']}/motion", data={**form, "what": "open the books", "result": "Died for lack of a second"})
     old = business.get(business.load(), old["id"])

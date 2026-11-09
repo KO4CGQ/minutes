@@ -6,6 +6,10 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 
+## 0.12.1 (2026-11-09)
+- **Motions:** Moved by and Seconded by each leave out whoever is picked in the other (leader console and Business → Motions).
+- **Business items:** an item can only be deleted at a meeting that's still being written, and a past motion can't be deleted at all (a delete leaves no trace).
+
 ## 0.12.0 (2026-11-09)
 - **Deploy notes:** before updating:
   1. Add the club's offices (bylaws II.A and III.A) to `/etc/w8lbz-minutes/club.yaml`, for the new Offices page (without it the page shows a generic four):

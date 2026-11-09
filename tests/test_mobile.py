@@ -66,6 +66,15 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
             w = page.evaluate("document.documentElement.scrollWidth")
             if w > 375:
                 too_wide[path] = w
+        # each of Moved by / Seconded by leaves out whoever is in the other
+        page.goto("http://testserver/business?tab=motions")
+        lists = []
+        for picked, other in (("mover", "seconder"), ("seconder", "mover")):
+            page.fill(f"input[name={picked}] >> nth=-1", "Amy Able")
+            page.focus(f"input[name={other}] >> nth=-1")
+            lists.append(page.locator(f"input[name={other}] >> nth=-1 >> xpath=.. >> li").all_inner_texts())
+            page.fill(f"input[name={picked}] >> nth=-1", "")
         browser.close()
+    assert lists == [["(nobody)"], ["(nobody)"]], lists
     assert not too_wide, f"pages wider than a 375px phone: {too_wide}"
     assert not blocked, f"blocked by the security policy, or a script error: {blocked}"
