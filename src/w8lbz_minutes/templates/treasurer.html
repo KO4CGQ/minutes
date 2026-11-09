@@ -4,7 +4,7 @@
 {% else %}<p class="muted">The money in and out of {{ kept|join(' and ') }}, which you look after.</p>{% endif %}
 <nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills'), ('settings', 'Settings')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-{% if full and not running %}<p class="msg err">Dues tracking is off. {% if edit %}Turn it on under <a href="/treasurer?tab=settings">Settings</a>: pick the date tracking starts, and try it in Preview first (officers see everything, members see nothing and no emails go out).{% else %}The Treasurer turns it on under Settings{% if admins %}; for help, ask {{ admins }}{% endif %}.{% endif %}</p>
+{% if full and not running %}<p class="msg err">Tracking (dues, bills and spending) is off. {% if edit %}Turn it on under <a href="/treasurer?tab=settings">Settings</a>: pick the date tracking starts, and try it in Preview first (officers see everything, members see nothing and no emails go out).{% else %}The Treasurer turns it on under Settings{% if admins %}; for help, ask {{ admins }}{% endif %}.{% endif %}</p>
 {% elif full and cfg.mode == 'preview' %}<p class="msg ok">Preview: officers see everything here; members don't see their figures yet, and no emails go out. Switch it on under <a href="/treasurer?tab=settings">Settings</a> when it looks right.</p>{% endif %}
 
 {% if tab == 'standing' %}
@@ -87,7 +87,7 @@
 {% elif tab == 'settings' %}
 {% set ro = '' if edit else 'disabled' %}
 {% if not edit %}<p class="hint">Only the Treasurer (or an admin in admin mode) changes these.</p>{% endif %}
-<form method="post" action="/treasurer/settings" class="modern card"><h2>Dues tracking</h2>
+<form method="post" action="/treasurer/settings" class="modern card"><h2>Tracking: dues, bills and spending</h2>
   {% for k, v in modes.items() %}<label class="check"><input type="radio" name="mode" value="{{ k }}" {{ 'checked' if cfg.mode == k }} {{ ro }}> {{ v }}</label>{% endfor %}
   <div class="formrow">
     <label>Tracking starts<input type="date" name="start" value="{{ cfg.start or '' }}" {{ ro }}></label>

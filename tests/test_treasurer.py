@@ -173,7 +173,7 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
         return t
     tre, pres, amy = as_("tre"), as_("pres"), as_("amy")
     assert amy.get("/treasurer").status_code == 403
-    assert "Dues tracking is off" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text
+    assert "Tracking (dues, bills and spending) is off" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text
     on = {"mode": "preview", "start": "2026-11-05", "arrears_weeks": "4", "certificate_years": "2"}
     assert pres.post("/treasurer/settings", data=on).status_code == 403
     assert tre.post("/treasurer/settings", data=on, follow_redirects=False).status_code == 303
@@ -269,3 +269,19 @@ def test_spending_page_members_once_on_officers_in_preview(club, tmp_path, monke
         s["settings"]["mode"] = "on"
         treasurer.save(s)
     assert "$81.00" in amy.get("/spending").text and "Amy Able" not in amy.get("/spending").text
+
+
+def test_cost_per_member_follows_people_joining_and_leaving(club):
+    club.members["amy"].events = [{"date": "2020-03-05", "event": "Joined"}]
+    club.members["bob"].events = [{"date": "2026-11-12", "event": "Joined"}]  # joins in November
+    club.members["old"].events = [{"date": "2010-01-07", "event": "Joined"}, {"date": "2026-10-15", "event": "Silent Key"}]
+    # tre and pres: no log rows, active now, so members all along
+    assert treasurer.members_in(club, "2026-10-01", "2026-10-31") == 4  # amy, old (until Oct 15), tre, pres
+    assert treasurer.members_in(club, "2026-11-01", "2026-11-30") == 4  # amy, bob, tre, pres
+    assert treasurer.members_in(club, "2026-09-01", "2026-09-30") == 4  # amy, old, tre, pres
+    s = started()
+    treasurer.record(club, s, "tre", "expense", "100", "2026-11-06", "Checking", note="Gas bill")
+    sp = treasurer.spending(s, dt.date(2026, 11, 20), club=club)
+    nov = sp["months"][-1]
+    assert nov["members"] == 4 and nov["per_member"] == 2500
+    assert sp["per_member_month"] == round(10000 / 4 / 12) and sp["dues_month"] == 350 * 52 // 12  # $15.16 a month

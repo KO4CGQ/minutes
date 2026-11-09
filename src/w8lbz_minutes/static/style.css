@@ -471,6 +471,7 @@ table.month li.extra { display: none; }
 
 /* Charts (Attendance): stacked bars in plain HTML; each bar's title is its tooltip, the table below has the numbers */
 .chart { margin: 0 0 1.5rem; padding: 1rem 1rem .6rem 2.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.chart.wide-axis { padding-left: 4rem; } .chart.wide-axis .bars { justify-content: space-around; } .chart.wide-axis .legend { margin-left: -3rem; }  /* "$4,800" needs more room than "40" */
 .chart .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .85rem; color: var(--muted); margin: 0 0 .8rem -1.4rem; }
 .chart .legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: -.05rem; }
 .chart .k1 { background: var(--chart-1); } .chart .k2 { background: var(--chart-2); } .chart .k3 { background: var(--chart-3); }

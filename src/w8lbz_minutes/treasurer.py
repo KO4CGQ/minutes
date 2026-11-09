@@ -254,8 +254,33 @@ def set_category(s: dict, eid: str, category: str, by: str) -> None:
     _log("category", by, entry=eid, category=category)
 
 
-def spending(s: dict, today: dt.date, months: int = 12) -> dict:
-    """Expenses by month and category over the last `months` months (this one included), and the totals."""
+def _spans(m) -> list[tuple[str, str | None]]:
+    """When someone was a member: from Joined/Rejoined to Left/Silent Key in the Membership Log, still open if they're
+    a member now. Without log rows, from "member since" (or always) while they're a member now."""
+    spans, start = [], None
+    for e in sorted((e for e in m.events if e.get("date")), key=lambda e: e["date"]):
+        if e["event"] in ("Joined", "Rejoined"):
+            start = start or e["date"]
+        elif e["event"] in ("Left", "Silent Key") and start:
+            spans.append((start, e["date"]))
+            start = None
+    current = m.status.lower() in ("active", "suspended")
+    if current and not start and not spans:
+        start = m.member_since or "0000"
+    if current and start:
+        spans.append((start, None))
+    # shortcut: someone marked Inactive with no Left row has no known end, so isn't counted; add the row to count them
+    return spans
+
+
+def members_in(club: Club, first: str, last: str) -> int:
+    """How many were members at some point between two dates (ISO)."""
+    return sum(any(a <= last and (b is None or b >= first) for a, b in _spans(m)) for m in club.members.values())
+
+
+def spending(s: dict, today: dt.date, months: int = 12, club: Club | None = None) -> dict:
+    """Expenses by month and category over the last `months` months (this one included), and the totals. With the
+    club, also what that cost per member: each month's spending over the members that month."""
     keys, d = [], today.replace(day=1)
     for _ in range(months):
         keys.insert(0, d.strftime("%Y-%m"))
@@ -265,8 +290,20 @@ def spending(s: dict, today: dt.date, months: int = 12) -> dict:
         if e["kind"] == "expense" and e["date"][:7] in rows:
             rows[e["date"][:7]][e.get("category") or guess(e.get("note") or "")] += e["cents"]
     totals = {c: sum(r[c] for r in rows.values()) for c in CATEGORIES}
-    return {"months": [{"month": k, "by": r, "total": sum(r.values())} for k, r in rows.items()], "totals": totals,
-            "total": sum(totals.values()), "top": max([sum(r.values()) for r in rows.values()] + [0])}
+    out = {"months": [{"month": k, "by": r, "total": sum(r.values())} for k, r in rows.items()], "totals": totals,
+           "total": sum(totals.values()), "top": max([sum(r.values()) for r in rows.values()] + [0])}
+    if club:
+        for r in out["months"]:
+            y, mo = map(int, r["month"].split("-"))
+            end = (dt.date(y + mo // 12, mo % 12 + 1, 1) - dt.timedelta(days=1)).isoformat()
+            r["members"] = members_in(club, f"{r['month']}-01", end)
+            r["per_member"] = r["total"] // r["members"] if r["members"] else None
+        avg = sum(r["members"] for r in out["months"]) / months
+        out["members"] = round(avg)
+        out["per_member_year"] = round(out["total"] / avg) if avg else None  # one member's share of the 12 months
+        out["per_member_month"] = round(out["total"] / avg / months) if avg else None  # a month's cost per member, on average
+        out["dues_month"] = rate(config(s), "dues_weekly", today.isoformat()) * 52 // 12  # what dues bring in a month, per member
+    return out
 
 
 def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights: dict | None = None) -> dict | None:

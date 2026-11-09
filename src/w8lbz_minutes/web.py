@@ -711,7 +711,7 @@ def spending_page(request: Request, mid: str = Depends(me)):
     s = treasurer.load()
     if not spending_visible(request, s):
         raise HTTPException(404)
-    return page(request, "spending.html", sp=treasurer.spending(s, dt.date.today()), cats=treasurer.CATEGORIES, money=treasurer.money,
+    return page(request, "spending.html", sp=treasurer.spending(s, dt.date.today(), club=archive.club), cats=treasurer.CATEGORIES, money=treasurer.money,
                 preview=not treasurer.members_see(s), month=lambda k: dt.date.fromisoformat(k + "-01").strftime("%b %Y"))
 
 
