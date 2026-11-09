@@ -1543,6 +1543,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 local_backups=[(p.name, p.stat().st_size) for p in backup.local_copies()], env_s3=bool(os.environ.get("W8LBZ_S3_SECRET")),
                 passphrase_set=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12, drive_key=KEY_FILE.exists(),
                 data_size=backup.data_size() if tab == "backups" else 0, rec=backup.RECOMMENDED,
+                suggestion=backup.suggest() if tab == "backups" else "",
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
@@ -1574,6 +1575,15 @@ async def security_backup_settings(request: Request):
         return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_settings=", ".join(k for k in ("s3", "drive") if s[k]["on"]) or "server only")
     return RedirectResponse("/admin/security/backups?note=" + quote("Saved. Back up now to try it."), status_code=303)
+
+
+@app.post("/admin/security/backups/check")
+def security_backup_check(request: Request, passphrase: str = Form("")):
+    """Is this the server's passphrase, is it strong, has it leaked? The passphrase itself is never stored or logged."""
+    _security_admin(request)
+    ok, msg = backup.check(passphrase)
+    _admin_log(request, backup="checked a passphrase")
+    return RedirectResponse("/admin/security/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
 
 
 @app.post("/admin/security/backups/download")
