@@ -1577,7 +1577,7 @@ async def calendar_save(request: Request, mid: str = Depends(me)):
         with events.locked():
             evs = events.load()
             if eid:
-                events.change(evs, eid, d or None, cal, v, scope, _club_tz())
+                events.change(evs, eid, d or None, cal, v, scope)
                 action = "changed" if not d else {"this": "changed one date of", "following": "changed this and following dates of",
                                                   "all": "changed every date of"}[scope]
             else:

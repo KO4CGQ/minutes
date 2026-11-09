@@ -238,17 +238,19 @@ def add(evs: list[dict], cal: str, v: dict, by: str) -> dict:
     return e
 
 
-def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: str = "all", club_tz: str = "") -> None:
+def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: str = "all") -> None:
     """Change an event; for one date d of a repeating event, scope says this date, this and following, or every date."""
     e = get(evs, eid)
     if not e.get("repeat") or not d:
         e.update(cal=cal, **v)
         return
     first = _dt(e["start"]).date().isoformat()
-    if scope == "this":  # one date keeps the series' time zone: times typed in another zone are moved into it
+    if scope == "this":  # one date keeps the series' calendar and time zone
+        if cal != e["cal"]:
+            raise ValueError("To move one date to another calendar, choose This and following dates or Every date.")
+        if "T" in v["start"] and v.get("tz") != e.get("tz"):
+            raise ValueError("Unable to change the time zone of a single date in a series; choose This and following dates or Every date.")
         e["changes"][d] = {k: v[k] for k in FIELDS}
-        if v.get("tz") != e.get("tz") and "T" in v["start"]:
-            e["changes"][d] |= {k: x for k, x in in_zone(v, v.get("tz") or club_tz, e.get("tz") or club_tz).items() if k in ("start", "end")}
         return
     # every date (or following from the first date): the series moves by as much as this date moved
     was = _dt(occurrence(e, dt.date.fromisoformat(d))["start"])
