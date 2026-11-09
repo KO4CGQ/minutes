@@ -60,6 +60,8 @@ else PORT=8100; while ss -ltn | grep -q ":$PORT " || grep -qx "$PORT" "$BASE"/*/
 systemctl --user stop "$U" 2>/dev/null || true
 systemctl --user reset-failed "$U" 2>/dev/null || true
 ENV=(W8LBZ_PREVIEW="$B" W8LBZ_DATA="$DIR/data" W8LBZ_CONFIG="$DIR/club.yaml" W8LBZ_ROOT="$DIR/app")
+# To try backups in a preview, run this script with W8LBZ_BACKUP_PASSPHRASE set (never a real one: previews hold copies of the minutes).
+[ -n "${W8LBZ_BACKUP_PASSPHRASE:-}" ] && ENV+=(W8LBZ_BACKUP_PASSPHRASE="$W8LBZ_BACKUP_PASSPHRASE")
 systemd-run --user -q --unit "$U" --collect -p WorkingDirectory="$DIR/app" \
   $(printf -- '--setenv=%s ' "${ENV[@]}") "$DIR/app/.venv/bin/w8lbz-minutes" serve --host 0.0.0.0 --port "$PORT"
 for _ in $(seq 20); do curl -s -o /dev/null "http://127.0.0.1:$PORT/login" && break; sleep 0.5; done
