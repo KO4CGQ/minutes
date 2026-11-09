@@ -5,16 +5,37 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+
+## 0.12.0 (2026-11-09)
+- **Deploy notes:** before updating:
+  1. Add the club's offices (bylaws II.A and III.A) to `/etc/w8lbz-minutes/club.yaml`, for the new Offices page (without it the page shows a generic four):
+
+          offices:
+            - President
+            - Vice President
+            - Secretary
+            - Treasurer
+            - Transmitter-Trustee
+            - {title: Trustee, officer: false, seats: 3}
+
+  2. In the roster sheet, check the **Membership Log** tab has a `note` column (offices and callsign changes write there). Add it if not.
+
+  Optional, any time later (README): the backup passphrase (`W8LBZ_BACKUP_PASSPHRASE` in `/etc/w8lbz-minutes/env`; until it's set, no backups run and callsign changes are refused), S3 or Google Drive on the Backups page, and the roster API token and allowlist for the Discord bot.
+### Roster and offices
 - **Roster API for the Discord bot's container:** `W8LBZ_ROSTER_API_ALLOW` lists the addresses (besides the server itself) that may call `/api/roster`, still only with the token and never through the web proxy. The bot runs in its own container on the same Proxmox host. Each member now also lists `former` callsigns, so the bot moves a member's Discord verification to their new call by itself after a callsign change.
-- **Security:** a roster keeper can no longer change an admin's email (it's how admins sign in and confirm admin mode); that needs an admin in admin mode. Over HTTPS the app now sends `Strict-Transport-Security` (browsers refuse a plain-HTTP connection to the hostname) and `Cross-Origin-Opener-Policy`. FastAPI's automatic API pages (`/docs`, `/redoc`, `/openapi.json`) are off. Checked: `pip-audit` finds no known-vulnerable packages.
-- **Back up before updating:** the Updates page has "Back up first", ticked by default once backups are set up. A full backup runs before the update starts; if it fails, the update doesn't start.
 - **Callsign changes:** Edit roster details → **New callsign** (a vanity call, or a new call with an upgrade). The app takes a backup first, writes the new call to the roster sheet (the old one goes in Other spellings, so old links and club.yaml entries still find the member), adds a "Callsign Change" row to the Membership Log, and moves the member's chow nights, business items, minutes (attendance, leader, report tags), email choices, calendar link, picture, sign-ins and passkeys to the new call. The member stays signed in. Logs keep the old call as history and show the member's name.
 - **Edit the roster in the app:** roster keepers (Secretary, Treasurer) and admins in admin mode get **Edit roster details** on each member's page: name, license class, status, email, phone, address, titles, other spellings, and the officer, board, lead-meetings and change-calendars ticks. Each change is written to the roster sheet (ticks stay checkboxes), shown under Roster changes with Undo, and emailed to the Secretary and the member. The same page adds Membership Log events (Joined, Rejoined, Left, Silent Key, Callsign Change, or anything else), and "member since" follows the latest Joined or Rejoined. Callsign changes still happen on the sheet.
-- **Backups the app makes itself:** the whole data folder (minutes, chow, business, calendars, settings, the sign-in database) in one compressed archive, encrypted with a passphrase only the admins hold, checked that it opens, kept on the server and sent to Backblaze B2 or other S3-compatible storage, a Google Drive folder (in a Shared Drive), or both. Admin mode → Security → Backups sets it all up: where they go, how often (daily, weekly or by hand, at a chosen hour), how many to keep, with recommended values; it shows the data's size and the last result, runs one now, and downloads a fresh backup to your computer. The page also suggests a passphrase that's easy to type from a printout, and checks one (does it match the server's, how strong is it, is it in Have I Been Pwned's leaked passwords). The admins are emailed if a backup fails. `w8lbz-minutes restore` unpacks one; README → Backups has the steps.
-- **Roster API** for the club's other tool on the same server: `GET /api/roster` gives active members' callsign, name, email and officer tick. It answers only requests made on the server itself (not through the web proxy) that carry the token in `W8LBZ_ROSTER_API_TOKEN`; without that token it's off. Every call is logged in `api-log.jsonl`. That tool can stop reading the Google Sheet, one step toward retiring it.
+- **Roster API** for the club's Discord bot: `GET /api/roster` gives active members' callsign, name, email and officer tick. It answers only requests made on the server itself (not through the web proxy) that carry the token in `W8LBZ_ROSTER_API_TOKEN`; without that token it's off. Every call is logged in `api-log.jsonl`. That tool can stop reading the Google Sheet, one step toward retiring it.
 - **Offices and officer history:** Roster → **Offices** lists the club's offices (`offices:` in club.yaml, from the bylaws), who holds each, and who held them when. An admin in admin mode records a change of holder in one step (after an election, a resignation, or a vacancy filled): the app sets the titles and the officer and board ticks on the roster sheet, adds "Took office" and "Left office" rows to its Membership Log, and emails the officers. Past terms from before the app can be added to the history. Each change shows in Roster changes.
+### Backups
+- **Back up before updating:** the Updates page has "Back up first", ticked by default once backups are set up. A full backup runs before the update starts; if it fails, the update doesn't start.
+- **Backups the app makes itself:** the whole data folder (minutes, chow, business, calendars, settings, the sign-in database) in one compressed archive, encrypted with a passphrase only the admins hold, checked that it opens, kept on the server and sent to Backblaze B2 or other S3-compatible storage, a Google Drive folder (in a Shared Drive), or both. Admin mode → Security → Backups sets it all up: where they go, how often (daily, weekly or by hand, at a chosen hour), how many to keep, with recommended values; it shows the data's size and the last result, runs one now, and downloads a fresh backup to your computer. The page also suggests a passphrase that's easy to type from a printout, and checks one (does it match the server's, how strong is it, is it in Have I Been Pwned's leaked passwords). The admins are emailed if a backup fails. `w8lbz-minutes restore` unpacks one; README → Backups has the steps.
+### Meetings and chow
 - **Motions as records:** a motion made in the console (+ Motion) now keeps who moved it, who seconded it, its wording and its result as data, not just a line of text. Business → **Motions** lists them all, filtered by result, so spending and bylaws changes can be traced to the motion that approved them. Officers can correct a motion, record what became of a tabled one, and add past motions from older minutes (filed under that meeting's date, never carried into Old Business).
 - **Printable chow list:** "Printable list (PDF)" on the Chow page shows every night still to come. Officers email it with "Email the list to members", which says whether the schedule has changed since it was last sent; it goes only when someone sends it, never with each set of minutes. Members can turn it off on their Email tab. This replaces the Secretary's spreadsheet.
+### Security
+- **Security:** a roster keeper can no longer change an admin's email (it's how admins sign in and confirm admin mode); that needs an admin in admin mode. Over HTTPS the app now sends `Strict-Transport-Security` (browsers refuse a plain-HTTP connection to the hostname) and `Cross-Origin-Opener-Policy`. FastAPI's automatic API pages (`/docs`, `/redoc`, `/openapi.json`) are off. Checked: `pip-audit` finds no known-vulnerable packages.
+
 
 ## 0.11.0 (2026-11-08)
 ### Security
