@@ -180,7 +180,20 @@ def context(archive: Archive, m: Meeting) -> dict:
         "business": business_items(archive, m.slug),
         "ask_about": ask_about_for(history),
         "celebrations": celebrations(club, m.date),
+        "paid_since": paid_since(archive, m.date),
     }
+
+
+def paid_since(archive: Archive, date: dt.date) -> list[str]:
+    """What the Treasurer recorded as paid since the last meeting, for the leader to read under Bills (and add on a tap)."""
+    from . import treasurer
+    s = treasurer.load()
+    if not treasurer.on(s):
+        return []
+    prev = previous(archive, date)
+    lo = prev.date.isoformat() if prev else (date - dt.timedelta(days=7)).isoformat()
+    return [f"Paid {treasurer.money(e['cents'])}: {e['note'] or treasurer.CATEGORIES.get(e.get('category'), 'expense')}"
+            for e in sorted(s["entries"], key=lambda e: e["date"]) if e["kind"] == "expense" and lo < e["date"] <= date.isoformat()]
 
 
 def _on(year: int, mmdd: str) -> dt.date:

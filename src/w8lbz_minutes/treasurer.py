@@ -38,6 +38,12 @@ BOND = "Bond (Certificate of Indebtedness)"
 LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": BOND,
           "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
 RATES = {"dues_weekly": "Dues, each meeting night", "initiation": "Initiation fee", "certificate": BOND, "missed_chow": "Missed chow night"}
+# Where the club's money goes, for the Spending page; each expense has one (guessed from its words, the Treasurer can change it).
+CATEGORIES = {"utilities": "Utilities", "insurance": "Insurance", "internet": "Internet and phone", "food": "Food",
+              "equipment": "Equipment and supplies", "other": "Other"}
+GUESSES = (("utilities", r"\bgas\b|\belec|edison|water|sewer"), ("insurance", r"insur"),
+           ("internet", r"internet|phone|credit card|blink"), ("food", r"pizza|food|chow|drink|soda|\bpop\b"),
+           ("equipment", r"radio|antenna|rope|pull[ei]|\bups\b|bulb|\bkeys?\b|tool|part|cable|coax|print|shirt"))
 MODES = {"off": "Off", "preview": "Preview: officers only", "on": "On: members see their own figures"}
 # the bylaws (VII); amounts in cents, each a list of {from, cents} so a change takes effect on a date
 DEFAULTS = {"mode": "off", "start": None, "certificate_years": 2, "arrears_weeks": 4, "alerts": False,
@@ -67,6 +73,11 @@ def rate(c: dict, kind: str, day: str) -> int:
     """The amount in effect on a day, in cents (before the first change, the first amount)."""
     steps = sorted(c["rates"][kind], key=lambda x: x["from"])
     return ([x for x in steps if x["from"] <= day] or steps[:1])[-1]["cents"]
+
+
+def guess(text: str) -> str:
+    """The likely category from a bill's words: "Gas Bill $81" -> utilities. Other when nothing matches."""
+    return next((c for c, pat in GUESSES if re.search(pat, text, re.I)), "other")
 
 
 def kept_accounts(club: Club, s: dict, mid: str | None) -> list[str]:
@@ -130,7 +141,7 @@ def _log(action: str, by: str, **details) -> None:
 
 
 def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, account: str, member: str | None = None,
-           note: str = "", bill: str | None = None, regular: str | None = None) -> dict:
+           note: str = "", bill: str | None = None, regular: str | None = None, category: str | None = None) -> dict:
     if kind not in KINDS:
         raise ValueError("Pick what the money is for.")
     c = cents(amount)
@@ -145,6 +156,8 @@ def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, acco
         raise ValueError("Pick an account.")
     e = {"id": secrets.token_hex(5), "date": date, "kind": kind, "member": member, "cents": c, "account": account,
          "note": note.strip()[:300], "bill": bill, "by": by, "at": int(time.time())}
+    if kind == "expense":
+        e["category"] = category if category in CATEGORIES else guess(note)
     if regular:
         if kind != "expense" or not any(r["id"] == regular for r in s["regular"]):
             raise ValueError("That regular bill is gone.")
@@ -215,15 +228,45 @@ def bills(archive, s: dict, start: str | None) -> list[dict]:
     for i, m in enumerate(ms):
         if not start or m.slug < start:
             continue
-        before = {it.text for it in ms[i + 1].items("Bills and Communications")} if i + 1 < len(ms) else set()
+        last_week = {it.text for it in ms[i + 1].items("Bills and Communications")} if i + 1 < len(ms) else set()
         for it in m.items("Bills and Communications"):
             h = hashlib.sha1(it.text.encode()).hexdigest()[:8]
-            for n, found in enumerate(AMOUNTS.finditer(it.text)):
+            found_all = list(AMOUNTS.finditer(it.text))
+            for n, found in enumerate(found_all):
                 key = f"{m.slug}:{h}:{n}"
-                out.append({"key": key, "meeting": m.slug, "text": it.text, "amount": found.group(0),
-                            "cents": cents(found.group(1) or found.group(2)), "repeated": it.text in before,
+                # a bullet that starts with an amount names each after it ("$99 gas bill $35 raffle tickets"),
+                # otherwise before it ("Gas Bill $81"); the other side only when that one has no words
+                after = it.text[found.end():found_all[n + 1].start() if n + 1 < len(found_all) else None]
+                before = it.text[found_all[n - 1].end() if n else 0:found.start()]
+                label, other = (after, before) if found_all[0].start() == 0 else (before, after)
+                cat = guess(label if re.search(r"[a-z]", label, re.I) else other)
+                out.append({"key": key, "meeting": m.slug, "text": it.text, "amount": found.group(0), "category": cat,
+                            "cents": cents(found.group(1) or found.group(2)), "repeated": it.text in last_week,
                             **s["bills"].get(key, {"status": "waiting"})})
     return out
+
+
+def set_category(s: dict, eid: str, category: str, by: str) -> None:
+    e = next((x for x in s["entries"] if x["id"] == eid and x["kind"] == "expense"), None)
+    if not e or category not in CATEGORIES:
+        raise ValueError("Pick a category for an expense.")
+    e["category"] = category
+    _log("category", by, entry=eid, category=category)
+
+
+def spending(s: dict, today: dt.date, months: int = 12) -> dict:
+    """Expenses by month and category over the last `months` months (this one included), and the totals."""
+    keys, d = [], today.replace(day=1)
+    for _ in range(months):
+        keys.insert(0, d.strftime("%Y-%m"))
+        d = (d - dt.timedelta(days=1)).replace(day=1)
+    rows = {k: {c: 0 for c in CATEGORIES} for k in keys}
+    for e in s["entries"]:
+        if e["kind"] == "expense" and e["date"][:7] in rows:
+            rows[e["date"][:7]][e.get("category") or guess(e.get("note") or "")] += e["cents"]
+    totals = {c: sum(r[c] for r in rows.values()) for c in CATEGORIES}
+    return {"months": [{"month": k, "by": r, "total": sum(r.values())} for k, r in rows.items()], "totals": totals,
+            "total": sum(totals.values()), "top": max([sum(r.values()) for r in rows.values()] + [0])}
 
 
 def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights: dict | None = None) -> dict | None:

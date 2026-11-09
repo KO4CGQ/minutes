@@ -28,3 +28,6 @@ Your name menu → **Your profile**:
 
 ## Your dues
 Once the Treasurer has turned tracking on, Home shows what you owe (or that you're paid up, and through which date) and whether you still need to buy your bond (Certificate of Indebtedness). Only you and the officers see your figures. Pay the Treasurer at a meeting.
+
+## Where the club's money goes
+Once the Treasurer has turned tracking on, **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there.

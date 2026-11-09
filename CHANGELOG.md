@@ -14,6 +14,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Treasurer settings on the page:** the Treasurer turns dues tracking off, to Preview (officers only, no emails: for checking the figures on the live app) or on, sets the start date, changes the amounts with the date each takes effect, and adds accounts and funds. Nothing goes in club.yaml.
 - **Arrears:** an optional daily email to the Treasurer and the Board when a member reaches the arrears line (bylaws VII.B). Suspending stays with the Board (bylaws VIII): members can now be given the status Suspended, and the Membership Log has Suspended and Reinstated rows.
 - **Bills from the minutes:** every amount in a bullet is its own bill, amounts without a $ count, and a bullet repeated from the week before is marked.
+- **Spending, for every member:** the club's expenses over the last 12 months by category and month (chart and tables), once the Treasurer turns tracking on (officers only in Preview). Each expense gets a category, guessed from its words and changeable by the Treasurer. In the leader console, the Bills step lists what the Treasurer recorded as paid since the last meeting, with **Add to tonight's bills**.
 - **Treasurer, more:** regular bills (what the club pays every month or year) show whether they've been paid this month or year; other income (drink sales, donations); and funds a committee runs, like a drinks fund with its own checking account, whose keepers record that account's money and see only it.
 
 ## 0.12.1 (2026-11-09)

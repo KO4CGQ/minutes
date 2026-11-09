@@ -218,3 +218,54 @@ def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
     assert "can sales" in page and "Dues" not in page.split("<tbody>")[1] and "Who owes what" not in page
     assert bob.post(f"/treasurer/entries/{s['entries'][1]['id']}/delete").status_code == 403
     assert bob.post(f"/treasurer/entries/{s['entries'][0]['id']}/delete", follow_redirects=False).status_code == 303
+
+
+def test_categories_spending_by_month_and_the_console(club, tmp_path, monkeypatch):
+    for d, items in ((dt.date(2026, 11, 5), [Item("$99 gas bill $35 Raffle tickets $10 for pizza"), Item("Paid insurance $2884")]),):
+        Meeting(date=d, status="published", sections={"Bills and Communications": items}).save(tmp_path / "m")
+    archive, s = Archive(tmp_path / "m", club), started()
+    assert [(b["amount"], b["category"]) for b in treasurer.bills(archive, s, "2026-11-05")] == [
+        ("$99", "utilities"), ("$35", "other"), ("$10", "food"), ("$2884", "insurance")]
+    treasurer.record(club, s, "tre", "expense", "99", "2026-11-06", "Checking", note="Gas bill")
+    e = treasurer.record(club, s, "tre", "expense", "10", "2026-11-06", "Cash", note="for the fox hunt", category="food")
+    treasurer.record(club, s, "tre", "expense", "2884", "2026-02-05", "Checking", note="Paid insurance")
+    treasurer.record(club, s, "tre", "dues", "7", "2026-11-06", "Cash", "amy")  # money in: not spending
+    treasurer.set_category(s, e["id"], "other", "tre")
+    sp = treasurer.spending(s, dt.date(2026, 11, 20))
+    assert [r["month"] for r in sp["months"]][::11] == ["2025-12", "2026-11"]
+    nov = sp["months"][-1]
+    assert nov["by"]["utilities"] == 9900 and nov["by"]["other"] == 1000 and nov["total"] == 10900
+    assert sp["totals"]["insurance"] == 288400 and sp["total"] == 299300 and sp["top"] == 288400
+    from w8lbz_minutes import console
+    treasurer.save(s)
+    Meeting(date=dt.date(2026, 11, 12), status="draft").save(tmp_path / "m")
+    assert console.paid_since(Archive(tmp_path / "m", club), dt.date(2026, 11, 12)) == [
+        "Paid $99.00: Gas bill", "Paid $10.00: for the fox hunt"]  # since the Nov 5 meeting
+
+
+def test_spending_page_members_once_on_officers_in_preview(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+
+    def as_(who):
+        t = TestClient(web.app)
+        t.cookies.set(web.COOKIE, a.new_session(who))
+        return t
+    amy, pres = as_("amy"), as_("pres")
+    assert pres.get("/spending").status_code == 404  # tracking off
+    with treasurer.locked():
+        s = started("preview", "2025-01-02")
+        treasurer.record(club, s, "tre", "expense", "81", dt.date.today().isoformat(), "Checking", note="Gas bill")
+        treasurer.save(s)
+    assert amy.get("/spending").status_code == 404 and "/spending" not in amy.get("/").text
+    page = pres.get("/spending").text
+    assert "Preview:" in page and "$81.00" in page and 'href="/spending"' in page
+    with treasurer.locked():
+        s = treasurer.load()
+        s["settings"]["mode"] = "on"
+        treasurer.save(s)
+    assert "$81.00" in amy.get("/spending").text and "Amy Able" not in amy.get("/spending").text

@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block title %}Spending{% endblock %}{% block body %}
+<h1>Where the club's money goes</h1>
+<p class="muted">What the Treasurer recorded as paid over the last 12 months, by category. Members' dues are never shown here.</p>
+{% if preview %}<p class="msg ok">Preview: only officers see this page until the Treasurer turns dues tracking on.</p>{% endif %}
+{% if sp.total %}{% set ks = cats.keys()|list %}
+{% set step = [((sp.top / 100 / 4) // 50 + 1) * 50, 50]|max|int %}{% set ymax = step * 4 %}
+<figure class="chart" role="img" aria-label="Spending per month over the last 12 months, as stacked bars by category. The same numbers are in the table below.">
+  <div class="legend">{% for k in ks %}<span><i class="k{{ loop.index }}"></i>{{ cats[k] }}</span>{% endfor %}</div>
+  <div class="plot">
+    {% for t in range(0, ymax + 1, step) %}<div class="grid" style="bottom: {{ t / ymax * 100 }}%"><span>${{ '{:,}'.format(t) }}</span></div>{% endfor %}
+    <div class="bars">{% for r in sp.months %}<span class="bar" tabindex="0" style="height: {{ r.total / 100 / ymax * 100 }}%"
+      title="{{ month(r.month) }}: {{ money(r.total) }}{% for k in ks if r.by[k] %}, {{ cats[k]|lower }} {{ money(r.by[k]) }}{% endfor %}">
+      {% for k in ks|reverse if r.by[k] %}<i class="k{{ ks.index(k) + 1 }}" style="flex-grow: {{ r.by[k] }}"></i>{% endfor %}</span>{% endfor %}</div>
+  </div>
+  <figcaption><span>{{ month(sp.months[0].month) }}</span><span>{{ month(sp.months[-1].month) }}</span></figcaption>
+</figure>
+<div class="cols"><section><h2>12 months by category</h2>
+<table class="list"><thead><tr><th>Category</th><th class="n">Total</th></tr></thead>
+<tbody>{% for k in ks %}<tr><td><i class="swatch k{{ loop.index }}"></i>{{ cats[k] }}</td><td class="n" data-sort="{{ sp.totals[k] }}">{{ money(sp.totals[k]) if sp.totals[k] else '' }}</td></tr>{% endfor %}
+<tr><td><b>All</b></td><td class="n"><b>{{ money(sp.total) }}</b></td></tr></tbody></table></section>
+<section><h2>By month</h2>
+<table class="list"><thead><tr><th>Month</th>{% for k in ks %}<th class="n opt">{{ cats[k] }}</th>{% endfor %}<th class="n">Total</th></tr></thead>
+<tbody>{% for r in sp.months|reverse %}<tr><td data-sort="{{ r.month }}">{{ month(r.month) }}</td>{% for k in ks %}<td class="n opt">{{ money(r.by[k]) if r.by[k] else '' }}</td>{% endfor %}<td class="n"><b>{{ money(r.total) if r.total else '' }}</b></td></tr>{% endfor %}
+<tr><td><b>12 months</b></td>{% for k in ks %}<td class="n opt"><b>{{ money(sp.totals[k]) if sp.totals[k] else '' }}</b></td>{% endfor %}<td class="n"><b>{{ money(sp.total) }}</b></td></tr></tbody></table></section></div>
+{% else %}<p class="muted">Nothing recorded as paid in the last 12 months yet.</p>{% endif %}
+{% endblock %}

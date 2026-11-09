@@ -286,7 +286,12 @@
     const set = (a) => { M.sections[sec] = a.map((t) => ({ text: t, member: null })); };
     const rows = itemRows(arr, set);
     const hint = [HINTS[sec], EMPTY_NOTE].filter(Boolean).join(" ");
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), rows);
+    // Bills: what the Treasurer recorded as paid since the last meeting, to read out; added to the minutes only on a tap
+    const paid = sec === "Bills and Communications" ? (D.paid_since || []).filter((t) => !arr.includes(t)) : [];
+    const treasurer = paid.length ? h("div", { class: "card" }, h("p", { class: "hint" }, "The Treasurer recorded these as paid since the last meeting:"),
+      h("ul", {}, paid.map((t) => h("li", {}, t))),
+      h("button", { class: "btn small ghost", onclick: () => { set(arr.concat(paid)); render(); save(); } }, "Add to tonight's bills")) : null;
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), treasurer, rows);
   }
 
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------

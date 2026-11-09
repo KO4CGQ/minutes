@@ -33,6 +33,9 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
     ts = treasurer.load()
     treasurer.set_general(ts, "kd8adm", "preview", "2026-01-01", 4, 2, True)  # so Who owes what has rows
     treasurer.set_fund(ts, "kd8adm", "Drinks fund", "Cash", ["kd8adm"])
+    import datetime as _dt
+    for cents_, note in (("81", "Gas bill"), ("2884", "Paid insurance"), ("10", "Pizza for the fox hunt")):  # so Spending has a chart
+        treasurer.record(club, ts, "kd8adm", "expense", cents_, _dt.date.today().isoformat(), "Checking", note=note)
     treasurer.save(ts)
     club._yaml_links = [{"label": "Constitution and Bylaws of the club, the long version", "url": "https://example.org/a/very/long/address/bylaws.pdf"}]
     a = Auth(club, tmp_path / "auth.sqlite")

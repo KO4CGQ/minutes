@@ -12,7 +12,7 @@
   --nav-bg: #2b3a19; --nav-text: #eef4e2; --nav-hover: rgba(255, 255, 255, .12); --nav-on: rgba(255, 255, 255, .2);
   --focus: rgba(91, 122, 47, .28); --mark: #fbe58a; --sheet-h: #c3d69b;
   --inperson-bg: #dcebc4; --inperson-edge: #7da04a; --online-bg: #d6e4f7; --online-edge: #5a86c4;
-  --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a;  /* chart series, checked for colour blindness */
+  --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a; --chart-4: #eda100; --chart-5: #e87ba4; --chart-6: #008300;  /* chart series, checked for colour blindness */
   --shadow: 0 1px 2px rgba(20, 30, 10, .06), 0 4px 16px rgba(20, 30, 10, .05);
   --shadow-pop: 0 10px 30px rgba(20, 30, 10, .18);
   --radius: .8rem; --radius-sm: .55rem;
@@ -29,7 +29,7 @@
   --nav-bg: #161b12; --nav-text: #e2ead6; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
   --focus: rgba(156, 196, 105, .3); --mark: #6b5a12; --sheet-h: #34442180;
   --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
-  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70;
+  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
 }
@@ -46,7 +46,7 @@
     --nav-bg: #161b12; --nav-text: #e2ead6; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
     --focus: rgba(156, 196, 105, .3); --mark: #6b5a12; --sheet-h: #34442180;
     --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
-    --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70;
+    --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
   }
@@ -474,6 +474,7 @@ table.month li.extra { display: none; }
 .chart .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .85rem; color: var(--muted); margin: 0 0 .8rem -1.4rem; }
 .chart .legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: -.05rem; }
 .chart .k1 { background: var(--chart-1); } .chart .k2 { background: var(--chart-2); } .chart .k3 { background: var(--chart-3); }
+.chart .k4 { background: var(--chart-4); } .chart .k5 { background: var(--chart-5); } .chart .k6 { background: var(--chart-6); }
 .chart .plot { position: relative; height: 11rem; }
 .chart .grid { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
 .chart .grid span { position: absolute; right: 100%; margin-right: .4rem; transform: translateY(-50%); font-size: .75rem; color: var(--faint); }
@@ -481,3 +482,5 @@ table.month li.extra { display: none; }
 .chart .bar { flex: 1 1 0; max-width: 1.6rem; display: flex; flex-direction: column; gap: 2px; border-radius: 4px 4px 0 0; overflow: hidden; }
 .chart .bar i { flex-basis: 0; min-height: 2px; } .chart .bar:hover, .chart .bar:focus-visible { opacity: .75; }
 .chart figcaption { display: flex; justify-content: space-between; font-size: .75rem; color: var(--faint); margin-top: .3rem; }
+table.list td select { max-width: 7.5rem; font-size: .8rem; display: block; margin-top: .2rem; }
+.swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -.05rem; } .swatch.k1 { background: var(--chart-1); } .swatch.k2 { background: var(--chart-2); } .swatch.k3 { background: var(--chart-3); } .swatch.k4 { background: var(--chart-4); } .swatch.k5 { background: var(--chart-5); } .swatch.k6 { background: var(--chart-6); }

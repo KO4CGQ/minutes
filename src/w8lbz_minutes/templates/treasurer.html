@@ -26,20 +26,22 @@
     <label>Amount<input name="amount" inputmode="decimal" required placeholder="3.50"></label>
     <label>Date<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
     <label>Account<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+    <label>Category (expenses)<select name="category"><option value="">Guess from the note</option>{% for k, v in cats.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
   </div>
   <label>Note<input name="note" maxlength="300" placeholder="e.g. paid through December"></label>
   {% if edit %}<p class="hint">An adjustment charges a member (e.g. a balance from before the app); a negative one is a credit (e.g. a night with no meeting). Other income is money in that isn't from a member's account (drink sales, a donation).</p>{% endif %}
   <div class="formrow"><button class="btn small">Record</button></div>
 </form>{% endif %}
-<table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th>{% if edit or kept %}<th></th>{% endif %}</tr></thead>
-<tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ fmt(e.date) }}</td><td>{{ labels[e.kind] }}</td>
+<table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th></tr></thead>
+<tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ e.date|isodate }}{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" style="display:block" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form>{% endif %}</td><td>{{ labels[e.kind] }}{% if e.kind == 'expense' %}{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/category" class="inline"><select name="category" data-autosubmit aria-label="Category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if e.category == k }}>{{ v }}</option>{% endfor %}</select></form>{% elif e.category %}<br><span class="muted small">{{ cats[e.category] }}</span>{% endif %}{% endif %}</td>
   <td>{% if e.member %}<a href="/members/{{ e.member }}">{{ club.name(e.member) }}</a>{% endif %}</td>
   <td class="n" data-sort="{{ -e.cents if e.kind == 'expense' else e.cents }}">{{ money(-e.cents) if e.kind == 'expense' else money(e.cents) }}</td>
   <td class="opt">{{ e.account }}</td><td class="opt">{{ e.note }}</td>
-  {% if edit or kept %}<td>{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form>{% endif %}</td>{% endif %}</tr>
-{% else %}<tr><td colspan="7" class="muted">Nothing recorded yet.</td></tr>{% endfor %}</tbody></table>
+</tr>
+{% else %}<tr><td colspan="6" class="muted">Nothing recorded yet.</td></tr>{% endfor %}</tbody></table>
 
 {% elif tab == 'bills' %}
+{% macro cat_pick(sel) %}<label>Category<select name="category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if k == sel }}>{{ v }}</option>{% endfor %}</select></label>{% endmacro %}
 {% macro regular_pick() %}{% if regular_all %}<label>Regular bill<select name="regular"><option value="">(not one of them)</option>{% for r in regular_all %}<option value="{{ r.id }}">{{ r.payee }}</option>{% endfor %}</select></label>{% endif %}{% endmacro %}
 <h2>Regular bills</h2>
 <p class="hint">What the club pays every month or year (bylaws IV.C: gas, electricity, water, phone and internet, taxes, insurance), whether or not it's read at a meeting.</p>
@@ -52,6 +54,7 @@
     <div class="formrow"><label>Paid<input name="amount" inputmode="decimal" required value="{{ '%d.%02d'|format(r.cents // 100, r.cents % 100) }}"></label>
       <label>On<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
       <label>From<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+      {{ cat_pick(guess(r.payee)) }}
       <button class="btn small">Mark paid</button></div></form>{% endif %}
 </article>{% else %}<p class="muted">None listed{{ ' yet: add them below' if edit }}.</p>{% endfor %}</div>
 {% if edit %}<details class="card"><summary>Add or remove a regular bill</summary>
@@ -74,6 +77,7 @@
     <div class="formrow"><label>Paid<input name="amount" inputmode="decimal" required value="{{ '%d.%02d'|format(b.cents // 100, b.cents % 100) }}"></label>
       <label>On<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
       <label>From<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+      {{ cat_pick(b.category) }}
       {{ regular_pick() }}
       <button class="btn small">Mark paid</button></div></form>
   <form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><button class="btn small ghost">Not a bill</button></form>
