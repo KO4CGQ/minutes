@@ -24,7 +24,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import backup, profile
-from .club import CALLSIGN, DATA, ROSTER_CACHE, Club, inside, one_line
+from .club import CALLSIGN, DATA, ROSTER_CACHE, Club, inside, one_line, roster_locked
 from .membership import LOG_TAB
 from .roster import Sheet
 
@@ -93,6 +93,7 @@ def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
     return done
 
 
+@roster_locked
 def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet | None = None) -> str:
     """Give a member a new callsign. Returns their new id. Raises ValueError, backup.BackupError or
     roster.SheetError before anything is renamed."""

@@ -103,3 +103,63 @@ def test_the_original_pdf_is_only_served_for_a_real_meeting(app):
     amy = app("kd8aaa")
     for slug in ("..", ".", "%2e%2e"):
         assert amy.get(f"/meetings/{slug}/original.pdf", follow_redirects=False).status_code == 404
+
+
+def test_a_slow_profile_save_doesnt_hold_up_everyone_else(app, monkeypatch):
+    """Saving a profile writes the Google roster sheet, which can take seconds; other requests are answered meanwhile."""
+    import asyncio
+    import time
+    import httpx
+    from w8lbz_minutes import profile
+    monkeypatch.setattr(profile, "change", lambda *a, **k: time.sleep(2))  # the sheet, slow today
+    cookie = {web.COOKIE: web.authn.new_session("kd8aaa")}
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=web.app), base_url="http://testserver", cookies=cookie) as c:
+            t0 = time.monotonic()
+            save = asyncio.create_task(c.post("/profile", data={"phone": "419-555-0101"}))
+            await asyncio.sleep(0.2)  # the save is under way
+            other = await c.get("/about")
+            waited = time.monotonic() - t0
+            assert other.status_code == 200 and waited < 1.5, waited  # not stuck behind the 2-second save
+            assert (await save).status_code == 303
+    asyncio.run(run())
+
+
+def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_path, monkeypatch):
+    from w8lbz_minutes import avatars, limits
+    monkeypatch.setattr(limits, "DATA", tmp_path)
+    assert limits.upload_mb() == limits.DEFAULT_MB
+    with pytest.raises(ValueError):
+        limits.set_upload_mb(0)
+    with pytest.raises(ValueError):
+        limits.set_upload_mb(101)
+    limits.set_upload_mb(1)
+    amy = app("kd8aaa")
+    big = b"x" * (limits.max_upload() + limits.FORM_ROOM + 1)
+    r = amy.post("/profile/photo", files={"photo": ("p.jpg", big, "image/jpeg")})
+    assert r.status_code == 413 and "1 MB at most" in r.text  # turned away before it's read
+    with pytest.raises(ValueError, match="1 MB at most"):
+        avatars.save("kd8aaa", b"x" * (limits.max_upload() + 1))
+    assert amy.post("/admin/security/limits", data={"upload_mb": "50"}).status_code in (403, 404)  # admins only
+    assert limits.upload_mb() == 1
+    (tmp_path / "limits.json").write_text("not json")  # a damaged file: the default, not a crash
+    assert limits.upload_mb() == limits.DEFAULT_MB
+
+
+def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
+    from w8lbz_minutes import limits
+    monkeypatch.setattr(limits, "DATA", tmp_path)
+    club = Club(FIX / "test-club.yaml", roster=PEOPLE)
+    club.admins = {"kd8off"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tok = a.new_session("kd8off")
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, tok)
+    assert t.post("/admin/security/limits", data={"upload_mb": "25"}).status_code == 403  # admin mode first
+    a.set_admin(tok, 60)
+    r = t.post("/admin/security/limits", data={"upload_mb": "25"})
+    assert r.status_code == 200 and "Uploads up to 25 MB." in r.text and limits.upload_mb() == 25
+    assert 'value="25"' in t.get("/admin/security/server").text

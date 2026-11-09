@@ -12,7 +12,7 @@ import logging
 import re
 
 from . import auth, chow, prefs, profile
-from .club import ROSTER_CACHE, Club, one_line, valid_email
+from .club import ROSTER_CACHE, Club, one_line, valid_email, roster_locked
 from .roster import Sheet, SheetError
 
 log = logging.getLogger("w8lbz.membership")
@@ -53,6 +53,7 @@ def clean(form: dict) -> dict:
     return f
 
 
+@roster_locked
 def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url: str = "") -> str:
     """Add a member to the roster sheet and the app. Returns their id. Raises ValueError or SheetError."""
     f = clean(form)
@@ -111,6 +112,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
 EVENTS = ("Joined", "Rejoined", "Suspended", "Reinstated", "Left", "Silent Key", "Callsign Change", "Other")
 
 
+@roster_locked
 def add_event(club: Club, mid: str, event: str, date: str, note: str, by: str, sheet: Sheet | None = None) -> dict:
     """A Membership Log row (Joined, Left, Silent Key, ...): on the sheet, then in the app. "Member since" follows
     the latest Joined or Rejoined. Status isn't changed here; the editor's Status box does that."""

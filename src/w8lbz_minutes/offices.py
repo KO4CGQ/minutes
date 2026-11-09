@@ -16,7 +16,7 @@ import secrets
 import time
 
 from . import auth, profile
-from .club import ROSTER_CACHE, Club
+from .club import ROSTER_CACHE, Club, roster_locked
 from .membership import LOG_TAB
 from .roster import Sheet
 
@@ -75,6 +75,7 @@ def _date(v: str) -> str:
         raise ValueError("Give the date the change took effect.")
 
 
+@roster_locked
 def change(club: Club, title: str, out_mid: str | None, in_mid: str | None, date: str, by: str,
            sheet: Sheet | None = None, url: str = "") -> list[str]:
     """Hand an office from out_mid to in_mid (either may be None: a vacancy filled, or a resignation).
@@ -132,6 +133,7 @@ def change(club: Club, title: str, out_mid: str | None, in_mid: str | None, date
     return list(changed)
 
 
+@roster_locked
 def record_term(club: Club, title: str, mid: str, start: str, end: str, by: str, sheet: Sheet | None = None) -> None:
     """A past term (before the app kept the history): two Membership Log rows. Titles and ticks are untouched."""
     if title not in {o["title"] for o in offices(club)}:

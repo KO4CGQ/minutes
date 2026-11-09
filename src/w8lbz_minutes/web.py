@@ -19,8 +19,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, treasurer, updates
+from . import ai, avatars, limits, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
+from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW, one_line, valid_email
@@ -143,6 +144,16 @@ async def require_login(request: Request, call_next):
 
 
 CALENDAR_PATHS = ("/chow", "/api/meetings", "/console", "/calendar")  # changes here can move chow nights or events
+
+
+@app.middleware("http")
+async def upload_limit(request: Request, call_next):
+    """Turn away a request bigger than the admin's upload limit before reading it (a huge upload would fill the disk)."""
+    size = request.headers.get("content-length", "")
+    if size.isdigit() and int(size) > limits.max_upload() + limits.FORM_ROOM:
+        return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
+                            status_code=413)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -510,7 +521,7 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
         if "owner" in fields:
             fields["owner"] = owner_id(fields["owner"])
         business.edit(s, iid, mid, meeting=form.get("meeting") or None, **fields)
-    return business_change(request, run, form.get("meeting", ""))
+    return await run_in_threadpool(business_change, request, run, form.get("meeting", ""))
 
 
 @app.post("/business/{iid}/comment")
@@ -879,8 +890,8 @@ async def chow_constraints(request: Request, mid: str = Depends(chow_leader)):
     weeks = [int(w) for w in form.getlist("not_weeks") if w.isdigit()]
     away = [[form.get("away_from", ""), form.get("away_to", "")]] if form.get("away_from") else []
     skip = int(form.get("skip") or 0) if str(form.get("skip") or "0").isdigit() else 0
-    return chow_change(request, lambda s: chow.set_constraints(s, who, weeks, away, form.get("note", ""), mid, skip),
-                       back="/chow/rotation")
+    return await run_in_threadpool(chow_change, request, lambda s: chow.set_constraints(s, who, weeks, away, form.get("note", ""), mid, skip),
+                                   "/chow/rotation")
 
 
 # ---------------- admin mode ----------------
@@ -1089,9 +1100,9 @@ async def profile_photo(request: Request, mid: str = Depends(me)):
     """Upload (or replace) your own profile picture."""
     form = await request.form()
     f = form.get("photo")
-    data = await f.read(avatars.MAX_UPLOAD + 1) if f is not None and hasattr(f, "read") else b""
+    data = await f.read(limits.max_upload() + 1) if f is not None and hasattr(f, "read") else b""
     try:
-        avatars.save(mid, data)
+        await run_in_threadpool(avatars.save, mid, data)
     except ValueError as e:
         return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
     return RedirectResponse("/profile?photo=1", status_code=303)
@@ -1139,12 +1150,12 @@ async def profile_save(request: Request, mid: str = Depends(me)):
     new = {"phone": form.get("phone", "").strip()[:40], "address": address, "birthday": birthday,
            "share": ", ".join(f for f in SHAREABLE if f in form.getlist("share"))}
     try:
-        profile.change(archive.club, mid, new, by=mid, url=base_url(request))
+        await run_in_threadpool(profile.change, archive.club, mid, new, by=mid, url=base_url(request))
     except SheetError as e:
         return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
     email = form.get("email", "").strip()
     if email and email.lower() != (m.email or "").lower():
-        err = authn.start_email_change(mid, email, base_url(request))
+        err = await run_in_threadpool(authn.start_email_change, mid, email, base_url(request))
         if err:
             return RedirectResponse("/profile?saved=1&error=" + quote(err), status_code=303)
         return RedirectResponse("/profile?saved=1&email_sent=" + quote(email), status_code=303)
@@ -1184,7 +1195,7 @@ def roster_add_form(request: Request, guest: str = "", error: str = "", mid: str
 async def roster_add(request: Request, mid: str = Depends(roster_keeper)):
     form = dict(await request.form())
     try:
-        new = membership.add_member(archive.club, form, mid, url=base_url(request))
+        new = await run_in_threadpool(membership.add_member, archive.club, form, mid, url=base_url(request))
     except (ValueError, SheetError) as e:
         ready = membership.ready_guests(archive.guests(), int(archive.club.info.get("invite_after_visits", 3)))
         return page(request, "roster_add.html", ready=ready, guest=None, f=form, error=str(e),
@@ -1524,7 +1535,7 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
                **{k: "TRUE" if f.get(k) else "FALSE" for k in ("officer", "board", "minutes_editor", "calendar_editor")}}
         if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
             new["address"] = m.address or ""
-        profile.change(archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+        await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
     except (ValueError, SheetError) as e:
         return RedirectResponse(_safe_next(back + "?error=" + quote(str(e))), status_code=303)
     return RedirectResponse(_safe_next(back + "?saved=1"), status_code=303)
@@ -1750,7 +1761,19 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
+                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
+                upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
+
+
+@app.post("/admin/security/limits")
+def security_limits(request: Request, upload_mb: int = Form(...)):
+    _security_admin(request)
+    try:
+        limits.set_upload_mb(upload_mb)
+    except ValueError as e:
+        return RedirectResponse("/admin/security/server?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, upload_mb=upload_mb)
+    return RedirectResponse("/admin/security/server?note=" + quote(f"Uploads up to {upload_mb} MB."), status_code=303)
 
 
 @app.post("/admin/security/ban")
@@ -1773,7 +1796,7 @@ async def security_backup_settings(request: Request):
     _security_admin(request)
     form = dict(await request.form())
     try:
-        s = backup.save_settings(form)
+        s = await run_in_threadpool(backup.save_settings, form)
     except backup.BackupError as e:
         return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_settings=", ".join(k for k in ("s3", "drive") if s[k]["on"]) or "server only")
@@ -2092,10 +2115,10 @@ async def calendar_import(request: Request, mid: str = Depends(me)):
     cal, f = form.get("cal", ""), form.get("file")
     if cal not in events.CALS or f is None or not hasattr(f, "read"):
         raise HTTPException(400, "Pick a calendar and an .ics file.")
-    raw = await f.read(10_000_001)
+    raw = await f.read(limits.max_upload() + 1)
     try:
-        if len(raw) > 10_000_000:
-            raise ValueError("That file is over 10 MB.")
+        if len(raw) > limits.max_upload():
+            raise ValueError(f"That file is over {limits.upload_mb()} MB.")
         text = raw.decode("utf-8-sig")
         if "BEGIN:VCALENDAR" not in text[:2000].upper():
             raise ValueError("That isn't an .ics calendar file.")

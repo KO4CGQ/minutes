@@ -8,8 +8,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 from dataclasses import dataclass, field, fields
-from functools import cached_property
+from functools import cached_property, wraps
 from pathlib import Path
 
 import yaml
@@ -18,6 +19,16 @@ ROOT = Path(os.environ.get("W8LBZ_ROOT", Path(__file__).resolve().parents[2]))
 DATA = Path(os.environ.get("W8LBZ_DATA", ROOT / "data"))
 MEETINGS = DATA / "meetings"
 ROSTER_CACHE = DATA / "roster.json"
+ROSTER_LOCK = threading.RLock()  # one roster change at a time in the app: the sheet, then roster.json (read, change, write)
+
+
+def roster_locked(fn):
+    """For the functions that change the roster (they run on the web app's threads, so two could overlap)."""
+    @wraps(fn)
+    def run(*a, **k):
+        with ROSTER_LOCK:
+            return fn(*a, **k)
+    return run
 # Preview mode (deploy/preview.sh): set to the branch name. Email goes to an outbox file instead of
 # SMTP, and roster edits go to a local copy of the sheet, never the real one.
 PREVIEW = os.environ.get("W8LBZ_PREVIEW") or None
