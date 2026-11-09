@@ -22,7 +22,9 @@ from . import ai, avatars, backup, business, calview, chow, console, events, gca
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
-from .roster import SHAREABLE, SheetError
+from .roster import COLUMNS, SHAREABLE, SheetError
+
+KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
 from .meeting import SECTIONS
 from .store import Archive
 
@@ -1280,7 +1282,61 @@ def member(request: Request, mid: str):
     contact = [(f, v if v and club.can_see(viewer, mid, f, elevated) else None, href) for f, (v, href) in values.items()]
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
                 contact=contact, is_me=viewer == mid, is_officer=privileged(request), is_officer_or_admin=privileged(request),
-                can_view_as=elevated and mid != request.state.real_member)
+                can_view_as=elevated and mid != request.state.real_member,
+                can_edit_roster=archive.club.keeps_roster(viewer) or elevated)
+
+
+STATUSES = ("Active", "Inactive", "Silent Key", "Prospect")
+
+
+@app.get("/members/{who}/edit", response_class=HTMLResponse)
+def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, mid: str = Depends(roster_keeper)):
+    """Roster keepers (and admins in admin mode) edit what the roster sheet holds about a member."""
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    m = archive.club.members[who]
+    return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
+                statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
+                events=membership.EVENTS, today=dt.date.today().isoformat())
+
+
+@app.post("/members/{who}/edit")
+async def member_edit(request: Request, who: str, mid: str = Depends(roster_keeper)):
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    m, f = archive.club.members[who], await request.form()
+    back = f"/members/{quote(who)}/edit"
+    first, last, email = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split()), f.get("email", "").strip()
+    try:
+        if not first or not last or " " in first:
+            raise ValueError("First and last name are both needed; put a middle name with the last name.")
+        if f.get("license_class") not in ("", *membership.CLASSES) or f.get("status") not in (*STATUSES, m.status):
+            raise ValueError("Pick a license class and status from the lists.")
+        if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            raise ValueError(f"{email} doesn't look like an email address.")
+        new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
+               "role": ", ".join(t.strip() for t in f.get("role", "").split(",") if t.strip()),
+               "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
+               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", "")),
+               **{k: "TRUE" if f.get(k) else "FALSE" for k in ("officer", "board", "minutes_editor", "calendar_editor")}}
+        if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
+            new["address"] = m.address or ""
+        profile.change(archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+    except (ValueError, SheetError) as e:
+        return RedirectResponse(back + "?error=" + quote(str(e)), status_code=303)
+    return RedirectResponse(back + "?saved=1", status_code=303)
+
+
+@app.post("/members/{who}/log")
+def member_log_event(request: Request, who: str, event: str = Form(""), date: str = Form(""), note: str = Form(""),
+                     mid: str = Depends(roster_keeper)):
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    try:
+        membership.add_event(archive.club, who, event, date, note, mid)
+    except (ValueError, SheetError) as e:
+        return RedirectResponse(f"/members/{quote(who)}/edit?error=" + quote(str(e)) + "#log", status_code=303)
+    return RedirectResponse(f"/members/{quote(who)}/edit?saved=1#log", status_code=303)
 
 
 @app.get("/roster", response_class=HTMLResponse)

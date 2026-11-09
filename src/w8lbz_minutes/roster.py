@@ -43,7 +43,13 @@ def _sheet() -> tuple[str, str]:
 
 
 SHAREABLE = ("email", "phone", "address", "birthday")
-EDITABLE = ("email", "phone", "address", "birthday", "share")  # member field = lowercase sheet header
+EDITABLE = ("email", "phone", "address", "birthday", "share")  # what members change themselves
+# What roster keepers (and admins) change: member field -> roster sheet header (lowercase). Not the callsign: it's
+# the member's id in the app's records, so a change needs its own step.
+COLUMNS = {"name": "full_name", "license_class": "class", "status": "status", "role": "title(s)", "officer": "is_officer",
+           "board": "is_board", "minutes_editor": "minutes_editor", "calendar_editor": "calendar_editor",
+           "aliases": "aliases", **{f: f for f in EDITABLE}}
+FLAGS = ("officer", "board", "minutes_editor", "calendar_editor")  # checkboxes in the sheet: written as true/false
 
 
 def _col(i: int) -> str:
@@ -132,7 +138,7 @@ class PreviewSheet:
     """Preview mode's stand-in for the Sheets API: local grids (preview-sheet.json, one per tab) built from
     the roster cache, so roster edits can be tried without touching the real sheet."""
     HEADER = ["callsign", "full_name", "email", "Phone", "Address", "Class", "Title(s)", "Status", "birthday", "share",
-              "is_officer", "is_board"]
+              "is_officer", "is_board", "minutes_editor", "calendar_editor", "aliases"]
     LOG_HEADER = ["callsign", "full_name", "date", "event", "note"]
 
     def __init__(self):
@@ -142,7 +148,8 @@ class PreviewSheet:
             rows = [[p.get("callsign") or "", f"{p['first']} {p['last']}", p.get("email") or "", p.get("phone") or "",
                      p.get("address") or "", p.get("license_class") or "", p.get("role") or "",
                      p.get("status") or "Active", p.get("birthday") or "", ", ".join(p.get("share") or []),
-                     bool(p.get("officer")), bool(p.get("board"))]
+                     bool(p.get("officer")), bool(p.get("board")), bool(p.get("minutes_editor")),
+                     bool(p.get("calendar_editor")), ", ".join(p.get("aliases") or [])]
                     for p in people]
             self.path.write_text(json.dumps({"Member Roster": [self.HEADER] + rows, "Membership Log": [self.LOG_HEADER]}))
 

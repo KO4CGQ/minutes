@@ -14,10 +14,12 @@ import time
 
 from . import auth, prefs
 from .club import DATA, ROSTER_CACHE, Club
-from .roster import EDITABLE, Sheet
+from .roster import COLUMNS, EDITABLE, FLAGS, Sheet, _truthy
 
 log = logging.getLogger("w8lbz.profile")
-LABELS = {"callsign": "Callsign", "license_class": "License class", "joined": "Joined", "email": "Email", "phone": "Phone", "address": "Address", "birthday": "Birthday", "share": "Shared with members", "role": "Title(s)"}
+LABELS = {"callsign": "Callsign", "license_class": "License class", "joined": "Joined", "email": "Email", "phone": "Phone", "address": "Address", "birthday": "Birthday", "share": "Shared with members", "role": "Title(s)",
+          "name": "Name", "status": "Status", "officer": "Officer", "board": "Board", "minutes_editor": "May lead meetings",
+          "calendar_editor": "May change the calendars", "aliases": "Other spellings", "membership_log": "Membership Log"}
 
 
 def log_path():
@@ -25,7 +27,10 @@ def log_path():
 
 
 def as_cell(fld: str, value) -> str:
-    return ", ".join(value) if fld == "share" else (value or "")
+    """A member field as the text kept in the change log (ticks as TRUE / FALSE)."""
+    if fld in FLAGS:
+        return "TRUE" if value is True or _truthy(str(value or "")) else "FALSE"
+    return ", ".join(value) if isinstance(value, list) else (value or "")
 
 
 def history(limit: int = 200) -> list[dict]:
@@ -57,12 +62,20 @@ def _apply_locally(club: Club, mid: str, new: dict[str, str]) -> None:
     """Update the running app and the roster cache so the change shows before the next sync."""
     m = club.members[mid]
     for fld, v in new.items():
-        setattr(m, fld, [x for x in v.split(", ") if x] if fld == "share" else (v or None))
+        if fld == "name":
+            m.first, _, m.last = v.partition(" ")  # as the sync splits full_name
+        elif fld in FLAGS:
+            setattr(m, fld, v == "TRUE")
+        elif fld == "status":
+            m.status = v or "Active"
+        else:
+            setattr(m, fld, [x.strip() for x in v.split(",") if x.strip()] if fld in ("share", "aliases") else (v or None))
+    fields = [f for f in new if f != "name"] + (["first", "last"] if "name" in new else [])
     if ROSTER_CACHE.exists():
         rows = json.loads(ROSTER_CACHE.read_text())
         for r in rows:
             if r["id"] == mid:
-                r.update({f: getattr(m, f) for f in new})
+                r.update({f: getattr(m, f) for f in fields})
         tmp = ROSTER_CACHE.with_suffix(".tmp")
         tmp.write_text(json.dumps(rows, indent=1))
         tmp.chmod(0o600)
@@ -70,17 +83,20 @@ def _apply_locally(club: Club, mid: str, new: dict[str, str]) -> None:
 
 
 def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | None = None,
-           url: str = "", undoes: str | None = None) -> dict | None:
-    """Write a member's changed fields (field -> cell text) to the sheet, log them, tell the Secretary.
+           url: str = "", undoes: str | None = None, allowed=EDITABLE) -> dict | None:
+    """Write a member's changed fields (field -> text, as as_cell gives it) to the sheet, log them, tell the
+    Secretary. `allowed`: EDITABLE for a member's own profile, COLUMNS for roster keepers.
 
     Returns the log entry, or None if nothing changed. Raises roster.SheetError if the
     sheet can't be written; then nothing is changed anywhere.
     """
     m = club.members[mid]
-    new = {f: v for f, v in new.items() if f in EDITABLE and v != as_cell(f, getattr(m, f))}
+    new = {f: v for f, v in new.items() if f in allowed and v != as_cell(f, getattr(m, f))}
     if not new:
         return None
-    old = (sheet or Sheet()).update_member(m.callsign, m.name, new)
+    cells = {COLUMNS[f]: (v == "TRUE") if f in FLAGS else v for f, v in new.items()}  # ticks stay checkboxes
+    old = (sheet or Sheet()).update_member(m.callsign, m.name, cells)
+    old = {f: as_cell(f, old[COLUMNS[f]]) if f in FLAGS else old[COLUMNS[f]] for f in new}
     _apply_locally(club, mid, new)
     entry = {"id": secrets.token_hex(6), "at": int(time.time()), "member": mid, "by": by,
              "old": old, "new": new, "undoes": undoes}
@@ -93,12 +109,12 @@ def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | No
 def undo(club: Club, change_id: str, by: str, sheet: Sheet | None = None, url: str = "") -> dict:
     """Put back the old values of a change, unless the member has changed those fields again since."""
     e = next((x for x in history(10_000) if x["id"] == change_id), None)
-    if not e or e["undone"] or e.get("undoes") or e.get("added") or e.get("office"):
+    if not e or e["undone"] or e.get("undoes") or e.get("added") or e.get("office") or e.get("logged"):
         raise ValueError("That change can't be undone.")
     m = club.members[e["member"]]
     if any(as_cell(f, getattr(m, f)) != v for f, v in e["new"].items()):
         raise ValueError("Those details have been changed again since; edit them on the roster sheet instead.")
-    return change(club, e["member"], e["old"], by, sheet, url, undoes=change_id)
+    return change(club, e["member"], e["old"], by, sheet, url, undoes=change_id, allowed=COLUMNS)
 
 
 def _notify(club: Club, e: dict, url: str) -> None:

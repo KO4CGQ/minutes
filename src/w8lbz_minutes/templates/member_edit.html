@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% block title %}Edit {{ member.name }}{% endblock %}{% block body %}
+<h1>Edit {{ member.name }}{% if member.callsign %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
+<p class="muted">What the roster holds about {{ member.first }}. Each change is written to the roster sheet, listed under <a href="/roster/changes">Roster changes</a> (where an officer can undo it), and emailed to the Secretary and to {{ member.first }}. Birthday and sharing are {{ member.first }}'s own choices, on their profile. <a href="/members/{{ member.id }}">Back to {{ member.first }}'s page</a></p>
+{% if saved and not error %}<p class="msg ok">Saved. The roster sheet is updated.</p>{% endif %}
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+<form method="post" action="/members/{{ member.id }}/edit" class="profile">
+  <div class="fixedrow">
+    <label>First name <input name="first" value="{{ member.first }}" required></label>
+    <label>Last name <input name="last" value="{{ member.last }}" required></label>
+  </div>
+  <label>Callsign <input value="{{ member.callsign or '' }}" readonly tabindex="-1" class="cs">
+    <span class="hint">A callsign change needs its own step (the callsign is how the app knows {{ member.first }}); for now, change it on the roster sheet and add a "Callsign Change" event below.</span></label>
+  <div class="fixedrow">
+    <label>License class <select name="license_class"><option value="">(none)</option>{% for c in classes %}<option {{ 'selected' if member.license_class == c }}>{{ c }}</option>{% endfor %}</select></label>
+    <label>Status <select name="status">{% for s in statuses %}<option {{ 'selected' if member.status == s }}>{{ s }}</option>{% endfor %}</select></label>
+  </div>
+  <label>Email <input type="email" name="email" value="{{ member.email or '' }}"><span class="hint">Also how {{ member.first }} signs in. Both the old and new address are told.</span></label>
+  <label>Phone <input type="tel" name="phone" value="{{ member.phone or '' }}" maxlength="40"></label>
+  <label>Address <textarea name="address" rows="3" maxlength="200">{{ member.address or '' }}</textarea></label>
+  <label>Titles <input name="role" value="{{ member.role or '' }}" placeholder="e.g. Net Manager"><span class="hint">Comma-separated. For an office (President, Trustee, ...) use the <a href="/offices">Offices</a> page, which also records the history.</span></label>
+  <label>Other spellings <input name="aliases" value="{{ member.aliases|join(', ') }}"><span class="hint">Comma-separated: how the name shows up in old minutes, so their reports are matched to {{ member.first }}.</span></label>
+  <fieldset><legend>Ticks</legend>
+    <label class="check"><input type="checkbox" name="officer" value="1" {{ 'checked' if member.officer }}> Officer</label>
+    <label class="check"><input type="checkbox" name="board" value="1" {{ 'checked' if member.board }}> On the board</label>
+    <label class="check"><input type="checkbox" name="minutes_editor" value="1" {{ 'checked' if member.minutes_editor }}> May lead meetings and edit minutes</label>
+    <label class="check"><input type="checkbox" name="calendar_editor" value="1" {{ 'checked' if member.calendar_editor }}> May change the club calendars</label>
+  </fieldset>
+  <p><button class="btn">Save</button></p>
+</form>
+
+<h2 id="log">Membership Log</h2>
+<p class="muted">Member since {{ member.member_since or '(not recorded)' }}: the latest Joined or Rejoined.</p>
+<ul class="plain">{% for e in member.events %}<li>{{ e.date or '?' }}: {{ e.event }}{% if e.note %} <span class="muted">({{ e.note }})</span>{% endif %}</li>{% else %}<li class="muted">Nothing yet.</li>{% endfor %}</ul>
+<form method="post" action="/members/{{ member.id }}/log" class="modern card">
+  <div class="formrow">
+    <label>What happened<select name="event" required><option value="" disabled selected>Pick one…</option>{% for e in events %}<option>{{ e }}</option>{% endfor %}</select></label>
+    <label>Date<input type="date" name="date" value="{{ today }}" required></label>
+    <label>Note<input name="note" maxlength="200" placeholder="e.g. moved out of state"></label>
+  </div>
+  <p class="hint">Added to the sheet's Membership Log. It doesn't change the status above; set that too if it changed. Office changes go on the <a href="/offices">Offices</a> page.</p>
+  <div class="formrow"><button class="btn small">Add to the log</button></div>
+</form>
+{% endblock %}
