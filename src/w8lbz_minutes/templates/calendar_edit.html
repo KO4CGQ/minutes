@@ -15,26 +15,33 @@
 <fieldset><legend>Ends</legend><div class="row"><input type="date" name="end_date" value="{{ f.end_date }}" aria-label="Last day (optional)">
   <input type="time" name="end_time" value="{{ f.end_time }}" aria-label="End time (optional)"></div>
   <p class="muted small">Optional. An end time alone means the same day; a later date for an event over several days. With a start time and no end, it's taken as 2 hours.</p></fieldset>
+<label>Time zone <input name="tz" list="zones" value="{{ f.tz or club_tz }}" autocomplete="off" spellcheck="false"></label>
+<datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
+<p class="muted small">For timed events. The club's is {{ club_tz }}; pick another (like UTC for a contest) and the calendar shows it in club time.</p>
 <fieldset><legend>Repeats</legend>
   <select name="repeat" aria-label="Repeats">{% for v, label in repeat_choices %}<option value="{{ v }}" {{ 'selected' if v == (f.repeat or '') }}>{{ label }}</option>{% endfor %}</select>
+  <p class="row" id="weeks"{% if f.repeat != 'monthly_weeks' %} hidden{% endif %}>{% for k, label in (('week1', '1st'), ('week2', '2nd'), ('week3', '3rd'), ('week4', '4th'), ('week_last', 'Last')) %}<label class="check"><input type="checkbox" name="{{ k }}" value="1" {{ 'checked' if f[k] }}> {{ label }}</label>{% endfor %}</p>
   <label class="until">Until <input type="date" name="repeat_until" value="{{ f.repeat_until }}" aria-label="Repeats until (optional)"></label>
   <p class="muted small">"Until" is optional; leave it empty to keep repeating.</p></fieldset>
 <label>Where <input name="where" value="{{ f.where }}" maxlength="200"></label>
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
 <p class="row"><button class="btn">Save</button> <a class="btn ghost" href="/calendar{% if f.date %}?start={{ f.date }}{% endif %}">Cancel</a>
-{% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate onclick="return confirm('Delete this event from the calendar?')">Delete</button>{% endif %}</p>
+{% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate data-confirm="Delete this event from the calendar?">Delete</button>{% endif %}</p>
 </form>
-<script>
+<script nonce="{{ csp_nonce }}">
 // The Repeats menu names the start day ("Monthly on the 2nd Tuesday"): reword it when the date changes.
 document.querySelector("input[name=date]").addEventListener("change", (e) => {
   const d = new Date(e.target.value + "T12:00"); if (isNaN(d)) return;
   const day = d.toLocaleDateString("en-US", { weekday: "long" }), n = Math.floor((d.getDate() - 1) / 7) + 1;
   const th = (x) => x + (x % 100 >= 11 && x % 100 <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[x % 10] || "th");
-  const words = { weekly: `Every ${day}`, biweekly: `Every 2 weeks on ${day}`, monthly_weekday: n <= 4 ? `Monthly on the ${th(n)} ${day}` : `Monthly on the last ${day}`,
+  const words = { daily: "Every day", monthly_weeks: `Monthly on some ${day}s (pick the weeks)`, weekly: `Every ${day}`, biweekly: `Every 2 weeks on ${day}`, monthly_weekday: n <= 4 ? `Monthly on the ${th(n)} ${day}` : `Monthly on the last ${day}`,
     monthly_last: `Monthly on the last ${day}`, monthly: `Monthly on the ${th(d.getDate())}`,
     yearly: `Every year on ${d.toLocaleDateString("en-US", { month: "long", day: "numeric" })}`,
     yearly_weekday: `Every year on the ${n <= 4 ? th(n) : "last"} ${day} of ${d.toLocaleDateString("en-US", { month: "long" })}` };
   document.querySelectorAll("select[name=repeat] option").forEach((o) => { if (words[o.value]) o.textContent = words[o.value]; });
 });
+// the week boxes only for "Monthly on some Tuesdays"
+const rep = document.querySelector("select[name=repeat]");
+rep.addEventListener("change", () => { document.getElementById("weeks").hidden = rep.value !== "monthly_weeks"; });
 </script>
 {% endblock %}

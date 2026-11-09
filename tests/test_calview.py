@@ -76,7 +76,7 @@ def test_form_checks():
     with pytest.raises(ValueError, match="stops repeating before"):
         form(repeat="weekly", repeat_until="2026-11-01")
     with pytest.raises(ValueError, match="repeats"):
-        form(repeat="daily")
+        form(repeat="hourly")
     assert form(end_date="2026-11-11", end_time="")["end"] == "2026-11-11T20:00"  # a last day and no end time: same time that day
     assert events.from_form({"title": "x", "date": "2026-11-10", "end_date": "2026-11-10"})["end"] is None
 
@@ -84,7 +84,13 @@ def test_form_checks():
 def test_change_this_following_every_date():
     evs, e = net()
     events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", time="20:30", end_time="21:30", title="Net (late)", repeat="weekly"), "this")
-    assert events.occurrence(e, dt.date(2026, 11, 17))["start"] == "2026-11-17T20:30" and events.occurrence(e, dt.date(2026, 11, 24))["title"] == "Weekly net"
+    assert events.occurrence(e, dt.date(2026, 11, 17))["start"] == "2026-11-17T20:30"
+    moved = {**e, "changes": {"2026-11-17": {**e["changes"]["2026-11-17"], "start": "2026-11-27T20:00", "end": "2026-11-27T21:00"}}}
+    with events.locked():  # one date moved to another day shows there, even in a range without its original date
+        events.save([moved])
+    c = club()
+    got = calview.entries(c, Archive(events.DATA, c), "kd8bbb", dt.date(2026, 11, 20), dt.date(2026, 11, 30))[0]
+    assert sorted(x.start.isoformat() for x in got if x.id == e["id"]) == ["2026-11-24", "2026-11-27"] and events.occurrence(e, dt.date(2026, 11, 24))["title"] == "Weekly net"
     evs, e = net()
     events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-18", time="19:00", end_time="20:00", repeat="weekly"), "all")
     assert e["start"] == "2026-11-11T19:00" and e["end"] == "2026-11-11T20:00" and days(e, *NOV)[0] == "2026-11-11"  # moved to Wednesdays
@@ -172,9 +178,9 @@ RRULE:FREQ=MONTHLY;BYDAY=3SA;COUNT=3\r
 END:VEVENT\r
 BEGIN:VEVENT\r
 UID:daily@google.com\r
-SUMMARY:Daily check\r
+SUMMARY:Hourly check\r
 DTSTART:20261101T120000Z\r
-RRULE:FREQ=DAILY\r
+RRULE:FREQ=HOURLY\r
 END:VEVENT\r
 BEGIN:VEVENT\r
 UID:twice@google.com\r
@@ -201,7 +207,7 @@ def test_import_ics():
     evs = []
     r = events.import_ics(evs, ICS, "events", "kd8aaa", TZ, dt.date(2025, 11, 8))
     assert r["added"] == ["Weekly net, all welcome", "Winter Field Day", "Fox hunt", "Tue and Thu net", "Tue and Thu net"]
-    assert [t for t, _ in r["skipped"]] == ["Daily check"]
+    assert [t for t, _ in r["skipped"]] == ["Hourly check"]
     tt = [e for e in evs if e["title"] == "Tue and Thu net"]  # one weekly event per day
     assert [(e["start"], events.repeat_label(e["start"], e["repeat"])) for e in tt] == [
         ("2026-11-03T20:00", "Every Tuesday"), ("2026-11-05T20:00", "Every Thursday")]
@@ -268,7 +274,7 @@ def test_leaders_add_change_delete_and_import_on_the_page(tmp_path, monkeypatch)
     t.post("/calendar/delete", data={"id": eid, "d": "2026-11-17", "scope": "this"})
     assert "2026-11-17" in events.load()[0]["skip"]
     up = t.post("/calendar/import", data={"cal": "community", "since": "2025-01-01"}, files={"file": ("club.ics", ICS.encode(), "text/calendar")})
-    assert "Added 5" in up.text and "Daily check" in up.text
+    assert "Added 5" in up.text and "Hourly check" in up.text
     assert t.post("/calendar/import", data={"cal": "events"}, files={"file": ("x.ics", b"hello", "text/plain")}).text.count("an .ics calendar file") == 1
     assert [h["action"] for h in events.history()][:2] == ["imported 5 new and 0 updated events into", "deleted one date of"]
 
@@ -337,3 +343,168 @@ def test_the_weekly_meeting_is_on_the_calendar_from_the_start(tmp_path):
         events.delete(evs, evs[0]["id"], None)
         events.save(evs)
     assert not any(e.title == "W0TST meeting" for e in calview.entries(c, Archive(tmp_path, c), "kd8bbb", today, today + dt.timedelta(days=20))[0])
+
+
+def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
+    # Field Day: the fourth full weekend of June (always the 4th Saturday), 1800 UTC Saturday to 2059 UTC Sunday
+    v = events.from_form({"title": "Field Day", "date": "2026-06-27", "time": "18:00", "end_date": "2026-06-28", "end_time": "20:59",
+                          "repeat": "yearly_weekday", "tz": "UTC"}, TZ)
+    assert v["tz"] == "UTC" and events.from_form({"title": "x", "date": "2026-06-27", "time": "18:00", "tz": TZ}, TZ)["tz"] is None
+    assert events.from_form({"title": "x", "date": "2026-06-27", "tz": "UTC"}, TZ)["tz"] is None  # all day: no zone
+    with pytest.raises(ValueError, match="time zone"):
+        events.from_form({"title": "x", "date": "2026-06-27", "time": "18:00", "tz": "Mars/Olympus"}, TZ)
+    with events.locked():
+        evs = []
+        e = events.add(evs, "events", v, "x")
+        events.save(evs)
+    assert events.form_values(e, None)["tz"] == "UTC"
+    c = club()
+    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))
+    fd = next(x for x in got if x.title == "Field Day")
+    assert (fd.starts, fd.ends) == (dt.datetime(2027, 6, 26, 14, 0), dt.datetime(2027, 6, 27, 16, 59)) and fd.time == "2:00 PM"
+    assert fd.zone == "Sat Jun 26 18:00 – Sun Jun 27 20:59 UTC"
+    evs = events.load()  # one date of a series keeps its time zone and calendar: the form says so
+    one = {**v, "start": "2027-06-26T13:00", "end": "2027-06-27T16:59", "tz": None}
+    with pytest.raises(ValueError, match="time zone of a single date"):
+        events.change(evs, evs[0]["id"], "2027-06-26", "events", one, "this")
+    with pytest.raises(ValueError, match="another calendar"):
+        events.change(evs, evs[0]["id"], "2027-06-26", "planning", v, "this")
+    events.change(evs, evs[0]["id"], "2027-06-26", "planning", v, "all")
+    assert evs[0]["cal"] == "planning"
+    # late UTC on the last day of the range is still that day in club time
+    late = events.add([], "events", events.from_form({"title": "Late", "date": "2027-07-01", "time": "01:00", "tz": "UTC"}, TZ), "x")
+    with events.locked():
+        events.save([late])
+    assert [x.start for x in calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))[0]
+            if x.title == "Late"] == [dt.date(2027, 6, 30)]
+
+
+def test_search_finds_calendar_events_and_the_agenda_can_show_more_weeks(tmp_path, monkeypatch):
+    from w8lbz_minutes import web
+    today = dt.date.today()
+    with events.locked():
+        evs = []
+        events.add(evs, "events", events.from_form({"title": "Fox hunt", "where": "City park", "date": (today + dt.timedelta(days=80)).isoformat()}), "x")
+        events.save(evs)
+    (tmp_path / "meetings").mkdir()
+    monkeypatch.setattr(web, "archive", Archive(tmp_path / "meetings", club()))
+    m, *_ = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    found = m.get("/search?q=city+PARK").text
+    assert "Fox hunt" in found and f"/calendar?start={today + dt.timedelta(days=80)}" in found
+    assert "Fox hunt" not in m.get("/search?q=park+bench").text
+    assert "Fox hunt" not in m.get("/calendar").text and "Fox hunt" in m.get("/calendar?weeks=13").text
+    assert "Fox hunt" not in m.get("/calendar?weeks=999").text  # not a choice: 8 weeks
+    assert f"start={today + dt.timedelta(days=91)}&amp;weeks=13" in m.get("/calendar?weeks=13").text  # Later keeps the length
+
+
+def test_imported_minutes_offer_the_original_and_new_ones_the_pdf(tmp_path, monkeypatch):
+    from w8lbz_minutes import web
+    root = tmp_path / "meetings"
+    old = Meeting(date=dt.date(2025, 3, 6), status="published", source="6-mar-25-minutes.pdf")
+    fixed = Meeting(date=dt.date(2025, 3, 13), status="published", source="13-mar-25-minutes-CORRECTED.txt")  # no original PDF
+    new = Meeting(date=dt.date(2026, 11, 5), status="published")
+    old.save(root), new.save(root), fixed.save(root)
+    (root / old.slug / "original.pdf").write_bytes(b"%PDF")
+    (root / new.slug / "original.pdf").write_bytes(b"%PDF")  # a stray file doesn't make it "imported"
+    m, c, _ = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    monkeypatch.setattr(web, "archive", Archive(root, c))
+    o, n = m.get(f"/meetings/{old.slug}").text, m.get(f"/meetings/{new.slug}").text
+    assert "View original" in o and "Download PDF" not in o
+    assert "View original" not in n and "Download PDF" in n
+    assert "Download PDF" in m.get(f"/meetings/{fixed.slug}").text  # imported, but no original to show: the PDF instead
+
+
+def test_odd_edits_found_by_poking_at_the_calendar():
+    def series():
+        evs, e = net()
+        return evs, e
+    evs, e = series()  # a series made a one-off: an old change to its first date doesn't hide the new title
+    events.change(evs, e["id"], "2026-11-10", "events", form(title="Special", repeat="weekly"), "this")
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", title="Plain"), "all")
+    assert [events.occurrence(e, d)["title"] for d in events.dates(e, *NOV)] == ["Plain"]
+    evs, e = series()  # Repeats changed for one date only: say so instead of ignoring it
+    with pytest.raises(ValueError, match="how it repeats"):
+        events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", repeat="monthly"), "this")
+    evs, e = series()  # a new time for every date keeps deleted dates deleted and one-date changes
+    events.delete(evs, e["id"], "2026-12-01", "this")
+    events.change(evs, e["id"], "2026-11-24", "events", form(date="2026-11-24", title="Thanksgiving net", repeat="weekly"), "this")
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", time="19:00", end_time="20:00", repeat="weekly"), "all")
+    assert "2026-12-01" in e["skip"] and e["changes"]["2026-11-24"]["title"] == "Thanksgiving net" and e["start"] == "2026-11-10T19:00"
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-18", repeat="weekly"), "all")  # a new day: they go
+    assert e["skip"] == [] and e["changes"] == {}
+
+
+def test_odd_addresses_are_not_found_rather_than_errors(tmp_path, monkeypatch):
+    m, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    with events.locked():
+        evs, e = net()
+        events.save(evs)
+    for url in ("/calendar?start=0001-01-01", "/calendar?start=9999-12-31&weeks=52", "/calendar?view=month&month=0001-01",
+                f"/calendar/edit?id={e['id']}&d=garbage"):
+        assert m.get(url).status_code == 404, url
+    assert m.get("/calendar?weeks=abc").status_code == 200
+
+
+def test_daily_and_several_weeks_of_the_month():
+    daily = events.add([], "events", events.from_form({"title": "Field Day prep", "date": "2026-11-10", "repeat": "daily", "repeat_until": "2026-11-13"}), "x")
+    assert days(daily) == ["2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13"] and events.repeat_label(daily["start"], daily["repeat"]) == "Every day, until Nov 13, 2026"
+    f = {"title": "Net", "date": "2026-11-03", "time": "20:00", "repeat": "monthly_weeks", "week1": "1", "week3": "1"}
+    net13 = events.add([], "events", events.from_form(f), "x")  # Nov 3 is the 1st Tuesday
+    assert days(net13, NOV[0], dt.date(2027, 1, 31)) == ["2026-11-03", "2026-11-17", "2026-12-01", "2026-12-15", "2027-01-05", "2027-01-19"]
+    assert events.repeat_label(net13["start"], net13["repeat"]) == "Monthly on the 1st and 3rd Tuesday"
+    assert {k: events.form_values(net13, None)[k] for k in ("repeat", "week1", "week2", "week3", "week_last")} == {"repeat": "monthly_weeks", "week1": True, "week2": False, "week3": True, "week_last": False}
+    last = events.add([], "events", events.from_form({**f, "week3": "", "week_last": "1"}), "x")
+    assert days(last, NOV[0], dt.date(2026, 12, 31)) == ["2026-11-03", "2026-11-24", "2026-12-01", "2026-12-29"]
+    with pytest.raises(ValueError, match="tick that week too"):
+        events.from_form({**f, "week1": ""})  # starts on a 1st Tuesday that isn't ticked
+    with pytest.raises(ValueError, match="Tick the weeks"):
+        events.from_form({**f, "week1": "", "week3": ""})
+    ics = ("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:d1\r\nDTSTART;VALUE=DATE:20300105\r\nRRULE:FREQ=DAILY;COUNT=3\r\nSUMMARY:Exams\r\nEND:VEVENT\r\n"
+           "BEGIN:VEVENT\r\nUID:m1\r\nDTSTART:20300101T200000\r\nRRULE:FREQ=MONTHLY;BYDAY=1TU,-1TU\r\nSUMMARY:Net\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+    evs = []
+    report = events.import_ics(evs, ics, "events", "x", TZ, dt.date(2030, 1, 1))
+    assert report["added"] == ["Exams", "Net"] and not report["skipped"]
+    assert days(evs[0], dt.date(2030, 1, 1), dt.date(2030, 1, 31)) == ["2030-01-05", "2030-01-06", "2030-01-07"]
+    assert days(evs[1], dt.date(2030, 1, 1), dt.date(2030, 2, 28)) == ["2030-01-01", "2030-01-29", "2030-02-05", "2030-02-26"]
+
+
+def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
+    from w8lbz_minutes import business, web
+    c = club()
+    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
+    hol = [(e.start.isoformat(), e.title) for e in got if e.kind == "holiday"]
+    assert hol == [("2026-11-11", "Veterans Day"), ("2026-11-26", "Thanksgiving")]
+    assert [e.start for e in calview.holidays(dt.date(2027, 1, 1), dt.date(2027, 12, 31)) if e.title in ("Memorial Day", "Labor Day")] == \
+        [dt.date(2027, 5, 31), dt.date(2027, 9, 6)]
+    assert not any(e.kind == "holiday" for e in calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)[0])
+    c.info["public_calendars"] = ["holiday"]
+    assert any(e.kind == "holiday" for e in calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)[0])
+    s = business.load()
+    business.add(s, "Order the Field Day banner", "kd8aaa", owner="kd8bbb", due="2026-11-20")
+    business.add(s, "No date on this one", "kd8aaa")
+    business.save(s)
+    due = [e for e in calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)[0] if e.title.startswith("Due:")]
+    assert [(e.start.isoformat(), e.kind, e.title) for e in due] == [("2026-11-20", "planning", "Due: Order the Field Day banner")]
+    assert "Bob Baker" in due[0].notes
+    want = gcal.wanted(c, [], dt.date(2026, 11, 1))
+    assert any(v["summary"] == "Due: Order the Field Day banner" for v in want["planning"].values())
+    # calendar editors: a member ticked calendar_editor may change events; others may not
+    m, c2, _ = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    assert m.get("/calendar/edit").status_code == 403
+    c2.members["kd8bbb"].calendar_editor = True
+    assert m.get("/calendar/edit").status_code == 200 and "+ Add an event" in m.get("/calendar").text
+    m.post("/calendar/save", data={"cal": "events", "title": "Fox hunt", "date": "2026-11-21"})
+    assert m.get("/calendar/changes").status_code == 403  # the log is for officers
+    o, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    log = o.get("/calendar/changes").text
+    assert "Fox hunt" in log and "Bob Baker" in log and "Who changed what" in o.get("/calendar").text
+
+
+def test_ohio_election_days_on_community():
+    got = [(e.start.isoformat(), e.title) for e in calview.elections(dt.date(2024, 1, 1), dt.date(2026, 12, 31))]
+    assert got == [("2024-03-19", "Ohio primary election"), ("2024-11-05", "Election Day (Ohio general election)"),  # a presidential year: March
+                   ("2025-05-06", "Ohio primary election"), ("2025-11-04", "Election Day (Ohio general election)"),
+                   ("2026-05-05", "Ohio primary election"), ("2026-11-03", "Election Day (Ohio general election)")]
+    c = club()
+    nov = calview.entries(c, Archive(events.DATA, c), "kd8bbb", *NOV)[0]
+    assert [(e.kind, e.start.day) for e in nov if e.title.startswith("Election Day")] == [("community", 3)]

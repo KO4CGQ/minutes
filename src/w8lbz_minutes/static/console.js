@@ -14,6 +14,7 @@
     "Winners": "e.g. “50/50 drawing – Amy A $7.50” and “Weekly drawing – Bob B, not registered (up to $62)”.",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
+  if (D.events_public) HINTS["Upcoming Events"] += " Dated events also go on the public calendar, which anyone can see, signed in or not: keep anything members-only out of them.";
   const RECENT_GUESTS = 8; // quick-pick buttons; older guests are in the name field's autocomplete
   // A guest on their Nth visit or later gets a reminder to invite them to apply for membership.
   const visitNo = (g) => { const p = D.guest_history[key(g.callsign)] || D.guest_history[key(g.name)]; return p && !p.member ? p.visits + 1 : 1; };

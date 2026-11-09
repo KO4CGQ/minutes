@@ -61,12 +61,18 @@ def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict
     seen = set()
     store.ensure_meeting(club)
     for e in store.load():
-        for d in store.dates(e, today, today + dt.timedelta(days=365)):
-            o = store.occurrence(e, d)
+        for d in store.dates(e, today - store.reach(e), today + dt.timedelta(days=365)):
+            o = store.in_zone(store.occurrence(e, d), e.get("tz"), tz)
+            if (o["end"] or o["start"])[:10] < today.isoformat():  # moved into the past
+                continue
             seen.add((o["start"][:10], o["title"].lower()))
             out[e["cal"]][f"ev:{e['id']}:{d}"] = {"summary": o["title"], "location": o.get("where") or "",
                                                   "description": o.get("notes") or "",
                                                   **times(Item(o["title"], when=o["start"], until=o["end"]), tz)}
+    from .calview import due_dates, elections  # business due dates on Planning, election days on Community
+    for kind, xs in (("planning", due_dates(club, today, today + dt.timedelta(days=365))), ("community", elections(today, today + dt.timedelta(days=365)))):
+        for x in xs:
+            out[kind][x.id] = {"summary": x.title, "description": x.notes, **times(Item(x.title, when=x.start.isoformat()), tz)}
     for e in events:
         if not e.when or (e.until or e.when)[:10] < today.isoformat() or (e.when[:10], e.text.lower()) in seen:
             continue

@@ -20,7 +20,7 @@ Click an icon to change it, or search over 3,000 brand logos (Home Assistant, Di
 <p><button type="button" class="btn small ghost" id="addlink">+ Add a link</button></p>
 <p><button class="btn">Save links</button> <a class="btn ghost" href="/links">Cancel</a></p>
 </form>
-<script>
+<script nonce="{{ csp_nonce }}">
 const body = document.querySelector("form.linkedit tbody");
 body.addEventListener("click", (e) => { const b = e.target.closest("button"), tr = b?.closest("tr"); if (!tr) return;
   if (b.dataset.remove !== undefined) { tr.remove(); return; }

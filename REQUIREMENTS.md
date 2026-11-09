@@ -130,9 +130,9 @@ The minutes follow a fixed template. The system should generate exactly this str
 ### 4.6 Minutes archive (new and historical)
 - **FR-29** **One place for everything.** All minutes live in the app's archive, new and historical.
 - **FR-30** **Storage format.** Each meeting is a **Markdown file with YAML front matter**, holding the date, leader, attendance, guests, motions, winners and version. Attachments (images, the original PDF, the chow list) sit next to it. Markdown is human-readable, easy to diff, and doesn't depend on this app surviving.
-- **FR-31** **Viewing.** Each meeting renders as HTML in the web UI, with a **Download PDF** button that generates the PDF on demand from the same source.
+- **FR-31** **Viewing.** Each meeting renders as HTML in the web UI, with a **Download PDF** button (or, for minutes imported with their original PDF, **View original** instead) that generates the PDF on demand from the same source.
 - **FR-32** **Search and browse.**
-  - Full-text search across all meetings.
+  - Full-text search across all meetings, and in the same results, grouped by kind: members (name, callsign), guests, business items, upcoming chow nights and calendar events (title, place, notes).
   - Filters by date range, section and member.
   - A **per-member history** ("everything this member has reported").
   - A **per-item history** (for example, every mention of the hex beam or the GMRS repeater).
@@ -171,7 +171,7 @@ Members share personal news in their reports (health, jobs, family), and **those
 - **FR-42a** (Built, by email) Each member chooses which emails they get: the minutes (PDF, link or off), a meeting-day email (time, their chow, their business items, the week's calendar), chow and business reminders. Every optional email says how to change it.
 
 ### 4.11 Club calendars
-- **FR-47** The app keeps the club calendars itself (no Google needed): club events, planning and community, plus the weekly meeting, chow nights, dated Upcoming Events and the birthdays members share. Leaders edit them; members subscribe from their own calendar apps; chosen calendars can be public; events come in from .ics files; a one-way copy to Google Calendar is optional.
+- **FR-47** The app keeps the club calendars itself (no Google needed): club events, planning and community, plus the weekly meeting, chow nights, dated Upcoming Events, the birthdays members share, business items' due dates (Planning) and holidays. Leaders and calendar editors edit them, and officers see who changed what; members subscribe from their own calendar apps; chosen calendars can be public; events come in from .ics files; a one-way copy to Google Calendar is optional.
 
 ## 5. Non-functional requirements
 

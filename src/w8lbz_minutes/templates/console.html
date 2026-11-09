@@ -12,12 +12,12 @@
 <section id="panel"></section>
 <div class="pager"><button id="prev" class="btn ghost">◀ Back</button><button id="next" class="btn">Next ▶</button></div>
 <form id="submitform" method="post" action="/console/{{ m.slug }}/submit"></form>
-<form method="post" action="/console/{{ m.slug }}/discard" onsubmit="return confirm('Discard this draft completely? This cannot be undone.')" style="text-align:right">
+<form method="post" action="/console/{{ m.slug }}/discard" data-confirm="Discard this draft completely? This cannot be undone." style="text-align:right">
   <button class="btn small ghost" type="submit">Discard draft</button></form>
-<script>window.CONSOLE = {{ data|safe }};</script>
+<script nonce="{{ csp_nonce }}">window.CONSOLE = {{ data|safe }};</script>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
 <script src="/static/console.js?v={{ ASSETS }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById("share").addEventListener("click", async (e) => {
   const b = e.currentTarget, url = location.origin + b.dataset.path;
   try { await navigator.clipboard.writeText(url); }   // needs HTTPS; the LAN address falls back to a prompt

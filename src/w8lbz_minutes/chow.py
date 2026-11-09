@@ -141,10 +141,12 @@ def generate(club: Club, s: dict, until: dt.date, by: str, today: dt.date | None
     A member who can't do a night (constraint) keeps their turn and gets the next night they can do.
     Returns the dates filled.
     """
+    today = today or dt.date.today()
+    if until > today + dt.timedelta(days=731):
+        raise ValueError("Fill nights up to two years ahead at most.")
     order = [m for m in s["order"] if m in club.members]
     if not order:
         return []
-    today = today or dt.date.today()
     assigned = [d for d, x in sorted(s["nights"].items()) if x.get("member") and x.get("status") != "none"]
     start = max(today, dt.date.fromisoformat(assigned[-1]) + dt.timedelta(days=1)) if assigned else today
     i = order.index(next_up(club, s))
@@ -203,6 +205,8 @@ def set_none(s: dict, date: str, note: str, by: str) -> None:
 
 def swap(club: Club, s: dict, a: str, b: str, by: str, url: str = "", request: str | None = None) -> dict:
     """Trade the members of two nights. Both members, and the Secretary, are emailed."""
+    if a == b:
+        raise ValueError("Pick two different nights.")
     xa, xb = night(s, a), night(s, b)
     if not (xa.get("member") and xb.get("member")):
         raise ValueError("Both nights need someone assigned to swap them.")

@@ -1,7 +1,7 @@
 {% from "_avatar.html" import avatar %}{% from "_icons.html" import icon, emoji %}<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}W8LBZ Minutes{% endblock %}</title>
-<script>/* theme before first paint: "light", "dark", or follow the device */
+<script nonce="{{ csp_nonce }}">/* theme before first paint: "light", "dark", or follow the device */
 try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
 /* color emoji? draw one and look for colored pixels; without them, icons drawn by the app stand in (see emoji() in _icons.html) */
 try { const c = document.createElement("canvas").getContext("2d", { willReadFrequently: true }); c.canvas.width = c.canvas.height = 20;
@@ -9,7 +9,7 @@ try { const c = document.createElement("canvas").getContext("2d", { willReadFreq
   const p = c.getImageData(0, 0, 20, 20).data;
   for (let i = 0; i < p.length; i += 4) if (p[i + 3] && (Math.abs(p[i] - p[i + 1]) > 30 || Math.abs(p[i + 1] - p[i + 2]) > 30)) { document.documentElement.classList.add("emoji"); break; }
 } catch (e) {}</script>
-<script>/* emo("✅", "check"): what emoji() in _icons.html makes, for pages built in JavaScript (the console) */
+<script nonce="{{ csp_nonce }}">/* emo("✅", "check"): what emoji() in _icons.html makes, for pages built in JavaScript (the console) */
 window.emo = (ch, name) => { const w = document.createElement("span"), a = document.createElement("span"), b = document.createElement("span");
   a.className = "emo"; a.setAttribute("aria-hidden", "true"); a.textContent = ch; b.className = "emo-alt";
   const svg = document.querySelector(`#emoji-icons [data-i="${name}"] svg`); if (svg) b.append(svg.cloneNode(true));
@@ -29,7 +29,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   {% if live %}<a class="start live" href="/meetings/{{ live.slug }}">{{ emoji('🔴', 'live') }} Live meeting</a>
   {% elif can_lead %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console" data-meets="{{ meeting_at }}">Start meeting</a>{% endif %}
   <span class="clock" title="Club time"></span>
-  <form action="/search" class="barsearch"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
+  <form action="/search" class="barsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business, chow and calendar"></form>
   <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}<span class="name">{{ me.short or me.first }}</span>{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
     <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">{{ emoji('⬆️', 'arrowup') }} Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/security">Security</a><a href="/admin/email">Email log</a><a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
     {% if is_admin %}<form method="post" action="/admin/mode"><input type="hidden" name="on" value="{{ 0 if admin_until else 1 }}"><input type="hidden" name="next" value="{{ request.url.path }}">
@@ -43,7 +43,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {% if me %}<div class="drawer" id="drawer"><div class="scrim"></div>
   <div class="panel" role="dialog" aria-label="All pages">
     {# search only below 820px, where the bar has no room for it #}
-    <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search all minutes…" value="{{ q or '' }}" aria-label="Search all minutes"></form>
+    <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business, chow and calendar"></form>
     {% for href, label in PAGES %}{{ navlink(href, label) }}{% if loop.index == 4 %}<div class="sep"></div>{% endif %}{% endfor %}
   </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
@@ -54,7 +54,19 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {% if PREVIEW %}<div class="preview">PREVIEW of <b>{{ PREVIEW }}</b>: a copy of the data. Emails aren't sent{% if is_admin and admin_until %} (see the <a href="/admin/email">email log</a>){% endif %} and roster edits don't reach the real sheet.</div>{% endif %}
 <main>{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
-<script>  // theme switch (name menu), remembered in this browser
+<script nonce="{{ csp_nonce }}">  // what inline on…= handlers did, as data- attributes: the security policy runs no inline handlers
+document.addEventListener("submit", (e) => {
+  const msg = e.submitter?.dataset.confirm || e.target.dataset.confirm;  // "Are you sure?"
+  if (e.target.hasAttribute("data-nosubmit") || (msg && !confirm(msg))) e.preventDefault();
+});
+document.addEventListener("change", (e) => { if (e.target.matches("[data-autosubmit]")) e.target.form.submit(); });
+document.addEventListener("click", (e) => {
+  if (e.target.matches("[data-select]")) e.target.select();
+  const t = e.target.closest("[data-tick]");  // "Tick all"
+  if (t) t.form.querySelectorAll(`[name="${t.dataset.tick}"]`).forEach((c) => c.checked = true);
+});
+</script>
+<script nonce="{{ csp_nonce }}">  // theme switch (name menu), remembered in this browser
 const markTheme = () => { const t = document.documentElement.dataset.theme || "auto";
   document.querySelectorAll("[data-theme-pick]").forEach((b) => b.classList.toggle("on", b.dataset.themePick === t)); };
 document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => {

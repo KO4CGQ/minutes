@@ -20,7 +20,7 @@
   <div class="card-text">{{ emoji('⏳', 'hourglass') }} {{ 'Updating' if st.running else 'Waiting to update' }} to {{ (st.running or st.requested).to }}, asked for {{ (st.running or st.requested).at|tsfull }} by {{ club.short((st.running or st.requested).by) }}.</div>
   <p class="muted">The app restarts when it's done, usually within a minute or two. This page shows the result by itself.</p>
 </article>
-<script>  // check every 5 s; reload once the server is back and this card is gone (fetch errors = mid-restart, keep trying)
+<script nonce="{{ csp_nonce }}">  // check every 5 s; reload once the server is back and this card is gone (fetch errors = mid-restart, keep trying)
 setInterval(() => fetch(location.pathname, {cache: "no-store"})
   .then((r) => r.ok ? r.text() : "id=\"updating\"")
   .then((t) => { if (!t.includes('id="updating"')) location.replace(location.pathname); })
@@ -34,7 +34,7 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
       <div class="deploynotes">{{ newer.deploy_notes|md }}</div>
       <label class="wk"><input type="checkbox" name="notes_done" value="1" required> I've done these steps</label></div>{% endif %}
     <details open><summary class="muted">What's in it</summary><div class="relnotes changelog">{{ newer.notes|md }}</div></details>
-    <div class="formrow"><button class="btn" onclick="return confirm('Update the app to {{ newer.version }} now? It restarts, so anyone using it is interrupted for a moment.')">Update now</button></div>
+    <div class="formrow"><button class="btn" data-confirm="Update the app to {{ newer.version }} now? It restarts, so anyone using it is interrupted for a moment.">Update now</button></div>
     <p class="hint">Runs the same update as <code>update.sh</code> on the server: the latest main from GitHub, then a restart. Avoid doing it during a meeting.</p>
   </form>
 </article>{% endif %}

@@ -43,6 +43,7 @@ class Member:
     board: bool = False
     license_class: str | None = None
     minutes_editor: bool = False  # may lead meetings and edit minutes (officers always may)
+    calendar_editor: bool = False  # may change the club calendars (leaders always may)
     status: str = "Active"
     aliases: list[str] = field(default_factory=list)
     events: list[dict] = field(default_factory=list)  # from the Membership Log tab
@@ -149,6 +150,11 @@ class Club:
         return bool(m and (m.officer or m.minutes_editor))
 
     can_edit = can_lead
+
+    def can_edit_calendar(self, mid: str) -> bool:
+        """Leaders, and members ticked calendar_editor (say, the net manager), may change the club calendars."""
+        m = self.members.get(mid)
+        return bool(m and (self.can_lead(mid) or m.calendar_editor))
 
     def is_admin(self, mid: str | None) -> bool:
         """Listed under admins: in club.yaml. Admin rights apply only while admin mode is on."""

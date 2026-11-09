@@ -18,7 +18,6 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 - **Motions as records:** keep a motion's mover, seconder and result as data, not just text, so bylaws amendments and spending can be traced to the motion that approved them (see Bylaws).
 
 ## Look and feel: ideas to consider
-- **Unified search:** one search box for minutes, members (name, callsign), business items and chow nights, with results grouped by kind. Minutes already have full-text search; the others are small lists, so this is a modest change.
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
 - **Calmer Business cards:** History and Comment buttons only on hover or tap, and a one-line intro.
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
@@ -36,13 +35,6 @@ Today the server relies on Proxmox snapshots of the container. A backup the app 
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
 - **Filter the Admin actions log** by admin, kind of action and date, with paging (it shows the last 50 today).
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
-
-## Club calendars
-The calendars are kept by the app, with .ics import, subscriptions, public calendars and an optional copy to Google (see the README). Still to do:
-- **Calendar editors:** editing is for leaders and minutes editors; a separate `calendar_editor` tick on the roster sheet could let others (e.g. the net manager) edit too.
-- **Who changed what:** a page for officers listing `calendar-log.jsonl`.
-- **Planning:** due dates of tracked business items on the Planning calendar.
-- **More repeat patterns:** daily, or several days of the month; today these are listed as not imported.
 
 ## Members and roster management
 The Google Sheet stays the source of truth; the app writes values back to it (values only, never formatting or structure).

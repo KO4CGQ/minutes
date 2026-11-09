@@ -413,7 +413,7 @@ form.linkedit table.list { overflow: visible; }
 .callegend span { display: inline-flex; align-items: center; gap: .3rem; }
 .dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; flex: none; margin-right: .35rem; vertical-align: middle; }
 .k-events { background: var(--accent); } .k-chow { background: #d9932b; } .k-planning { background: #7b4fb0; }
-.k-community { background: #2f7fc1; } .k-birthday { background: #d24f86; }
+.k-community { background: #2f7fc1; } .k-birthday { background: #d24f86; } .k-holiday { background: #3a9a5b; }
 h2.calday { font-size: 1rem; margin: 1.1rem 0 .3rem; color: var(--accent-text); }
 ul.agenda { list-style: none; padding: 0; margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 ul.agenda li + li { border-top: 1px solid var(--border); } ul.agenda li.alt { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }

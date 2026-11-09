@@ -174,6 +174,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "past_guests": sorted(past, key=lambda g: (g["last"], g["visits"]), reverse=True),
         "sections": SECTIONS,
         "invite_after": int(club.info.get("invite_after_visits", 3)),
+        "events_public": "events" in (club.info.get("public_calendars") or []),  # Club events shown to anyone
         "email": {"roster": len(recipients(archive)), "only_to": club.email.get("only_to")},
         "chow": chow_tonight(archive, m),
         "business": business_items(archive, m.slug),

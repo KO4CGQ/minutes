@@ -6,11 +6,13 @@ from __future__ import annotations
 import datetime as dt
 import json
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
-from . import chow, events as store, gcal
+from . import business, chow, events as store, gcal
 from .club import DATA, Club
 
-KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays"}
+KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays",
+         "holiday": "Holidays"}
 
 
 @dataclass
@@ -28,6 +30,7 @@ class Entry:
     ends: dt.datetime | None = None
     occ: str | None = None  # a repeating event's original date (which date to edit)
     notes: str = ""
+    zone: str = ""  # an event kept in another time zone: its times there ("Sat Jun 27 18:00 – Sun Jun 28 20:59 UTC")
 
     def days(self, lo: dt.date, hi: dt.date) -> list[dt.date]:
         """The days it covers within lo..hi (a long event is listed on each day, up to two weeks)."""
@@ -50,6 +53,15 @@ def _entry(o: dict, kind: str, **kw) -> Entry:
     return Entry(s.date(), f.date() if not timed else max(s.date(), (f - dt.timedelta(seconds=1)).date()), o["title"], kind,
                  _clock(s) if timed else None, o.get("where") or None, starts=s if timed else None, ends=f if timed else None,
                  notes=o.get("notes", ""), **kw)
+
+
+def _zone(o: dict, tz: str | None, club_tz: str) -> str:
+    if not tz or tz == club_tz or "T" not in o["start"]:
+        return ""
+    s = dt.datetime.fromisoformat(o["start"])
+    f = dt.datetime.fromisoformat(o["end"]) if o.get("end") else s + dt.timedelta(hours=store_hours())
+    abbr = s.replace(tzinfo=ZoneInfo(tz)).tzname()
+    return f"{s:%H:%M} – {f:%H:%M} {abbr}" if s.date() == f.date() else f"{s:%a %b %-d %H:%M} – {f:%a %b %-d %H:%M} {abbr}"
 
 
 def store_hours() -> int:
@@ -83,7 +95,58 @@ def _birthdays(club: Club, viewer: str, lo: dt.date, hi: dt.date) -> list[Entry]
 
 def public_kinds(club: Club) -> list[str]:
     """The calendars an admin made public (`club.public_calendars`): shown without signing in. Never chow or birthdays."""
-    return [k for k in club.info.get("public_calendars") or [] if k in store.CALS]
+    return [k for k in club.info.get("public_calendars") or [] if k in store.CALS or k == "holiday"]
+
+
+def due_dates(club: Club, lo: dt.date, hi: dt.date) -> list[Entry]:
+    """Open business items' due dates, on the Planning calendar."""
+    out = []
+    for x in business.load()["items"]:
+        if x["status"] == "open" and x.get("due") and lo.isoformat() <= x["due"] <= hi.isoformat():
+            d = dt.date.fromisoformat(x["due"])
+            who = f", looked after by {club.name(x['owner'])}" if x.get("owner") else ""
+            out.append(Entry(d, d, f"Due: {x['text'][:80]}{'…' if len(x['text']) > 80 else ''}", "planning", id=f"due-{x['id']}",
+                             notes=f"An open business item{who}. It's on the Business page."))
+    return out
+
+
+def _nth(year: int, month: int, weekday: int, n: int) -> dt.date:
+    """The nth weekday (Monday 0) of a month; n = -1 for the last."""
+    return store._nth_weekday(year, month, weekday, n, n == -1)
+
+
+HOLIDAYS = [  # (name, month, day) or (name, month, (weekday, nth)): US federal holidays, and two nights clubs often skip
+    ("New Year's Day", 1, 1), ("Martin Luther King Jr. Day", 1, (0, 3)), ("Presidents' Day", 2, (0, 3)),
+    ("Memorial Day", 5, (0, -1)), ("Juneteenth", 6, 19), ("Independence Day", 7, 4), ("Labor Day", 9, (0, 1)),
+    ("Columbus Day", 10, (0, 2)), ("Veterans Day", 11, 11), ("Thanksgiving", 11, (3, 4)), ("Christmas Eve", 12, 24),
+    ("Christmas", 12, 25), ("New Year's Eve", 12, 31)]
+
+
+def elections(lo: dt.date, hi: dt.date) -> list[Entry]:
+    """Ohio's regular election days, on the Community calendar (Ohio Revised Code 3501.01; there's no official feed):
+    the general election every November, the first Tuesday after the first Monday; the primary on that Tuesday in
+    May, or the 3rd Tuesday of March in a presidential year. August special elections are left out: held only when
+    something is put on that ballot. shortcut: Ohio only, rules as of 2026; if the law changes, change them here."""
+    def after_first_monday(year, month):
+        return _nth(year, month, 0, 1) + dt.timedelta(days=1)
+    out = []
+    for year in range(lo.year, hi.year + 1):
+        primary = _nth(year, 3, 1, 3) if year % 4 == 0 else after_first_monday(year, 5)
+        for d, name in ((primary, "Ohio primary election"), (after_first_monday(year, 11), "Election Day (Ohio general election)")):
+            if lo <= d <= hi:
+                out.append(Entry(d, d, name, "community", id=f"election-{d}", notes="Polls are open 6:30 AM to 7:30 PM. "
+                                 "Registration closes 30 days before. Your ballot and polling place: voteohio.gov"))
+    return out
+
+
+def holidays(lo: dt.date, hi: dt.date) -> list[Entry]:
+    out = []
+    for year in range(lo.year, hi.year + 1):
+        for name, month, day in HOLIDAYS:
+            d = dt.date(year, month, day) if isinstance(day, int) else _nth(year, month, *day)
+            if lo <= d <= hi:
+                out.append(Entry(d, d, name, "holiday"))
+    return out
 
 
 def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, public: bool = False) -> tuple[list[Entry], None]:
@@ -92,12 +155,15 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     out: list[Entry] = []
     store.ensure_meeting(club)
     kinds = public_kinds(club) if public else list(store.CALS)
+    tz = str(club.info.get("timezone", "America/New_York"))
     for e in store.load():
         if e["cal"] not in kinds:
             continue
-        for d in store.dates(e, lo, hi):
+        pad = store.reach(e)  # a date moved to another day, or another zone's date, can land in the range from outside it
+        for d in store.dates(e, lo - pad, hi + pad):
             o = store.occurrence(e, d)
-            x = _entry(o, e["cal"], id=e["id"], repeats=bool(e.get("repeat")), occ=d.isoformat() if e.get("repeat") else None)
+            x = _entry(store.in_zone(o, e.get("tz"), tz), e["cal"], id=e["id"], repeats=bool(e.get("repeat")),
+                       occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz))
             if x.end >= lo and x.start <= hi:
                 out.append(x)
     if "events" in kinds:  # the minutes' dated Upcoming Events, unless the same event is already on the calendar
@@ -109,6 +175,12 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
                 x = _entry(o, "events", from_minutes=True)
                 if x.end >= lo and x.start <= hi and (x.start, x.title.lower()) not in seen:
                     out.append(x)
+    if "planning" in kinds and not public:
+        out += due_dates(club, lo, hi)
+    if "holiday" in public_kinds(club) or not public:
+        out += holidays(lo, hi)
+    if "community" in kinds:
+        out += elections(lo, hi)
     if not public:
         at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
         for d, x in chow.upcoming(chow.load(), lo, n=400):

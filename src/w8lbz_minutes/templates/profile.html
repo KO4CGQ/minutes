@@ -11,7 +11,7 @@
   <div>
     <form method="post" action="/profile/photo" enctype="multipart/form-data" class="photoform">
       <label class="btn small ghost filebtn">{{ 'Change picture' if avatar_url(m.id) else 'Add a picture' }}
-        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" onchange="this.form.submit()" hidden></label>
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" data-autosubmit hidden></label>
     </form>
     {% if avatar_url(m.id) %}<form method="post" action="/profile/photo/remove" class="inline"><button class="linkbtn">Remove</button></form>{% endif %}
     <p class="hint">Members see it next to your name. It's cropped to a square; camera details and location are removed.</p>

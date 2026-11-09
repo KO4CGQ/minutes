@@ -7,7 +7,7 @@
 {% if passkey %}
 <p><button class="btn" id="confirm">Confirm with your passkey</button> <span id="pkmsg" class="muted"></span></p>
 <script src="/static/auth.js?v={{ ASSETS }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById("confirm").onclick = async () => {
   const msg = document.getElementById("pkmsg"); msg.textContent = "";
   try {

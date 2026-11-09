@@ -7,8 +7,10 @@
 {% macro open(e) %}<button type="button" class="calopen" data-ev="{{ items.index(e) }}">{{ caller() }}</button>{% endmacro %}
 
 {% if view == 'agenda' %}
-{% macro moves() %}<p class="row"><a class="btn small ghost" href="{{ base }}?start={{ lo - timedelta(days=56) }}">← Earlier</a>{% if lo != today %}<a class="btn small ghost" href="{{ base }}">Back to today</a>{% endif %}<a class="btn small ghost" href="{{ base }}?start={{ hi + timedelta(days=1) }}">Later →</a></p>{% endmacro %}
-<div class="headrow"><h2 class="calrange">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }}</h2>{{ moves() }}</div>
+{% set w = '&weeks=' ~ weeks if weeks != 8 else '' %}
+{% macro moves() %}<p class="row"><a class="btn small ghost" href="{{ base }}?start={{ lo - timedelta(days=7 * weeks) }}{{ w }}">← Earlier</a>{% if lo != today %}<a class="btn small ghost" href="{{ base }}{{ '?' ~ w[1:] if w }}">Back to today</a>{% endif %}<a class="btn small ghost" href="{{ base }}?start={{ hi + timedelta(days=1) }}{{ w }}">Later →</a></p>{% endmacro %}
+<div class="headrow"><h2 class="calrange">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }}</h2>
+<form class="row" action="{{ base }}">{% if lo != today %}<input type="hidden" name="start" value="{{ lo }}">{% endif %}<label class="small">Show <select name="weeks" data-autosubmit>{% for n, label in agenda_weeks.items() %}<option value="{{ n }}" {{ 'selected' if n == weeks }}>{{ label }}</option>{% endfor %}</select></label><noscript><button class="btn small ghost">Go</button></noscript></form>{{ moves() }}</div>
 {% for d, es in by_day|dictsort %}<h2 class="calday" id="d{{ d }}">{{ 'Today' if d == today else d.strftime('%A, %B %-d') }}</h2>
 <ul class="agenda">{% for e in es %}<li data-kind="{{ e.kind }}">{% call open(e) %}<span class="caltime">{{ e.time if e.time and d == e.start else 'All day' if not e.time else '' }}</span><i class="dot k-{{ e.kind }}"></i><span class="caltitle">{{ e.title }}{% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}</span>{% endcall %}</li>{% endfor %}</ul>
 {% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
@@ -26,6 +28,7 @@
 </tbody></table>
 <p class="muted small">Tap an event for details, or a day to see it in the agenda.</p>
 {% endif %}
+{% if is_officer %}<p class="muted small"><a href="/calendar/changes">Who changed what on the calendars</a></p>{% endif %}
 {% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
 {% else %}<p><a href="/calendar/subscribe">Subscribe in your calendar app (phone, Outlook, Apple or Google Calendar)</a></p>{% endif %}
 
@@ -34,6 +37,7 @@
 <h2>{{ e.title }}</h2>
 <p class="calwhen">{% if e.starts %}{% if e.starts.date() == e.ends.date() %}{{ e.starts.strftime('%A, %B %-d') }}<br>{{ e.time }} – {{ e.ends.strftime('%-I:%M %p') }}
   {% else %}{{ e.starts.strftime('%a, %b %-d, %-I:%M %p') }} –<br>{{ e.ends.strftime('%a, %b %-d, %-I:%M %p') }}{% endif %}
+{% if e.zone %}<br><span class="muted">{{ e.zone }}</span>{% endif %}
 {% elif e.end != e.start %}{{ e.start.strftime('%a, %b %-d') }} – {{ e.end.strftime('%a, %b %-d') }}, all day
 {% else %}{{ e.start.strftime('%A, %B %-d') }}, all day{% endif %}</p>
 {% if e.repeats and repeats.get(e.id) %}<p class="muted">{{ emoji('🔁', 'repeat') }} {{ repeats[e.id] }}</p>{% endif %}
@@ -44,7 +48,7 @@
 </template>{% endfor %}
 <dialog id="calmodal" aria-labelledby="calmodal-title"><form method="dialog"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form><div class="body"></div></dialog>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // The legend shows or hides each calendar (remembered in this browser). In the month grid each day keeps showing
 // its first three visible events, with "+N more" for the rest. Agenda rows are shaded every other visible row.
 (() => {
