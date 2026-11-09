@@ -7,6 +7,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "James Flattery" }]
 requires-python = ">=3.13"
 dependencies = [
+    "cryptography>=50.0.2",  # backups (AES-GCM); already installed for webauthn
     "fastapi>=0.162.0",
     "google-auth[requests]>=2.62.1",
     "httpx>=0.28.1",

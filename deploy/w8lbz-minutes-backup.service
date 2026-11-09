@@ -1,0 +1,13 @@
+[Unit]
+Description=Nightly encrypted backup of the W8LBZ minutes data (backup.py)
+
+[Service]
+Type=oneshot
+User=minutes
+Group=minutes
+WorkingDirectory=/opt/w8lbz-minutes
+Environment=W8LBZ_CONFIG=/etc/w8lbz-minutes/club.yaml
+Environment=W8LBZ_DATA=/var/lib/w8lbz-minutes
+# W8LBZ_BACKUP_PASSPHRASE, and W8LBZ_S3_KEY_ID / W8LBZ_S3_SECRET to send it off the server
+EnvironmentFile=-/etc/w8lbz-minutes/env
+ExecStart=/opt/w8lbz-minutes/.venv/bin/w8lbz-minutes backup

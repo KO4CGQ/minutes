@@ -35,7 +35,29 @@ curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh 
 /opt/w8lbz-minutes/deploy/update.sh                                                    # after each merge to main
 ```
 Then put `club.yaml` and `google-service-account.json` in `/etc/w8lbz-minutes/`, and data in `/var/lib/w8lbz-minutes/`.
-The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00.
+The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00; backups run at 02:30 (see Backups).
+
+## Backups
+Every night at 2:30 (`w8lbz-minutes-backup.timer`) the app puts the whole data folder (minutes, chow, business, calendars, settings, logs, the roster cache, and a consistent copy of the sign-in database) into one `.tar.gz`, encrypts it (scrypt + AES-256-GCM) with a passphrase only the admins hold, decrypts it again to check it opens, keeps the last 7 in `backups/` in the data folder, and sends it to S3-compatible storage. If anything fails, the admins get an email. Admin mode → Security → **Backups** shows the last result, runs one now, and downloads the local copies (still encrypted).
+
+**Setup:**
+1. A long passphrase in `/etc/w8lbz-minutes/env`: `W8LBZ_BACKUP_PASSPHRASE=...`. Keep a copy somewhere other than the server (a password manager the admins share): without it no backup can be opened.
+2. Backblaze B2 (or any S3-compatible storage): a private bucket, and an application key limited to that bucket with read and write access. In club.yaml:
+   ```yaml
+   backup:
+     s3: {endpoint: https://s3.us-west-004.backblazeb2.com, region: us-west-004, bucket: BUCKET, prefix: minutes/}
+   ```
+   and in `/etc/w8lbz-minutes/env`: `W8LBZ_S3_KEY_ID=...` and `W8LBZ_S3_SECRET=...`. How long backups are kept there is the bucket's lifecycle rule (B2: Lifecycle Settings → custom rule for `minutes/`: hide files 90 days after upload, delete them 1 day after hiding), so the app never deletes anything there.
+3. `systemctl start w8lbz-minutes-backup` (or Back up now) and check the Backups tab.
+
+**Restore** (onto this server or a fresh one set up with `setup.sh`):
+```sh
+sudo -u minutes /opt/w8lbz-minutes/.venv/bin/w8lbz-minutes restore BACKUP.tar.gz.enc /tmp/restored   # asks for the passphrase
+systemctl stop w8lbz-minutes
+rsync -a /tmp/restored/ /var/lib/w8lbz-minutes/ && chown -R minutes:minutes /var/lib/w8lbz-minutes
+systemctl start w8lbz-minutes
+```
+`restore` only unpacks into an empty folder, never over live data. Members stay signed in (the sign-in database is in the backup); passkeys keep working as long as the hostname is the same.
 
 ## Server hardening (recommended)
 The app blocks web visitors itself after repeated failed sign-ins (admin **Security** page). For SSH, use fail2ban:

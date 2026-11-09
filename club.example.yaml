@@ -62,6 +62,11 @@ offices:
 #   model: provider/model-name   # any chat model id from openrouter.ai/models
 #   enabled: true
 
+# Nightly encrypted backups (README -> Backups). The passphrase and the storage key go in /etc/w8lbz-minutes/env:
+# W8LBZ_BACKUP_PASSPHRASE, W8LBZ_S3_KEY_ID, W8LBZ_S3_SECRET. Without backup.s3, backups stay on the server only.
+# backup:
+#   s3: {endpoint: https://s3.us-west-004.backblazeb2.com, region: us-west-004, bucket: REPLACE_ME, prefix: minutes/}
+
 roster:  # the club roster Google Sheet (share it with the service account as Viewer)
   sheet_id: REPLACE_ME
   tab: Member Roster

@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly encrypted backup of the minutes data, at 2:30 am
+
+[Timer]
+OnCalendar=*-*-* 02:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

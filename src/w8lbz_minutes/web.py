@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, updates
+from . import ai, avatars, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, updates
 from . import auth as authmod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
@@ -1424,7 +1424,7 @@ def _security_admin(request: Request) -> str:
 
 
 SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
-                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
+                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("backups", "Backups"), ("server", "Server"))
 
 
 def admin_action(e: dict) -> str:
@@ -1461,7 +1461,13 @@ def security_page(request: Request, tab: str = "signins", member: str = "", mid:
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
     roster = DATA / "roster.json"
     events = authn.events(100)
-    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS,
+    try:
+        s3 = backup.s3_config(archive.club)
+        s3_error = None
+    except backup.BackupError as e:
+        s3, s3_error = None, str(e)
+    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS, backup_status=backup.status(),
+                local_backups=[(p.name, p.stat().st_size) for p in backup.local_copies()], s3=s3, s3_error=s3_error,
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
@@ -1481,6 +1487,26 @@ def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), re
     authn.ban(ip, hours or None, reason or "banned by an admin", mid)
     _admin_log(request, ban=ip, hours=hours or None)
     return RedirectResponse("/admin/security/bans", status_code=303)
+
+
+@app.post("/admin/security/backup")
+def security_backup_now(request: Request, background: BackgroundTasks):
+    """Run tonight's backup now (in the background; the page shows the result when it's done)."""
+    _security_admin(request)
+    _admin_log(request, backup="started")
+    background.add_task(backup.run, archive.club, base_url(request))
+    return RedirectResponse("/admin/security/backups", status_code=303)
+
+
+@app.get("/admin/security/backups/{name}")
+def security_backup_download(request: Request, name: str):
+    """A local copy, still encrypted: safe to keep on your own computer."""
+    _security_admin(request)
+    p = next((p for p in backup.local_copies() if p.name == name), None)
+    if not p:
+        raise HTTPException(404)
+    _admin_log(request, backup_downloaded=name)
+    return FileResponse(p, media_type="application/octet-stream", filename=name)
 
 
 @app.post("/admin/security/unban")

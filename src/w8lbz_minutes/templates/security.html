@@ -49,6 +49,17 @@
 <p><a href="/admin/email">Email log</a> · <a href="/admin/updates">Updates</a></p>
 
 {% endif %}
+{% if tab == 'backups' %}
+<p class="muted">Every night at 2:30 the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one archive, encrypts it with the backup passphrase, checks it opens, keeps the last 7 here and sends it off the server. Restoring: README → Backups.</p>
+<ul class="plain">
+<li>Last backup: {% if not backup_status %}none yet{% elif backup_status.ok %}{{ backup_status.at|tsfull }}, {{ backup_status.files }} files, {{ (backup_status.size / 1048576)|round(1) }} MB{% if backup_status.sent_to %}, sent to {{ backup_status.sent_to }}{% endif %}{% else %}<b>failed</b> {{ backup_status.at|tsfull }}: {{ backup_status.error }}{% endif %}</li>
+<li>Off the server: {% if s3 %}{{ s3.endpoint }}, bucket {{ s3.bucket }}{% elif s3_error %}<b>{{ s3_error }}</b>{% else %}not set up (<code>backup.s3</code> in club.yaml){% endif %}</li>
+</ul>
+<form method="post" action="/admin/security/backup" class="inline"><button class="btn small">Back up now</button></form> <span class="hint">Takes a few seconds; reload this page to see it.</span>
+<h2>On the server</h2>
+<p class="hint">Download one to keep on your own computer. It's encrypted: it opens only with the passphrase.</p>
+<ul class="plain">{% for name, size in local_backups %}<li><a href="/admin/security/backups/{{ name }}">{{ name }}</a> <span class="muted small">{{ (size / 1048576)|round(1) }} MB</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}</ul>
+{% endif %}
 {% if tab == 'server' %}
 <ul class="plain">
 <li>Version {{ VERSION }}</li>
