@@ -62,4 +62,9 @@ Suggested follow-ups are done. Next, using the typed minutes we already have (no
 - **Discord:** a post-meeting summary and weekly reminders.
 - **Clubhouse DNS override:** the club router resolves the app's hostname to the server's LAN address, and the server serves HTTPS locally with the Tailscale-issued certificate. Then the same URL works at the clubhouse without an internet round trip, even when the internet is down.
 - **Permanent hostname** (e.g. `minutes.w8lbz.org`) once the club controls its DNS. Members re-add passkeys once.
+- **Anubis proof-of-work in front of public pages** (sign-in, public calendar), to turn away scrapers. Signed-in members never see it:
+  - Keep Anubis's pass cookie at least as long as a session (`session_days`), so passing it once at sign-in covers the whole session.
+  - Never challenge machine clients: the `.ics` feeds, `/api/roster` and the live-meeting polling.
+  - Skip the challenge on the LAN with an Anubis rule on the club's network address ranges. This needs the real client address: a proxy in front must pass it on, and Anubis must not trust a forwarded address a client sends itself.
+  - Don't let requests skip the challenge just because they carry a session cookie. Anubis can't check that the cookie is valid, so a bot could send a fake one.
 - **Import review:** a page to mark imported historical minutes as reviewed, and fix their attributions.
