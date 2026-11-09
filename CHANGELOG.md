@@ -5,29 +5,38 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
-- **Ohio election days** on the Community calendar: the primary (May, or March in a presidential year) and the November general election, worked out from Ohio law (there's no official feed), with poll hours and a pointer to voteohio.gov. In the feeds and the Google copy too.
+
+## 0.11.0 (2026-11-08)
+### Security
+- **Fix: search and the leader console could run script typed into the minutes.** Text with HTML in it (a business item, say, which any member can add) was shown as HTML in search results, and could end the leader console's data early. Both are escaped now. Found by testing; no sign it was used.
+- **Stricter Content Security Policy:** pages run only the app's own scripts and the script blocks the page was given a one-time nonce for, so injected markup can't run script even if some text slips through unescaped. The 24 inline `onclick`/`onsubmit`/`onchange` handlers became `data-` attributes handled in one place. The phone-width browser test now also fails on anything the policy blocks. (A member's name with an apostrophe in "Remove …'s picture?" no longer breaks that button.)
+- **Security checks, every week and on every PR:** `pip-audit` (known-vulnerable packages), `gitleaks` (secrets in the git history), CodeQL (security bugs in the code) and Dependabot (weekly update PRs, and security fixes right away). Workflow actions are pinned to commits. See README → Security checks.
+- **Dependencies:** fastapi 0.162.2, click 8.5.1, cbor2 6.2.1 (patch releases). `pip-audit` finds no known vulnerabilities.
+
+### Search
+- **One search for everything:** minutes, members (name, callsign), guests who haven't joined, business items (text, owner), upcoming chow nights (who's bringing it) and calendar events (title, place, notes), each linked to its page.
+- **Tabs by kind,** with counts: **All** shows the first 5 of each kind (with "See all"), and a kind's tab lists every result a page at a time (10, 25, 50 or all). Minutes results are no longer capped at 100.
+
+### Calendar
+- **Event time zones:** a timed event can be kept in another time zone (the club's, from club.yaml, by default). Field Day, for example, is 1800 UTC Saturday to 2059 UTC Sunday: the calendar shows it in club time, and the event's details also give the UTC times. One date of a repeating event can't change its time zone or calendar; the form says to choose This and following dates or Every date.
 - **Holidays calendar:** US federal holidays, plus Christmas Eve and New Year's Eve, as their own calendar (shown or hidden from the legend, in the feeds, and public if `public_calendars` lists `holiday`).
+- **Ohio election days** on the Community calendar: the primary (May, or March in a presidential year) and the November general election, worked out from Ohio law (there's no official feed), with poll hours and a pointer to voteohio.gov.
+- **More repeat patterns:** every day (or every few days), and monthly on several weeks: the 1st and 3rd Tuesday, or the 1st and last. The .ics import brings these in too.
 - **Calendar editors:** members ticked `calendar_editor` in the roster sheet (say, the net manager) can add, change and delete events, as leaders and minutes editors can. Add a `calendar_editor` column to the sheet to use it.
 - **Who changed what:** officers see every calendar change (who, when, what, which calendar) at Calendar → Who changed what.
-- **Business due dates on Planning:** open business items with a due date show on the Planning calendar ("Due: …", with who's looking after it), in the feeds and in the Google copy.
-- **More repeat patterns:** every day (or every few days), and monthly on several weeks: the 1st and 3rd Tuesday, or the 1st and last. The .ics import brings these in too.
-- **Security checks, every week and on every PR:** `pip-audit` (known-vulnerable packages), `gitleaks` (secrets in the git history), CodeQL (security bugs in the code) and Dependabot (weekly update PRs, and security fixes right away). Workflow actions are pinned to commits. See README → Security checks.
-- **Stricter Content Security Policy:** pages run only the app's own scripts and the script blocks the page was given a one-time nonce for, so injected markup can't run script even if some text slips through unescaped. The 24 inline `onclick`/`onsubmit`/`onchange` handlers became `data-` attributes handled in one place. The phone-width browser test now also fails on anything the policy blocks. (A member's name with an apostrophe in "Remove …'s picture?" no longer breaks that button.)
-- **Chow fixes from testing odd requests:** a bad date on Assign or No chow is refused (it was a server error); swapping a night with itself is refused by the server too (it logged a swap and emailed the member); filling the rotation stops at two years ahead (a typo like the year 2400 made 19,470 nights).
-- **Security fix: search and the leader console could run script typed into the minutes.** Text with HTML in it (a business item, say) was shown as HTML in search results, and could end the leader console's data early. Both are escaped now. Found by testing; no sign it was used.
-- **Calendar fixes from testing odd edits:**
+- **Business due dates on Planning:** open business items with a due date show on the Planning calendar ("Due: …", with who's looking after it) and in the feeds.
+- **Longer agenda:** the agenda shows 8 weeks by default; **Show** can switch it to 3 months, 6 months or a year.
+- **Fixes from testing odd edits:**
+  - One date moved to another day (This date only) now shows on its new day, even when the page doesn't cover its original day.
   - Changing a series' time for every date no longer brings back dates deleted from it or drops one-date changes. Moving it to another day still clears them.
   - Making a series a one-off no longer lets an old change to its first date hide the new details.
   - Changing Repeats for "This date only" now says to choose This and following dates or Every date, instead of being ignored.
   - A far-off or mistyped date in a calendar address, or a bad date on an Edit link, shows "not found" instead of an error.
-- **Dependencies:** fastapi 0.162.2, click 8.5.1, cbor2 6.2.1 (patch releases). `pip-audit` finds no known vulnerabilities.
-- **Event time zones:** a timed event can be kept in another time zone (the club's, from club.yaml, by default). Field Day, for example, is 1800 UTC Saturday to 2059 UTC Sunday: the calendar shows it in club time, and the event's details also give the UTC times. The feeds and Google get club time. One date of a repeating event can't change its time zone or calendar; the form says to choose This and following dates or Every date.
-- **One search for everything:** the search box also finds members (name, callsign), guests who haven't joined, business items (text, owner) and upcoming chow nights (who's bringing it). Results are grouped: Members, Guests, Business, Chow, Calendar, Minutes, each linked to its page. Tabs above them filter by kind, with counts: **All** shows the first 5 of each kind (with "See all"), and a kind's tab lists every result a page at a time (10, 25, 50 or all). Minutes results are no longer capped at 100.
-- **Search finds calendar events:** the search box looks through calendar events (title, place, notes) as well as the minutes. Matching events are listed first, each with its next date, linked to that day in the agenda.
-- **Fix: one date moved to another day** (This date only) now shows on its new day even when the page or Google sync doesn't cover its original day; it could go missing before.
-- **Longer agenda:** the agenda shows 8 weeks by default; **Show** can switch it to 3 months, 6 months or a year.
+
+### Minutes, chow and console
 - **Minutes buttons:** one or the other. Minutes imported with their original PDF have **View original**. All others have **Download PDF**: minutes made in the app, and corrected minutes imported from text.
 - **Console reminder:** when Club events is a public calendar, the Upcoming Events step says dated events are public too, so members-only details stay out of them.
+- **Chow fixes from testing odd requests:** a bad date on Assign or No chow is refused (it was a server error); swapping a night with itself is refused by the server too (it logged a swap and emailed the member); filling the rotation stops at two years ahead (a typo like the year 2400 made 19,470 nights).
 - **Docs:** how to release a stack of PRs (README), and backups on the roadmap.
 
 ## 0.10.0 (2026-11-08)
