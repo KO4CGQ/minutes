@@ -35,7 +35,6 @@ Nobody uses the sheet directly any more; one other club tool on the same server 
 - **Move over once:** import the sheet and its Membership Log tab, show what differs, then turn off the sync and the write-back. The sheet stays as a read-only archive.
 - **Then remove** the Google Sheets code and the service account's access to the sheet. With no copy to Google Calendar either (decided 2026-11-08), the app needs no Google account at all.
 
-- **Celebrations:** birthdays (opt-in; a month-only birthday at the first meeting of that month) and membership anniversaries shown in the console on meeting night ("Happy birthday, …", "5 years as a member").
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".
 - **Associate members** (GMRS or unlicensed), only if the bylaws add them; today a member must hold an amateur license.
 - **Admin page for officers:** sync the roster now, email test mode on/off, delete test minutes, review imported minutes.

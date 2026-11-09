@@ -158,3 +158,15 @@ def test_email_minutes_as_pdf_or_link_per_member(tmp_path, monkeypatch):
     prefs.save("kim", {"minutes": "off"})
     prefs.save("doe", {"minutes": "off"})
     assert console.email_minutes(a, "2026-11-12", lambda: 1 / 0, "u")["sent"] == 0  # nobody wants it: no PDF made
+
+
+def test_celebrations_the_week_up_to_tonight_shared_birthdays_only():
+    c = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": "amy", "first": "Amy", "last": "Able", "birthday": "11-10", "share": ["birthday"], "member_since": "2020-11-06"},
+        {"id": "bob", "first": "Bob", "last": "Baker", "birthday": "11-12", "share": []},  # not shared: never shown
+        {"id": "cal", "first": "Cal", "last": "Cole", "birthday": "12", "share": ["birthday"], "member_since": "2026-11-01"},
+        {"id": "dee", "first": "Dee", "last": "Dunn", "birthday": "11-13", "share": ["birthday"]}])  # tomorrow: next week
+    assert console.celebrations(c, dt.date(2026, 11, 12)) == ["Amy Able: 6 years as a member", "Happy birthday, Amy Able!"]
+    assert console.celebrations(c, dt.date(2026, 12, 3)) == ["Happy birthday, Cal Cole! (December)"]  # first meeting of the month
+    assert console.celebrations(c, dt.date(2026, 12, 10)) == []
+    assert console.celebrations(c, dt.date(2027, 1, 2)) == []  # the week crosses New Year

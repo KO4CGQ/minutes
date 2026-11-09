@@ -7,6 +7,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 ## Unreleased
 - **Attendance:** a chart of each meeting's attendance (in person, online, guests) over the chosen period, above the tables. Hover or tap a bar for its numbers; click to open that meeting.
 - **Business cards, calmer:** History and Comment sit with the other buttons and stay faded until the card is hovered, tapped or reached with the keyboard; the intro is one line.
+- **Celebrations:** the leader console's Attendance step opens with the week's shared birthdays ("Happy birthday, …"; a month-only birthday at the month's first meeting) and membership anniversaries ("5 years as a member").
 
 ## 0.12.1 (2026-11-09)
 - **Motions:** Moved by and Seconded by each leave out whoever is picked in the other (leader console and Business → Motions).

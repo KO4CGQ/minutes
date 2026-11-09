@@ -151,6 +151,7 @@
     };
     const n = (w) => w === "inperson" ? M.in_person.length : M.remote.length;
     return h("div", {},
+      D.celebrations.length ? h("p", { class: "msg ok" }, emo("🎉", "star"), " ", D.celebrations.join(" · ")) : null,
       h("h2", {}, `Attendance: ${M.in_person.length} in person, ${M.remote.length} online, ${M.guests.length + M.visitors} guest${M.guests.length + M.visitors === 1 ? "" : "s"}`),
       h("p", { class: "legend" }, "Tap a name to cycle: ", h("span", { class: "mbtn" }, "absent"), "→",
         h("span", { class: "mbtn inperson" }, `in person (${n("inperson")})`), "→", h("span", { class: "mbtn online" }, `online (${n("online")})`)),

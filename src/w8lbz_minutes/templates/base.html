@@ -17,7 +17,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="stylesheet" href="/static/style.css?v={{ ASSETS }}"><link rel="stylesheet" href="/static/minutes.css?v={{ ASSETS }}"></head>
-<body><div id="emoji-icons" hidden>{% for n in ('check', 'x', 'xcircle') %}<span data-i="{{ n }}">{{ icon(n) }}</span>{% endfor %}</div>
+<body><div id="emoji-icons" hidden>{% for n in ('check', 'x', 'xcircle', 'star') %}<span data-i="{{ n }}">{{ icon(n) }}</span>{% endfor %}</div>
 {% set PAGES = (('/', 'Home'), ('/minutes', 'Minutes'), ('/calendar', 'Calendar'), ('/chow', 'Chow'), ('/business', 'Business'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/guests', 'Guests'), ('/links', 'Links')) %}
 {% set here = request.url.path %}
 {% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}

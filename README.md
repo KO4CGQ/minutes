@@ -104,7 +104,7 @@ When a leader submits the minutes, they go to every roster member with an email 
 - **Removing a test meeting:** `w8lbz-minutes delete-meeting 2026-12-31`, then `systemctl restart w8lbz-minutes`.
 
 ## Member profiles
-Members edit their own email, phone, address, birthday and sharing choices at `/profile`. The app writes those cells to the roster sheet, values only, and never changes columns, dropdowns or formatting.
+Members edit their own email, phone, address, birthday and sharing choices at `/profile`. The app writes those cells to the roster sheet, values only, and never changes columns, dropdowns or formatting. A birthday shared with members, and each membership anniversary, shows at the top of the leader console's Attendance step at the first meeting on or after the day (a month-only birthday: the month's first meeting).
 - **Setup:** share the roster sheet with the service account as **Editor**, and add `birthday` and `share` columns to the Member Roster tab (headers exactly; any position).
 - Each change is logged in `profile-changes.jsonl` in the data directory, emailed to members whose title includes Secretary, and can be undone by any officer at `/roster/changes`.
 - Officers see all contact details; other members see only what each member shares.
