@@ -102,3 +102,37 @@ def test_admin_page(env, tmp_path, monkeypatch):
     c.cookies.set(web.COOKIE, a.new_session("bob"))
     assert "of the app is available" not in c.get("/links").text                 # not for members
     assert c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1}).status_code == 403
+
+
+def test_backup_before_update(env, tmp_path, monkeypatch):
+    """Back up first (ticked by default when backups are set up): a failed backup means no update."""
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import backup, web
+    from w8lbz_minutes.auth import Auth
+    from w8lbz_minutes.club import Club
+    from w8lbz_minutes.store import Archive
+    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin"}])
+    club.admins = {"kd8adm"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(backup, "DATA", tmp_path)
+    monkeypatch.setattr(updates, "latest", lambda *a, **k: {"version": "0.7.0", "notes": "", "url": "u", "deploy_notes": ""})
+    c = TestClient(web.app)
+    token = a.new_session("kd8adm")
+    a.set_admin(token, 60)
+    c.cookies.set(web.COOKIE, token)
+    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "a long test passphrase")
+    assert 'name="backup_first" value="1" checked' in c.get("/admin/updates").text
+    monkeypatch.setattr(backup, "run", lambda club, url="": {"ok": False, "error": "S3: no network"})
+    assert "failed, so the update" in c.post("/admin/updates/run", data={"target": "0.7.0", "backup_first": 1}).text
+    assert not (tmp_path / "update-request.json").exists()
+    ran = []
+    monkeypatch.setattr(backup, "run", lambda club, url="": ran.append(1) or {"ok": True})
+    c.post("/admin/updates/run", data={"target": "0.7.0", "backup_first": 1})
+    assert ran and (tmp_path / "update-request.json").exists()
+    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "")
+    updates.cancel()
+    assert "no backup before the update" in c.get("/admin/updates").text

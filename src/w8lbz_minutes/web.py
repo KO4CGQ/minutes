@@ -796,7 +796,8 @@ def admin_updates(request: Request, error: str = "", note: str = "", mid: str = 
     if not admin_mode(request):
         return RedirectResponse("/admin/confirm?next=/admin/updates", status_code=303)
     return page(request, "updates.html", running=updates.running(), rel=updates.latest(), st=updates.status(),
-                newer=updates.available(), error=error, note=note)
+                newer=updates.available(), error=error, note=note,
+                backup_ready=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12)
 
 
 @app.post("/admin/updates/check")
@@ -809,10 +810,17 @@ def admin_updates_check(request: Request, mid: str = Depends(real_me)):
 
 
 @app.post("/admin/updates/run")
-def admin_updates_run(request: Request, target: str = Form(""), notes_done: int = Form(0), mid: str = Depends(real_me)):
+def admin_updates_run(request: Request, target: str = Form(""), notes_done: int = Form(0), backup_first: int = Form(0),
+                      mid: str = Depends(real_me)):
     _admin(mid)
     if not admin_mode(request):
         raise HTTPException(403, "Turn on admin mode first.")
+    if backup_first:  # a way back if the update goes wrong; a few seconds at our size
+        st = backup.run(archive.club, base_url(request))
+        if not st["ok"]:
+            return RedirectResponse("/admin/updates?error=" + quote(f"The backup before the update failed, so the update "
+                                                                   f"didn't start: {st['error']}"), status_code=303)
+        _admin_log(request, backup="before the update")
     try:
         updates.request(mid, target, bool(notes_done))
     except ValueError as e:
