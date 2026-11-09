@@ -126,7 +126,7 @@ Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos 
 `/bylaws` shows the club's constitution and bylaws from `bylaws.md` in the data directory (`/var/lib/w8lbz-minutes/bylaws.md` on the server). It's kept out of this public repo.
 
 ## Previewing a branch
-`deploy/preview.sh BRANCH` runs a branch on a development machine (ports from 8100) so it can be tried before merging, without touching the live server. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
+`deploy/preview.sh BRANCH` runs a branch on a development machine (ports from 8100) so it can be tried before merging, without touching the live server. It uses the local branch when there is one, so work can be previewed before it's pushed; otherwise the branch on GitHub. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
 - **Preview mode:** a banner on every page; email is recorded on the **Email log** page (name menu → Email log, in admin mode) instead of being sent; roster edits go to a local copy of the sheet.
 - Each preview has its own checkout and a fresh copy of `data/` (meetings, roster cache, bylaws) on every update; its sign-ins are kept.
 - `deploy/preview.sh --list` shows running previews; `deploy/preview.sh --stop BRANCH` stops one and deletes its copy.

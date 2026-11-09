@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run a branch as a preview on this machine, reachable from the LAN, without touching the live server.
 #
-#   deploy/preview.sh BRANCH [NAME]   start or update the preview of BRANCH (prints its address and a sign-in link)
+#   deploy/preview.sh BRANCH [NAME]   start or update the preview of BRANCH, the local one if it exists, else origin's
+#                                     (prints its address and a sign-in link)
 #                                     NAME (default: the branch) keeps one address while it follows different branches,
 #                                     e.g. `deploy/preview.sh my-branch dev` for a single "dev" preview of the latest work
 #   deploy/preview.sh --stop NAME     stop it and delete its copy
@@ -25,15 +26,18 @@ case "${1:-}" in
     B=${2:?branch}; systemctl --user stop "$(unit "$B")" 2>/dev/null || true
     git -C "$REPO" worktree remove --force "$BASE/$B/app" 2>/dev/null || true
     rm -rf "${BASE:?}/$B"; echo "Stopped and removed the preview of $B"; exit 0 ;;
-  ""|-*) sed -n '2,12p' "$0"; exit 1 ;;
+  ""|-*) sed -n '2,13p' "$0"; exit 1 ;;
 esac
 
 B=$1; NAME=${2:-$1}; DIR=$BASE/$NAME; U=$(unit "$NAME")
 mkdir -p "$DIR"
 git -C "$REPO" fetch -q origin
+# The local branch if there is one (work that hasn't been pushed yet), else the one on GitHub.
+REF="origin/$B"; git -C "$REPO" rev-parse -q --verify "refs/heads/$B" >/dev/null && REF=$B
+echo "Previewing $REF ($(git -C "$REPO" rev-parse --short "$REF"))"
 # the preview's checkout is a throwaway copy: any edits made in it are discarded (and a failure stops here)
-if [ -d "$DIR/app" ]; then git -C "$DIR/app" checkout -q --force --detach "origin/$B"; git -C "$DIR/app" reset -q --hard "origin/$B"
-else git -C "$REPO" worktree add -q --detach "$DIR/app" "origin/$B"; fi
+if [ -d "$DIR/app" ]; then git -C "$DIR/app" checkout -q --force --detach "$REF"; git -C "$DIR/app" reset -q --hard "$REF"
+else git -C "$REPO" worktree add -q --detach "$DIR/app" "$REF"; fi
 
 # Older branches have no preview mode: they would send real email and write to the real roster sheet.
 if ! grep -q W8LBZ_PREVIEW "$DIR/app/src/w8lbz_minutes/club.py"; then
