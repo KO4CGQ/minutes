@@ -99,7 +99,7 @@
 {% elif tab == 'motions' %}
 {% macro motion_fields(mo) %}
     <div class="formrow">
-      <label>Moved by<input name="mover" data-combo="roster-names" placeholder="Type a name…" required value="{{ club.name(mo.mover) if mo else '' }}"></label>
+      <label>Moved by<input name="mover" data-combo="roster-names" data-combo-exclude="seconder" placeholder="Type a name…" required value="{{ club.name(mo.mover) if mo else '' }}"></label>
       <label>Seconded by<input name="seconder" data-combo="roster-names" data-combo-exclude="mover" placeholder="(nobody)" value="{{ club.name(mo.seconder) if mo and mo.seconder else '' }}"></label>
     </div>
     <label>Moved to<textarea name="what" rows="2" required placeholder="buy a new antenna for the repeater">{{ mo.what if mo else '' }}</textarea></label>

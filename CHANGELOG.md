@@ -5,7 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
-- **Motions:** the Seconded by list leaves out whoever is in Moved by (leader console and Business → Motions).
+- **Motions:** Moved by and Seconded by each leave out whoever is picked in the other (leader console and Business → Motions).
 
 ## 0.12.0 (2026-11-09)
 - **Deploy notes:** before updating:

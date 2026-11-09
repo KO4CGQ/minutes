@@ -375,7 +375,7 @@
     const motionForm = () => {
       const person = (label, exclude) => makeCombo(h("input", { placeholder: label, "aria-label": label, class: "ownerbox" }),
         D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), { empty: "(nobody)", exclude });
-      const mover = person("Moved by"), second = person("Seconded by", () => val(mover));
+      const mover = person("Moved by", () => val(second)), second = person("Seconded by", () => val(mover));
       const what = h("textarea", { rows: 1, placeholder: "buy a new antenna for the repeater", "aria-label": "Moved to", oninput: (e) => grow(e.target) });
       const result = h("select", { "aria-label": "Result" }, ["", "Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second"]
         .map((v) => h("option", { value: v }, v || "Result…")));
