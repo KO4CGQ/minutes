@@ -122,7 +122,7 @@
 <li><form method="post" action="/admin/security/limits" class="modern"><div class="formrow">
   <label>Largest upload (MB)<input type="number" name="upload_mb" min="{{ upload_range[0] }}" max="{{ upload_range[1] }}" value="{{ upload_mb }}" required></label>
   <button class="btn small">Save</button></div>
-  <p class="hint">Profile pictures and calendar .ics files. Anything bigger is turned away before it's read. If a proxy sits in front of the app (Caddy, nginx), its own limit has to be at least this.</p></form></li>
+  <p class="hint">Profile pictures and calendar .ics files. Anything bigger is turned away before it's read. If a proxy sits in front of the app (Caddy, nginx, Traefik), its own limit has to be at least this.</p></form></li>
 <li>Copy to Google Calendar (optional): {% if not calendars %}off (<code>club.calendars</code> in club.yaml turns it on){% elif not calendar %}not copied yet{% elif calendar.error %}<b>last sync failed</b> {{ calendar.at|tsfull }}: {{ calendar.error }}{% else %}synced {{ calendar.at|tsfull }}{% for k, c in calendar.counts.items() %}; {{ k }}: {{ c.added }} added, {{ c.changed }} changed, {{ c.removed }} removed{% endfor %}{% endif %}</li>
 </ul>
 {% endif %}

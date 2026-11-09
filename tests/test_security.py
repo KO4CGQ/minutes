@@ -163,3 +163,23 @@ def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
     r = t.post("/admin/security/limits", data={"upload_mb": "25"})
     assert r.status_code == 200 and "Uploads up to 25 MB." in r.text and limits.upload_mb() == 25
     assert 'value="25"' in t.get("/admin/security/server").text
+
+
+def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, monkeypatch):
+    """The sync (`w8lbz-minutes roster`, its own process) and the web app take the same roster lock, so neither writes over
+    the other's roster.json."""
+    import os
+    import subprocess
+    import sys
+    import time
+    from w8lbz_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    holder = subprocess.Popen(
+        [sys.executable, "-c", "import time; from w8lbz_minutes.club import roster_locked\n"
+                               "roster_locked(lambda: (print('held', flush=True), time.sleep(1.5)))()"],
+        env={**os.environ, "W8LBZ_DATA": str(tmp_path)}, stdout=subprocess.PIPE, text=True)
+    assert holder.stdout.readline().strip() == "held"  # the "sync" has the lock
+    t0 = time.monotonic()
+    assert clubmod.roster_locked(lambda: clubmod.roster_locked(lambda: "nested ok")())() == "nested ok"  # waits; nesting is fine
+    assert time.monotonic() - t0 > 1.0
+    holder.wait(5)

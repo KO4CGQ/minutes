@@ -60,7 +60,7 @@ systemctl start w8lbz-minutes
 `restore` only unpacks into an empty folder, never over live data. Members stay signed in (the sign-in database is in the backup); passkeys keep working as long as the hostname is the same.
 
 ## Upload limit
-Admin mode → Security → **Server** → **Largest upload** (1–100 MB, 10 by default; kept in `limits.json` in the data folder). It covers profile pictures and calendar .ics imports; a bigger request is turned away (413) before the app reads it. A proxy in front of the app (Caddy, nginx) has its own limit, which must be at least as big.
+Admin mode → Security → **Server** → **Largest upload** (1–100 MB, 10 by default; kept in `limits.json` in the data folder). It covers profile pictures and calendar .ics imports; a bigger request is turned away (413) before the app reads it. A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
 
 ## Server hardening (recommended)
 The app blocks web visitors itself after repeated failed sign-ins (admin **Security** page). For SSH, use fail2ban:

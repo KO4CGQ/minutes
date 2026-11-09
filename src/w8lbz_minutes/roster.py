@@ -19,7 +19,7 @@ import os
 import re
 from pathlib import Path
 
-from .club import DATA, PREVIEW, ROOT, ROSTER_CACHE as CACHE
+from .club import DATA, PREVIEW, ROOT, ROSTER_CACHE as CACHE, roster_locked
 
 KEY_FILE = Path(os.environ.get("W8LBZ_GOOGLE_KEY", ROOT / "private" / "google-service-account.json"))
 
@@ -273,6 +273,7 @@ def attach_log(members: list[dict], log: list[dict[str, str]]) -> None:
         m["member_since"] = max(joins) if joins else None
 
 
+@roster_locked  # from fetching to writing: a profile saved meanwhile waits, so this can't write over it with an older copy
 def sync() -> list[dict]:
     members = to_members(fetch_rows())
     try:
