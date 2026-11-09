@@ -1439,13 +1439,13 @@ SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "
 # ---------------- calendar ----------------
 
 @app.get("/calendar", response_class=HTMLResponse)
-def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: int = 8, mid: str = Depends(me)):
+def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: str = "8", mid: str = Depends(me)):
     """Agenda (from a day, 8 weeks or more) or month grid: club calendars, chow nights and birthdays."""
     return _calendar(request, view, start, month, mid, weeks)
 
 
 @app.get("/calendar/public", response_class=HTMLResponse)
-def calendar_public(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: int = 8):
+def calendar_public(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: str = "8"):
     """The calendars an admin made public, for anyone (no chow, no birthdays)."""
     if not calview.public_kinds(archive.club):
         raise HTTPException(404)
@@ -1455,13 +1455,15 @@ def calendar_public(request: Request, view: str = "agenda", start: str = "", mon
 AGENDA_WEEKS = {8: "8 weeks", 13: "3 months", 26: "6 months", 52: "a year"}
 
 
-def _calendar(request: Request, view: str, start: str, month: str, mid: str | None, weeks: int = 8) -> HTMLResponse:
-    weeks = weeks if weeks in AGENDA_WEEKS else 8
+def _calendar(request: Request, view: str, start: str, month: str, mid: str | None, weeks: str = "8") -> HTMLResponse:
+    weeks = int(weeks) if weeks.isdigit() and int(weeks) in AGENDA_WEEKS else 8
     today = dt.date.today()
     try:
         first = dt.date.fromisoformat(month + "-01") if month else today.replace(day=1)
         start_day = dt.date.fromisoformat(start) if start else today
     except ValueError:
+        raise HTTPException(404)
+    if not (1900 <= first.year <= 2200 and 1900 <= start_day.year <= 2200):  # past the ends of what dates can hold
         raise HTTPException(404)
     ws = 0 if prefs.settings(mid)["week_start"] == "monday" else 6  # the weekday a week starts on (Monday is 0)
     if view == "month":
@@ -1569,7 +1571,10 @@ def calendar_edit(request: Request, id: str = "", d: str = "", date: str = "", c
         e = events.get(events.load(), id)
     except KeyError:
         raise HTTPException(404, "That event isn't on the calendar any more.")
-    return _event_form(request, events.form_values(e, d or None), id, d, repeats=bool(e.get("repeat")))
+    try:
+        return _event_form(request, events.form_values(e, d or None), id, d, repeats=bool(e.get("repeat")))
+    except ValueError:  # d isn't a date
+        raise HTTPException(404)
 
 
 @app.post("/calendar/save")
@@ -1719,7 +1724,7 @@ def console_page(request: Request, slug: str, mid: str = Depends(leader)):
     if m.status == "published":
         return RedirectResponse(f"/meetings/{slug}", status_code=303)
     ctx = console.context(archive, m)
-    return page(request, "console.html", m=m, data=json.dumps(ctx),
+    return page(request, "console.html", m=m, data=json.dumps(ctx).replace("<", "\\u003c"),  # "</script>" in any text can't end the script
                 leaders=sorted(archive.club.leaders, key=archive.club.name))
 
 

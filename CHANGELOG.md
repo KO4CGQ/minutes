@@ -5,6 +5,13 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Security fix: search and the leader console could run script typed into the minutes.** Text with HTML in it (a business item, say) was shown as HTML in search results, and could end the leader console's data early. Both are escaped now. Found by testing; no sign it was used.
+- **Calendar fixes from testing odd edits:**
+  - Changing a series' time for every date no longer brings back dates deleted from it or drops one-date changes. Moving it to another day still clears them.
+  - Making a series a one-off no longer lets an old change to its first date hide the new details.
+  - Changing Repeats for "This date only" now says to choose This and following dates or Every date, instead of being ignored.
+  - A far-off or mistyped date in a calendar address, or a bad date on an Edit link, shows "not found" instead of an error.
+- **Dependencies:** fastapi 0.162.2, click 8.5.1, cbor2 6.2.1 (patch releases). `pip-audit` finds no known vulnerabilities.
 - **Event time zones:** a timed event can be kept in another time zone (the club's, from club.yaml, by default). Field Day, for example, is 1800 UTC Saturday to 2059 UTC Sunday: the calendar shows it in club time, and the event's details also give the UTC times. The feeds and Google get club time. One date of a repeating event can't change its time zone or calendar; the form says to choose This and following dates or Every date.
 - **One search for everything:** the search box also finds members (name, callsign), guests who haven't joined, business items (text, owner) and upcoming chow nights (who's bringing it). Results are grouped: Members, Guests, Business, Chow, Calendar, Minutes, each linked to its page. Tabs above them filter by kind, with counts: **All** shows the first 5 of each kind (with "See all"), and a kind's tab lists every result a page at a time (10, 25, 50 or all). Minutes results are no longer capped at 100.
 - **Search finds calendar events:** the search box looks through calendar events (title, place, notes) as well as the minutes. Matching events are listed first, each with its next date, linked to that day in the agenda.

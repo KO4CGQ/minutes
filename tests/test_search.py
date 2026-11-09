@@ -52,3 +52,21 @@ def test_results_by_kind_a_page_at_a_time(tmp_path, monkeypatch):
     assert m.get("/search?q=fox&kind=calendar&per=10&page=2").text.count("Fox hunt") == 2
     assert "No members found." in m.get("/search?q=fox&kind=members").text
     assert "All (12)" in m.get("/search?q=fox&kind=junk").text  # an unknown kind: All
+
+
+def test_text_typed_into_the_minutes_or_console_cannot_run_as_script(tmp_path, monkeypatch):
+    from w8lbz_minutes.meeting import Item
+    root = tmp_path / "meetings"
+    Meeting(date=dt.date(2026, 10, 1), status="published", sections={"New Business": [Item("Antenna <img src=x onerror=alert(1)>")]}).save(root)
+    m, club, _ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    monkeypatch.setattr(web, "archive", Archive(root, club))
+    page = m.get("/search?q=antenna").text
+    assert "<img src=x" not in page and "<mark>Antenna</mark> &lt;img" in page
+    s = business.load()
+    s["seeded"] = True
+    business.add(s, "</script><script>alert(1)</script>", "kd8aaa")
+    business.save(s)
+    Meeting(date=dt.date.today(), status="draft").save(root)
+    monkeypatch.setattr(web, "archive", Archive(root, club))
+    console = m.get(f"/console/{dt.date.today()}").text
+    assert "\\u003c/script>\\u003cscript>alert(1)" in console and "</script><script>alert(1)" not in console

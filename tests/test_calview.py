@@ -412,3 +412,34 @@ def test_imported_minutes_offer_the_original_and_new_ones_the_pdf(tmp_path, monk
     assert "View original" in o and "Download PDF" not in o
     assert "View original" not in n and "Download PDF" in n
     assert "Download PDF" in m.get(f"/meetings/{fixed.slug}").text  # imported, but no original to show: the PDF instead
+
+
+def test_odd_edits_found_by_poking_at_the_calendar():
+    def series():
+        evs, e = net()
+        return evs, e
+    evs, e = series()  # a series made a one-off: an old change to its first date doesn't hide the new title
+    events.change(evs, e["id"], "2026-11-10", "events", form(title="Special", repeat="weekly"), "this")
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", title="Plain"), "all")
+    assert [events.occurrence(e, d)["title"] for d in events.dates(e, *NOV)] == ["Plain"]
+    evs, e = series()  # Repeats changed for one date only: say so instead of ignoring it
+    with pytest.raises(ValueError, match="how it repeats"):
+        events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", repeat="monthly"), "this")
+    evs, e = series()  # a new time for every date keeps deleted dates deleted and one-date changes
+    events.delete(evs, e["id"], "2026-12-01", "this")
+    events.change(evs, e["id"], "2026-11-24", "events", form(date="2026-11-24", title="Thanksgiving net", repeat="weekly"), "this")
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", time="19:00", end_time="20:00", repeat="weekly"), "all")
+    assert "2026-12-01" in e["skip"] and e["changes"]["2026-11-24"]["title"] == "Thanksgiving net" and e["start"] == "2026-11-10T19:00"
+    events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-18", repeat="weekly"), "all")  # a new day: they go
+    assert e["skip"] == [] and e["changes"] == {}
+
+
+def test_odd_addresses_are_not_found_rather_than_errors(tmp_path, monkeypatch):
+    m, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    with events.locked():
+        evs, e = net()
+        events.save(evs)
+    for url in ("/calendar?start=0001-01-01", "/calendar?start=9999-12-31&weeks=52", "/calendar?view=month&month=0001-01",
+                f"/calendar/edit?id={e['id']}&d=garbage"):
+        assert m.get(url).status_code == 404, url
+    assert m.get("/calendar?weeks=abc").status_code == 200

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import html
 import re
 import sqlite3
 from collections import defaultdict
@@ -52,9 +53,11 @@ class Archive:
             return []
         fts = " ".join(f'"{t}"*' for t in terms)
         cur = self.db.execute(
-            "select slug, section, member, snippet(docs, 3, '<mark>', '</mark>', ' … ', 24) "
+            "select slug, section, member, snippet(docs, 3, char(1), char(2), ' … ', 24) "
             "from docs where docs match ? order by slug desc limit ?", (fts, limit))
-        return [dict(slug=s, section=sec, member=mem, snippet=snip) for s, sec, mem, snip in cur]
+        # the text is escaped (it's typed by members); only the highlight marks are HTML
+        mark = lambda t: html.escape(t).replace("\x01", "<mark>").replace("\x02", "</mark>")  # noqa: E731
+        return [dict(slug=s, section=sec, member=mem, snippet=mark(snip)) for s, sec, mem, snip in cur]
 
     def member_history(self, mid: str) -> dict:
         present = [(m, "in person" if mid in m.in_person else "online")

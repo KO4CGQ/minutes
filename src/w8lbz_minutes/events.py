@@ -257,11 +257,15 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
             raise ValueError("To move one date to another calendar, choose This and following dates or Every date.")
         if "T" in v["start"] and v.get("tz") != e.get("tz"):
             raise ValueError("Unable to change the time zone of a single date in a series; choose This and following dates or Every date.")
+        same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until")) or None  # noqa: E731
+        if same(v.get("repeat")) != same(e["repeat"]):
+            raise ValueError("To change how it repeats, choose This and following dates or Every date.")
         e["changes"][d] = {k: v[k] for k in FIELDS}
         return
     # every date (or following from the first date): the series moves by as much as this date moved
     was = _dt(occurrence(e, dt.date.fromisoformat(d))["start"])
     delta = _dt(v["start"]) - was
+    redated = _dt(v["start"]).date() != was.date()  # only a new time keeps one-date changes and deleted dates
     timed = "T" in v["start"]
     new_start = _dt(e["start"]) + delta if scope == "all" or d == first else _dt(v["start"])
     new_start = new_start if timed else dt.datetime.combine(new_start.date(), dt.time())
@@ -269,7 +273,7 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
     moved = {**v, "start": _iso(new_start, timed), "end": _iso(new_start + dur, timed) if dur else None, "cal": cal}
     if scope == "all" or d == first:
         e.update(moved)
-        if delta:  # one-date changes and skips belonged to the old dates
+        if redated or not e.get("repeat"):  # they belonged to the old dates (or there's one date now)
             e["changes"], e["skip"] = {}, []
         return
     old_until = e["repeat"].get("until")
@@ -277,7 +281,7 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
     later = {k: x for k, x in e["changes"].items() if k >= d}
     e["changes"] = {k: x for k, x in e["changes"].items() if k < d}
     rest = {"id": secrets.token_hex(5), **{k: x for k, x in e.items() if k not in ("id", "uid", "changes", "skip")}, **moved,
-            "changes": later if not delta else {}, "skip": [s for s in e["skip"] if s >= d] if not delta else []}
+            "changes": later if not redated else {}, "skip": [s for s in e["skip"] if s >= d] if not redated else []}
     if rest["repeat"] and not v.get("repeat"):
         rest["repeat"] = None
     elif rest["repeat"]:
