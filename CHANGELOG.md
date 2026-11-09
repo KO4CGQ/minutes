@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Ohio election days** on the Community calendar: the primary (May, or March in a presidential year) and the November general election, worked out from Ohio law (there's no official feed), with poll hours and a pointer to voteohio.gov. In the feeds and the Google copy too.
 - **Holidays calendar:** US federal holidays, plus Christmas Eve and New Year's Eve, as their own calendar (shown or hidden from the legend, in the feeds, and public if `public_calendars` lists `holiday`).
 - **Calendar editors:** members ticked `calendar_editor` in the roster sheet (say, the net manager) can add, change and delete events, as leaders and minutes editors can. Add a `calendar_editor` column to the sheet to use it.
 - **Who changed what:** officers see every calendar change (who, when, what, which calendar) at Calendar → Who changed what.

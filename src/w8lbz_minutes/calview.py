@@ -122,6 +122,23 @@ HOLIDAYS = [  # (name, month, day) or (name, month, (weekday, nth)): US federal 
     ("Christmas", 12, 25), ("New Year's Eve", 12, 31)]
 
 
+def elections(lo: dt.date, hi: dt.date) -> list[Entry]:
+    """Ohio's regular election days, on the Community calendar (Ohio Revised Code 3501.01; there's no official feed):
+    the general election every November, the first Tuesday after the first Monday; the primary on that Tuesday in
+    May, or the 3rd Tuesday of March in a presidential year. August special elections are left out: held only when
+    something is put on that ballot. shortcut: Ohio only, rules as of 2026; if the law changes, change them here."""
+    def after_first_monday(year, month):
+        return _nth(year, month, 0, 1) + dt.timedelta(days=1)
+    out = []
+    for year in range(lo.year, hi.year + 1):
+        primary = _nth(year, 3, 1, 3) if year % 4 == 0 else after_first_monday(year, 5)
+        for d, name in ((primary, "Ohio primary election"), (after_first_monday(year, 11), "Election Day (Ohio general election)")):
+            if lo <= d <= hi:
+                out.append(Entry(d, d, name, "community", id=f"election-{d}", notes="Polls are open 6:30 AM to 7:30 PM. "
+                                 "Registration closes 30 days before. Your ballot and polling place: voteohio.gov"))
+    return out
+
+
 def holidays(lo: dt.date, hi: dt.date) -> list[Entry]:
     out = []
     for year in range(lo.year, hi.year + 1):
@@ -162,6 +179,8 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
         out += due_dates(club, lo, hi)
     if "holiday" in public_kinds(club) or not public:
         out += holidays(lo, hi)
+    if "community" in kinds:
+        out += elections(lo, hi)
     if not public:
         at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
         for d, x in chow.upcoming(chow.load(), lo, n=400):

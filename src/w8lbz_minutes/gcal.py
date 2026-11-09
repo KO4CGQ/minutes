@@ -69,9 +69,10 @@ def wanted(club: Club, events: list, today: dt.date) -> dict[str, dict[str, dict
             out[e["cal"]][f"ev:{e['id']}:{d}"] = {"summary": o["title"], "location": o.get("where") or "",
                                                   "description": o.get("notes") or "",
                                                   **times(Item(o["title"], when=o["start"], until=o["end"]), tz)}
-    from .calview import due_dates  # business items' due dates are on the Planning calendar too
-    for x in due_dates(club, today, today + dt.timedelta(days=365)):
-        out["planning"][x.id] = {"summary": x.title, "description": x.notes, **times(Item(x.title, when=x.start.isoformat()), tz)}
+    from .calview import due_dates, elections  # business due dates on Planning, election days on Community
+    for kind, xs in (("planning", due_dates(club, today, today + dt.timedelta(days=365))), ("community", elections(today, today + dt.timedelta(days=365)))):
+        for x in xs:
+            out[kind][x.id] = {"summary": x.title, "description": x.notes, **times(Item(x.title, when=x.start.isoformat()), tz)}
     for e in events:
         if not e.when or (e.until or e.when)[:10] < today.isoformat() or (e.when[:10], e.text.lower()) in seen:
             continue

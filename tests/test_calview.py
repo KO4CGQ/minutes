@@ -498,3 +498,13 @@ def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
     o, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
     log = o.get("/calendar/changes").text
     assert "Fox hunt" in log and "Bob Baker" in log and "Who changed what" in o.get("/calendar").text
+
+
+def test_ohio_election_days_on_community():
+    got = [(e.start.isoformat(), e.title) for e in calview.elections(dt.date(2024, 1, 1), dt.date(2026, 12, 31))]
+    assert got == [("2024-03-19", "Ohio primary election"), ("2024-11-05", "Election Day (Ohio general election)"),  # a presidential year: March
+                   ("2025-05-06", "Ohio primary election"), ("2025-11-04", "Election Day (Ohio general election)"),
+                   ("2026-05-05", "Ohio primary election"), ("2026-11-03", "Election Day (Ohio general election)")]
+    c = club()
+    nov = calview.entries(c, Archive(events.DATA, c), "kd8bbb", *NOV)[0]
+    assert [(e.kind, e.start.day) for e in nov if e.title.startswith("Election Day")] == [("community", 3)]
