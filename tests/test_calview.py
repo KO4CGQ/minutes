@@ -357,14 +357,14 @@ def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
     fd = next(x for x in got if x.title == "Field Day")
     assert (fd.starts, fd.ends) == (dt.datetime(2027, 6, 26, 14, 0), dt.datetime(2027, 6, 27, 16, 59)) and fd.time == "2:00 PM"
     assert fd.zone == "Sat Jun 26 18:00 – Sun Jun 27 20:59 UTC"
-    evs = events.load()  # one date of a series keeps its time zone and calendar: the form says so
+    evs = events.load()  # one date in another time zone or calendar: it leaves the series as its own event
     one = {**v, "start": "2027-06-26T13:00", "end": "2027-06-27T16:59", "tz": None}
-    with pytest.raises(ValueError, match="time zone of a single date"):
-        events.change(evs, evs[0]["id"], "2027-06-26", "events", one, "this")
-    with pytest.raises(ValueError, match="another calendar"):
-        events.change(evs, evs[0]["id"], "2027-06-26", "planning", v, "this")
-    events.change(evs, evs[0]["id"], "2027-06-26", "planning", v, "all")
-    assert evs[0]["cal"] == "planning"
+    events.change(evs, evs[0]["id"], "2027-06-26", "community", one, "this")
+    series, alone = evs
+    assert "2027-06-26" in series["skip"] and series["cal"] == "events" and series["tz"] == "UTC"
+    assert (alone["cal"], alone["tz"], alone["repeat"], alone["start"]) == ("community", None, None, "2027-06-26T13:00")
+    events.change(evs, series["id"], "2028-06-24", "events", {**v, "title": "Field Day!"}, "this")  # same calendar and zone: stays in the series
+    assert len(evs) == 2 and series["changes"]["2028-06-24"]["title"] == "Field Day!"
     # late UTC on the last day of the range is still that day in club time
     late = events.add([], "events", events.from_form({"title": "Late", "date": "2027-07-01", "time": "01:00", "tz": "UTC"}, TZ), "x")
     with events.locked():

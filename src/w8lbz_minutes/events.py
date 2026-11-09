@@ -245,11 +245,13 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
         e.update(cal=cal, **v)
         return
     first = _dt(e["start"]).date().isoformat()
-    if scope == "this":  # one date keeps the series' calendar and time zone
-        if cal != e["cal"]:
-            raise ValueError("To move one date to another calendar, choose This and following dates or Every date.")
-        if "T" in v["start"] and v.get("tz") != e.get("tz"):
-            raise ValueError("Unable to change the time zone of a single date in a series; choose This and following dates or Every date.")
+    if scope == "this":
+        if cal != e["cal"] or ("T" in v["start"] and v.get("tz") != e.get("tz")):
+            # another calendar or time zone: the date leaves the series as an event of its own (as Fastmail and Google do)
+            e.setdefault("skip", []).append(d)
+            e["changes"].pop(d, None)
+            add(evs, cal, {**v, "repeat": None}, e.get("by", ""))
+            return
         e["changes"][d] = {k: v[k] for k in FIELDS}
         return
     # every date (or following from the first date): the series moves by as much as this date moved
