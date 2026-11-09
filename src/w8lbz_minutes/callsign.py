@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import os
 import re
 import secrets
 import sqlite3
@@ -52,6 +53,15 @@ def _write(p: Path, text: str) -> None:
     tmp.replace(p)
 
 
+def _inside(folder: Path, name: str) -> Path:
+    """folder/name, refused unless it really is a file directly in that folder (no "..", no slashes)."""
+    base = os.path.realpath(folder)
+    p = os.path.realpath(os.path.join(base, name))
+    if not p.startswith(base + os.sep) or os.path.dirname(p) != base:
+        raise ValueError(f"{name!r} isn't a plain file name.")
+    return Path(p)
+
+
 def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
     """Rename a member id throughout the data folder. Returns what changed, per kind."""
     data = data or DATA
@@ -86,9 +96,9 @@ def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
                     done["signin rows"] += con.execute(f"update {t} set {c} = ? where {c} = ?", (new, old)).rowcount
         con.close()
     for ext in (".jpg", ".png"):
-        p = data / "avatars" / f"{old}{ext}"
+        p = _inside(data / "avatars", f"{old}{ext}")
         if p.exists():
-            p.rename(p.with_name(f"{new}{ext}"))
+            p.rename(_inside(data / "avatars", f"{new}{ext}"))
             done["pictures"] += 1
     return done
 
@@ -115,7 +125,7 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
     name, blob, _ = backup.make()  # needs the passphrase: no renaming without a way back
     d = DATA / "backups"
     d.mkdir(mode=0o700, exist_ok=True)
-    keep = d / name.replace(".tar.gz.enc", f"-before-{new}.tar.gz.enc")
+    keep = _inside(d, name.replace(".tar.gz.enc", f"-before-{new}.tar.gz.enc"))
     keep.write_bytes(blob)
     keep.chmod(0o600)
 
