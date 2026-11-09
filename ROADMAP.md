@@ -35,7 +35,7 @@ The Google Sheet is the source of truth today; the app writes values back to it 
 
 ### Roster in the app (retire the Google Sheet)
 Nobody uses the sheet directly any more; one other club tool on the same server reads four columns from it (callsign, name, email, officer). Serve that from the app and the app can own the roster outright, with no Google dependency left.
-- **Roster API:** `GET /api/roster`, read-only: active members' callsign, name, email and officer flag. It answers only requests made on the server itself (not through the web proxy) that carry a token kept on the server, outside the repo; every call is logged.
+- **Roster API:** built (`GET /api/roster`). Next: point the other tool at it.
 - **Edit everything in the app:** roster keepers (Secretary, Treasurer) and admins edit what the sheet holds today: name, callsign, email, titles, officer and board, license class, status, aliases, `minutes_editor` / `calendar_editor`, member since and the Membership Log. Members keep editing their own contact details. Every change logged, with undo, as profile changes are now.
 - **Offices:** built (Roster → Offices). Open question: should the Secretary also change offices, not only admins?
 - **Move over once:** import the sheet and its Membership Log tab, show what differs, then turn off the sync and the write-back. The sheet stays as a read-only archive.

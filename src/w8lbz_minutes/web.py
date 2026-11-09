@@ -45,7 +45,8 @@ if not _log.handlers:
 COOKIE = "w8lbz_session"
 CHALLENGE_COOKIE = "w8lbz_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico",
-                "/calendar/public", "/calendar/feed/")  # public calendars (if any are made public); private feeds carry their own secret
+                "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
+                "/api/roster")  # its own token, and only from the server itself
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
 
 
@@ -1811,6 +1812,32 @@ def stats(request: Request, period: str = "", p: str = Query("1", alias="page"),
 @app.get("/guests", response_class=HTMLResponse)
 def guests(request: Request):
     return page(request, "guests.html", guests=archive.guests())
+
+
+@app.get("/api/roster")
+def roster_api(request: Request):
+    """Active members' callsign, name, email and officer tick, for the club's other tools on this server.
+    Only from the server itself, never through the web proxy, with the token in W8LBZ_ROSTER_API_TOKEN
+    (/etc/w8lbz-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
+    import hmac
+    import os
+    want = os.environ.get("W8LBZ_ROSTER_API_TOKEN", "")
+    host = request.client.host if request.client else ""
+    local = host in ("127.0.0.1", "::1") and not any(h in request.headers for h in ("x-forwarded-for", "x-forwarded-proto"))
+    got = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    ok = bool(want) and local and hmac.compare_digest(got.encode(), want.encode())
+    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": m.officer}
+            for m in sorted(archive.club.members.values(), key=lambda m: (m.last, m.first)) if m.status.lower() == "active"] if ok else []
+    p = DATA / "api-log.jsonl"
+    with p.open("a") as f:
+        f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
+                            "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
+    p.chmod(0o600)
+    if not want:
+        raise HTTPException(404)
+    if not ok:
+        raise HTTPException(403, "Not allowed.")
+    return rows
 
 
 @app.get("/api/meetings/{slug}/live", response_class=HTMLResponse)
