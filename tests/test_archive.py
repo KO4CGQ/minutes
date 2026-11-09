@@ -215,6 +215,8 @@ def test_about_page(monkeypatch):
     html = c.get("/about").text
     assert web.version("w8lbz-minutes") in html and "James Flattery, KO4CGQ" in html and "AGPL-3.0-or-later" in html
     assert ">fastapi<" in html.lower() and "What's new" in html
+    folds = html.count("<details")  # one per release, only the newest open
+    assert folds > 3 and html.count("<details open>") == 1 and "<summary><b>0.12.0 (" in html.split("<details open>")[1][:40]
     assert 'href="/about"' in c.get("/links").text  # in the name menu on every page
 
 

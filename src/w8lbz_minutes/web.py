@@ -1461,7 +1461,9 @@ def about(request: Request):
     changelog = None
     if changes.exists():  # show the versions, without the file's own title and intro
         text = re.sub(r"## Unreleased\s*(?=## )", "", changes.read_text())  # hide an empty Unreleased section
-        changelog = Markup(markdown.markdown(text[text.find("\n## "):]))
+        # one (version, notes) per release, newest first; the page folds all but the latest
+        changelog = [(head.strip(), Markup(markdown.markdown(body)))
+                     for head, _, body in (s.partition("\n") for s in text.split("\n## ")[1:])]
     return page(request, "about.html", deps=dependencies(), changelog=changelog, license=_license("w8lbz-minutes"))
 
 

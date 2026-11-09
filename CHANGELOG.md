@@ -37,6 +37,8 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Security:** a roster keeper can no longer change an admin's email (it's how admins sign in and confirm admin mode); that needs an admin in admin mode. Over HTTPS the app now sends `Strict-Transport-Security` (browsers refuse a plain-HTTP connection to the hostname) and `Cross-Origin-Opener-Policy`. FastAPI's automatic API pages (`/docs`, `/redoc`, `/openapi.json`) are off. Checked: `pip-audit` finds no known-vulnerable packages.
 
 
+### Other
+- **About page:** each release's notes fold up, with only the newest open; long commands in them scroll on a phone instead of widening the page.
 ## 0.11.0 (2026-11-08)
 ### Security
 - **Fix: search and the leader console could run script typed into the minutes.** Text with HTML in it (a business item, say, which any member can add) was shown as HTML in search results, and could end the leader console's data early. Both are escaped now. Found by testing; no sign it was used.
