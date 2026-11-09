@@ -3,21 +3,21 @@
 <p class="muted">What the Treasurer recorded as paid over the last 12 months, by category. Members' dues are never shown here.</p>
 {% if preview %}<p class="msg ok">Preview: only officers see this page until the Treasurer turns tracking on.</p>{% endif %}
 {% if sp.total %}{% set ks = cats.keys()|list %}
-{% if sp.per_member_month %}<p><b>{{ money(sp.per_member_month) }}</b> a month per member <span class="muted">to run the club, on average over 12 months ({{ sp.members }} member{{ "s" if sp.members != 1 }}). Dues bring in {{ money(sp.dues_month) }} a month per member.</span></p>{% endif %}
+{% if sp.per_member_month %}<p><b>{{ money(sp.per_member_month) }}</b> a month per member <span class="muted">to run the club, on average over 12 months ({{ sp.members }} member{{ "s" if sp.members != 1 }}). Dues bring in {{ money(sp.dues_month) }} a month per member ({{ money(sp.dues_week) }} a week × 52 weeks ÷ 12 months).</span></p>{% endif %}
 {% set step = [((sp.top / 100 / 4) // 50 + 1) * 50, 50]|max|int %}{% set ymax = step * 4 %}
 <figure class="chart wide-axis" role="img" aria-label="Spending per month over the last 12 months, as stacked bars by category. The same numbers are in the table below.">
-  <div class="legend">{% for k in ks %}<span><i class="k{{ loop.index }}"></i>{{ cats[k] }}</span>{% endfor %}</div>
+  <div class="legend">{% for k in ks %}<span><i class="k{{ colour[k] }}"></i>{{ cats[k] }}</span>{% endfor %}</div>
   <div class="plot">
     {% for t in range(0, ymax + 1, step) %}<div class="grid" style="bottom: {{ t / ymax * 100 }}%"><span>${{ '{:,}'.format(t) }}</span></div>{% endfor %}
     <div class="bars">{% for r in sp.months %}<span class="bar" tabindex="0" style="height: {{ r.total / 100 / ymax * 100 }}%"
       title="{{ month(r.month) }}: {{ money(r.total) }}{% for k in ks if r.by[k] %}, {{ cats[k]|lower }} {{ money(r.by[k]) }}{% endfor %}">
-      {% for k in ks|reverse if r.by[k] %}<i class="k{{ ks.index(k) + 1 }}" style="flex-grow: {{ r.by[k] }}"></i>{% endfor %}</span>{% endfor %}</div>
+      {% for k in ks|reverse if r.by[k] %}<i class="k{{ colour[k] }}" style="flex-grow: {{ r.by[k] }}"></i>{% endfor %}</span>{% endfor %}</div>
   </div>
   <figcaption><span>{{ month(sp.months[0].month) }}</span><span>{{ month(sp.months[-1].month) }}</span></figcaption>
 </figure>
 <section><h2>12 months by category</h2>
 <table class="list"><thead><tr><th>Category</th><th class="n">Total</th></tr></thead>
-<tbody>{% for k in ks %}<tr><td><i class="swatch k{{ loop.index }}"></i>{{ cats[k] }}</td><td class="n" data-sort="{{ sp.totals[k] }}">{{ money(sp.totals[k]) if sp.totals[k] else '' }}</td></tr>{% endfor %}
+<tbody>{% for k in ks %}<tr><td><i class="swatch k{{ colour[k] }}"></i>{{ cats[k] }}</td><td class="n" data-sort="{{ sp.totals[k] }}">{{ money(sp.totals[k]) if sp.totals[k] else '' }}</td></tr>{% endfor %}
 <tr><td><b>All</b></td><td class="n"><b>{{ money(sp.total) }}</b></td></tr></tbody></table></section>
 <section><h2>By month</h2>
 <table class="list"><thead><tr><th>Month</th>{% for k in ks %}<th class="n opt">{{ cats[k] }}</th>{% endfor %}<th class="n">Total</th><th class="n">Per member</th></tr></thead>

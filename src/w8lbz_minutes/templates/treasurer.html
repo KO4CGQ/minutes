@@ -40,7 +40,7 @@
   </div>
   <label>Note<input name="note" maxlength="300" placeholder="e.g. cash at the meeting, or check 1042"></label>
   {% if edit %}<p class="hint">Enter what was paid and the date. The app works out which weeks it covers, and anyone paid ahead shows as "paid through" a date.</p>{% endif %}
-  {% if edit %}<p class="hint"><b>Adjustment:</b> adds to what a member owes, such as a balance from before the app; enter a minus amount to take some off, such as for a night with no meeting. <b>Other income:</b> money that didn't come from a member, such as drink sales or a donation.</p>{% endif %}
+  {% if edit %}<p class="hint"><b>Adjustment:</b> adds to what a member owes, such as a balance from before the app; enter a minus amount to take some off, such as a charge made by mistake. <b>Other income:</b> money that didn't come from a member, such as drink sales or a donation.</p>{% endif %}
   <div class="formrow"><button class="btn small">Record</button></div>
 </form>{% endif %}
 <table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th></tr></thead>
@@ -78,13 +78,22 @@
   {% for r in regular_all %}<form method="post" action="/treasurer/regular/{{ r.id }}/remove" class="inline" data-confirm="Stop expecting {{ r.payee }}? Payments already recorded stay."><button class="linkbtn">Remove {{ r.payee }}</button></form> {% endfor %}
 </details>{% endif %}
 <h2>Read at meetings</h2>
-<p class="hint">Amounts read under Bills and Communications (one card each; the one meant is in ⟨ ⟩){% if cfg.start %}, since {{ fmt(cfg.start) }}{% endif %}. Mark each one paid (it becomes an expense) or not a bill.</p>
-<div class="cards">{% for b in bills %}<article class="card{{ ' done' if b.status != 'waiting' }}">
-  <div class="card-text">{{ b.text|replace(b.amount, '⟨' ~ b.amount ~ '⟩') }}</div>
+{% set waiting = bills|selectattr('status', 'equalto', 'waiting')|list %}
+<p class="hint">Each amount read under Bills and Communications{% if bills_from %} since {{ bills_from|isodate }}{% endif %} gets its own card; a bullet with several amounts is split. Nothing counts until you mark it paid (it becomes an expense) or not a bill.</p>
+{% if edit and cfg.start %}<details class="card"><summary>{% if bills_from and bills_from < cfg.start %}Reading minutes from {{ bills_from|isodate }}, before tracking started{% else %}Look in older minutes{% endif %}</summary>
+  <form method="post" action="/treasurer/bills/from" class="modern"><p class="hint">Bills read before {{ cfg.start|isodate }} aren't listed unless you ask: pick how far back to look. Going back to the start date hides the older ones again; any you already marked paid stay recorded.</p>
+    <div class="formrow"><label>Read bills from<input type="date" name="date" max="{{ cfg.start }}" value="{{ bills_from if bills_from and bills_from < cfg.start else '' }}"></label>
+      <button class="btn small">Look back</button></div></form>
+  {% if bills_from and bills_from < cfg.start %}<form method="post" action="/treasurer/bills/from" class="inline"><button class="btn small ghost">Back to {{ cfg.start|isodate }} only</button></form>{% endif %}
+</details>{% endif %}
+<nav class="tabs small"><a href="/treasurer?tab=bills" class="{{ 'on' if waiting_only }}">Waiting ({{ waiting|length }})</a><a href="/treasurer?tab=bills&everyone=1" class="{{ 'on' if not waiting_only }}">All ({{ bills|length }})</a></nav>
+<div class="cards">{% for b in bills if not waiting_only or b.status == 'waiting' %}<article class="card{{ ' done' if b.status != 'waiting' }}">
+  {% if b.split %}<div class="card-text">{{ b.label }}: {{ money(b.cents) }}</div><div class="muted small">Part of “{{ b.text }}”</div>
+  {% else %}<div class="card-text">{{ b.text }}</div>{% endif %}
   <div class="card-meta"><span class="chip"><a href="/meetings/{{ b.meeting }}">{{ fmt(b.meeting) }}</a></span><span class="chip">{{ money(b.cents) }}</span>{% if b.repeated %}<span class="chip warn" title="The same words as the week before: copied forward?">same as last week</span>{% endif %}
     <span class="chip{{ ' warn' if b.status == 'waiting' }}">{{ {'waiting': 'waiting', 'paid': 'paid', 'dismissed': 'not a bill'}[b.status] }}</span></div>
   {% if edit and b.status == 'waiting' %}<form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="expense"><input type="hidden" name="bill" value="{{ b.key }}">
-    <input type="hidden" name="note" value="{{ b.text[:300] }}">
+    <input type="hidden" name="note" value="{{ (b.label if b.split else b.text)[:300] }}">
     <div class="formrow"><label>Paid<input name="amount" inputmode="decimal" required value="{{ '%d.%02d'|format(b.cents // 100, b.cents % 100) }}"></label>
       <label>On<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
       <label>From<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
@@ -93,7 +102,7 @@
       <button class="btn small">Mark paid</button></div></form>
   <form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><button class="btn small ghost">Not a bill</button></form>
   {% elif edit and b.status == 'dismissed' %}<form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><input type="hidden" name="undo" value="1"><button class="linkbtn">Undo</button></form>{% endif %}
-</article>{% else %}<p class="muted">No bills with amounts yet.</p>{% endfor %}</div>
+</article>{% else %}<p class="muted">{{ 'Nothing waiting.' if waiting_only else 'No bills with amounts yet.' }}</p>{% endfor %}</div>
 
 {% elif tab == 'settings' %}
 {% set ro = '' if edit else 'disabled' %}
@@ -129,6 +138,16 @@
     <label>New account<input name="name" required maxlength="60" placeholder="e.g. Emergency Fund"></label><button class="btn small">Add</button></div></form>
   <form method="post" action="/treasurer/settings/account" class="modern"><input type="hidden" name="remove" value="1"><div class="formrow">
     <label>Remove an unused account<select name="name">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label><button class="btn small ghost">Remove</button></div></form>{% endif %}
+</div>
+
+<div class="card"><h2>Spending categories</h2>
+  <p class="hint">What the Spending page groups expenses by ({{ 8 }} at most, one colour each). Renaming keeps every expense in it; removing one moves its expenses to Other.</p>
+  {% for k, v in cats.items() %}{% if edit %}<form method="post" action="/treasurer/settings/category" class="modern"><input type="hidden" name="key" value="{{ k }}">
+    <div class="formrow"><label>{{ 'Category' if loop.first else '' }}<input name="label" value="{{ v }}" maxlength="40" required aria-label="Name of {{ v }}"></label><button class="btn small ghost">Rename</button>
+    {% if k != 'other' %}<button class="btn small ghost" name="remove" value="1" data-confirm="Remove {{ v }}? Its expenses move to Other.">Remove</button>{% endif %}</div></form>
+  {% else %}<p>{{ v }}</p>{% endif %}{% endfor %}
+  {% if edit and cats|length < 8 %}<form method="post" action="/treasurer/settings/category" class="modern"><div class="formrow">
+    <label>New category<input name="label" required maxlength="40" placeholder="e.g. Repeater"></label><button class="btn small">Add</button></div></form>{% endif %}
 </div>
 
 <div class="card"><h2>Funds</h2>

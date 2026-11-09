@@ -41,6 +41,7 @@ LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow c
           "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
 RATES = {"dues_weekly": "Dues, each meeting night", "initiation": "Initiation fee", "certificate": BOND, "missed_chow": "Missed chow night"}
 # Where the club's money goes, for the Spending page; each expense has one (guessed from its words, the Treasurer can change it).
+MAX_CATEGORIES = 8  # the chart's tested colours; a ninth would need a colour nobody checked
 CATEGORIES = {"utilities": "Utilities", "insurance": "Insurance", "internet": "Internet and phone", "food": "Food",
               "equipment": "Equipment and supplies", "other": "Other"}
 GUESSES = (("utilities", r"\bgas\b|\belec|edison|water|sewer"), ("insurance", r"insur"),
@@ -50,7 +51,7 @@ MODES = {"off": "Off", "preview": "Preview: officers only", "on": "On: members s
 # the bylaws (VII); amounts in cents, each a list of {from, cents} so a change takes effect on a date
 DEFAULTS = {"mode": "off", "start": None, "certificate_years": 2, "arrears_weeks": 4, "alerts": False,
             "rates": {"dues_weekly": 350, "initiation": 2500, "certificate": 10000, "missed_chow": 3500},
-            "accounts": ["Checking", "Cash"], "funds": []}
+            "accounts": ["Checking", "Cash"], "funds": [], "categories": [{"key": k, "label": v, "slot": n} for n, (k, v) in enumerate(CATEGORIES.items(), 1)]}
 AMOUNTS = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)|(?<![\d$.,])(\d{1,5}\.\d{2})\b")  # "$81", "$1,200.50", "Electric 50.64"
 
 
@@ -77,9 +78,21 @@ def rate(c: dict, kind: str, day: str) -> int:
     return ([x for x in steps if x["from"] <= day] or steps[:1])[-1]["cents"]
 
 
-def guess(text: str) -> str:
-    """The likely category from a bill's words: "Gas Bill $81" -> utilities. Other when nothing matches."""
-    return next((c for c, pat in GUESSES if re.search(pat, text, re.I)), "other")
+def categories(s: dict) -> dict[str, str]:
+    """The Treasurer's categories, key -> name, in order. Other is always there (it catches the rest)."""
+    return {c["key"]: c["label"] for c in config(s)["categories"]}
+
+
+def colours(s: dict) -> dict[str, int]:
+    """Each category's chart colour (1-8), kept for good: removing one never repaints the others."""
+    return {c["key"]: c.get("slot", n) for n, c in enumerate(config(s)["categories"], 1)}
+
+
+def guess(text: str, s: dict | None = None) -> str:
+    """The likely category from a bill's words: "Gas Bill $81" -> utilities. Other when nothing matches, or when the
+    Treasurer removed the one it would be."""
+    c = next((c for c, pat in GUESSES if re.search(pat, text, re.I)), "other")
+    return c if s is None or c in categories(s) else "other"
 
 
 def kept_accounts(club: Club, s: dict, mid: str | None) -> list[str]:
@@ -166,7 +179,7 @@ def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, acco
     if on_file:
         e["on_file"] = True
     if kind == "expense":
-        e["category"] = category if category in CATEGORIES else guess(note)
+        e["category"] = category if category in categories(s) else guess(note, s)
     if regular:
         if kind != "expense" or not any(r["id"] == regular for r in s["regular"]):
             raise ValueError("That regular bill is gone.")
@@ -229,8 +242,23 @@ def regular_due(s: dict, today: dt.date) -> list[dict]:
     return sorted(out, key=lambda r: (bool(r["paid"]), r["payee"].lower()))
 
 
+def bills_from(s: dict) -> str | None:
+    """How far back the Bills tab reads the minutes: the start date, unless the Treasurer chose to look further back."""
+    c = config(s)
+    return c.get("bills_from") or c["start"]
+
+
+def set_bills_from(s: dict, by: str, date: str | None) -> None:
+    """Read bills from older minutes (a date before the start), or None to go back to the start date. Bills already
+    marked paid or not a bill keep that either way."""
+    if date:
+        dt.date.fromisoformat(date)
+    _settings(s)["bills_from"] = date or None
+    _log("bills from", by, date=date)
+
+
 def bills(archive, s: dict, start: str | None) -> list[dict]:
-    """Each amount read under "Bills and Communications" since tracking started, newest first. One bullet often
+    """Each amount read under "Bills and Communications" since `start` (see bills_from), newest first. One bullet often
     holds several ("$99 gas bill $35 Raffle tickets"), each its own bill; a bullet word for word the same as the
     week before is marked `repeated` (copied forward, most likely)."""
     out, ms = [], [m for m in archive.meetings if m.status != "draft"]  # newest first
@@ -248,8 +276,10 @@ def bills(archive, s: dict, start: str | None) -> list[dict]:
                 after = it.text[found.end():found_all[n + 1].start() if n + 1 < len(found_all) else None]
                 before = it.text[found_all[n - 1].end() if n else 0:found.start()]
                 label, other = (after, before) if found_all[0].start() == 0 else (before, after)
-                cat = guess(label if re.search(r"[a-z]", label, re.I) else other)
+                label = label if re.search(r"[a-z]", label, re.I) else other
+                cat = guess(label, s)
                 out.append({"key": key, "meeting": m.slug, "text": it.text, "amount": found.group(0), "category": cat,
+                            "label": label.strip(" ,.;:-–/") or it.text, "split": len(found_all) > 1,
                             "cents": cents(found.group(1) or found.group(2)), "repeated": it.text in last_week,
                             **s["bills"].get(key, {"status": "waiting"})})
     return out
@@ -257,7 +287,7 @@ def bills(archive, s: dict, start: str | None) -> list[dict]:
 
 def set_category(s: dict, eid: str, category: str, by: str) -> None:
     e = next((x for x in s["entries"] if x["id"] == eid and x["kind"] == "expense"), None)
-    if not e or category not in CATEGORIES:
+    if not e or category not in categories(s):
         raise ValueError("Pick a category for an expense.")
     e["category"] = category
     _log("category", by, entry=eid, category=category)
@@ -294,11 +324,13 @@ def spending(s: dict, today: dt.date, months: int = 12, club: Club | None = None
     for _ in range(months):
         keys.insert(0, d.strftime("%Y-%m"))
         d = (d - dt.timedelta(days=1)).replace(day=1)
-    rows = {k: {c: 0 for c in CATEGORIES} for k in keys}
+    cats = categories(s)
+    rows = {k: {c: 0 for c in cats} for k in keys}
     for e in s["entries"]:
         if e["kind"] == "expense" and e["date"][:7] in rows:
-            rows[e["date"][:7]][e.get("category") or guess(e.get("note") or "")] += e["cents"]
-    totals = {c: sum(r[c] for r in rows.values()) for c in CATEGORIES}
+            c = e.get("category") if e.get("category") in cats else guess(e.get("note") or "", s)
+            rows[e["date"][:7]][c] += e["cents"]
+    totals = {c: sum(r[c] for r in rows.values()) for c in cats}
     out = {"months": [{"month": k, "by": r, "total": sum(r.values())} for k, r in rows.items()], "totals": totals,
            "total": sum(totals.values()), "top": max([sum(r.values()) for r in rows.values()] + [0])}
     if club:
@@ -311,7 +343,8 @@ def spending(s: dict, today: dt.date, months: int = 12, club: Club | None = None
         out["members"] = round(avg)
         out["per_member_year"] = round(out["total"] / avg) if avg else None  # one member's share of the 12 months
         out["per_member_month"] = round(out["total"] / avg / months) if avg else None  # a month's cost per member, on average
-        out["dues_month"] = rate(config(s), "dues_weekly", today.isoformat()) * 52 // 12  # what dues bring in a month, per member
+        out["dues_week"] = rate(config(s), "dues_weekly", today.isoformat())
+        out["dues_month"] = out["dues_week"] * 52 // 12  # what dues bring in a month, per member
     return out
 
 
@@ -361,7 +394,7 @@ def standings(club: Club, s: dict, today: dt.date | None = None) -> list[dict]:
 
 def _settings(s: dict) -> dict:
     s.setdefault("settings", {})
-    for k in ("rates", "accounts", "funds"):  # copy the defaults in before changing them
+    for k in ("rates", "accounts", "funds", "categories"):  # copy the defaults in before changing them
         s["settings"].setdefault(k, config(s)[k])
     return s["settings"]
 
@@ -426,6 +459,42 @@ def set_fund(s: dict, by: str, name: str, account: str, keepers: list[str]) -> N
         raise ValueError("Give the fund a name and pick its account (add the account first).")
     s["settings"]["funds"] = [f for f in s["settings"]["funds"] if f["name"] != name] + [{"name": name, "account": account, "keepers": keepers}]
     _log("fund", by, name=name, account=account, keepers=keepers)
+
+
+def add_category(s: dict, by: str, label: str) -> None:
+    label = " ".join(label.split())[:40]
+    cats = _settings(s)["categories"]
+    if not label or label.lower() in {c["label"].lower() for c in cats}:
+        raise ValueError("Give the category a new name.")
+    if len(cats) >= MAX_CATEGORIES:
+        raise ValueError(f"{MAX_CATEGORIES} categories at most (the chart has a colour for each): merge two first.")
+    key = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "c"
+    while key in {c["key"] for c in cats}:
+        key += "-2"
+    free = min(set(range(1, MAX_CATEGORIES + 1)) - set(colours(s).values()))
+    cats.insert(len(cats) - 1, {"key": key, "label": label, "slot": free})  # Other stays last
+    _log("add category", by, key=key, label=label)
+
+
+def rename_category(s: dict, by: str, key: str, label: str) -> None:
+    label = " ".join(label.split())[:40]
+    c = next((c for c in _settings(s)["categories"] if c["key"] == key), None)
+    if not c or not label or label.lower() in {x["label"].lower() for x in s["settings"]["categories"] if x is not c}:
+        raise ValueError("Give the category a new name.")
+    _log("rename category", by, key=key, old=c["label"], label=label)
+    c["label"] = label
+
+
+def remove_category(s: dict, by: str, key: str) -> int:
+    """Its expenses move to Other (nothing is lost); Other itself stays. Returns how many moved."""
+    if key == "other":
+        raise ValueError("Other stays: it catches whatever fits nowhere else.")
+    s["settings"]["categories"] = [c for c in _settings(s)["categories"] if c["key"] != key]
+    moved = [e for e in s["entries"] if e.get("category") == key]
+    for e in moved:
+        e["category"] = "other"
+    _log("remove category", by, key=key, moved=len(moved))
+    return len(moved)
 
 
 def remove_fund(s: dict, by: str, name: str) -> None:

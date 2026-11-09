@@ -657,8 +657,9 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                 owing=sum(1 for x in standings if x["owed"] > 0 or x["certificate_late"]), error=error, cfg=c, edit=edit, full=full, kept=kept, members=members, running=running,
                 standings=standings,
                 entries=sorted(entries, key=lambda e: (e["date"], e["at"]), reverse=True),
-                bills=treasurer.bills(archive, s, c["start"]) if full and running else [], regular=treasurer.regular_due(s, dt.date.today()),
-                regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.CATEGORIES, guess=treasurer.guess, modes=treasurer.MODES, rates=treasurer.RATES, bond=treasurer.BOND,
+                bills=treasurer.bills(archive, s, treasurer.bills_from(s)) if full and running else [], bills_from=treasurer.bills_from(s),
+                waiting_only=not everyone, regular=treasurer.regular_due(s, dt.date.today()),
+                regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=treasurer.RATES, bond=treasurer.BOND,
                 labels=treasurer.LABELS, kinds=treasurer.KINDS if edit else treasurer.NO_MEMBER, accounts=c["accounts"] if edit else kept,
                 rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
@@ -713,13 +714,20 @@ def spending_page(request: Request, mid: str = Depends(me)):
     s = treasurer.load()
     if not spending_visible(request, s):
         raise HTTPException(404)
-    return page(request, "spending.html", sp=treasurer.spending(s, dt.date.today(), club=archive.club), cats=treasurer.CATEGORIES, money=treasurer.money,
+    return page(request, "spending.html", sp=treasurer.spending(s, dt.date.today(), club=archive.club), colour=(c := treasurer.colours(s)),
+                # in colour order, so the bands that touch in a bar are the neighbours the palette was checked for
+                cats=dict(sorted(treasurer.categories(s).items(), key=lambda kv: c[kv[0]])), money=treasurer.money,
                 preview=not treasurer.members_see(s), month=lambda k: dt.date.fromisoformat(k + "-01").strftime("%b %Y"))
 
 
 @app.post("/treasurer/bills/dismiss")
 def treasurer_dismiss(key: str = Form(...), undo: int = Form(0), mid: str = Depends(treasurer_only)):
     return money_change(lambda s: treasurer.dismiss_bill(s, key, mid, bool(undo)), "bills")
+
+
+@app.post("/treasurer/bills/from")
+def treasurer_bills_from(date: str = Form(""), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.set_bills_from(s, mid, date or None), "bills")
 
 
 @app.post("/treasurer/regular")
@@ -749,6 +757,18 @@ def treasurer_rate(kind: str = Form(...), start: str = Form(...), amount: str = 
 @app.post("/treasurer/settings/account")
 def treasurer_account(name: str = Form(...), remove: int = Form(0), mid: str = Depends(treasurer_only)):
     return money_change(lambda s: treasurer.remove_account(s, mid, name) if remove else treasurer.add_account(s, mid, name), "settings")
+
+
+@app.post("/treasurer/settings/category")
+def treasurer_category_settings(key: str = Form(""), label: str = Form(""), remove: int = Form(0), mid: str = Depends(treasurer_only)):
+    def run(s):
+        if remove:
+            treasurer.remove_category(s, mid, key)
+        elif key:
+            treasurer.rename_category(s, mid, key, label)
+        else:
+            treasurer.add_category(s, mid, label)
+    return money_change(run, "settings")
 
 
 @app.post("/treasurer/settings/fund")

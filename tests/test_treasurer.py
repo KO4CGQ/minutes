@@ -319,3 +319,37 @@ def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, 
     table = lambda html: html.split("<tbody>")[1].split("</tbody>")[0]
     assert "Pat Prez" not in table(owe) and "Pat Prez" in table(everyone)
     assert "everyday name for the Certificate of Indebtedness" in owe and "Thu" not in owe.split("Record a bond bought before")[1][:20]
+
+
+def test_the_treasurer_manages_categories_and_colours_stay_put(club):
+    s = started()
+    treasurer.add_category(s, "tre", "Repeater")
+    e = treasurer.record(club, s, "tre", "expense", "40", "2026-11-12", "Checking", note="duplexer", category="repeater")
+    treasurer.rename_category(s, "tre", "repeater", "Repeater site")
+    assert list(treasurer.categories(s))[-2:] == ["repeater", "other"] and treasurer.categories(s)["repeater"] == "Repeater site"
+    before = treasurer.colours(s)
+    assert treasurer.remove_category(s, "tre", "insurance") == 0
+    after = treasurer.colours(s)
+    assert after["repeater"] == before["repeater"] == 7 and after["food"] == before["food"]  # no repainting
+    assert treasurer.guess("Paid insurance", s) == "other"  # its guess falls back once it's gone
+    assert treasurer.remove_category(s, "tre", "repeater") == 1 and e["category"] == "other"
+    with pytest.raises(ValueError):
+        treasurer.remove_category(s, "tre", "other")
+    treasurer.add_category(s, "tre", "Antennas")
+    assert treasurer.colours(s)["antennas"] == 2  # the lowest colour free
+    treasurer.add_category(s, "tre", "Field Day")
+    treasurer.add_category(s, "tre", "Awards")
+    with pytest.raises(ValueError):
+        treasurer.add_category(s, "tre", "Ninth")
+
+
+def test_bills_from_older_minutes_only_when_asked(club, tmp_path):
+    for d, items in ((dt.date(2026, 10, 29), [Item("Water bill $40")]), (dt.date(2026, 11, 5), [Item("Pizza bill for fox hunt $10, Gas Bill $81")])):
+        Meeting(date=d, status="published", sections={"Bills and Communications": items}).save(tmp_path / "m")
+    archive, s = Archive(tmp_path / "m", club), started()
+    bills = treasurer.bills(archive, s, treasurer.bills_from(s))
+    assert [(b["label"], b["cents"], b["split"]) for b in bills] == [("Pizza bill for fox hunt", 1000, True), ("Gas Bill", 8100, True)]
+    treasurer.set_bills_from(s, "tre", "2026-10-01")
+    assert len(treasurer.bills(archive, s, treasurer.bills_from(s))) == 3
+    treasurer.set_bills_from(s, "tre", None)  # undo
+    assert len(treasurer.bills(archive, s, treasurer.bills_from(s))) == 2

@@ -192,7 +192,7 @@ def paid_since(archive: Archive, date: dt.date) -> list[str]:
         return []
     prev = previous(archive, date)
     lo = prev.date.isoformat() if prev else (date - dt.timedelta(days=7)).isoformat()
-    return [f"Paid {treasurer.money(e['cents'])}: {e['note'] or treasurer.CATEGORIES.get(e.get('category'), 'expense')}"
+    return [f"Paid {treasurer.money(e['cents'])}: {e['note'] or treasurer.categories(s).get(e.get('category'), 'expense')}"
             for e in sorted(s["entries"], key=lambda e: e["date"]) if e["kind"] == "expense" and lo < e["date"] <= date.isoformat()]
 
 
