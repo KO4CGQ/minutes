@@ -3,13 +3,13 @@
 <p class="muted">Dues, fees and the club's bills (bylaws VII). Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
 <nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills')) %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-{% if not cfg.start %}<p class="msg err">Nothing is tracked yet: an admin sets the date tracking starts, <code>treasurer: {start: YYYY-MM-DD}</code> under <code>club:</code> in club.yaml (README → Treasurer).</p>{% endif %}
+{% if not cfg.start %}<p class="msg err">The Treasurer pages aren't turned on yet: nothing is owed until the date tracking starts is set in the server's club.yaml (<code>treasurer:</code> → <code>start: YYYY-MM-DD</code>, under <code>club:</code>). To turn them on, ask {{ admins or 'an admin' }}.</p>{% endif %}
 
 {% if tab == 'standing' %}
-<p class="hint">Dues are {{ money(cents(cfg.dues_weekly)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(cents(cfg.missed_chow)) }} for each missed chow night and the {{ money(cents(cfg.initiation)) }} initiation fee for new members. Four weeks or more behind is in red.</p>
+<p class="hint">Dues are {{ money(at(cfg.dues_weekly, today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(at(cfg.missed_chow, today)) }} for each missed chow night and the {{ money(at(cfg.initiation, today)) }} initiation fee for new members. Four weeks or more behind is in red.</p>
 <table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th><th class="n opt">Missed chow</th><th>Certificate</th></tr></thead>
 <tbody>{% for x in standings %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a></td>
-  <td class="n" data-sort="{{ x.owed }}">{{ money(x.owed) if x.owed else '—' }}</td><td class="n">{{ x.weeks_behind or '' }}</td>
+  <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.weeks_behind or '' }}</td>
   <td class="n opt">{{ x.missed_chow|length or '' }}</td>
   <td>{% if x.certificate %}bought{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td></tr>
 {% else %}<tr><td colspan="5" class="muted">No one yet.</td></tr>{% endfor %}</tbody></table>

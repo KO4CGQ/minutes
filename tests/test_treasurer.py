@@ -50,6 +50,22 @@ def test_standing_dues_by_the_week_chow_fees_and_payments(club):
     assert treasurer.standing(club, s, "old", today, {}) is None
 
 
+def test_amounts_that_change_and_paying_ahead(club):
+    club.info["treasurer"].update(dues_weekly=[{"from": "2026-01-01", "amount": 3.50}, {"from": "2026-11-19", "amount": 4}],
+                                  certificate=[{"from": "2000-01-01", "amount": 100}, {"from": "2026-11-10", "amount": 150}])
+    s, today = treasurer.load(), dt.date(2026, 12, 3)
+    amy = treasurer.standing(club, s, "amy", today, {})
+    assert amy["owed"] == 2 * 350 + 3 * 400  # Nov 5 and 12 at the old rate, Nov 19 on at the new
+    treasurer.record(club, s, "tre", "certificate", "100", "2021-01-07", "Checking", "amy")  # bought before the rise: still good
+    treasurer.record(club, s, "tre", "dues", "19", "2026-12-03", "Cash", "amy")
+    treasurer.record(club, s, "tre", "dues", "50", "2026-12-03", "Cash", "amy")  # a few months ahead
+    amy = treasurer.standing(club, s, "amy", today, {})
+    assert amy["certificate"] and amy["owed"] == -5000 and amy["paid_through"] == "2027-02-25"  # 12 nights of $4: Dec 10 … Feb 25
+    bob = treasurer.standing(club, s, "bob", today, {})
+    assert bob["certificate_due"] == "2028-11-12"  # joined after the rise: owes $150, nothing bought
+    assert treasurer.at(club.info["treasurer"]["dues_weekly"], "1999-01-01") == 350  # before the first step: the first
+
+
 def test_nothing_is_owed_until_tracking_starts(club):
     club.info["treasurer"] = {}
     assert treasurer.standing(club, treasurer.load(), "amy", dt.date(2026, 12, 3), {}) is None
@@ -104,3 +120,6 @@ def test_officers_look_the_treasurer_records_members_see_their_own(club, tmp_pat
     assert "Record</button>" not in pres.get("/treasurer?tab=money").text and "Amy Able" in pres.get("/treasurer?tab=money").text
     assert "Record</button>" in tre.get("/treasurer?tab=money").text
     assert "Your dues" in amy.get("/").text
+    c.info["treasurer"] = {}
+    c.admins = {"pres"}
+    assert "ask Pat Prez" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text

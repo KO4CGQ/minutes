@@ -11,7 +11,8 @@ State lives in treasurer.json in the data directory; every change is appended to
 
 What a member owes is worked out, never stored: $3.50 for each meeting night since tracking started (or since
 they joined), the initiation fee if they joined since then, $35 for each chow night marked missed, plus
-adjustments, minus payments. Amounts come from `treasurer:` under `club:` in club.yaml, the bylaws' by default.
+adjustments, minus payments. Paying ahead (monthly, yearly) shows as "paid through" a date. Amounts come from
+`treasurer:` under `club:` in club.yaml, the bylaws' by default; each can be a dated list when the bylaws change it.
 """
 from __future__ import annotations
 
@@ -51,6 +52,15 @@ def cents(v) -> int:
     whole, _, frac = s.lstrip("-").partition(".")
     n = int(whole) * 100 + int((frac + "00")[:2])
     return -n if s.startswith("-") else n
+
+
+def at(v, day: str) -> int:
+    """An amount from the config, in cents: a number, or a list of `{from: YYYY-MM-DD, amount: N}` when the bylaws
+    change it (the amount in effect on that day; before the first `from`, the first amount)."""
+    if isinstance(v, list):
+        steps = sorted(v, key=lambda x: str(x["from"]))
+        v = ([x for x in steps if str(x["from"]) <= day] or steps[:1])[-1]["amount"]
+    return cents(v)
 
 
 def money(c: int) -> str:
@@ -147,25 +157,29 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     m = club.members.get(mid)
     if not c["start"] or not m or m.status.lower() in ("inactive", "silent key"):
         return None
-    start = max(c["start"], m.member_since or "")
-    weekly = cents(c["dues_weekly"])
-    # shortcut: every meeting night accrues dues, holidays included; record an adjustment (a credit) for a night off
-    weeks = len(chow.meeting_nights(club, dt.date.fromisoformat(start), today))
+    start, joined = max(c["start"], m.member_since or ""), m.member_since or c["start"]
+    weekly = at(c["dues_weekly"], today.isoformat())
+    # Every meeting night accrues dues, holidays included: 52 x $3.50 is the bylaws' $182 a year.
+    nights_owed = chow.meeting_nights(club, dt.date.fromisoformat(start), today)
     missed = sorted(d for d, x in (nights if nights is not None else chow.load()["nights"]).items()
                     if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat())
     mine = [e for e in s["entries"] if e["member"] == mid]
-    charged = (weeks * weekly + len(missed) * cents(c["missed_chow"])
-               + (cents(c["initiation"]) if m.member_since and m.member_since >= c["start"] else 0)
+    charged = (sum(at(c["dues_weekly"], d.isoformat()) for d in nights_owed) + sum(at(c["missed_chow"], d) for d in missed)
+               + (at(c["initiation"], joined) if m.member_since and m.member_since >= c["start"] else 0)
                + sum(e["cents"] for e in mine if e["kind"] == "adjustment"))
     paid = sum(e["cents"] for e in mine if e["kind"] in PAYMENTS and e["kind"] != "certificate")
     owed = charged - paid
-    cert = sum(e["cents"] for e in mine if e["kind"] == "certificate") >= cents(c["certificate"])
+    # the certificate's price when they joined: a later rise doesn't ask existing holders for more
+    cert = sum(e["cents"] for e in mine if e["kind"] == "certificate") >= at(c["certificate"], joined)
     cert_due = None
     if not cert and m.member_since:
         j = dt.date.fromisoformat(m.member_since)
         cert_due = j.replace(year=j.year + int(c["certificate_years"]), day=28 if (j.month, j.day) == (2, 29) else j.day)
+    ahead = -owed // weekly if owed < 0 else 0  # whole meeting nights already paid for (monthly or yearly payers)
+    later = chow.meeting_nights(club, today + dt.timedelta(days=1), today + dt.timedelta(weeks=ahead + 1))
     return {"member": mid, "owed": owed, "weeks_behind": -(-owed // weekly) if owed > 0 else 0,
             "behind": owed >= int(c["arrears_weeks"]) * weekly, "missed_chow": missed, "certificate": cert,
+            "paid_through": later[ahead - 1].isoformat() if ahead else None,
             "certificate_due": cert_due.isoformat() if cert_due else None,
             "certificate_late": bool(cert_due and cert_due < today)}
 

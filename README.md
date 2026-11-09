@@ -175,7 +175,7 @@ Previews never copy to Google.
 
 ## Treasurer
 **Treasurer** in the menu (`/treasurer`), for officers; whoever holds Treasurer, and admins in admin mode, record the money (`treasurer.py`, `treasurer.json` in the data folder, every change logged in `treasurer-log.jsonl`).
-- **Who owes what** is worked out, never typed: dues for each meeting night since tracking started (or since the member joined), the initiation fee for members who joined since then, a charge for each chow night marked missed, plus adjustments, minus payments. Four weeks or more behind shows in red. It also shows who still owes a Certificate of Indebtedness, and by when.
+- **Who owes what** is worked out, never typed: dues for each meeting night since tracking started (or since the member joined), the initiation fee for members who joined since then, a charge for each chow night marked missed, plus adjustments, minus payments. Every meeting night counts, holidays included (52 × $3.50 is the bylaws' $182 a year); a credit covers a night the club calls off. Members may pay weekly, monthly or for the year: paying ahead shows as "paid through" a date. Four weeks or more behind shows in red. It also shows who still owes a Certificate of Indebtedness, and by when.
 - **Money in and out:** payments (dues, initiation fee, missed chow, certificate), adjustments (a charge, or a credit when negative: a balance from before the app, a night with no meeting) and expenses, each with a date and an account. Delete fixes a mistake; the log keeps it.
 - **Bills:** each Bills and Communications item with a $ amount (`Gas Bill $81`) since tracking started waits for the Treasurer to mark it paid (an expense) or not a bill.
 - **Home** shows each member their own figures, never anyone else's.
@@ -190,6 +190,14 @@ Previews never copy to Google.
         certificate_years: 2
         missed_chow: 35
         arrears_weeks: 4
+
+  When the bylaws change an amount, list it with the date it starts, so earlier weeks keep the old amount (the certificate's is the one in effect when a member joined):
+
+      dues_weekly:
+        - {from: 2020-01-01, amount: 3.50}
+        - {from: 2027-01-01, amount: 4.00}
+
+  Until `start` is set, officers opening the page are told to ask an admin (named from `admins:`), and members see nothing.
 
 Not a bookkeeping system: there are no account balances or transfers yet (ROADMAP → Treasurer).
 

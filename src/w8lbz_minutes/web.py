@@ -641,7 +641,8 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", mid
                      key=lambda m: (m.last, m.first))
     return page(request, "treasurer.html", tab=tab, error=error, cfg=c, edit=is_treasurer(request), members=members,
                 standings=treasurer.standings(club, s), entries=sorted(s["entries"], key=lambda e: (e["date"], e["at"]), reverse=True),
-                bills=treasurer.bills(archive, s, c["start"]), labels=treasurer.LABELS, kinds=treasurer.KINDS, cents=treasurer.cents,
+                bills=treasurer.bills(archive, s, c["start"]), labels=treasurer.LABELS, kinds=treasurer.KINDS, at=treasurer.at,
+                admins=' or '.join(sorted(club.name(a) for a in club.admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
 
 
