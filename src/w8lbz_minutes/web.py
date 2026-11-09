@@ -1965,7 +1965,7 @@ def guests(request: Request):
 
 @app.get("/api/roster")
 def roster_api(request: Request):
-    """Active members' callsign, name, email and officer tick, for the club's other tools (the Discord bot, in its
+    """Active members' callsign, name, email, officer tick and former callsigns, for the club's other tools (the Discord bot, in its
     own container on the same Proxmox host). Only from this server itself or the addresses in
     W8LBZ_ROSTER_API_ALLOW (comma-separated), never through the web proxy, with the token in W8LBZ_ROSTER_API_TOKEN
     (both in /etc/w8lbz-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
@@ -1977,7 +1977,10 @@ def roster_api(request: Request):
     local = host in allowed and not any(h in request.headers for h in ("x-forwarded-for", "x-forwarded-proto"))
     got = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     ok = bool(want) and local and hmac.compare_digest(got.encode(), want.encode())
-    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": m.officer}
+    former: dict[str, list[str]] = {}  # earlier callsigns (kept as aliases), so the bot can follow a callsign change
+    for old, mid in archive.club.former_ids.items():
+        former.setdefault(mid, []).append(old.upper())
+    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": m.officer, "former": sorted(former.get(m.id, []))}
             for m in sorted(archive.club.members.values(), key=lambda m: (m.last, m.first)) if m.status.lower() == "active"] if ok else []
     p = DATA / "api-log.jsonl"
     with p.open("a") as f:

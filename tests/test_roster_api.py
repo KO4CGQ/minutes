@@ -9,7 +9,7 @@ from w8lbz_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "callsign": "KD8AAA", "email": "amy@example.org", "officer": True,
-           "phone": "419-555-0101"},
+           "phone": "419-555-0101", "aliases": ["Amelia", "KD8OLD"]},
           {"id": "kd8bbb", "first": "Bob", "last": "Baker", "callsign": "KD8BBB", "status": "Inactive"}]
 
 
@@ -22,7 +22,7 @@ def test_roster_api(tmp_path, monkeypatch):
     assert local.get("/api/roster", headers=auth).status_code == 404  # off without a token on the server
     monkeypatch.setenv("W8LBZ_ROSTER_API_TOKEN", "s3cret")
     r = local.get("/api/roster", headers=auth)
-    assert r.json() == [{"callsign": "KD8AAA", "name": "Amy Able", "email": "amy@example.org", "officer": True}]
+    assert r.json() == [{"callsign": "KD8AAA", "name": "Amy Able", "email": "amy@example.org", "officer": True, "former": ["KD8OLD"]}]
     assert local.get("/api/roster", headers={"Authorization": "Bearer wrong"}).status_code == 403
     assert local.get("/api/roster", headers={**auth, "X-Forwarded-For": "203.0.113.9"}).status_code == 403  # the proxy
     assert TestClient(web.app, client=("192.168.1.20", 50000)).get("/api/roster", headers=auth).status_code == 403
