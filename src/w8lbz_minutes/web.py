@@ -410,7 +410,7 @@ def run_followups(slug: str) -> str:
         s = console.business_state(archive)
         n = business.add_suggestions(s, slug, found, archive.club.ai.get("model", ""))
         business.save(s)
-    _log.info("AI suggested %d follow-ups for %s", n, slug)
+    _log.info("AI suggested %d follow-ups for %s", n, one_line(slug))
     return f"{n} suggestion{'s' if n != 1 else ''} from the {m.date:%B %-d} minutes." if n else \
         f"No follow-ups found in the {m.date:%B %-d} minutes."
 
@@ -719,7 +719,7 @@ def _admin(mid: str) -> str:
 def _admin_on(request: Request, mid: str, how: str) -> None:
     until = authn.set_admin(request.cookies.get(COOKIE), ADMIN_MINUTES)
     _admin_log(request, on=True, until=until, confirmed_by=how)
-    _log.info("admin mode on for %s (confirmed by %s)", mid, how)
+    _log.info("admin mode on for %s (confirmed by %s)", one_line(mid), one_line(how))
 
 
 @app.post("/admin/mode")
@@ -730,7 +730,7 @@ def admin_mode_switch(request: Request, on: int = Form(0), next: str = Form("/")
         return RedirectResponse("/admin/confirm?next=" + quote(_safe_next(next)), status_code=303)
     until = authn.set_admin(request.cookies.get(COOKIE), 0)
     _admin_log(request, on=False, until=until)
-    _log.info("admin mode off for %s", mid)
+    _log.info("admin mode off for %s", one_line(mid))
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -853,7 +853,7 @@ def admin_view_as(request: Request, member: str = Form(""), next: str = Form("/"
         raise HTTPException(404)
     authn.set_view_as(request.cookies.get(COOKIE), member or None)
     _admin_log(request, view_as=member or None)
-    _log.info("%s %s", mid, f"viewing as {member}" if member else "stopped viewing as another member")
+    _log.info("%s %s", one_line(mid), one_line(f"viewing as {member}" if member else "stopped viewing as another member"))
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -921,7 +921,7 @@ def profile_photo_remove(mid: str = Depends(me)):
 def member_photo_remove(request: Request, who: str, mid: str = Depends(officer)):
     """Officers (and admins in admin mode) can take down someone's picture."""
     if avatars.remove(who):
-        _log.info("%s removed the profile picture of %s", mid, who)
+        _log.info("%s removed the profile picture of %s", one_line(mid), one_line(who))
     return RedirectResponse(f"/members/{who}", status_code=303)
 
 

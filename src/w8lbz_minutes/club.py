@@ -34,6 +34,15 @@ def valid_email(s: str) -> bool:
     return bool(local) and "." in domain and not domain.startswith(".") and not domain.endswith(".")
 
 
+def inside(folder: Path, name: str) -> Path:
+    """folder/name, refused unless it really is a file directly in that folder (no "..", no slashes)."""
+    base = os.path.realpath(folder)
+    p = os.path.realpath(os.path.join(base, name))
+    if not p.startswith(base + os.sep) or os.path.dirname(p) != base:
+        raise ValueError(f"{name!r} isn't a plain file name.")
+    return Path(p)
+
+
 def one_line(v) -> str:
     """A value for a log line: line breaks shown as \\n, so typed text can't add a fake log entry."""
     return str(v).replace("\r", "\\r").replace("\n", "\\n")
