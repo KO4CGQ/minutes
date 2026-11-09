@@ -35,6 +35,8 @@ PAYMENTS = ("dues", "initiation", "chow", "certificate")
 KINDS = PAYMENTS + ("adjustment", "income", "expense")
 NO_MEMBER = ("income", "expense")  # money in or out of the club as a whole
 BOND = "Bond (Certificate of Indebtedness)"
+BOND_NOTE = ("“Bond” is the club's everyday name for the Certificate of Indebtedness in the bylaws (VII.D), which each member "
+             "buys within two years of joining. It isn't a government or savings bond.")
 LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": BOND,
           "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
 RATES = {"dues_weekly": "Dues, each meeting night", "initiation": "Initiation fee", "certificate": BOND, "missed_chow": "Missed chow night"}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block title %}Treasurer{% endblock %}{% block body %}
 <h1>Treasurer</h1>
 {% if full %}<p class="muted">Dues, fees and the club's bills (bylaws VII). Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
+<p class="muted small">{{ bond_note }}</p>
 {% else %}<p class="muted">The money in and out of {{ kept|join(' and ') }}, which you look after.</p>{% endif %}
 <nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills'), ('settings', 'Settings')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
@@ -8,21 +9,22 @@
 {% elif full and cfg.mode == 'preview' %}<p class="msg ok">Preview: officers see everything here; members don't see their figures yet, and no emails go out. Switch it on under <a href="/treasurer?tab=settings">Settings</a> when it looks right.</p>{% endif %}
 
 {% if tab == 'standing' %}
-<p class="hint">Dues are {{ money(rate(cfg, 'dues_weekly', today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_weeks }} weeks or more behind is in red.</p>
-<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th><th class="n opt">Missed chow</th><th>Bond</th></tr></thead>
-<tbody>{% for x in standings %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a>{% if x.suspended %} <span class="chip late">suspended</span>{% endif %}</td>
-  <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.weeks_behind or '' }}</td>
-  <td class="n opt">{{ x.missed_chow|length or '' }}</td>
-  <td>{% if x.certificate %}bought {{ x.certificate_bought[:4] }}{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td></tr>
-{% else %}<tr><td colspan="5" class="muted">No one yet.</td></tr>{% endfor %}</tbody></table>
-{% if edit and cfg.start %}<details class="card"><summary>Record a bond bought before {{ fmt(cfg.start) }}</summary>
+{% if edit and cfg.start %}<details class="card"><summary>Record a bond bought before {{ cfg.start|isodate }}</summary>
   <form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="certificate"><input type="hidden" name="account" value="">
     <p class="hint">For members who bought their bond years ago: it's kept on file so they show as bought, and it doesn't count as money received now. Use the date and amount if you know them; otherwise the year they joined and the price then ({{ money(rate(cfg, 'certificate', '2000-01-01')) }}).</p>
-    <div class="formrow"><label>Member<input name="member" data-combo="roster-names" required placeholder="Type a name…"></label>
+    <div class="formrow"><label>Member<input name="member" data-combo="no-bond-names" required placeholder="Type a name…"></label>
       <label>Bought on<input type="date" name="date" required max="{{ cfg.start }}"></label>
       <label>Amount<input name="amount" inputmode="decimal" required value="{{ '%d'|format(rate(cfg, 'certificate', '2000-01-01') // 100) }}"></label></div>
     <label>Note<input name="note" maxlength="300" placeholder="e.g. from the old ledger"></label>
     <div class="formrow"><button class="btn small">Record the bond</button></div></form></details>{% endif %}
+<p class="hint">Dues are {{ money(rate(cfg, 'dues_weekly', today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_weeks }} weeks or more behind is in red.</p>
+<nav class="tabs small"><a href="/treasurer?tab=standing" class="{{ 'on' if not everyone }}">Owe something ({{ owing }})</a><a href="/treasurer?tab=standing&everyone=1" class="{{ 'on' if everyone }}">Everyone ({{ standings|length }})</a></nav>
+<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th><th class="n opt">Missed chow</th><th>Bond</th></tr></thead>
+<tbody>{% for x in standings if everyone or x.owed > 0 or x.certificate_late %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a>{% if x.suspended %} <span class="chip late">suspended</span>{% endif %}</td>
+  <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.weeks_behind or '' }}</td>
+  <td class="n opt">{{ x.missed_chow|length or '' }}</td>
+  <td>{% if x.certificate %}bought {{ x.certificate_bought[:4] }}{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">{{ 'No one yet.' if everyone else 'Nobody owes anything.' }}</td></tr>{% endfor %}</tbody></table>
 
 {% elif tab == 'money' %}
 {% if edit or kept %}<form method="post" action="/treasurer/record" class="modern card">
@@ -37,8 +39,8 @@
     <label>Category (expenses)<select name="category"><option value="">Guess from the note</option>{% for k, v in cats.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
   </div>
   <label>Note<input name="note" maxlength="300" placeholder="e.g. cash at the meeting, or check 1042"></label>
-  {% if edit %}<p class="hint">Just what was paid and when: the app works out which weeks it covers, and money paid ahead shows as "paid through" a date on Who owes what.</p>{% endif %}
-  {% if edit %}<p class="hint">An adjustment charges a member (e.g. a balance from before the app); a negative one is a credit (e.g. a night with no meeting). Other income is money in that isn't from a member's account (drink sales, a donation).</p>{% endif %}
+  {% if edit %}<p class="hint">Enter what was paid and the date. The app works out which weeks it covers, and anyone paid ahead shows as "paid through" a date.</p>{% endif %}
+  {% if edit %}<p class="hint"><b>Adjustment:</b> adds to what a member owes, such as a balance from before the app; enter a minus amount to take some off, such as for a night with no meeting. <b>Other income:</b> money that didn't come from a member, such as drink sales or a donation.</p>{% endif %}
   <div class="formrow"><button class="btn small">Record</button></div>
 </form>{% endif %}
 <table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th></tr></thead>
@@ -142,6 +144,7 @@
 </div>
 {% endif %}
 
+<datalist id="no-bond-names">{% for x in standings if not x.certificate %}<option value="{{ club.name(x.member) }}"></option>{% endfor %}</datalist>
 <datalist id="roster-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
 {% endblock %}

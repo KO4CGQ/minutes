@@ -23,7 +23,8 @@
   {% if dues.owed > 0 %}<p class="big{{ ' late' if dues.behind }}">You owe {{ money(dues.owed) }}</p>
   <p class="muted">That's about {{ dues.weeks_behind }} week{{ 's' if dues.weeks_behind != 1 }} of dues{% if dues.missed_chow %}, including {{ dues.missed_chow|length }} missed chow night{{ 's' if dues.missed_chow|length != 1 }}{% endif %}. Pay the Treasurer at a meeting.</p>
   {% else %}<p class="big">Paid up</p>{% if dues.paid_through %}<p class="muted">Paid through {{ fmt(dues.paid_through) }} ({{ money(-dues.owed) }} ahead).</p>{% endif %}{% endif %}
-  {% if not dues.certificate %}<p{% if dues.certificate_late %} class="late"{% endif %}>Bond (Certificate of Indebtedness): not bought yet{% if dues.certificate_due %}, due by {{ fmt(dues.certificate_due) }}{% endif %}.</p>{% endif %}
+  {% if not dues.certificate %}<p{% if dues.certificate_late %} class="late"{% endif %}>Bond (Certificate of Indebtedness): not bought yet{% if dues.certificate_due %}, due by {{ fmt(dues.certificate_due) }}{% endif %}.</p>
+  <p class="muted small">{{ bond_note }}</p>{% endif %}
 </section>{% endif %}
 <section class="card">
   <h2>Your business items</h2>

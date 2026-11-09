@@ -299,3 +299,23 @@ def test_a_bond_bought_years_ago_is_on_file_and_moves_no_money(club):
         treasurer.record(club, s, "tre", "certificate", "100", "2026-11-12", "", "bob")  # since tracking: an account, please
     treasurer.record(club, s, "tre", "expense", "81", "2026-11-12", "Checking", note="Gas bill")
     assert treasurer.spending(s, today)["total"] == 8100  # the old bond isn't money in or out
+
+
+def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    monkeypatch.setattr(treasurer.chow, "load", lambda: {"nights": {}})
+    tre = TestClient(web.app)
+    tre.cookies.set(web.COOKIE, a.new_session("tre"))
+    with treasurer.locked():
+        s = started("preview", dt.date.today().isoformat())
+        treasurer.record(club, s, "tre", "dues", "100", dt.date.today().isoformat(), "Cash", "pres")  # paid ahead
+        treasurer.save(s)
+    owe, everyone = tre.get("/treasurer").text, tre.get("/treasurer?everyone=1").text
+    table = lambda html: html.split("<tbody>")[1].split("</tbody>")[0]
+    assert "Pat Prez" not in table(owe) and "Pat Prez" in table(everyone)
+    assert "everyday name for the Certificate of Indebtedness" in owe and "Thu" not in owe.split("Record a bond bought before")[1][:20]

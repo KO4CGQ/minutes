@@ -638,7 +638,7 @@ def treasurer_only(request: Request) -> str:
 
 
 @app.get("/treasurer", response_class=HTMLResponse)
-def treasurer_page(request: Request, tab: str = "standing", error: str = "", mid: str = Depends(me)):
+def treasurer_page(request: Request, tab: str = "standing", error: str = "", everyone: int = 0, mid: str = Depends(me)):
     """Officers see who owes what; the Treasurer records payments, expenses and bills, and runs the settings. A fund's
     keepers (the drinks committee, say) see and record only their fund's account."""
     club, s = archive.club, treasurer.load()
@@ -652,8 +652,10 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", mid
                      key=lambda m: (m.last, m.first))
     edit, running = is_treasurer(request), treasurer.on(s)
     entries = [e for e in s["entries"] if full or e["account"] in kept]
-    return page(request, "treasurer.html", tab=tab, error=error, cfg=c, edit=edit, full=full, kept=kept, members=members, running=running,
-                standings=treasurer.standings(club, s) if full and running else [],
+    standings = treasurer.standings(club, s) if full and running else []
+    return page(request, "treasurer.html", tab=tab, everyone=everyone, bond_note=treasurer.BOND_NOTE,
+                owing=sum(1 for x in standings if x["owed"] > 0 or x["certificate_late"]), error=error, cfg=c, edit=edit, full=full, kept=kept, members=members, running=running,
+                standings=standings,
                 entries=sorted(entries, key=lambda e: (e["date"], e["at"]), reverse=True),
                 bills=treasurer.bills(archive, s, c["start"]) if full and running else [], regular=treasurer.regular_due(s, dt.date.today()),
                 regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.CATEGORIES, guess=treasurer.guess, modes=treasurer.MODES, rates=treasurer.RATES, bond=treasurer.BOND,
@@ -1327,7 +1329,7 @@ def home(request: Request, mid: str = Depends(me)):
     coming = [e for e in coming if e.kind != "chow"][:8]
     # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
     undated = [i.text for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
-    return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+    return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, bond_note=treasurer.BOND_NOTE, money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,

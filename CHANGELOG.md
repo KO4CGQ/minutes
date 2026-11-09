@@ -17,6 +17,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Spending, for every member:** the club's expenses over the last 12 months by category and month (chart and tables), once the Treasurer turns tracking on (officers only in Preview). Each expense gets a category, guessed from its words and changeable by the Treasurer. In the leader console, the Bills step lists what the Treasurer recorded as paid since the last meeting, with **Add to tonight's bills**.
 - **Cost per member** on the Spending page: each month's spending over the members that month (following joins and departures in the Membership Log), the 12-month average, and what dues bring in per member to compare.
 - **Bonds bought years ago** go on file (date and amount, no account): the member shows as having bought one, with no money in or out now. Payments can't be dated before tracking starts.
+- **Bond wording:** every page that says "bond" explains it's the club's name for the Certificate of Indebtedness, not a government or savings bond. Who owes what lists who owes something, with **Everyone** a tap away.
 - **Treasurer, more:** regular bills (what the club pays every month or year) show whether they've been paid this month or year; other income (drink sales, donations); and funds a committee runs, like a drinks fund with its own checking account, whose keepers record that account's money and see only it.
 
 ## 0.12.1 (2026-11-09)
