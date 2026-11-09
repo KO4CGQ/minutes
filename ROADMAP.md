@@ -37,7 +37,17 @@ Today the server relies on Proxmox snapshots of the container. A backup the app 
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Members and roster management
-The Google Sheet stays the source of truth; the app writes values back to it (values only, never formatting or structure).
+The Google Sheet is the source of truth today; the app writes values back to it (values only, never formatting or structure). The plan below retires it.
+
+### Roster in the app (retire the Google Sheet)
+The sheet's only other reader is the Discord onboarding bot: four columns (`callsign`, `full_name`, `email`, `is_officer`), read-only, every few minutes. Serve the bot from the app and the app can own the roster outright, with no Google dependency left.
+- **Roster API for the bot:** `GET /api/roster` with a bearer token (a secret kept on the server, outside the repo), returning active members' callsign, name, email and officer flag. HTTPS only, every call logged, nothing else exposed. The bot reads it instead of the sheet and keeps its guard against a sync that drops more than 25% of rows. (A change in the discord-onboarding-bot repo too.)
+- **Edit everything in the app:** roster keepers (Secretary, Treasurer) and admins edit what the sheet holds today: name, callsign, email, titles, officer and board, license class, status, aliases, `minutes_editor` / `calendar_editor`, member since and the Membership Log. Members keep editing their own contact details. Every change logged, with undo, as profile changes are now.
+- **Move over once:** import the sheet and its Membership Log tab, show what differs, then turn off the sync and the write-back. The sheet stays as a read-only archive.
+- **Export:** a roster spreadsheet (CSV) download for officers, for anyone who still wants one (dues, ARRL affiliation reports).
+- **Then remove** the Google Sheets code and the service account's access to the sheet. With no copy to Google Calendar either (decided 2026-11-08), the app needs no Google account at all.
+- **Before this:** Backups (below). Once the roster lives only in the app, the app's own encrypted, off-server backup is the only copy.
+- **Open questions:** does anyone else use the sheet (the Treasurer, reports)? Does the bot need any other field? Where does the bot run: if on the same network as the app, the API can be limited to that network.
 - **Celebrations:** birthdays (opt-in; a month-only birthday at the first meeting of that month) and membership anniversaries shown in the console on meeting night ("Happy birthday, …", "5 years as a member").
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".
 - **Associate members** (GMRS or unlicensed), only if the bylaws add them; today a member must hold an amateur license.
