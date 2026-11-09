@@ -9,7 +9,7 @@
     <label>Last name <input name="last" value="{{ member.last }}" required></label>
   </div>
   <label>Callsign <input value="{{ member.callsign or '' }}" readonly tabindex="-1" class="cs">
-    <span class="hint">A callsign change needs its own step (the callsign is how the app knows {{ member.first }}); for now, change it on the roster sheet and add a "Callsign Change" event below.</span></label>
+    <span class="hint">Changed below, under <a href="#callsign">New callsign</a>.</span></label>
   <div class="fixedrow">
     <label>License class <select name="license_class"><option value="">(none)</option>{% for c in classes %}<option {{ 'selected' if member.license_class == c }}>{{ c }}</option>{% endfor %}</select></label>
     <label>Status <select name="status">{% for s in statuses %}<option {{ 'selected' if member.status == s }}>{{ s }}</option>{% endfor %}</select></label>
@@ -26,6 +26,16 @@
     <label class="check"><input type="checkbox" name="calendar_editor" value="1" {{ 'checked' if member.calendar_editor }}> May change the club calendars</label>
   </fieldset>
   <p><button class="btn">Save</button></p>
+</form>
+
+<h2 id="callsign">New callsign</h2>
+<form method="post" action="/members/{{ member.id }}/callsign" class="modern card" data-confirm="Change {{ member.first }}'s callsign? Every record in the app follows.">
+  <p class="hint">For a vanity call or a new call with an upgrade. The app takes a backup first, then writes the new call to the roster sheet (the old one goes in Other spellings, so old links still work), adds a "Callsign Change" row to the Membership Log, and moves {{ member.first }}'s chow nights, business items, minutes, email choices, picture, sign-ins and passkeys to the new call. {{ member.first }} stays signed in. If {{ member.first }} is an admin, update <code>admins:</code> in club.yaml when convenient (the old call keeps working meanwhile).</p>
+  <div class="formrow">
+    <label>New callsign<input name="callsign" class="cs" required size="8" autocapitalize="characters"></label>
+    <label>As of<input type="date" name="date" value="{{ today }}" required></label>
+    <button class="btn small">Change callsign</button>
+  </div>
 </form>
 
 <h2 id="log">Membership Log</h2>

@@ -21,6 +21,7 @@ from markupsafe import Markup, escape
 
 from . import ai, avatars, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, updates
 from . import auth as authmod
+from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW
 from .roster import COLUMNS, KEY_FILE, SHAREABLE, SheetError
@@ -1326,6 +1327,23 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     except (ValueError, SheetError) as e:
         return RedirectResponse(back + "?error=" + quote(str(e)), status_code=303)
     return RedirectResponse(back + "?saved=1", status_code=303)
+
+
+@app.post("/members/{who}/callsign")
+def member_callsign(request: Request, who: str, callsign: str = Form(""), date: str = Form(""),
+                    mid: str = Depends(roster_keeper)):
+    """A new callsign: the roster sheet, and the member's id in every record (callsign.py). Backed up first."""
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    try:
+        with business.locked(), events.locked(), _chow_lock:  # nothing else writes those files meanwhile
+            new = callsign_mod.change(archive.club, who, callsign, date, mid)
+        archive.reload()
+    except (ValueError, SheetError, backup.BackupError) as e:
+        return RedirectResponse(f"/members/{quote(who)}/edit?error=" + quote(str(e)) + "#callsign", status_code=303)
+    if admin_mode(request):
+        _admin_log(request, callsign_change=f"{who} to {new}")
+    return RedirectResponse(f"/members/{quote(new)}/edit?saved=1#callsign", status_code=303)
 
 
 @app.post("/members/{who}/log")

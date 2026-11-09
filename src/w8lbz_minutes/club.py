@@ -138,7 +138,7 @@ class Club:
             return None
         out = set()
         for x in only:
-            m = self.members.get(str(x).lower())
+            m = self.members.get(self.canonical(str(x).lower()))
             addr = m.email if m else str(x)
             if addr and "@" in addr:
                 out.add(addr.strip().lower())
@@ -159,7 +159,7 @@ class Club:
 
     def is_admin(self, mid: str | None) -> bool:
         """Listed under admins: in club.yaml. Admin rights apply only while admin mode is on."""
-        return bool(mid) and mid in self.admins
+        return bool(mid) and mid in {self.canonical(a) for a in self.admins}  # club.yaml may still have an old call
 
     def can_see(self, viewer: str | None, mid: str, fld: str, elevated: bool = False) -> bool:
         """Contact details: officers, admins in admin mode, and the member always; others only what was shared."""
@@ -186,11 +186,11 @@ class Club:
 
     # ---- names ----
     def name(self, mid: str | None) -> str:
-        m = self.members.get(mid or "")
+        m = self.members.get(self.canonical(mid or ""))
         return m.name if m else (mid or "").title()
 
     def short(self, mid: str) -> str:
-        m = self.members.get(mid)
+        m = self.members.get(self.canonical(mid))
         return (m.short or m.first or m.last) if m else mid.title()
 
     def resolve_surname(self, word: str) -> str | None:
