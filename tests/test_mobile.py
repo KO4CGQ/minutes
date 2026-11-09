@@ -4,6 +4,7 @@ The same visit fails on anything the Content Security Policy blocks, or a script
 New GET pages are picked up automatically from the app's routes. Pages are served to the browser straight from
 the test client, so no server runs. Skipped where Playwright's Chromium isn't installed (`uv run playwright install chromium`).
 """
+import re
 from pathlib import Path
 
 import pytest
@@ -168,7 +169,7 @@ def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_pat
         page.goto("http://testserver" + r.headers["location"])
         assert page.is_visible(d) and page.is_visible(f"{d} >> text=On it this weekend")  # back, still open
         page.keyboard.press("Escape")
-        page.wait_for_function("!location.hash")  # closing it takes #i… off the address
+        sync_api.expect(page).not_to_have_url(re.compile("#"))  # closing it takes #i… off the address (no string eval: the CSP forbids it)
         assert not page.is_visible(d)
         assert not errors
         browser.close()
