@@ -114,6 +114,15 @@ Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos 
 - **Updating from the app:** admins in admin mode see "Version X is available" and an **Updates** page with **Update now**. It writes `update-request.json` in the data folder; the root-owned `w8lbz-minutes-update.path` unit sees it and runs `deploy/update-from-app.sh` (which runs `update.sh` and records the result). `update.sh` installs and enables that unit, so the first update after this feature arrives is still by hand.
 - Every pull request runs the tests (the Tests workflow).
 
+## Security checks
+Run on every pull request, every push to main and **every Monday**, so a newly published advisory turns up even in a quiet week. Any of them can also be run by hand: Actions → the workflow → Run workflow.
+- **Security workflow:** `pip-audit` checks the locked Python packages (`uv.lock`) against the PyPI and OSV advisory databases; `gitleaks` looks for keys, tokens and passwords anywhere in the git history.
+- **CodeQL workflow:** GitHub's code scanner for the Python and JavaScript (injection, script injection (XSS), unsafe redirects...). Findings are under Security → Code scanning.
+- **Dependabot** (`.github/dependabot.yml`): a weekly PR for newer Python packages and GitHub Actions, and one right away for a security fix. Review and merge like any PR.
+- **Tests:** the mobile test opens every page in a real browser and fails if the Content Security Policy blocks anything or a script errors. The policy runs scripts only from the app's own files or the `<script>` blocks a page was given a one-time nonce for: no inline `on…=` handlers (use `data-confirm`, `data-autosubmit`, `data-select`, `data-tick` from `base.html`, or a listener in a `<script nonce="{{ csp_nonce }}">`).
+- Actions in the workflows are pinned to a commit, with the version in a comment; Dependabot updates both.
+- **Repository settings** worth having on (Settings → Code security): Dependabot alerts, secret scanning and push protection (blocks a push that contains a key).
+
 ## Club calendars
 The app keeps the club calendars itself (`events.json` in the data folder), so nothing depends on Google: **Club events** (what the club runs or joins: meetings, nets, VE testing, fox hunts), **Planning** (officers' dates, like the annual meeting) and **Community** (what's on in the area). It adds chow nights, the minutes' dated Upcoming Events and the birthdays members share (never private ones, not even for officers). The weekly meeting is put on Club events once, from `meeting_day` and `meeting_time`, as an ordinary repeating event: delete one date for a holiday, or move it.
 

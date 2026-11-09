@@ -10,7 +10,7 @@
 {% set w = '&weeks=' ~ weeks if weeks != 8 else '' %}
 {% macro moves() %}<p class="row"><a class="btn small ghost" href="{{ base }}?start={{ lo - timedelta(days=7 * weeks) }}{{ w }}">← Earlier</a>{% if lo != today %}<a class="btn small ghost" href="{{ base }}{{ '?' ~ w[1:] if w }}">Back to today</a>{% endif %}<a class="btn small ghost" href="{{ base }}?start={{ hi + timedelta(days=1) }}{{ w }}">Later →</a></p>{% endmacro %}
 <div class="headrow"><h2 class="calrange">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }}</h2>
-<form class="row" action="{{ base }}">{% if lo != today %}<input type="hidden" name="start" value="{{ lo }}">{% endif %}<label class="small">Show <select name="weeks" onchange="this.form.submit()">{% for n, label in agenda_weeks.items() %}<option value="{{ n }}" {{ 'selected' if n == weeks }}>{{ label }}</option>{% endfor %}</select></label><noscript><button class="btn small ghost">Go</button></noscript></form>{{ moves() }}</div>
+<form class="row" action="{{ base }}">{% if lo != today %}<input type="hidden" name="start" value="{{ lo }}">{% endif %}<label class="small">Show <select name="weeks" data-autosubmit>{% for n, label in agenda_weeks.items() %}<option value="{{ n }}" {{ 'selected' if n == weeks }}>{{ label }}</option>{% endfor %}</select></label><noscript><button class="btn small ghost">Go</button></noscript></form>{{ moves() }}</div>
 {% for d, es in by_day|dictsort %}<h2 class="calday" id="d{{ d }}">{{ 'Today' if d == today else d.strftime('%A, %B %-d') }}</h2>
 <ul class="agenda">{% for e in es %}<li data-kind="{{ e.kind }}">{% call open(e) %}<span class="caltime">{{ e.time if e.time and d == e.start else 'All day' if not e.time else '' }}</span><i class="dot k-{{ e.kind }}"></i><span class="caltitle">{{ e.title }}{% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}</span>{% endcall %}</li>{% endfor %}</ul>
 {% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
@@ -47,7 +47,7 @@
 </template>{% endfor %}
 <dialog id="calmodal" aria-labelledby="calmodal-title"><form method="dialog"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form><div class="body"></div></dialog>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // The legend shows or hides each calendar (remembered in this browser). In the month grid each day keeps showing
 // its first three visible events, with "+N more" for the rest. Agenda rows are shaded every other visible row.
 (() => {

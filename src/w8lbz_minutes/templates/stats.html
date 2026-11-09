@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% import "_pager.html" as pager %}{% block body %}
 <div class="headrow"><h1>Attendance</h1>
-<form class="filter"><label>Period <select name="period" onchange="this.form.submit()">
+<form class="filter"><label>Period <select name="period" data-autosubmit>
   <option value="6m" {{ 'selected' if period == '6m' }}>Last 6 months</option>
   <option value="12m" {{ 'selected' if period == '12m' }}>Last 12 months</option>
   {% for y in years %}<option {{ 'selected' if y|string == period }}>{{ y }}</option>{% endfor %}

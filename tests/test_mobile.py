@@ -1,4 +1,5 @@
 """Mobile first: every page fits a phone's width (no sideways scrolling), checked in a real browser at 375px.
+The same visit fails on anything the Content Security Policy blocks, or a script error.
 
 New GET pages are picked up automatically from the app's routes. Pages are served to the browser straight from
 the test client, so no server runs. Skipped where Playwright's Chromium isn't installed (`uv run playwright install chromium`).
@@ -53,7 +54,10 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
             pytest.skip(f"no Chromium for Playwright: {e}")
         page = browser.new_page(viewport={"width": 375, "height": 800})
         page.route("http://testserver/**", serve)
-        too_wide = {}
+        too_wide, blocked, path = {}, [], ""
+        # the security policy runs no inline handlers or unmarked scripts: anything it blocks, or any script error, fails
+        page.on("console", lambda m: m.type == "error" and "Content Security Policy" in m.text and blocked.append((path, m.text[:200])))
+        page.on("pageerror", lambda e: blocked.append((path, str(e)[:200])))
         for path in pages(web.app):
             r = c.get(path, follow_redirects=False)
             if r.status_code != 200 or "text/html" not in r.headers.get("content-type", ""):
@@ -64,3 +68,4 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
                 too_wide[path] = w
         browser.close()
     assert not too_wide, f"pages wider than a 375px phone: {too_wide}"
+    assert not blocked, f"blocked by the security policy, or a script error: {blocked}"

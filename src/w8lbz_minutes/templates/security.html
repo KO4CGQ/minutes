@@ -12,13 +12,13 @@
 {% if tab == 'devices' %}
 <p class="muted">Each stays signed in for {{ session_days }} days unless signed out. Sign out a lost phone, or someone who left the club.</p>
 {% set rows = sessions|selectattr('member', 'equalto', who)|list if who else sessions %}
-<form method="get" class="filter"><label>Member <select name="member" onchange="this.form.submit()"><option value="">Everyone</option>
+<form method="get" class="filter"><label>Member <select name="member" data-autosubmit><option value="">Everyone</option>
 {% for m in sessions|map(attribute='member')|unique|by_last_name %}<option value="{{ m }}" {{ 'selected' if m == who }}>{{ club.name(m) }}</option>{% endfor %}</select></label><noscript><button class="btn small">Show</button></noscript></form>
-<form method="post" action="/admin/security/signout" id="devices" onsubmit="return confirm('Sign out the ticked devices?')"><input type="hidden" name="member" value="{{ who }}">
+<form method="post" action="/admin/security/signout" id="devices" data-confirm="Sign out the ticked devices?"><input type="hidden" name="member" value="{{ who }}">
 <table class="list"><thead><tr><th></th><th>Member</th><th>Since</th><th class="opt">Device</th><th>From</th></tr></thead><tbody>
 {% for r in rows %}<tr><td><input type="checkbox" name="session" value="{{ r.rowid }}" aria-label="Select {{ club.name(r.member) }}, {{ r.agent|device }}"></td><td>{{ club.name(r.member) }}</td><td>{{ r.created|ts }}</td><td class="opt">{{ r.agent|device }}</td><td>{% if r.ip %}<span class="ip">{{ r.ip }}</span> <span class="muted">{{ r.ip|where }}</span>{% else %}<span class="muted">not recorded</span>{% endif %}</td></tr>{% endfor %}
 </tbody></table>
-<div class="row"><button type="button" class="btn small ghost" onclick="this.form.querySelectorAll('[name=session]').forEach((c) => c.checked = true)">Tick all {{ rows|length }}</button>
+<div class="row"><button type="button" class="btn small ghost" data-tick="session">Tick all {{ rows|length }}</button>
 <button class="btn small">Sign out ticked</button></div></form>
 
 {% endif %}

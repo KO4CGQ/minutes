@@ -23,7 +23,7 @@
   <div class="card-head"><div class="card-text">{{ x.text }}</div>
     <div class="topacts">
       {% if mine %}<button type="button" class="act" data-panel="e{{ x.id }}" title="Edit the wording, owner or dates">{{ emoji('✏️', 'pencil') }} Edit</button>
-      <form method="post" action="/business/{{ x.id }}/done" class="inline" onsubmit="return confirm('Mark this item done? It shows as done in the next minutes, then drops off.')"><button class="act" title="Mark done">{{ emoji('✅', 'check') }} Mark done</button></form>{% endif %}
+      <form method="post" action="/business/{{ x.id }}/done" class="inline" data-confirm="Mark this item done? It shows as done in the next minutes, then drops off."><button class="act" title="Mark done">{{ emoji('✅', 'check') }} Mark done</button></form>{% endif %}
       <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + cs|length }})</button>
     </div></div>
   <div class="card-meta">
@@ -49,7 +49,7 @@
     {% if cs|length > 2 %}<button type="button" class="linkbtn more" data-more="m{{ x.id }}">Show all {{ cs|length }} comments</button>{% endif %}
     {% for c in cs %}<div class="comment"{% if loop.revindex > 2 %} data-group="m{{ x.id }}" hidden{% endif %}>
       <span class="chip">{{ avatar(c.by, 'xs') }}<a href="/members/{{ c.by }}">{{ club.short(c.by) }}</a></span> <span class="muted small">{{ c.at|tsfull }}</span>
-      {% if leader or c.by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" onsubmit="return confirm('Delete this comment?')"><button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
+      {% if leader or c.by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?"><button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
       <div class="ctext">{{ c.text }}</div></div>{% endfor %}
   </div>{% endif %}
   <div class="itemacts"><button type="button" class="act" data-panel="c{{ x.id }}">{{ emoji('💬', 'chat') }} Comment</button></div>
@@ -120,7 +120,7 @@
 
 <datalist id="roster-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 // One panel (Comment / Edit / History) open at a time in each card.
 document.querySelectorAll("button.act[data-panel]").forEach((b) => b.addEventListener("click", () => {
   const card = b.closest(".card"), p = document.getElementById(b.dataset.panel), wasOpen = !p.hidden;

@@ -199,3 +199,24 @@ def test_skip_next_turn(env):
     filled = chow.generate(club, s, dt.date(2027, 2, 4), "sec", today=THU - dt.timedelta(days=3))
     assert [s["nights"][d]["member"] for d in filled] == ["amy", "cal", "dee", "amy", "bob"]  # Bob passed over once only
     assert s["constraints"]["bob"]["skip"] == 0 and chow.history()[0]["skipped"] == ["bob"]
+
+
+def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
+    import datetime as dt
+    from fastapi.testclient import TestClient
+    from test_calview import signed_in
+    from w8lbz_minutes import calview, web
+    monkeypatch.setattr(chow, "DATA", tmp_path)
+    monkeypatch.setattr(calview, "DATA", tmp_path)
+    m, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    t = TestClient(web.app, raise_server_exceptions=False, cookies=m.cookies)
+    assert t.post("/chow/assign", data={"date": "junk", "member": "kd8bbb"}).status_code == 400
+    assert t.post("/chow/none", data={"date": "junk"}).status_code == 400
+    d = (dt.date.today() + dt.timedelta(days=7)).isoformat()
+    s = chow.load()
+    s["nights"], s["order"] = {d: {"member": "kd8bbb"}}, ["kd8aaa", "kd8bbb"]
+    chow.save(s)
+    r = t.post("/chow/swap", data={"a": d, "b": d}, follow_redirects=False)
+    assert "different%20nights" in r.headers["location"] and not chow.history(5)  # no swap logged, nobody emailed
+    r = t.post("/chow/generate", data={"until": "2400-01-01"}, follow_redirects=False)
+    assert "two%20years" in r.headers["location"] and list(chow.load()["nights"]) == [d]

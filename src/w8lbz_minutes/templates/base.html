@@ -1,7 +1,7 @@
 {% from "_avatar.html" import avatar %}{% from "_icons.html" import icon, emoji %}<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}W8LBZ Minutes{% endblock %}</title>
-<script>/* theme before first paint: "light", "dark", or follow the device */
+<script nonce="{{ csp_nonce }}">/* theme before first paint: "light", "dark", or follow the device */
 try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
 /* color emoji? draw one and look for colored pixels; without them, icons drawn by the app stand in (see emoji() in _icons.html) */
 try { const c = document.createElement("canvas").getContext("2d", { willReadFrequently: true }); c.canvas.width = c.canvas.height = 20;
@@ -9,7 +9,7 @@ try { const c = document.createElement("canvas").getContext("2d", { willReadFreq
   const p = c.getImageData(0, 0, 20, 20).data;
   for (let i = 0; i < p.length; i += 4) if (p[i + 3] && (Math.abs(p[i] - p[i + 1]) > 30 || Math.abs(p[i + 1] - p[i + 2]) > 30)) { document.documentElement.classList.add("emoji"); break; }
 } catch (e) {}</script>
-<script>/* emo("✅", "check"): what emoji() in _icons.html makes, for pages built in JavaScript (the console) */
+<script nonce="{{ csp_nonce }}">/* emo("✅", "check"): what emoji() in _icons.html makes, for pages built in JavaScript (the console) */
 window.emo = (ch, name) => { const w = document.createElement("span"), a = document.createElement("span"), b = document.createElement("span");
   a.className = "emo"; a.setAttribute("aria-hidden", "true"); a.textContent = ch; b.className = "emo-alt";
   const svg = document.querySelector(`#emoji-icons [data-i="${name}"] svg`); if (svg) b.append(svg.cloneNode(true));
@@ -54,7 +54,19 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {% if PREVIEW %}<div class="preview">PREVIEW of <b>{{ PREVIEW }}</b>: a copy of the data. Emails aren't sent{% if is_admin and admin_until %} (see the <a href="/admin/email">email log</a>){% endif %} and roster edits don't reach the real sheet.</div>{% endif %}
 <main>{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
-<script>  // theme switch (name menu), remembered in this browser
+<script nonce="{{ csp_nonce }}">  // what inline on…= handlers did, as data- attributes: the security policy runs no inline handlers
+document.addEventListener("submit", (e) => {
+  const msg = e.submitter?.dataset.confirm || e.target.dataset.confirm;  // "Are you sure?"
+  if (e.target.hasAttribute("data-nosubmit") || (msg && !confirm(msg))) e.preventDefault();
+});
+document.addEventListener("change", (e) => { if (e.target.matches("[data-autosubmit]")) e.target.form.submit(); });
+document.addEventListener("click", (e) => {
+  if (e.target.matches("[data-select]")) e.target.select();
+  const t = e.target.closest("[data-tick]");  // "Tick all"
+  if (t) t.form.querySelectorAll(`[name="${t.dataset.tick}"]`).forEach((c) => c.checked = true);
+});
+</script>
+<script nonce="{{ csp_nonce }}">  // theme switch (name menu), remembered in this browser
 const markTheme = () => { const t = document.documentElement.dataset.theme || "auto";
   document.querySelectorAll("[data-theme-pick]").forEach((b) => b.classList.toggle("on", b.dataset.themePick === t)); };
 document.querySelectorAll("[data-theme-pick]").forEach((b) => b.addEventListener("click", () => {

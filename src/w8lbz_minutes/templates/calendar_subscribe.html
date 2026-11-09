@@ -4,13 +4,13 @@
 
 <h2>Your own link</h2>
 <p>From a month ago to a year ahead. <b>Keep this link to yourself:</b> anyone who has it can see what you see here.</p>
-<form class="profile" onsubmit="return false"><fieldset><legend>What to include</legend>
+<form class="profile" data-nosubmit><fieldset><legend>What to include</legend>
   {% for k, label in kinds.items() %}<label class="check"><input type="checkbox" class="feedkind" value="{{ k }}" checked> <i class="dot k-{{ k }}"></i>{{ label }}</label>{% endfor %}
   <p class="muted small">Want each in its own color in your calendar app? Tick one, copy the link and subscribe; then the next.</p></fieldset></form>
-<p><input type="text" readonly value="{{ private }}" aria-label="Your calendar link" onclick="this.select()" class="feedlink" id="feedlink">
+<p><input type="text" readonly value="{{ private }}" aria-label="Your calendar link" data-select class="feedlink" id="feedlink">
 <button type="button" class="btn small" id="feedcopy">Copy</button> <a id="feedwebcal" href="{{ private|replace('https://', 'webcal://') }}">Open in my calendar app</a></p>
 <p id="feednone" class="msg err" hidden>Tick at least one.</p>
-<script>
+<script nonce="{{ csp_nonce }}">
 // The link names what's ticked (?show=events,chow); all ticked is the plain link.
 (() => {
   const base = {{ private|tojson }}, box = document.getElementById("feedlink"), boxes = [...document.querySelectorAll(".feedkind")];
@@ -29,11 +29,11 @@
   <li><b>Google Calendar</b> (on a computer): Other calendars → + → From URL, and paste the link. Google only checks it every few hours.</li>
   <li><b>Outlook:</b> Add calendar → Subscribe from web, and paste the link.</li>
 </ul>
-<form method="post" action="/calendar/subscribe/reset" onsubmit="return confirm('Make a new link? The old one stops working, so update any calendar app that uses it.')">
+<form method="post" action="/calendar/subscribe/reset" data-confirm="Make a new link? The old one stops working, so update any calendar app that uses it.">
 <button class="btn small ghost">Make a new link</button> <span class="muted small">if you shared it by mistake.</span></form>
 
 {% if public %}<h2>The public calendar</h2>
 <p>For anyone, even people who aren't members: the club's public events, no names. Share it freely.</p>
-<p><input type="text" readonly value="{{ public }}" aria-label="Public calendar link" onclick="this.select()" class="feedlink"></p>
+<p><input type="text" readonly value="{{ public }}" aria-label="Public calendar link" data-select class="feedlink"></p>
 <p>As a web page: <a href="{{ public_page }}">{{ public_page }}</a></p>{% endif %}
 {% endblock %}

@@ -25,9 +25,9 @@
 <label>Where <input name="where" value="{{ f.where }}" maxlength="200"></label>
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
 <p class="row"><button class="btn">Save</button> <a class="btn ghost" href="/calendar{% if f.date %}?start={{ f.date }}{% endif %}">Cancel</a>
-{% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate onclick="return confirm('Delete this event from the calendar?')">Delete</button>{% endif %}</p>
+{% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate data-confirm="Delete this event from the calendar?">Delete</button>{% endif %}</p>
 </form>
-<script>
+<script nonce="{{ csp_nonce }}">
 // The Repeats menu names the start day ("Monthly on the 2nd Tuesday"): reword it when the date changes.
 document.querySelector("input[name=date]").addEventListener("change", (e) => {
   const d = new Date(e.target.value + "T12:00"); if (isNaN(d)) return;

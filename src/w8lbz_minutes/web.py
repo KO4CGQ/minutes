@@ -151,9 +151,14 @@ async def calendar_after_changes(request: Request, call_next):
 
 @app.middleware("http")  # added last, so it runs outermost and covers the login redirects too
 async def security_headers(request: Request, call_next):
+    import secrets
+    request.state.nonce = nonce = secrets.token_urlsafe(16)  # pages mark their own <script> blocks with it (page())
     response = await call_next(request)
     h = response.headers
-    h.setdefault("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+    # scripts only from the app's own files or a <script> block this page was given the nonce for: injected markup
+    # (an <img onerror=...>, a <script> in typed text) doesn't run. Inline style= attributes are still allowed.
+    h.setdefault("Content-Security-Policy", f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
+                 "img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
     h.setdefault("X-Content-Type-Options", "nosniff")
     h.setdefault("Referrer-Policy", "same-origin")
     h.setdefault("X-Robots-Tag", "noindex, nofollow")  # members-only; keep the public hostname out of search engines
@@ -205,7 +210,7 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         "update_available": _update_badge(request),
-        "rp_id": authn.rp_id, **ctx})
+        "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
 
 
 def _update_badge(request: Request) -> str | None:
@@ -557,6 +562,13 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
                 log=chow.history(30) if leader else [], fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
 
 
+def _form_date(v: str) -> None:
+    try:
+        dt.date.fromisoformat(v)
+    except ValueError:
+        raise HTTPException(400, "That isn't a date.")
+
+
 @app.post("/chow/request")
 def chow_request(request: Request, mine: str = Form(...), theirs: str = Form(...), mid: str = Depends(me)):
     return chow_change(request, lambda s: chow.request_swap(archive.club, s, mid, mine, theirs, base_url(request)))
@@ -569,13 +581,13 @@ def chow_answer(request: Request, rid: str, approve: int = Form(0), mid: str = D
 
 @app.post("/chow/assign")
 def chow_assign(request: Request, date: str = Form(...), member: str = Form(""), mid: str = Depends(chow_leader)):
-    dt.date.fromisoformat(date)
+    _form_date(date)
     return chow_change(request, lambda s: chow.assign(archive.club, s, date, owner_id(member), mid, base_url(request)))
 
 
 @app.post("/chow/none")
 def chow_none(request: Request, date: str = Form(...), note: str = Form(""), mid: str = Depends(chow_leader)):
-    dt.date.fromisoformat(date)
+    _form_date(date)
     return chow_change(request, lambda s: chow.set_none(s, date, note, mid))
 
 
