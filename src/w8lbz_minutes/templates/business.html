@@ -96,6 +96,40 @@
   <div class="panel" id="h{{ x.id }}" hidden>{{ timeline(x) }}</div>
 </article>{% else %}<p class="muted">Nothing yet.</p>{% endfor %}</div>
 
+{% elif tab == 'motions' %}
+{% macro motion_fields(mo) %}
+    <div class="formrow">
+      <label>Moved by<input name="mover" data-combo="roster-names" placeholder="Type a name…" required value="{{ club.name(mo.mover) if mo else '' }}"></label>
+      <label>Seconded by<input name="seconder" data-combo="roster-names" placeholder="(nobody)" value="{{ club.name(mo.seconder) if mo and mo.seconder else '' }}"></label>
+    </div>
+    <label>Moved to<textarea name="what" rows="2" required placeholder="buy a new antenna for the repeater">{{ mo.what if mo else '' }}</textarea></label>
+    <label>Result<select name="result" required><option value="" disabled {{ 'selected' if not mo }}>Result…</option>{% for r in results %}<option {{ 'selected' if mo and mo.result == r }}>{{ r }}</option>{% endfor %}</select></label>
+{% endmacro %}
+<p class="muted">Every motion recorded in the leader console: who moved and seconded it, and how it went. Spending and bylaws changes can be traced to the motion that approved them.</p>
+<nav class="tabs small"><a href="/business?tab=motions" class="{{ 'on' if not result }}">All</a>{% for r in results %}<a href="/business?tab=motions&result={{ r|urlencode }}" class="{{ 'on' if result == r }}">{{ r }}</a>{% endfor %}</nav>
+<div class="cards">{% for x in motions %}{% set mo = x.motion %}<article class="card" id="i{{ x.id }}">
+  <div class="card-head"><div class="card-text">{{ x.text }}</div>
+    <div class="topacts">
+      {% if leader %}<button type="button" class="act" data-panel="m{{ x.id }}" title="Correct it, or record what became of a tabled motion">{{ emoji('✏️', 'pencil') }} Edit</button>{% endif %}
+      <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + (x.comments or [])|length }})</button>
+    </div></div>
+  <div class="card-meta"><span class="chip">{{ mo.result }}</span>
+    <span class="chip">{{ emoji('📅', 'calendar') }} <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>
+    <span class="chip">{{ avatar(mo.mover, 'xs') }}moved by {{ club.name(mo.mover) }}</span>
+    {% if mo.seconder %}<span class="chip">{{ avatar(mo.seconder, 'xs') }}seconded by {{ club.name(mo.seconder) }}</span>{% endif %}</div>
+  {% if leader %}<div class="panel" id="m{{ x.id }}" hidden><form method="post" action="/business/{{ x.id }}/motion" class="modern">
+    {{ motion_fields(mo) }}
+    <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>{% endif %}
+  <div class="panel" id="h{{ x.id }}" hidden>{{ timeline(x) }}</div>
+</article>{% else %}<p class="muted">No motions{{ ' with that result' if result }} yet. Motions are recorded with "+ Motion" under New Business in the leader console.</p>{% endfor %}</div>
+{% if leader %}<h2>Record a past motion</h2>
+<form method="post" action="/business/motion" class="modern card">
+  <p class="hint">From minutes written before the app kept motions. It's filed under that meeting's date and never comes up in Old Business.</p>
+  <label>Meeting date<input type="date" name="date" required max="{{ today }}"></label>
+  {{ motion_fields(None) }}
+  <div class="formrow"><button class="btn small">Record the motion</button></div>
+</form>{% endif %}
+
 {% elif tab == 'suggestions' %}
 <p class="hint">An AI read the minutes and suggests these. Nothing is added until you accept it: check each one, fix the wording, owner or date, then Accept, or Dismiss it.</p>
 <div class="cards">{% for g in suggestions %}{% set it = by_id.get(g.item) %}<article class="card sugg">

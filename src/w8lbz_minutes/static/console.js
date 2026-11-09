@@ -382,9 +382,7 @@
       const val = (w) => w.querySelector("input").value.trim();
       const go = () => {
         if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
-        const r = result.value, s = val(second);
-        send("/business/add", { text: `Motion: ${val(mover)} moved to ${what.value.trim().replace(/^to\s+/i, "").replace(/\.$/, "")}` +
-          (s ? `, seconded by ${s}. ${r}.` : r.startsWith("Died") ? `. The motion died for lack of a second.` : `. ${r}.`) });
+        send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value });
       };
       return h("div", { class: "bizitem motion" }, h("b", {}, "Motion"),
         h("div", { class: "row" }, mover, h("span", {}, "moved to")), what,

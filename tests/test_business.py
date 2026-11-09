@@ -193,3 +193,42 @@ def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch)
     assert r.status_code == 200 and business.get(business.load(), iid)["text"] == "changed"
     assert c.post("/business/add", data={"text": "New thing", "meeting": "2026-11-05"},
                   headers={"Accept": "application/json"}).status_code == 200
+
+
+def test_motions_are_records(env, monkeypatch):
+    """A motion keeps its mover, seconder and result as data; its text is the minutes' line."""
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "amy"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    form = {"mover": "Amy Able", "seconder": "Bob Baker", "what": "to buy a new antenna.", "result": "Passed"}
+    assert c.post("/business/motion", data={**form, "meeting": "2026-11-05"}).status_code == 403  # not leading
+    who["id"] = "sec"
+    console.start(a, dt.date(2026, 11, 5), "sec")
+    r = c.post("/business/motion", data={**form, "meeting": "2026-11-05"}, headers={"Accept": "application/json"})
+    assert r.json()["new"][0]["text"] == "Motion: Amy Able moved to buy a new antenna, seconded by Bob Baker. Passed."
+    assert a.by_slug["2026-11-05"].items("New Business")[0].text.startswith("Motion: Amy Able")  # in the draft
+    x = business.motions(business.load())[0]
+    assert x["motion"] == {"mover": "amy", "seconder": "bob", "what": "buy a new antenna", "result": "Passed"}
+    # problems are refused, not stored
+    for bad in ({**form, "result": "Maybe"}, {**form, "seconder": "Amy Able"}, {**form, "mover": "Nobody Here"}):
+        assert c.post("/business/motion", data={**bad, "meeting": "2026-11-05"},
+                      headers={"Accept": "application/json"}).status_code == 409
+    # a past motion, from old minutes: filed under its date, closed, so it never comes up in Old Business
+    c.post("/business/motion", data={**form, "what": "open the books", "result": "Tabled", "date": "2026-10-22"})
+    old = business.motions(business.load())[1]
+    assert (old["opened"], old["status"]) == ("2026-10-22", "done")
+    assert "open the books" not in str(business.for_meeting(business.load(), "2026-11-12"))
+    # a tabled motion's later result; a died motion drops its seconder
+    c.post(f"/business/{old['id']}/motion", data={**form, "what": "open the books", "result": "Died for lack of a second"})
+    old = business.get(business.load(), old["id"])
+    assert old["text"] == "Motion: Amy Able moved to open the books. The motion died for lack of a second."
+    assert old["motion"]["seconder"] is None and "result" in old["history"][-1]["changes"]
+    page = c.get("/business?tab=motions&result=Passed").text
+    assert "buy a new antenna" in page and "open the books" not in page and "Record a past motion" in page
+    who["id"] = "amy"
+    assert "Record a past motion" not in c.get("/business?tab=motions").text
+    assert c.post(f"/business/{old['id']}/motion", data=form).status_code == 403

@@ -362,7 +362,8 @@ def _may_edit_item(request: Request, s: dict, iid: str, meeting: str = "") -> No
 
 
 @app.get("/business", response_class=HTMLResponse)
-def business_page(request: Request, tab: str = "open", error: str = "", note: str = "", mid: str = Depends(me)):
+def business_page(request: Request, tab: str = "open", error: str = "", note: str = "", result: str = "",
+                  mid: str = Depends(me)):
     s = console.business_state(archive)
     today = dt.date.today().isoformat()
     items = [business.view(archive.club, x, today) for x in s["items"]]
@@ -375,7 +376,7 @@ def business_page(request: Request, tab: str = "open", error: str = "", note: st
     submitted = [m for m in archive.meetings if m.status != "draft"][:6]
     my_notes = [n for n in s["notes"] if n["by"] == mid and n["status"] == "pending"]
     all_notes = [n for n in s["notes"] if n["status"] == "pending"] if leader_ else []
-    tabs = [("open", f"Open ({len(open_)})"), ("notes", "Notes for the next meeting"), ("done", "Done")]
+    tabs = [("open", f"Open ({len(open_)})"), ("notes", "Notes for the next meeting"), ("done", "Done"), ("motions", "Motions")]
     if leader_:
         tabs.insert(1, ("add", "Add an item"))
     if leader_ and (pending or ai.configured(archive.club)):
@@ -385,7 +386,8 @@ def business_page(request: Request, tab: str = "open", error: str = "", note: st
     return page(request, "business.html", tab=tab, tabs=tabs, open_items=open_, done=done, error=error, note=note, leader=leader_,
                 my_notes=my_notes, all_notes=all_notes, next_meetings=upcoming_meetings(),
                 suggestions=pending, ai_on=ai.configured(archive.club) and leader_, submitted=submitted,
-                by_id={x["id"]: x for x in items},
+                by_id={x["id"]: x for x in items}, results=business.RESULTS, result=result,
+                motions=[x for x in business.motions(s) if not result or x["motion"]["result"] == result],
                 members=members, today=today, fmt=lambda d: dt.date.fromisoformat(d).strftime("%b %-d, %Y"))
 
 
@@ -450,6 +452,25 @@ def business_add(request: Request, text: str = Form(...), owner: str = Form(""),
     return business_change(request, lambda s: business.add(s, text, mid, owner_id(owner), due, agenda,
                                                            opened=meeting or None), meeting,
                            back="/business?note=Added." if not meeting else "/business")
+
+
+@app.post("/business/motion")
+def business_motion(request: Request, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
+                    result: str = Form(""), meeting: str = Form(""), date: str = Form(""), mid: str = Depends(me)):
+    """A motion from the console (meeting set), or a past one an officer records from old minutes (date set)."""
+    if not manages_business(request, meeting):
+        raise HTTPException(403, "Only officers, or the meeting's leader in the console, can record motions.")
+    return business_change(request, lambda s: business.add_motion(
+        s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result, opened=meeting or date or None,
+        past=not meeting), meeting, back="/business?tab=motions&note=Recorded." if not meeting else "/business")
+
+
+@app.post("/business/{iid}/motion")
+def business_motion_edit(request: Request, iid: str, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
+                         result: str = Form(""), mid: str = Depends(officer)):
+    return business_change(request, lambda s: business.set_motion(s, archive.club, iid, mid, owner_id(mover),
+                                                                  owner_id(seconder), what, result),
+                           back=f"/business?tab=motions#i{iid}")
 
 
 @app.post("/business/{iid}/edit")

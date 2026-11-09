@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Motions as records:** a motion made in the console (+ Motion) now keeps who moved it, who seconded it, its wording and its result as data, not just a line of text. Business → **Motions** lists them all, filtered by result, so spending and bylaws changes can be traced to the motion that approved them. Officers can correct a motion, record what became of a tabled one, and add past motions from older minutes (filed under that meeting's date, never carried into Old Business).
 - **Printable chow list:** "Printable list (PDF)" on the Chow page shows every night still to come. Officers email it with "Email the list to members", which says whether the schedule has changed since it was last sent; it goes only when someone sends it, never with each set of minutes. Members can turn it off on their Email tab. This replaces the Secretary's spreadsheet.
 
 ## 0.11.0 (2026-11-08)

@@ -111,7 +111,7 @@ The minutes follow a fixed template. The system should generate exactly this str
   - The person with the floor is shown prominently.
 - **FR-20** Show follow-up prompts for the person with the floor, taken from their earlier reports in the archive. Examples: "Waiting on test results, ask how it went", "Hex beam build: done?", "Selling a radio: sold?". The leader can dismiss a prompt, or mark it resolved or still open.
 - **FR-21** Under Old Business, list the open tracked items. For each one, the leader can record an update, close it, or carry it forward. Items that haven't been touched in N weeks are flagged as possibly stale.
-- **FR-22** Under New Business, quick buttons create a **Motion** (mover, seconder, result), an **Action item** (owner, due date) or an **Event** (date, time, location).
+- **FR-22** Under New Business, quick buttons create a **Motion** (mover, seconder, result; kept as data, listed on Business → Motions), an **Action item** (owner, due date) or an **Event** (date, time, location).
 - **FR-23** Show a live draft of the minutes next to the transcript, updated within about 30–60 s, in the club's terse style.
 
 ### 4.4 Collaboration
