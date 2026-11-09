@@ -61,6 +61,18 @@
 <form method="post" action="/admin/security/backups/download" class="inline"><button class="btn small ghost">Download a backup now</button></form></div>
 <p class="hint">Back up now runs the usual backup (kept here and sent off); reload the page to see it. Download makes a fresh one and saves it on your computer: a compressed archive, encrypted with the passphrase, so it's safe on a laptop or USB stick. To open it: <code>w8lbz-minutes restore FILE FOLDER</code>.</p>
 
+<h2 id="passphrase">The passphrase</h2>
+<p class="hint">Set on the server only, in <code>/etc/w8lbz-minutes/env</code> (<code>W8LBZ_BACKUP_PASSPHRASE=…</code>, then restart the app), so a stolen admin sign-in can't change it. Keep it in your password manager, and a printed copy somewhere safe at the club: without it no backup opens. Changing it affects only new backups; keep the old one until the old backups have aged out.</p>
+<details><summary>Suggest a passphrase</summary>
+  <p><code class="cs">{{ suggestion }}</code></p>
+  <p class="hint">Random, made just now and not kept anywhere: copy it before leaving the page. Capital letters and digits without look-alikes (no 0/O, 1/I/L), in groups of four, so it's easy to read off paper and type; about 119 bits, far beyond guessing. A password manager's generator works too: 20+ random letters and digits, or 7+ random words. Symbols aren't needed: length matters more.</p>
+</details>
+<form method="post" action="/admin/security/backups/check" class="modern">
+  <div class="formrow"><label>Check a passphrase<input type="password" name="passphrase" required autocomplete="off"></label>
+  <button class="btn small ghost">Check</button></div>
+  <p class="hint">Says whether it matches the server's, how strong it is, and whether it's in Have I Been Pwned's leaked passwords (only the first 5 characters of its hash are sent). It isn't stored or logged.</p>
+</form>
+
 <h2>Schedule and how many to keep</h2>
 <p class="hint"><b>Recommended:</b> daily at {{ rec.hour }}:00, keep {{ rec.keep_local }} on the server, {{ rec.drive_keep }} on Google Drive, and {{ rec.s3_days }} days on S3 (the bucket's lifecycle rule). At this size{% if backup_status.size %} (about {{ (backup_status.size / 1048576)|round(1) }} MB each){% endif %}, a year of daily backups is a few GB at most: pennies on B2, well within a Shared Drive. Daily means at most a day of changes could be lost; the server copies cover a mistake noticed within the week, the off-server copies a lost server or one noticed later.</p>
 
