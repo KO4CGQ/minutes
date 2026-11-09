@@ -20,6 +20,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Bond wording:** every page that says "bond" explains it's the club's name for the Certificate of Indebtedness, not a government or savings bond. Who owes what lists who owes something, with **Everyone** a tap away.
 - **Spending categories** are the Treasurer's to add, rename and remove (Settings), each keeping its chart colour. **Bills from the minutes** are titled by their own words when a bullet holds several, open on what's waiting, and older minutes are read only when the Treasurer looks back (and can undo it). Spending shows how "dues bring in" is worked out.
 - **View as is gentler:** trying to change something while viewing the app as another member opens a "Read-only" dialog instead of a page saying no. **Bills** have Waiting, Paid, Not a bill and All tabs, the Treasurer names a bill as he marks it paid, and can rename entries later on the Money tab.
+- **Console comments show when:** in the leader console's Old Business, each comment since the last meeting shows when it was written ("Mon, Nov 9, 10:44 AM").
 - **Treasurer, more:** regular bills (what the club pays every month or year) show whether they've been paid this month or year; other income (drink sales, donations); and funds a committee runs, like a drinks fund with its own checking account, whose keepers record that account's money and see only it.
 
 ## 0.12.1 (2026-11-09)

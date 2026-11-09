@@ -369,7 +369,10 @@
         h("div", { class: "row meta" }, owner, due,
           x.overdue ? h("span", { class: "badge warn" }, `overdue since ${fmtDate(x.due)}`) : null,
           !isNew ? h("span", { class: "hint" }, `first mentioned ${fmtDate(x.opened)}`) : null),
-        (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, `${c.name}: `), c.text)));
+        // comments since the last meeting, each with when it was written ("Tue 7:41 PM")
+        (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, c.name), " ",
+          h("span", { class: "hint" }, new Date(c.at * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })),
+          h("b", {}, ": "), c.text)));
     };
     const add = () => {
       const ta = h("textarea", { rows: 1, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });
