@@ -384,8 +384,10 @@ class Auth:
 
 
 def _safe_next(url: str) -> str:
-    """Only allow local paths as a post-login redirect."""
-    return url if url.startswith("/") and not url.startswith("//") else "/"
+    """Only allow local paths as a post-login redirect. Browsers read "/\\x" (and "/<tab>/x": they drop tabs and newlines)
+    as "//x", another site, so a backslash or any control character sends you home instead."""
+    ok = url.startswith("/") and not url.startswith("//") and "\\" not in url and not any(ord(c) < 32 or ord(c) == 127 for c in url)
+    return url if ok else "/"
 
 
 def _preview_outbox(recipients, subject, body, attachments, only_to, reply_to) -> int:

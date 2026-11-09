@@ -1,0 +1,105 @@
+"""Whole-app security checks: every route for a signed-out visitor, officer pages for a member, members' own-only actions,
+post-sign-in redirects, and bad input that used to be a server error."""
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from w8lbz_minutes import business, chow, web
+from w8lbz_minutes.auth import Auth, _safe_next
+from w8lbz_minutes.club import Club
+
+FIX = Path(__file__).parent / "fixtures"
+PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "email": "amy@example.org"},
+          {"id": "kd8bbb", "first": "Bob", "last": "Baker", "email": "bob@example.org"},
+          {"id": "kd8off", "first": "Ola", "last": "Officer", "officer": True, "email": "o@example.org"}]
+PUBLIC_GET = {"/login", "/favicon.ico", "/calendar/public", "/calendar/public.ics", "/calendar/feed/x.ics", "/api/roster", "/login/link",
+              "/healthz"}
+
+
+@pytest.fixture
+def app(tmp_path, monkeypatch):
+    club = Club(FIX / "test-club.yaml", roster=PEOPLE)
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    monkeypatch.setattr(chow, "DATA", tmp_path)
+
+    def as_(who):
+        t = TestClient(web.app, client=("203.0.113.6", 5000))
+        t.cookies.set(web.COOKIE, a.new_session(who))
+        return t
+    return as_
+
+
+def routes():
+    for r in web.app.routes:
+        path = r.path
+        for p in ("slug", "iid", "eid", "rid", "cid", "sid", "nid", "mid", "tab", "tid", "id", "key", "kind"):
+            path = path.replace("{%s}" % p, "x")
+        path = path.replace("{token}.ics", "x.ics")
+        if "{" not in path and not path.startswith(("/static", "/docs", "/openapi")):
+            for m in getattr(r, "methods", None) or ():
+                if m in ("GET", "POST"):
+                    yield m, path
+
+
+def test_a_signed_out_visitor_reaches_only_the_public_pages(app):
+    anon = TestClient(web.app, client=("203.0.113.5", 5000))
+    seen = 0
+    for m, path in routes():
+        if path.startswith(("/login/email", "/auth/passkey/login/")):  # how you sign in: public by design (tested on their own)
+            continue
+        r = anon.request(m, path, data={"x": "1"} if m == "POST" else None, follow_redirects=False)
+        seen += 1
+        if m == "GET" and path not in PUBLIC_GET:
+            assert r.status_code in (303, 401) and r.headers.get("location", "/login").startswith("/login"), (path, r.status_code)
+        if m == "POST":
+            assert r.status_code == 401, (path, r.status_code)
+    assert seen > 100
+
+
+@pytest.mark.parametrize("path", ["/console", "/roster/add", "/roster/changes", "/calendar/edit", "/calendar/import", "/calendar/changes",
+                                  "/links/icons", "/treasurer", "/admin/updates", "/admin/security", "/admin/email", "/spending"])
+def test_officer_and_admin_pages_turn_members_away(app, path):
+    assert app("kd8aaa").get(path, follow_redirects=False).status_code in (403, 404)
+
+
+def test_members_change_only_their_own_things(app):
+    s = business.load()
+    x = business.add(s, "Bob's item", "kd8off", owner="kd8bbb")
+    c = business.comment(s, x["id"], "kd8bbb", "Bob's comment")
+    business.save(s)
+    cs = chow.load()
+    cs["swaps"].append({"id": "sw1", "requester": "kd8off", "with": "kd8bbb", "mine": "2030-01-03", "theirs": "2030-01-10", "status": "pending"})
+    chow.save(cs)
+    amy = app("kd8aaa")
+    amy.post(f"/business/{x['id']}/edit", data={"text": "hijacked", "due": ""})
+    amy.post(f"/business/{x['id']}/done", data={"done": "1"})
+    amy.post(f"/business/{x['id']}/comments/{c['id']}/delete")
+    amy.post("/chow/requests/sw1/answer", data={"approve": "1"})
+    it = business.load()["items"][0]
+    assert (it["text"], it["status"], len(it["comments"])) == ("Bob's item", "open", 1)
+    assert chow.load()["swaps"][0]["status"] == "pending"
+
+
+@pytest.mark.parametrize("bad", ["//evil.example", "/\\evil.example", "/\t/evil.example", "/\n/evil.example", "https://evil.example",
+                                 "javascript:alert(1)", "evil.example", "/\x7f/x"])
+def test_after_sign_in_you_never_leave_the_site(bad):
+    assert _safe_next(bad) == "/"
+
+
+def test_after_sign_in_local_paths_still_work():
+    assert _safe_next("/business?tab=done#i1") == "/business?tab=done#i1" and _safe_next("/%5Cx") == "/%5Cx"
+
+
+def test_unreadable_requests_are_a_400_not_a_crash(app):
+    anon = TestClient(web.app, raise_server_exceptions=False)
+    for body in (b"", b"not json"):
+        assert anon.post("/auth/passkey/login/verify", content=body).status_code == 400
+
+
+def test_the_original_pdf_is_only_served_for_a_real_meeting(app):
+    amy = app("kd8aaa")
+    for slug in ("..", ".", "%2e%2e"):
+        assert amy.get(f"/meetings/{slug}/original.pdf", follow_redirects=False).status_code == 404

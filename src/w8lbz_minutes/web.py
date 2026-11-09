@@ -271,6 +271,14 @@ def start_session(request: Request, response: Response, member: str, method: str
     return response
 
 
+async def _json(request: Request):
+    """The request's JSON body; anything that isn't JSON is a bad request (400), not a server error."""
+    try:
+        return await request.json()
+    except ValueError:
+        raise HTTPException(400, "That request wasn't readable.") from None
+
+
 def get_meeting(slug: str):
     m = archive.by_slug.get(slug)
     if not m:
@@ -933,7 +941,7 @@ def admin_confirm_options(mid: str = Depends(real_me)):
 @app.post("/admin/confirm/verify")
 async def admin_confirm_verify(request: Request, mid: str = Depends(real_me)):
     _admin(mid)
-    body = await request.json()
+    body = await _json(request)
     try:
         authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"], kind="step-up", member=mid)
     except Exception as e:
@@ -1275,7 +1283,7 @@ def passkey_register_options(request: Request, mid: str = Depends(me)):
 
 @app.post("/auth/passkey/register/verify")
 async def passkey_register_verify(request: Request, mid: str = Depends(me)):
-    body = await request.json()
+    body = await _json(request)
     try:
         authn.register(mid, request.cookies.get(CHALLENGE_COOKIE), body["credential"], body.get("label", ""))
     except Exception as e:  # verification errors come from several exception types
@@ -1293,7 +1301,7 @@ def passkey_login_options():
 
 @app.post("/auth/passkey/login/verify")
 async def passkey_login_verify(request: Request):
-    body = await request.json()
+    body = await _json(request)
     try:
         member = authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"])
     except Exception as e:
@@ -1404,6 +1412,7 @@ def pdf(request: Request, slug: str):
 
 @app.get("/meetings/{slug}/original.pdf")
 def original(slug: str):
+    get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
     p = archive.root / slug / "original.pdf"
     if not p.exists():
         raise HTTPException(404)
@@ -2210,7 +2219,7 @@ def console_page(request: Request, slug: str, mid: str = Depends(leader)):
 async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     try:
-        console.apply(archive, slug, await request.json())
+        console.apply(archive, slug, await _json(request))
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}
