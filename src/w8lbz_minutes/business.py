@@ -275,9 +275,9 @@ def reopen(s: dict, iid: str, by: str) -> dict:
 
 
 def remove(s: dict, iid: str, date: str) -> None:
-    """Delete an item added by mistake: only at the meeting that opened it."""
+    """Delete an item added by mistake: only at the meeting that opened it. A past motion is a record: never."""
     x = get(s, iid)
-    if x["opened"] != date:
+    if x["opened"] != date or x["history"][0]["what"] == "recorded a past motion":
         raise ValueError("Only an item added at this meeting can be deleted; mark it done instead.")
     s["items"].remove(x)
 
