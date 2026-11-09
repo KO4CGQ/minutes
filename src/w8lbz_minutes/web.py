@@ -1495,7 +1495,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
     return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
                 items=items, repeats=repeats, weekdays=[dt.date(2024, 1, 1 + (ws + i) % 7).strftime("%a") for i in range(7)],
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
-                can_edit=not public and can_lead_now(request),
+                can_edit=not public and can_edit_calendar_now(request), is_officer=not public and privileged(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
                 timedelta=dt.timedelta, weeks=weeks, agenda_weeks=AGENDA_WEEKS)
 
@@ -1503,6 +1503,12 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
 def _feed_url(request: Request, path: str) -> str:
     """The feed's address on the app's HTTPS name, which calendar services (Google, Outlook) can reach."""
     return f"https://{authn.rp_id}{path}" if authn.rp_id and not PREVIEW else str(request.base_url).rstrip("/") + path
+
+
+@app.get("/calendar/changes", response_class=HTMLResponse)
+def calendar_changes(request: Request, p: str = Query("1", alias="page"), per: str = "", mid: str = Depends(officer)):
+    """Who changed what on the club calendars (calendar-log.jsonl), newest first."""
+    return page(request, "calendar_changes.html", pg=paginate(events.history(5000), p, per, 50), cals=events.CALS)
 
 
 @app.get("/calendar/subscribe", response_class=HTMLResponse)
@@ -1552,9 +1558,13 @@ def _club_tz() -> str:
     return str(archive.club.info.get("timezone", "America/New_York"))
 
 
+def can_edit_calendar_now(request: Request) -> bool:
+    return archive.club.can_edit_calendar(request.state.member) or admin_mode(request)
+
+
 def _calendar_editor(request: Request) -> None:
-    if not can_lead_now(request):
-        raise HTTPException(403, "Only leaders and minutes editors can change the club calendars.")
+    if not can_edit_calendar_now(request):
+        raise HTTPException(403, "Only leaders, minutes editors and calendar editors can change the club calendars.")
 
 
 def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
@@ -1568,8 +1578,9 @@ def _repeat_choices(day: str) -> list[tuple[str, str]]:
     """The Repeats menu, worded for the start day ("Monthly on the 2nd Tuesday")."""
     start = day[:10]
     lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})  # noqa: E731
-    return [("", "Doesn't repeat"), ("weekly", lab("weekly")), ("biweekly", lab("weekly", interval=2)),
+    return [("", "Doesn't repeat"), ("daily", lab("daily")), ("weekly", lab("weekly")), ("biweekly", lab("weekly", interval=2)),
             ("monthly_weekday", lab("monthly_weekday")), ("monthly_last", lab("monthly_weekday", last=True)),
+            ("monthly_weeks", f"Monthly on some {dt.date.fromisoformat(start):%A}s (pick the weeks)"),
             ("monthly", lab("monthly")), ("yearly", lab("yearly")), ("yearly_weekday", lab("yearly_weekday"))]
 
 

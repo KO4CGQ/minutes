@@ -36,13 +36,6 @@ Today the server relies on Proxmox snapshots of the container. A backup the app 
 - **Filter the Admin actions log** by admin, kind of action and date, with paging (it shows the last 50 today).
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
-## Club calendars
-The calendars are kept by the app, with .ics import, subscriptions, public calendars and an optional copy to Google (see the README). Still to do:
-- **Calendar editors:** editing is for leaders and minutes editors; a separate `calendar_editor` tick on the roster sheet could let others (e.g. the net manager) edit too.
-- **Who changed what:** a page for officers listing `calendar-log.jsonl`.
-- **Planning:** due dates of tracked business items on the Planning calendar.
-- **More repeat patterns:** daily, or several days of the month; today these are listed as not imported.
-
 ## Members and roster management
 The Google Sheet stays the source of truth; the app writes values back to it (values only, never formatting or structure).
 - **Celebrations:** birthdays (opt-in; a month-only birthday at the first meeting of that month) and membership anniversaries shown in the console on meeting night ("Happy birthday, …", "5 years as a member").

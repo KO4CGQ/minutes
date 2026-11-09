@@ -3,8 +3,9 @@
 events.json in the data folder: {"events": [event, ...]}. An event:
     id, cal ("events" | "planning" | "community"), title, where, notes,
     start: "YYYY-MM-DD" (all day) or "YYYY-MM-DDTHH:MM", end: the same forms or None (the first date's end),
-    repeat: None or {"freq": "weekly" | "monthly" | "monthly_weekday" | "yearly" | "yearly_weekday", "interval": 1, "last": False,
-                     "until": "YYYY-MM-DD" or None},
+    repeat: None or {"freq": "daily" | "weekly" | "monthly" | "monthly_weekday" | "yearly" | "yearly_weekday", "interval": 1,
+                     "last": False, "until": "YYYY-MM-DD" or None, "weeks": [1, 3] (monthly_weekday on several weeks:
+                     the 1st and 3rd Tuesday; with it, "last" adds the last one)},
     skip: [dates taken out of a repeating event], changes: {date: {title, where, notes, start, end}} (one date changed),
     tz: the IANA time zone start/end are in (timed events), when not the club's (club.yaml timezone), e.g. "UTC",
     uid: the .ics UID it was imported from, if any.
@@ -26,7 +27,8 @@ from zoneinfo import ZoneInfo, available_timezones
 from .club import DATA
 
 CALS = {"events": "Club events", "planning": "Planning", "community": "Community"}
-REPEATS = ("", "weekly", "biweekly", "monthly", "monthly_weekday", "monthly_last", "yearly", "yearly_weekday")  # the form's choices
+REPEATS = ("", "daily", "weekly", "biweekly", "monthly", "monthly_weekday", "monthly_last", "monthly_weeks", "yearly",
+           "yearly_weekday")  # the form's choices
 SCOPES = {"this": "This date only", "following": "This and following dates", "all": "Every date"}
 ORDINAL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
 FIELDS = ("title", "where", "notes", "start", "end")
@@ -107,7 +109,12 @@ def repeat_label(start: str, r: dict | None) -> str:
     if not r:
         return "Doesn't repeat"
     d = _dt(start)
-    every = {"weekly": f"Every {d:%A}" if r.get("interval", 1) == 1 else f"Every {r['interval']} weeks on {d:%A}",
+    if r.get("weeks"):  # "Monthly on the 1st, 3rd and last Tuesday"
+        names = [ORDINAL[k] for k in r["weeks"]] + (["last"] if r.get("last") else [])
+        return f"Monthly on the {', '.join(names[:-1])} and {names[-1]} {d:%A}".replace("the  and ", "the ") + (
+            f", until {_dt(r['until']):%b %-d, %Y}" if r.get("until") else "")
+    every = {"daily": "Every day" if r.get("interval", 1) == 1 else f"Every {r['interval']} days",
+             "weekly": f"Every {d:%A}" if r.get("interval", 1) == 1 else f"Every {r['interval']} weeks on {d:%A}",
              "monthly": f"Monthly on the {d.day}{'th' if 10 <= d.day % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(d.day % 10, 'th')}",
              "monthly_weekday": f"Monthly on the {'last' if r.get('last') else ORDINAL.get((d.day - 1) // 7 + 1, 'last')} {d:%A}",
              "yearly": f"Every year on {d:%B} {d.day}",
@@ -133,8 +140,8 @@ def dates(e: dict, lo: dt.date, hi: dt.date) -> list[dt.date]:
     until = min(hi, dt.date.fromisoformat(r["until"])) if r.get("until") else hi
     lo = max(lo - dt.timedelta(days=span), first)
     out, n = [], r.get("interval", 1)
-    if r["freq"] == "weekly":
-        step = 7 * n
+    if r["freq"] in ("weekly", "daily"):
+        step = (7 if r["freq"] == "weekly" else 1) * n
         k = max(0, -(-((lo - first).days) // step))
         d = first + dt.timedelta(days=k * step)
         while d <= until:
@@ -148,12 +155,14 @@ def dates(e: dict, lo: dt.date, hi: dt.date) -> list[dt.date]:
             y, m = first.year + y, m + 1
             if dt.date(y, m, 1) > until:
                 break
-            if r["freq"] in ("monthly_weekday", "yearly_weekday"):
-                d = _nth_weekday(y, m, first.weekday(), nth, r.get("last", False))
+            if r.get("weeks"):  # several weeks of the month (and maybe the last)
+                ds = sorted({_nth_weekday(y, m, first.weekday(), k, False) for k in r["weeks"]} - {None}
+                            | ({_nth_weekday(y, m, first.weekday(), 0, True)} if r.get("last") else set()))
+            elif r["freq"] in ("monthly_weekday", "yearly_weekday"):
+                ds = [_nth_weekday(y, m, first.weekday(), nth, r.get("last", False))]
             else:
-                d = dt.date(y, m, first.day) if first.day <= monthcal.monthrange(y, m)[1] else None
-            if d and lo <= d <= until:
-                out.append(d)
+                ds = [dt.date(y, m, first.day) if first.day <= monthcal.monthrange(y, m)[1] else None]
+            out += [d for d in ds if d and lo <= d <= until]
             i += 1
     skip = set(e.get("skip", []))
     return [d for d in out if d.isoformat() not in skip]
@@ -221,8 +230,16 @@ def from_form(f: dict, club_tz: str = "") -> dict:
         until = f.get("repeat_until") or None
         if until and until < day.isoformat():
             raise ValueError("It stops repeating before it starts.")
-        repeat = {"freq": {"biweekly": "weekly", "monthly_last": "monthly_weekday"}.get(rep, rep),
+        repeat = {"freq": {"biweekly": "weekly", "monthly_last": "monthly_weekday", "monthly_weeks": "monthly_weekday"}.get(rep, rep),
                   "interval": 2 if rep == "biweekly" else 1, "last": rep == "monthly_last" or (rep == "yearly_weekday" and day.day > 28), "until": until}
+        if rep == "monthly_weeks":
+            weeks, last = [k for k in (1, 2, 3, 4) if f.get(f"week{k}")], bool(f.get("week_last"))
+            if not weeks and not last:
+                raise ValueError("Tick the weeks of the month it's on.")
+            nth, is_last = (day.day - 1) // 7 + 1, (day + dt.timedelta(days=7)).month != day.month
+            if nth not in weeks and not (last and is_last):
+                raise ValueError(f"It starts on the {'last' if is_last else ORDINAL[nth]} {day:%A}: tick that week too.")
+            repeat.update(weeks=weeks, last=last)
     return {"title": title, "where": " ".join((f.get("where") or "").split())[:200],
             "notes": (f.get("notes") or "").strip()[:2000], "start": start, "end": end, "repeat": repeat,
             "tz": tz if t and tz != club_tz else None}
@@ -232,11 +249,13 @@ def form_values(e: dict, d: str | None) -> dict:
     """The form's fields for an event (on date d, for a repeating one)."""
     o = occurrence(e, dt.date.fromisoformat(d)) if d else e
     r = e.get("repeat")
-    rep = "" if not r else "biweekly" if r.get("interval") == 2 else "monthly_last" if r.get("last") and r["freq"] == "monthly_weekday" else r["freq"]
+    rep = ("" if not r else "monthly_weeks" if r.get("weeks") else "biweekly" if r.get("interval") == 2 and r["freq"] == "weekly"
+           else "monthly_last" if r.get("last") and r["freq"] == "monthly_weekday" else r["freq"])
+    weeks = {f"week{k}": k in (r or {}).get("weeks", []) for k in (1, 2, 3, 4)} | {"week_last": bool(r and r.get("weeks") and r.get("last"))}
     end = o.get("end") or ""
     return {"title": o["title"], "where": o.get("where", ""), "notes": o.get("notes", ""), "cal": e["cal"],
             "date": o["start"][:10], "time": o["start"][11:16], "end_date": end[:10] if end[:10] != o["start"][:10] else "",
-            "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or ""}
+            "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or "", **weeks}
 
 
 def add(evs: list[dict], cal: str, v: dict, by: str) -> dict:
@@ -257,7 +276,7 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
             raise ValueError("To move one date to another calendar, choose This and following dates or Every date.")
         if "T" in v["start"] and v.get("tz") != e.get("tz"):
             raise ValueError("Unable to change the time zone of a single date in a series; choose This and following dates or Every date.")
-        same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until")) or None  # noqa: E731
+        same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until"), r.get("weeks")) or None  # noqa: E731
         if same(v.get("repeat")) != same(e["repeat"]):
             raise ValueError("To change how it repeats, choose This and following dates or Every date.")
         e["changes"][d] = {k: v[k] for k in FIELDS}
@@ -389,6 +408,16 @@ def _repeat(rule: str, start: dt.datetime, tz: ZoneInfo) -> tuple[dict | None, s
         if by and by != DAYS[start.weekday()]:
             return None, "repeats on more than one day of the week" if "," in by else "repeats on a different weekday than it starts"
         out["freq"] = "weekly"
+    elif freq == "DAILY" and not by:
+        out["freq"] = "daily"
+    elif freq == "MONTHLY" and "," in by:  # the 1st and 3rd Tuesday
+        parts = [re.fullmatch(r"([+-]?\d)(MO|TU|WE|TH|FR|SA|SU)", x) for x in by.split(",")]
+        nths = {int(p.group(1)) for p in parts if p}
+        is_last = (start + dt.timedelta(days=7)).month != start.month
+        if not all(parts) or {p.group(2) for p in parts} != {DAYS[start.weekday()]} or not nths <= {1, 2, 3, 4, -1} \
+                or not ((start.day - 1) // 7 + 1 in nths or (-1 in nths and is_last)):
+            return None, "repeats on more than one day of the month"
+        out.update(freq="monthly_weekday", weeks=sorted(nths - {-1}), last=-1 in nths)
     elif freq == "MONTHLY":
         m = re.fullmatch(r"([+-]?\d)?(MO|TU|WE|TH|FR|SA|SU)", by) if by else None
         if by and not m:
@@ -410,7 +439,7 @@ def _repeat(rule: str, start: dt.datetime, tz: ZoneInfo) -> tuple[dict | None, s
             return None, "repeats yearly on a day the app can't match to its start"
         out.update(freq="yearly_weekday", last=nth == -1)
     else:
-        return None, "repeats daily or in a way the app doesn't handle"
+        return None, "repeats in a way the app doesn't handle"
     if "UNTIL" in r:
         out["until"] = _when(r["UNTIL"], {}, tz)[0].date().isoformat()
     elif "COUNT" in r:

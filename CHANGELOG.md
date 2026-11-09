@@ -5,6 +5,11 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Holidays calendar:** US federal holidays, plus Christmas Eve and New Year's Eve, as their own calendar (shown or hidden from the legend, in the feeds, and public if `public_calendars` lists `holiday`).
+- **Calendar editors:** members ticked `calendar_editor` in the roster sheet (say, the net manager) can add, change and delete events, as leaders and minutes editors can. Add a `calendar_editor` column to the sheet to use it.
+- **Who changed what:** officers see every calendar change (who, when, what, which calendar) at Calendar → Who changed what.
+- **Business due dates on Planning:** open business items with a due date show on the Planning calendar ("Due: …", with who's looking after it), in the feeds and in the Google copy.
+- **More repeat patterns:** every day (or every few days), and monthly on several weeks: the 1st and 3rd Tuesday, or the 1st and last. The .ics import brings these in too.
 - **Security checks, every week and on every PR:** `pip-audit` (known-vulnerable packages), `gitleaks` (secrets in the git history), CodeQL (security bugs in the code) and Dependabot (weekly update PRs, and security fixes right away). Workflow actions are pinned to commits. See README → Security checks.
 - **Stricter Content Security Policy:** pages run only the app's own scripts and the script blocks the page was given a one-time nonce for, so injected markup can't run script even if some text slips through unescaped. The 24 inline `onclick`/`onsubmit`/`onchange` handlers became `data-` attributes handled in one place. The phone-width browser test now also fails on anything the policy blocks. (A member's name with an apostrophe in "Remove …'s picture?" no longer breaks that button.)
 - **Chow fixes from testing odd requests:** a bad date on Assign or No chow is refused (it was a server error); swapping a night with itself is refused by the server too (it logged a swap and emailed the member); filling the rotation stops at two years ahead (a typo like the year 2400 made 19,470 nights).

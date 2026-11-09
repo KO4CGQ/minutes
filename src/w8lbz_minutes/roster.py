@@ -2,7 +2,7 @@
 
 Reads columns by header name, so adding or reordering columns doesn't break it.
 Columns used: callsign, full_name, email, Title(s), is_officer, is_board, Class,
-minutes_editor (may lead meetings and edit minutes), Status (Active / Inactive /
+minutes_editor (may lead meetings and edit minutes), calendar_editor (may change the club calendars), Status (Active / Inactive /
 Silent Key / Prospect) and aliases (comma-separated spellings seen in old minutes).
 
 Also phone, address, birthday (MM-DD, or MM for a month only) and share (which of email, phone, address,
@@ -212,6 +212,7 @@ def to_members(rows: list[dict[str, str]]) -> list[dict]:
             "license_class": r.get("class", "").strip() or None,
             "aliases": _split(r.get("aliases", "")),
             "minutes_editor": _truthy(r.get("minutes_editor", "")),
+            "calendar_editor": _truthy(r.get("calendar_editor", "")),
             "status": r.get("status", "").strip() or "Active",
             "phone": r.get("phone", "").strip() or None,
             "address": r.get("address", "").strip() or None,

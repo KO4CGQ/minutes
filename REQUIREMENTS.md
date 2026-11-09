@@ -171,7 +171,7 @@ Members share personal news in their reports (health, jobs, family), and **those
 - **FR-42a** (Built, by email) Each member chooses which emails they get: the minutes (PDF, link or off), a meeting-day email (time, their chow, their business items, the week's calendar), chow and business reminders. Every optional email says how to change it.
 
 ### 4.11 Club calendars
-- **FR-47** The app keeps the club calendars itself (no Google needed): club events, planning and community, plus the weekly meeting, chow nights, dated Upcoming Events and the birthdays members share. Leaders edit them; members subscribe from their own calendar apps; chosen calendars can be public; events come in from .ics files; a one-way copy to Google Calendar is optional.
+- **FR-47** The app keeps the club calendars itself (no Google needed): club events, planning and community, plus the weekly meeting, chow nights, dated Upcoming Events, the birthdays members share, business items' due dates (Planning) and holidays. Leaders and calendar editors edit them, and officers see who changed what; members subscribe from their own calendar apps; chosen calendars can be public; events come in from .ics files; a one-way copy to Google Calendar is optional.
 
 ## 5. Non-functional requirements
 

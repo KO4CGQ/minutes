@@ -28,6 +28,7 @@
 </tbody></table>
 <p class="muted small">Tap an event for details, or a day to see it in the agenda.</p>
 {% endif %}
+{% if is_officer %}<p class="muted small"><a href="/calendar/changes">Who changed what on the calendars</a></p>{% endif %}
 {% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
 {% else %}<p><a href="/calendar/subscribe">Subscribe in your calendar app (phone, Outlook, Apple or Google Calendar)</a></p>{% endif %}
 
