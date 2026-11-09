@@ -1111,11 +1111,18 @@ def original(slug: str):
 
 
 @app.get("/search", response_class=HTMLResponse)
-def search(request: Request, q: str = ""):
-    results = archive.search(q) if q else []
-    for r in results:
+def search(request: Request, q: str = "", kind: str = "all", p: str = Query("1", alias="page"), per: str = ""):
+    """One search box; results by kind. All: the first few of each kind; a kind's tab: all of them, a page at a time."""
+    minutes = archive.search(q, limit=1000) if q else []
+    for r in minutes:
         r["date"] = archive.by_slug[r["slug"]].date
-    return page(request, "search.html", q=q, results=results, cal_results=_search_calendar(q), **_search_lists(q))
+    found = {**_search_lists(q), "calendar": _search_calendar(q), "minutes": minutes}
+    kind = kind if kind in SEARCH_KINDS else "all"
+    return page(request, "search.html", q=q, kind=kind, found=found, kinds=SEARCH_KINDS,
+                pg=paginate(found[kind], p, per) if kind != "all" else None)
+
+
+SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "nights": "Chow", "calendar": "Calendar", "minutes": "Minutes"}
 
 
 def _has(q: str, *texts) -> bool:
@@ -1128,7 +1135,7 @@ def _search_lists(q: str) -> dict:
     """Members (name, callsign), guests not yet members, business items (text, owner) and upcoming chow nights
     (who's bringing it) that match q. Only what the roster, Guests, Business and Chow pages already show every member."""
     if not q.split():
-        return {}
+        return {"members": [], "guests": [], "items": [], "nights": []}
     club = archive.club
     gone = ("inactive", "silent key")
     members = sorted((m for m in club.members.values() if _has(q, m.name, m.short, m.callsign, *m.aliases)),

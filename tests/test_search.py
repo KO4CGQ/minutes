@@ -30,3 +30,25 @@ def test_one_search_box_finds_members_guests_business_chow(tmp_path, monkeypatch
     gus = m.get("/search?q=kd8ggg").text
     assert ">Guests</h2>" in gus and "Gus Green" in gus
     assert "Nothing found." in m.get("/search?q=zebra").text
+
+
+def test_results_by_kind_a_page_at_a_time(tmp_path, monkeypatch):
+    from w8lbz_minutes import events
+    day = dt.date.today() + dt.timedelta(days=3)
+    with events.locked():
+        evs = []
+        for i in range(12):
+            events.add(evs, "events", events.from_form({"title": f"Fox hunt {i}", "date": (day + dt.timedelta(days=i)).isoformat()}), "x")
+        events.save(evs)
+    root = tmp_path / "meetings"
+    root.mkdir()
+    m, club, _ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    monkeypatch.setattr(web, "archive", Archive(root, club))
+    every = m.get("/search?q=fox").text
+    assert "All (12)" in every and "Calendar (12)" in every and "Members (" not in every  # tabs only for kinds found
+    assert every.count("Fox hunt") == 5 and "See all 12" in every and "kind=calendar" in every
+    first = m.get("/search?q=fox&kind=calendar&per=10").text
+    assert first.count("Fox hunt") == 10 and "Page 1 of 2" in first
+    assert m.get("/search?q=fox&kind=calendar&per=10&page=2").text.count("Fox hunt") == 2
+    assert "No members found." in m.get("/search?q=fox&kind=members").text
+    assert "All (12)" in m.get("/search?q=fox&kind=junk").text  # an unknown kind: All
