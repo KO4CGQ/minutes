@@ -16,7 +16,7 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 
 ## Backups
-Built (README → Backups): encrypted, scheduled and configured from the app, to S3 and/or Google Drive. Later, if wanted:
+Built (server admin guide → Backups): encrypted, scheduled and configured from the app, to S3 and/or Google Drive. Later, if wanted:
 - **SFTP** to another server, as a third destination.
 - **A restore drill:** a periodic test restore onto a scratch container, beyond the check that each backup opens.
 
@@ -44,7 +44,7 @@ Nobody uses the sheet directly any more; one other club tool on the same server 
 - **Later:** the bylaws as text under version control, with each amendment tied to the meeting and motion that adopted it, and a history page showing what changed and when. Open question: members-only or public.
 
 ## Treasurer
-Built (README → Treasurer): who owes what, payments, missed-chow charges, certificates, bills from the minutes, and each member's own figures on Home. Next:
+Built (officers guide → Treasurer): who owes what, payments, missed-chow charges, certificates, bills from the minutes, and each member's own figures on Home. Next:
 - **Monthly report:** the bylaws (IV.C) want a report at the first meeting of each month; fill the Financial Report step from the recorded money, with account balances.
 - **Certificate on the roster:** show whether each member has bought one on the Roster page (bylaws VII.E).
 - **Bookkeeping, if wanted:** every entry already has an account and whole-cent amounts, so a proper ledger (opening balances, transfers between accounts) or a QuickBooks export can be built on it without re-keying.

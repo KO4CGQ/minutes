@@ -12,7 +12,7 @@
   (Backblaze B2; how long they're kept is the bucket's lifecycle rule) and a Google Drive folder in a Shared
   Drive (the app keeps the last `keep` there). Admins choose on the Backups page (backup-settings.json, which
   holds the S3 secret and is left out of the backups; W8LBZ_S3_KEY_ID / W8LBZ_S3_SECRET override it).
-- Restore: `w8lbz-minutes restore FILE DIR` (README -> Backups).
+- Restore: `w8lbz-minutes restore FILE DIR` (docs/server-admin.md -> Backups).
 """
 from __future__ import annotations
 

@@ -51,7 +51,7 @@
 {% endif %}
 {% if tab == 'backups' %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
-<p class="muted">On the schedule below the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one compressed archive, encrypts it with the backup passphrase, checks it opens, keeps the newest here and sends it to the places ticked below. If it fails, the admins get an email. Restoring: README → Backups.</p>
+<p class="muted">On the schedule below the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one compressed archive, encrypts it with the backup passphrase, checks it opens, keeps the newest here and sends it to the places ticked below. If it fails, the admins get an email. Restoring: the server admin guide → Backups.</p>
 <ul class="plain">
 <li>Passphrase: {% if passphrase_set %}set{% else %}<b>not set</b>: put <code>W8LBZ_BACKUP_PASSPHRASE=…</code> (12+ characters) in <code>/etc/w8lbz-minutes/env</code> and restart. Keep a copy off the server: without it no backup opens.{% endif %}</li>
 <li>The data now: {{ (data_size / 1048576)|round(1) }} MB before compression{% if backup_status.size %}; the last backup came to {{ (backup_status.size / 1048576)|round(1) }} MB compressed{% endif %}.</li>
@@ -84,7 +84,7 @@
   </div>
   <h3>Where backups go</h3>
   <label class="check"><input type="checkbox" name="s3_on" value="1" {{ 'checked' if bs.s3.on }}> <b>S3-compatible storage</b> (Backblaze B2, AWS, Wasabi)</label>
-  <p class="hint">A private bucket, and a key limited to it with read and write. How long backups are kept there is the bucket's lifecycle rule (README → Backups).</p>
+  <p class="hint">A private bucket, and a key limited to it with read and write. How long backups are kept there is the bucket's lifecycle rule (the server admin guide → Backups).</p>
   <div class="formrow">
     <label>Endpoint<input name="s3_endpoint" value="{{ bs.s3.endpoint or '' }}" placeholder="https://s3.us-west-004.backblazeb2.com"></label>
     <label>Region<input name="s3_region" value="{{ bs.s3.region or '' }}" placeholder="us-west-004" size="12"></label>
