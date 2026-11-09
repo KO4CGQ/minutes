@@ -6,7 +6,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 - **Attendance:** a chart of each meeting's attendance (in person, online, guests) over the chosen period, above the tables. Hover or tap a bar for its numbers; click to open that meeting.
-- **Business cards, calmer:** History and Comment sit with the other buttons and stay faded until the card is hovered, tapped or reached with the keyboard; the intro is one line.
+- **Business items, one tap for the details:** each item is a small card (wording, owner, due date, how many comments); tapping it opens a dialog with everything else: Edit and Mark done (or Reopen, or a motion's Edit), all the comments and a box to add one, and the history folded away. After a comment or an edit the page comes back with that item open. The intro is one line.
 - **Celebrations:** the leader console's Attendance step opens with the week's shared birthdays ("Happy birthday, …"; a month-only birthday at the month's first meeting) and membership anniversaries ("5 years as a member").
 - **Previews** (`deploy/preview.sh`) use the local branch when there is one, so work can be tried before it's pushed.
 - **Docs by audience:** the README is now a short overview; the detail moved to guides in `docs/`: members, officers, server admins and developers.

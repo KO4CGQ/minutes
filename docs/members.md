@@ -21,7 +21,7 @@ Your name menu → **Your profile**:
 **Chow** shows the schedule and your nights. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap costs $35 (bylaws VII.F).
 
 ## Business
-**Business** lists the club's open items. Anyone can comment; if an item is yours, update it or mark it done. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting) and the leader reads it out.
+**Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting) and the leader reads it out.
 
 ## Calendar
 **Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google.

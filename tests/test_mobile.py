@@ -125,3 +125,50 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
         page.click("#readonly >> text=OK")
         assert not page.is_visible("#readonly")
         browser.close()
+
+
+def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_path, monkeypatch):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import business, web
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True}])
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "kd8adm", owner="kd8adm")
+    business.save(s)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("kd8adm"))
+
+    def serve(route):
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), follow_redirects=False)
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no Chromium for Playwright: {e}")
+        page = browser.new_page(viewport={"width": 375, "height": 800})
+        page.route("http://testserver/**", serve)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto("http://testserver/business")
+        d = f"#d{x['id']}"
+        assert not page.is_visible(d)
+        page.click(f"#i{x['id']}")  # the card
+        assert page.is_visible(d) and page.is_visible(f"{d} >> text=Mark done") and page.is_hidden(f"#e{x['id']}")
+        page.click(f"{d} >> text=Edit")
+        assert page.is_visible(f"#e{x['id']}")
+        # after a comment the app sends you back to /business#i<id> (Playwright can't follow a faked redirect, so go there)
+        r = c.post(f"/business/{x['id']}/comment", data={"text": "On it this weekend"}, follow_redirects=False)
+        assert r.headers["location"] == f"/business#i{x['id']}"
+        page.goto("about:blank")  # a real reload, as after the redirect (same address + #i… alone wouldn't reload)
+        page.goto("http://testserver" + r.headers["location"])
+        assert page.is_visible(d) and page.is_visible(f"{d} >> text=On it this weekend")  # back, still open
+        page.keyboard.press("Escape")
+        page.wait_for_function("!location.hash")  # closing it takes #i… off the address
+        assert not page.is_visible(d)
+        assert not errors
+        browser.close()

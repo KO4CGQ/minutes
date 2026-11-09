@@ -89,8 +89,6 @@ button.btn { cursor: pointer; font: inherit; font-weight: 500; } .btn.small { pa
 button.act { font: inherit; font-size: .86rem; padding: .25rem .8rem; border: 1px solid var(--border-strong); border-radius: 1rem;
   background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s; }
 button.act:hover { background: var(--accent-soft); } button.act.on { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
-/* Calmer cards: secondary buttons (History, Comment) appear on hover, keyboard focus or a tap on the card. */
-.card:not(:hover):not(:focus-within):not(.tapped) button.act.quiet:not(.on) { opacity: 0; }
 button.linkbtn { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: .85rem; padding: 0 .2rem; }
 button.linkbtn:hover { color: var(--danger); } button.linkbtn.more { color: var(--accent-text); margin-bottom: .2rem; }
 
@@ -486,3 +484,10 @@ table.month li.extra { display: none; }
 table.list td select { max-width: 7.5rem; font-size: .8rem; display: block; margin-top: .2rem; }
 .swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -.05rem; } .swatch.k1 { background: var(--chart-1); } .swatch.k2 { background: var(--chart-2); } .swatch.k3 { background: var(--chart-3); } .swatch.k4 { background: var(--chart-4); } .swatch.k5 { background: var(--chart-5); } .swatch.k6 { background: var(--chart-6); } .swatch.k7 { background: var(--chart-7); } .swatch.k8 { background: var(--chart-8); }
 input.cellinput { font: inherit; font-size: .9rem; width: 100%; min-width: 10rem; border: 1px solid transparent; background: transparent; color: inherit; padding: .15rem .3rem; border-radius: .3rem; } input.cellinput:hover, input.cellinput:focus { border-color: var(--border-strong); background: var(--surface); }
+/* Business items: a small card that opens a dialog with the details, comments, history and actions */
+article.bcard { cursor: pointer; transition: border-color .15s; } article.bcard:hover { border-color: var(--border-strong); }
+button.cardopen { all: unset; display: block; width: 100%; cursor: pointer; } button.cardopen:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: .3rem; }
+dialog.modal.wide { width: min(40rem, calc(100vw - 2rem)); } dialog.modal h3 { font-size: 1rem; margin: 1.1rem 0 .3rem; }
+dialog.modal .dacts { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 .2rem; } dialog.modal .dacts form { margin: 0; }
+details.hist { margin-top: 1rem; } details.hist summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+button.cardopen .card-text { display: block; }
