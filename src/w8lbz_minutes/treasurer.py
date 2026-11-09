@@ -43,7 +43,7 @@ MODES = {"off": "Off", "preview": "Preview: officers only", "on": "On: members s
 DEFAULTS = {"mode": "off", "start": None, "certificate_years": 2, "arrears_weeks": 4, "alerts": False,
             "rates": {"dues_weekly": 350, "initiation": 2500, "certificate": 10000, "missed_chow": 3500},
             "accounts": ["Checking", "Cash"], "funds": []}
-AMOUNTS = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{1,2})?)|(?<![\d$.,])(\d{1,5}\.\d{2})\b")  # "$81", "$1,200.50", "Electric 50.64"
+AMOUNTS = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)|(?<![\d$.,])(\d{1,5}\.\d{2})\b")  # "$81", "$1,200.50", "Electric 50.64"
 
 
 def config(s: dict) -> dict:

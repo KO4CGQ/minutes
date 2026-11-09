@@ -114,18 +114,18 @@ def test_bills_from_the_minutes_every_amount(club, tmp_path):
     for d, items in ((dt.date(2026, 10, 29), [Item("Water bill $40")]),  # before tracking
                      (dt.date(2026, 11, 5), [Item("Gas Bill $81")]),
                      (dt.date(2026, 11, 12), [Item("Gas Bill $81"), Item("Letter from the city"),
-                                              Item("Electric 50.64 $1,200.50 insurance")])):
+                                              Item("Electric 50.64 $1,200.50 insurance, pizza $10, ok")])):
         Meeting(date=d, status="published", sections={"Bills and Communications": items}).save(tmp_path / "m")
     archive, s = Archive(tmp_path / "m", club), started()
     bills = treasurer.bills(archive, s, "2026-11-05")
     assert [(b["meeting"], b["amount"], b["cents"], b["repeated"]) for b in bills] == [
-        ("2026-11-12", "$81", 8100, True), ("2026-11-12", "50.64", 5064, False), ("2026-11-12", "$1,200.50", 120050, False),
+        ("2026-11-12", "$81", 8100, True), ("2026-11-12", "50.64", 5064, False), ("2026-11-12", "$1,200.50", 120050, False), ("2026-11-12", "$10", 1000, False),
         ("2026-11-05", "$81", 8100, False)]
-    e = treasurer.record(club, s, "tre", "expense", "81", "2026-11-13", "Checking", bill=bills[3]["key"])
+    e = treasurer.record(club, s, "tre", "expense", "81", "2026-11-13", "Checking", bill=bills[4]["key"])
     treasurer.dismiss_bill(s, bills[0]["key"], "tre")
-    assert [b["status"] for b in treasurer.bills(archive, s, "2026-11-05")] == ["dismissed", "waiting", "waiting", "paid"]
+    assert [b["status"] for b in treasurer.bills(archive, s, "2026-11-05")] == ["dismissed", "waiting", "waiting", "waiting", "paid"]
     treasurer.delete(s, e["id"], "tre")  # a mistake: the bill waits again
-    assert treasurer.bills(archive, s, "2026-11-05")[3]["status"] == "waiting"
+    assert treasurer.bills(archive, s, "2026-11-05")[4]["status"] == "waiting"
 
 
 def test_regular_bills_this_month_or_year(club):
