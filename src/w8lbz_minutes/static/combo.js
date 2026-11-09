@@ -1,8 +1,9 @@
 // A dropdown you can also type into: click (or ▾) to see every name, type to narrow the list,
 // arrow keys + Enter or a click to pick. The input keeps the chosen name; the server matches it to a member.
-//   makeCombo(input, [{value: "Amy Able", note: "KD8AMY"}, ...], {empty: "(nobody)"})
-// On the Business page, <input data-combo="ID"> takes its names from <datalist id="ID">.
-function makeCombo(input, options, { empty = "(nobody)" } = {}) {
+//   makeCombo(input, [{value: "Amy Able", note: "KD8AMY"}, ...], {empty: "(nobody)", exclude: () => "Bob Baker"})
+// On the Business page, <input data-combo="ID"> takes its names from <datalist id="ID">;
+// data-combo-exclude="mover" leaves out the name in the form's "mover" box.
+function makeCombo(input, options, { empty = "(nobody)", exclude = () => "" } = {}) {
   input.removeAttribute("list");
   input.setAttribute("autocomplete", "off");
   input.setAttribute("role", "combobox");
@@ -23,7 +24,9 @@ function makeCombo(input, options, { empty = "(nobody)" } = {}) {
   const close = () => { menu.hidden = true; at = -1; };
   const open = (filter) => {
     const f = (filter || "").toLowerCase().trim();
-    shown = [{ value: "", note: empty }, ...options.filter((o) => !f || o.value.toLowerCase().includes(f) || (o.note || "").toLowerCase().includes(f))];
+    const skip = exclude().trim().toLowerCase();
+    shown = [{ value: "", note: empty }, ...options.filter((o) => o.value.toLowerCase() !== skip
+      && (!f || o.value.toLowerCase().includes(f) || (o.note || "").toLowerCase().includes(f)))];
     if (f) shown = shown.slice(1);  // while typing, only matches
     menu.replaceChildren(...shown.map((o, i) => {
       const li = document.createElement("li");
@@ -56,5 +59,7 @@ function makeCombo(input, options, { empty = "(nobody)" } = {}) {
 
 document.querySelectorAll("input[data-combo]").forEach((input) => {
   const list = document.getElementById(input.dataset.combo);
-  makeCombo(input, [...list.options].map((o) => ({ value: o.value, note: o.textContent })));
+  const other = input.dataset.comboExclude;
+  makeCombo(input, [...list.options].map((o) => ({ value: o.value, note: o.textContent })),
+    { exclude: () => (other && input.form?.elements[other]?.value) || "" });
 });
