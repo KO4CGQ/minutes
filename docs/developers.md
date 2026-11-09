@@ -6,7 +6,7 @@ For working on the code: running it locally, previews, tests, releases and the s
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh     # once
 uv sync
-uv run w8lbz-minutes roster                          # sync people from the roster Google Sheet
+uv run w8lbz-minutes roster                          # sync people from the roster (Google Sheet, or roster-sheet.json once moved)
 uv run w8lbz-minutes import archive                  # (re)build data/ from archive/
 uv run w8lbz-minutes serve --host 0.0.0.0 --port 8765
 uv run playwright install chromium                  # once: the mobile-first test uses it (skipped without it)

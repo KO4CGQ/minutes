@@ -1,5 +1,5 @@
 [Unit]
-Description=Sync the W8LBZ roster from the Google Sheet
+Description=Sync the W8LBZ roster (from the Google Sheet, or the app's own copy once moved)
 
 [Service]
 Type=oneshot

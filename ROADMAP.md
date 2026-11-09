@@ -26,13 +26,11 @@ Built (server admin guide → Backups): encrypted, scheduled and configured from
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Members and roster management
-The Google Sheet is the source of truth today; the app writes values back to it (values only, never formatting or structure). The plan below retires it.
+The roster can now live in the app (`roster --import`, then `roster: source: app`; see docs/server-admin.md). The Discord bot reads it from the roster API.
 
 ### Roster in the app (retire the Google Sheet)
 Nobody uses the sheet directly any more; one other club tool on the same server reads four columns from it (callsign, name, email, officer). Serve that from the app and the app can own the roster outright, with no Google dependency left.
-- **Roster API:** built (`GET /api/roster`). Next: point the other tool at it.
 - **Offices:** built (Roster → Offices). Open question: should the Secretary also change offices, not only admins?
-- **Move over once:** import the sheet and its Membership Log tab, show what differs, then turn off the sync and the write-back. The sheet stays as a read-only archive.
 - **Then remove** the Google Sheets code and the service account's access to the sheet. With no copy to Google Calendar either (decided 2026-11-08), the app needs no Google account at all.
 
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".

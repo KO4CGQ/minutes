@@ -1,7 +1,7 @@
 """Club config and people.
 
-People come only from the roster Google Sheet (synced to data/roster.json by
-`w8lbz-minutes roster`). club.yaml (local only, never in git) holds app settings.
+People come only from the roster (the Google Sheet, or the app's own copy once moved; synced to
+data/roster.json by `w8lbz-minutes roster`). club.yaml (local only, never in git) holds app settings.
 """
 from __future__ import annotations
 

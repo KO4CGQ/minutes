@@ -9,12 +9,24 @@ curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh 
 /opt/w8lbz-minutes/deploy/update.sh                                                    # after each merge to main
 ```
 Then put `club.yaml` and `google-service-account.json` in `/etc/w8lbz-minutes/`, and data in `/var/lib/w8lbz-minutes/`.
-The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00; backups run on the schedule set on the Backups page.
+The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00 (from the Google Sheet, or once moved, from the app's own copy); backups run on the schedule set on the Backups page.
 
 ## Config
 `club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the club links, the roster sheet's address and the private never-record list. People, their titles and who may lead come from the roster sheet; the list of offices is `offices:` in club.yaml.
 
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
+
+### Moving the roster into the app (once)
+Afterwards the app keeps the roster itself (`roster-sheet.json` in the data folder: the sheet's two tabs, same columns), every roster edit goes there, and nothing reads or writes the Google Sheet. The app is stopped meanwhile, so no edit lands in the sheet after the copy.
+```bash
+pct snapshot 103 before-roster-move                   # on the Proxmox host
+systemctl stop w8lbz-minutes
+w8lbz-minutes roster --import                         # copies both tabs; lists differences from the app's roster (expect none)
+# club.yaml, under roster:   source: app   (keep sheet_id: it's only read by --import)
+w8lbz-minutes roster                                  # rebuilds the roster from the app's copy: same counts as before
+systemctl start w8lbz-minutes
+```
+Then make the sheet read-only (Share: everyone Viewer) and keep it as an archive. To go back: remove `source: app`, restart; edits made since stay only in `roster-sheet.json`.
 
 ## Login
 Members sign in with a passkey, or with a one-time link emailed to their roster address.
