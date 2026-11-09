@@ -84,7 +84,7 @@ def pwned(pw: str) -> int | None:
     """How often it appears in Have I Been Pwned's leaked passwords (0: not found), or None if HIBP can't be
     reached. Only the first 5 characters of its SHA-1 leave the server (k-anonymity), and the reply is padded."""
     import httpx
-    h = hashlib.sha1(pw.encode()).hexdigest().upper()
+    h = hashlib.sha1(pw.encode(), usedforsecurity=False).hexdigest().upper()  # HIBP's API is keyed by SHA-1
     try:
         r = httpx.get(f"https://api.pwnedpasswords.com/range/{h[:5]}", timeout=10,
                       headers={"Add-Padding": "true", "User-Agent": "W8LBZ-Minutes-backup-check"})
@@ -237,7 +237,13 @@ def save_settings(form: dict) -> dict:
     old = settings()
     s3 = {k: " ".join(str(form.get(f"s3_{k}", "")).split()) for k in ("endpoint", "region", "bucket", "prefix", "key_id")}
     s3["on"] = bool(form.get("s3_on"))
-    s3["secret"] = str(form.get("s3_secret") or "").strip() or old["s3"].get("secret", "")
+    # The secret is kept encrypted with the backup passphrase, never as plain text (re-enter it if that changes).
+    typed = str(form.get("s3_secret") or "").strip()
+    if typed:
+        import base64
+        s3["secret_enc"] = base64.b64encode(encrypt(typed.encode(), passphrase())).decode()
+    elif old["s3"].get("secret_enc"):
+        s3["secret_enc"] = old["s3"]["secret_enc"]
     drive = {"on": bool(form.get("drive_on")), "folder": str(form.get("drive_folder", "")).strip(),
              "keep": _int(form.get("drive_keep"), 1, 365, DRIVE_KEEP)}
     every = form.get("every") if form.get("every") in ("daily", "weekly", "off") else RECOMMENDED["every"]
@@ -266,7 +272,13 @@ def s3_config(s: dict | None = None) -> dict | None:
     if not s3.get("on"):
         return None
     key_id = os.environ.get("W8LBZ_S3_KEY_ID") or s3.get("key_id")
-    secret = os.environ.get("W8LBZ_S3_SECRET") or s3.get("secret")
+    secret = os.environ.get("W8LBZ_S3_SECRET")
+    if not secret and s3.get("secret_enc"):
+        import base64
+        try:
+            secret = decrypt(base64.b64decode(s3["secret_enc"]), passphrase()).decode()
+        except BackupError:
+            raise BackupError("The saved S3 secret no longer opens (the backup passphrase changed?): enter it again.") from None
     if not (key_id and secret):
         raise BackupError("S3 is on, but its key ID or secret is missing.")
     return {"endpoint": s3["endpoint"].rstrip("/"), "bucket": s3["bucket"], "region": s3.get("region") or "us-east-1",

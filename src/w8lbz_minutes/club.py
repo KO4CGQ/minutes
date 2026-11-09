@@ -26,6 +26,19 @@ PREVIEW = os.environ.get("W8LBZ_PREVIEW") or None
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,3}$", re.I)
 
 
+def valid_email(s: str) -> bool:
+    """name@domain.tld, no spaces, at most 254 characters. No regex: a crafted address can't make it slow."""
+    if not s or len(s) > 254 or any(ch.isspace() for ch in s) or s.count("@") != 1:
+        return False
+    local, domain = s.split("@")
+    return bool(local) and "." in domain and not domain.startswith(".") and not domain.endswith(".")
+
+
+def one_line(v) -> str:
+    """A value for a log line: line breaks shown as \\n, so typed text can't add a fake log entry."""
+    return str(v).replace("\r", "\\r").replace("\n", "\\n")
+
+
 def _n(s: str) -> str:
     return re.sub(r"[^a-z]", "", s.lower())
 

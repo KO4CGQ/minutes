@@ -74,10 +74,11 @@ def test_nightly_run_keeps_sends_and_reports(data, monkeypatch):
                           "s3_region": "us-west-004", "s3_prefix": "minutes/", "s3_key_id": "keyid", "s3_secret": "secret",
                           "drive_on": "1", "drive_folder": "https://drive.google.com/drive/folders/0ABcd-123?usp=sharing", "drive_keep": "3"})
     s = backup.settings()
-    assert s["drive"]["folder"] == "0ABcd-123" and s["s3"]["secret"] == "secret"
+    assert s["drive"]["folder"] == "0ABcd-123" and backup.s3_config()["secret"] == "secret"
+    assert "secret" not in (data / "backup-settings.json").read_text().replace("secret_enc", "")  # never stored as text
     backup.save_settings({**{f"s3_{k}": v for k, v in s["s3"].items()}, "s3_on": "1", "s3_secret": "", "drive_on": "1",
                           "drive_folder": "0ABcd-123", "drive_keep": "3"})
-    assert backup.settings()["s3"]["secret"] == "secret"  # a blank secret keeps the saved one
+    assert backup.s3_config()["secret"] == "secret"  # a blank secret keeps the saved one
     with pytest.raises(backup.BackupError):
         backup.save_settings({"s3_on": "1", "s3_endpoint": "http://insecure.example", "s3_bucket": "b"})
     put, drive = [], FakeDrive()

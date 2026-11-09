@@ -23,7 +23,7 @@ from . import ai, avatars, backup, business, calview, chow, console, events, gca
 from . import auth as authmod
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, PREVIEW
+from .club import DATA, PREVIEW, one_line, valid_email
 from .roster import COLUMNS, KEY_FILE, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
@@ -332,14 +332,14 @@ def business_change(request: Request, fn, meeting: str = "", back: str = "/busin
             if request.headers.get("accept", "").startswith("application/json"):
                 return JSONResponse({"error": str(e)}, status_code=409)
             path, _, frag = back.partition("#")
-            return RedirectResponse(f"{path}{'&' if '?' in path else '?'}error=" + quote(str(e))
-                                    + (f"#{frag}" if frag else ""), status_code=303)
+            return RedirectResponse(_safe_next(f"{path}{'&' if '?' in path else '?'}error=" + quote(str(e))
+                                               + (f"#{frag}" if frag else "")), status_code=303)
         business.save(s)
         if meeting:
             console.sync_business(archive, meeting, s)
     if request.headers.get("accept", "").startswith("application/json"):
         return JSONResponse(console.business_items(archive, meeting, s) if meeting else {"ok": True})
-    return RedirectResponse(back, status_code=303)
+    return RedirectResponse(_safe_next(back), status_code=303)
 
 
 def owner_id(value: str | None) -> str | None:
@@ -829,7 +829,7 @@ def admin_updates_run(request: Request, target: str = Form(""), notes_done: int 
     except ValueError as e:
         return RedirectResponse("/admin/updates?error=" + quote(str(e)), status_code=303)
     _admin_log(request, update_requested=target)
-    _log.info("update to %s requested by %s", target, mid)
+    _log.info("update to %s requested by %s", one_line(target), one_line(mid))
     return RedirectResponse("/admin/updates?note=" + quote("Update started. The app restarts in a minute or two; "
                                                            "this page shows the result when it's done."), status_code=303)
 
@@ -1318,14 +1318,14 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     if who not in archive.club.members:
         raise HTTPException(404)
     m, f = archive.club.members[who], await request.form()
-    back = f"/members/{quote(who)}/edit"
+    back = f"/members/{quote(who, safe='')}/edit"
     first, last, email = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split()), f.get("email", "").strip()
     try:
         if not first or not last or " " in first:
             raise ValueError("First and last name are both needed; put a middle name with the last name.")
         if f.get("license_class") not in ("", *membership.CLASSES) or f.get("status") not in (*STATUSES, m.status):
             raise ValueError("Pick a license class and status from the lists.")
-        if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        if email and not valid_email(email):
             raise ValueError(f"{email} doesn't look like an email address.")
         # An address is a way to sign in (and an admin's, to confirm admin mode): only an admin changes an admin's.
         if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
@@ -1339,8 +1339,8 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
             new["address"] = m.address or ""
         profile.change(archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
     except (ValueError, SheetError) as e:
-        return RedirectResponse(back + "?error=" + quote(str(e)), status_code=303)
-    return RedirectResponse(back + "?saved=1", status_code=303)
+        return RedirectResponse(_safe_next(back + "?error=" + quote(str(e))), status_code=303)
+    return RedirectResponse(_safe_next(back + "?saved=1"), status_code=303)
 
 
 @app.post("/members/{who}/callsign")
@@ -1354,10 +1354,10 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
     except (ValueError, SheetError, backup.BackupError) as e:
-        return RedirectResponse(f"/members/{quote(who)}/edit?error=" + quote(str(e)) + "#callsign", status_code=303)
+        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#callsign"), status_code=303)
     if admin_mode(request):
         _admin_log(request, callsign_change=f"{who} to {new}")
-    return RedirectResponse(f"/members/{quote(new)}/edit?saved=1#callsign", status_code=303)
+    return RedirectResponse(_safe_next(f"/members/{quote(new, safe='')}/edit?saved=1#callsign"), status_code=303)
 
 
 @app.post("/members/{who}/log")
@@ -1368,8 +1368,8 @@ def member_log_event(request: Request, who: str, event: str = Form(""), date: st
     try:
         membership.add_event(archive.club, who, event, date, note, mid)
     except (ValueError, SheetError) as e:
-        return RedirectResponse(f"/members/{quote(who)}/edit?error=" + quote(str(e)) + "#log", status_code=303)
-    return RedirectResponse(f"/members/{quote(who)}/edit?saved=1#log", status_code=303)
+        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#log"), status_code=303)
+    return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?saved=1#log"), status_code=303)
 
 
 @app.get("/roster", response_class=HTMLResponse)
@@ -1545,16 +1545,16 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
-    if not admin_mode(request):
-        return RedirectResponse(f"/admin/confirm?next=/admin/security/{quote(tab)}", status_code=303)
-    if tab not in dict(SECURITY_TABS):
+    if tab not in dict(SECURITY_TABS):  # before the redirect, so only a known tab goes into its address
         raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse(f"/admin/confirm?next=/admin/security/{tab}", status_code=303)
     p = DATA / "admin-log.jsonl"
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
     roster = DATA / "roster.json"
     events = authn.events(100)
     bs = backup.settings()
-    bs["s3"] = {**bs["s3"], "secret": bool(bs["s3"].get("secret"))}  # never sent back to the browser
+    bs["s3"] = {k: v for k, v in bs["s3"].items() if k != "secret_enc"} | {"secret": bool(bs["s3"].get("secret_enc"))}  # never sent back
     return page(request, "security.html", tab=tab, tabs=SECURITY_TABS, backup_status=backup.status(), bs=bs, error=error, note=note,
                 local_backups=[(p.name, p.stat().st_size) for p in backup.local_copies()], env_s3=bool(os.environ.get("W8LBZ_S3_SECRET")),
                 passphrase_set=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12, drive_key=KEY_FILE.exists(),

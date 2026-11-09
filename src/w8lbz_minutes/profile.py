@@ -13,7 +13,7 @@ import secrets
 import time
 
 from . import auth, prefs
-from .club import DATA, ROSTER_CACHE, Club
+from .club import DATA, ROSTER_CACHE, Club, one_line
 from .roster import COLUMNS, EDITABLE, FLAGS, Sheet, _truthy
 
 log = logging.getLogger("w8lbz.profile")
@@ -101,7 +101,7 @@ def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | No
     entry = {"id": secrets.token_hex(6), "at": int(time.time()), "member": mid, "by": by,
              "old": old, "new": new, "undoes": undoes}
     _append(entry)
-    log.info("profile change %s for %s by %s: %s", entry["id"], mid, by, ", ".join(new))
+    log.info("profile change %s for %s by %s: %s", entry["id"], one_line(mid), one_line(by), one_line(", ".join(new)))
     _notify(club, entry, url)
     return entry
 
@@ -148,4 +148,4 @@ def _send(club: Club, to: list[str], subject: str, body: str, e: dict) -> None:
     try:
         auth.send_email(to, subject, body, only_to=club.email_only_to())
     except Exception:
-        log.exception("couldn't send %r about change %s", subject, e["id"])
+        log.exception("couldn't send %r about change %s", one_line(subject), e["id"])

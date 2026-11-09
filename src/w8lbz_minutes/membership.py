@@ -12,7 +12,7 @@ import logging
 import re
 
 from . import auth, chow, prefs, profile
-from .club import ROSTER_CACHE, Club
+from .club import ROSTER_CACHE, Club, one_line, valid_email
 from .roster import Sheet, SheetError
 
 log = logging.getLogger("w8lbz.membership")
@@ -42,7 +42,7 @@ def clean(form: dict) -> dict:
         raise ValueError("A callsign and license class are needed: members must be licensed.")
     if not re.fullmatch(r"[A-Z0-9]{3,7}", f["callsign"]):
         raise ValueError(f"{f['callsign']} doesn't look like a callsign.")
-    if f["email"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", f["email"]):
+    if f["email"] and not valid_email(f["email"]):
         raise ValueError(f"{f['email']} doesn't look like an email address.")
     if f["license_class"] not in CLASSES:
         raise ValueError("Unknown license class.")
@@ -142,5 +142,5 @@ def add_event(club: Club, mid: str, event: str, date: str, note: str, by: str, s
         tmp.replace(ROSTER_CACHE)
     profile._append({"id": profile.secrets.token_hex(6), "at": int(profile.time.time()), "member": mid, "by": by,
                      "logged": True, "old": {}, "new": {"membership_log": f"{e['event']}, {date}" + (f" ({e['note']})" if e["note"] else "")}})
-    log.info("membership log: %s %s %s, by %s", mid, e["event"], date, by)
+    log.info("membership log: %s %s %s, by %s", one_line(mid), one_line(e["event"]), date, one_line(by))
     return e

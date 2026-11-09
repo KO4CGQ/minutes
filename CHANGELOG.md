@@ -35,6 +35,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Printable chow list:** "Printable list (PDF)" on the Chow page shows every night still to come. Officers email it with "Email the list to members", which says whether the schedule has changed since it was last sent; it goes only when someone sends it, never with each set of minutes. Members can turn it off on their Email tab. This replaces the Secretary's spreadsheet.
 ### Security
 - **Security:** a roster keeper can no longer change an admin's email (it's how admins sign in and confirm admin mode); that needs an admin in admin mode. Over HTTPS the app now sends `Strict-Transport-Security` (browsers refuse a plain-HTTP connection to the hostname) and `Cross-Origin-Opener-Policy`. FastAPI's automatic API pages (`/docs`, `/redoc`, `/openapi.json`) are off. Checked: `pip-audit` finds no known-vulnerable packages.
+- **From GitHub's code scanner (CodeQL):** email addresses are checked without a regular expression, so a crafted one can't tie up the server; the S3 secret on the Backups page is stored encrypted with the backup passphrase (re-enter it if the passphrase changes); typed text written to the server's log has its line breaks escaped, so it can't fake a log line; redirects after a form go only to pages on this site; callsign renames check the ids they use as file names.
 
 
 ### Other

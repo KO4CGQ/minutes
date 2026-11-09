@@ -24,7 +24,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import backup, profile
-from .club import CALLSIGN, DATA, ROSTER_CACHE, Club
+from .club import CALLSIGN, DATA, ROSTER_CACHE, Club, one_line
 from .membership import LOG_TAB
 from .roster import Sheet
 
@@ -55,6 +55,9 @@ def _write(p: Path, text: str) -> None:
 def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
     """Rename a member id throughout the data folder. Returns what changed, per kind."""
     data = data or DATA
+    for x in (old, new):  # ids become file names and patterns below: letters, digits and dashes only
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,40}", x):
+            raise ValueError(f"{x!r} isn't a member id.")
     done = {"files": 0, "minutes": 0, "signin rows": 0, "pictures": 0}
     for p in [data / f for f in STATE_FILES] + sorted((data / "meetings").glob("*/console.json")):
         if p.exists():
@@ -134,5 +137,5 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
     club._load(rows)
     profile._append({"id": secrets.token_hex(6), "at": int(time.time()), "member": new, "by": by,
                      "logged": True, "old": {}, "new": {"callsign": f"{old_call or '(none)'} to {new_call}"}})
-    log.info("callsign change %s -> %s by %s (backup %s): %s", mid, new, by, keep.name, done)
+    log.info("callsign change %s -> %s by %s (backup %s): %s", one_line(mid), one_line(new), one_line(by), one_line(keep.name), done)
     return new
