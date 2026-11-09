@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import io
 
-from .club import DATA
+from .club import DATA, inside
 
 SIZE = 256
 MAX_UPLOAD = 8 * 1024 * 1024  # bytes
@@ -25,8 +25,8 @@ def _dir():
 
 def path(mid: str):
     """The member's picture file: .png when the upload had transparency, else .jpg."""
-    png = _dir() / f"{mid}.png"
-    return png if png.exists() else _dir() / f"{mid}.jpg"
+    png = inside(_dir(), f"{mid}.png")
+    return png if png.exists() else inside(_dir(), f"{mid}.jpg")
 
 
 def save(mid: str, data: bytes) -> None:
@@ -50,7 +50,7 @@ def save(mid: str, data: bytes) -> None:
     out = io.BytesIO()
     img.save(out, *(("PNG",) if clear else ("JPEG",)), optimize=True, **({} if clear else {"quality": 85}))  # a new file: no EXIF, no location
     remove(mid)  # the old picture may have the other extension
-    p = _dir() / f"{mid}.{'png' if clear else 'jpg'}"
+    p = inside(_dir(), f"{mid}.{'png' if clear else 'jpg'}")
     tmp = p.with_suffix(".tmp")
     tmp.write_bytes(out.getvalue())
     tmp.chmod(0o600)
@@ -59,7 +59,7 @@ def save(mid: str, data: bytes) -> None:
 
 def remove(mid: str) -> bool:
     found = False
-    for p in (_dir() / f"{mid}.jpg", _dir() / f"{mid}.png"):
+    for p in (inside(_dir(), f"{mid}.jpg"), inside(_dir(), f"{mid}.png")):
         if p.exists():
             p.unlink()
             found = True

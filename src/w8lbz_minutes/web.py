@@ -5,6 +5,7 @@ import datetime as dt
 import functools
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -18,16 +19,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, business, calview, chow, console, events, gcal, membership, prefs, profile, updates
+from . import ai, avatars, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, updates
 from . import auth as authmod
+from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, PREVIEW
-from .roster import SHAREABLE, SheetError
+from .club import DATA, PREVIEW, one_line, valid_email
+from .roster import COLUMNS, KEY_FILE, SHAREABLE, SheetError
+
+KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
 from .meeting import SECTIONS
 from .store import Archive
 
 HERE = Path(__file__).parent
-app = FastAPI(title="W8LBZ Minutes")
+app = FastAPI(title="W8LBZ Minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 archive = Archive()
@@ -45,7 +49,8 @@ if not _log.handlers:
 COOKIE = "w8lbz_session"
 CHALLENGE_COOKIE = "w8lbz_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico",
-                "/calendar/public", "/calendar/feed/")  # public calendars (if any are made public); private feeds carry their own secret
+                "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
+                "/api/roster")  # its own token, and only from the server itself
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
 
 
@@ -162,6 +167,9 @@ async def security_headers(request: Request, call_next):
     h.setdefault("X-Content-Type-Options", "nosniff")
     h.setdefault("Referrer-Policy", "same-origin")
     h.setdefault("X-Robots-Tag", "noindex, nofollow")  # members-only; keep the public hostname out of search engines
+    h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    if is_https(request):  # browsers then refuse a downgraded (http) connection to this hostname for a year
+        h.setdefault("Strict-Transport-Security", "max-age=31536000")
     return response
 
 
@@ -324,14 +332,14 @@ def business_change(request: Request, fn, meeting: str = "", back: str = "/busin
             if request.headers.get("accept", "").startswith("application/json"):
                 return JSONResponse({"error": str(e)}, status_code=409)
             path, _, frag = back.partition("#")
-            return RedirectResponse(f"{path}{'&' if '?' in path else '?'}error=" + quote(str(e))
-                                    + (f"#{frag}" if frag else ""), status_code=303)
+            return RedirectResponse(_safe_next(f"{path}{'&' if '?' in path else '?'}error=" + quote(str(e))
+                                               + (f"#{frag}" if frag else "")), status_code=303)
         business.save(s)
         if meeting:
             console.sync_business(archive, meeting, s)
     if request.headers.get("accept", "").startswith("application/json"):
         return JSONResponse(console.business_items(archive, meeting, s) if meeting else {"ok": True})
-    return RedirectResponse(back, status_code=303)
+    return RedirectResponse(_safe_next(back), status_code=303)
 
 
 def owner_id(value: str | None) -> str | None:
@@ -362,7 +370,8 @@ def _may_edit_item(request: Request, s: dict, iid: str, meeting: str = "") -> No
 
 
 @app.get("/business", response_class=HTMLResponse)
-def business_page(request: Request, tab: str = "open", error: str = "", note: str = "", mid: str = Depends(me)):
+def business_page(request: Request, tab: str = "open", error: str = "", note: str = "", result: str = "",
+                  mid: str = Depends(me)):
     s = console.business_state(archive)
     today = dt.date.today().isoformat()
     items = [business.view(archive.club, x, today) for x in s["items"]]
@@ -375,7 +384,7 @@ def business_page(request: Request, tab: str = "open", error: str = "", note: st
     submitted = [m for m in archive.meetings if m.status != "draft"][:6]
     my_notes = [n for n in s["notes"] if n["by"] == mid and n["status"] == "pending"]
     all_notes = [n for n in s["notes"] if n["status"] == "pending"] if leader_ else []
-    tabs = [("open", f"Open ({len(open_)})"), ("notes", "Notes for the next meeting"), ("done", "Done")]
+    tabs = [("open", f"Open ({len(open_)})"), ("notes", "Notes for the next meeting"), ("done", "Done"), ("motions", "Motions")]
     if leader_:
         tabs.insert(1, ("add", "Add an item"))
     if leader_ and (pending or ai.configured(archive.club)):
@@ -385,7 +394,8 @@ def business_page(request: Request, tab: str = "open", error: str = "", note: st
     return page(request, "business.html", tab=tab, tabs=tabs, open_items=open_, done=done, error=error, note=note, leader=leader_,
                 my_notes=my_notes, all_notes=all_notes, next_meetings=upcoming_meetings(),
                 suggestions=pending, ai_on=ai.configured(archive.club) and leader_, submitted=submitted,
-                by_id={x["id"]: x for x in items},
+                by_id={x["id"]: x for x in items}, results=business.RESULTS, result=result,
+                motions=[x for x in business.motions(s) if not result or x["motion"]["result"] == result],
                 members=members, today=today, fmt=lambda d: dt.date.fromisoformat(d).strftime("%b %-d, %Y"))
 
 
@@ -400,7 +410,7 @@ def run_followups(slug: str) -> str:
         s = console.business_state(archive)
         n = business.add_suggestions(s, slug, found, archive.club.ai.get("model", ""))
         business.save(s)
-    _log.info("AI suggested %d follow-ups for %s", n, slug)
+    _log.info("AI suggested %d follow-ups for %s", n, one_line(slug))
     return f"{n} suggestion{'s' if n != 1 else ''} from the {m.date:%B %-d} minutes." if n else \
         f"No follow-ups found in the {m.date:%B %-d} minutes."
 
@@ -450,6 +460,25 @@ def business_add(request: Request, text: str = Form(...), owner: str = Form(""),
     return business_change(request, lambda s: business.add(s, text, mid, owner_id(owner), due, agenda,
                                                            opened=meeting or None), meeting,
                            back="/business?note=Added." if not meeting else "/business")
+
+
+@app.post("/business/motion")
+def business_motion(request: Request, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
+                    result: str = Form(""), meeting: str = Form(""), date: str = Form(""), mid: str = Depends(me)):
+    """A motion from the console (meeting set), or a past one an officer records from old minutes (date set)."""
+    if not manages_business(request, meeting):
+        raise HTTPException(403, "Only officers, or the meeting's leader in the console, can record motions.")
+    return business_change(request, lambda s: business.add_motion(
+        s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result, opened=meeting or date or None,
+        past=not meeting), meeting, back="/business?tab=motions&note=Recorded." if not meeting else "/business")
+
+
+@app.post("/business/{iid}/motion")
+def business_motion_edit(request: Request, iid: str, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
+                         result: str = Form(""), mid: str = Depends(officer)):
+    return business_change(request, lambda s: business.set_motion(s, archive.club, iid, mid, owner_id(mover),
+                                                                  owner_id(seconder), what, result),
+                           back=f"/business?tab=motions#i{iid}")
 
 
 @app.post("/business/{iid}/edit")
@@ -543,6 +572,26 @@ def chow_leader(request: Request) -> str:
     return request.state.member
 
 
+def chow_list_pdf() -> tuple[str, bytes]:
+    today = dt.date.today()
+    return (f"chow-list-{today:%Y-%m-%d}.pdf", html_to_pdf("chow_list.html", nights=chow.upcoming(chow.load(), today, n=10_000),
+                                                           today=today))
+
+
+@app.get("/chow/list.pdf")
+def chow_pdf(mid: str = Depends(me)):
+    name, data = chow_list_pdf()
+    return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
+@app.post("/chow/email")
+def chow_email(request: Request, mid: str = Depends(chow_leader)):
+    """Send the chow list to every member who wants it (Email tab), e.g. after filling or changing the schedule."""
+    to = sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == "pdf"}, key=str.lower)
+    pdf = chow_list_pdf()
+    return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, to, mid, base_url(request)))
+
+
 @app.get("/chow", response_class=HTMLResponse)
 @app.get("/chow/{tab}", response_class=HTMLResponse)
 def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str = Depends(me)):
@@ -559,6 +608,7 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
                 asked=[r for r in s["swaps"] if r["status"] == "pending" and mid in (r["with"], r["requester"])],
                 next_up=chow.next_up(club, s), today=today.isoformat(),
                 default_until=(today + dt.timedelta(days=180)).isoformat(),
+                list_changed=chow.list_changed(s), emailed=s.get("emailed"),
                 log=chow.history(30) if leader else [], fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
 
 
@@ -669,7 +719,7 @@ def _admin(mid: str) -> str:
 def _admin_on(request: Request, mid: str, how: str) -> None:
     until = authn.set_admin(request.cookies.get(COOKIE), ADMIN_MINUTES)
     _admin_log(request, on=True, until=until, confirmed_by=how)
-    _log.info("admin mode on for %s (confirmed by %s)", mid, how)
+    _log.info("admin mode on for %s (confirmed by %s)", one_line(mid), one_line(how))
 
 
 @app.post("/admin/mode")
@@ -680,7 +730,7 @@ def admin_mode_switch(request: Request, on: int = Form(0), next: str = Form("/")
         return RedirectResponse("/admin/confirm?next=" + quote(_safe_next(next)), status_code=303)
     until = authn.set_admin(request.cookies.get(COOKIE), 0)
     _admin_log(request, on=False, until=until)
-    _log.info("admin mode off for %s", mid)
+    _log.info("admin mode off for %s", one_line(mid))
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -749,7 +799,8 @@ def admin_updates(request: Request, error: str = "", note: str = "", mid: str = 
     if not admin_mode(request):
         return RedirectResponse("/admin/confirm?next=/admin/updates", status_code=303)
     return page(request, "updates.html", running=updates.running(), rel=updates.latest(), st=updates.status(),
-                newer=updates.available(), error=error, note=note)
+                newer=updates.available(), error=error, note=note,
+                backup_ready=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12)
 
 
 @app.post("/admin/updates/check")
@@ -762,16 +813,23 @@ def admin_updates_check(request: Request, mid: str = Depends(real_me)):
 
 
 @app.post("/admin/updates/run")
-def admin_updates_run(request: Request, target: str = Form(""), notes_done: int = Form(0), mid: str = Depends(real_me)):
+def admin_updates_run(request: Request, target: str = Form(""), notes_done: int = Form(0), backup_first: int = Form(0),
+                      mid: str = Depends(real_me)):
     _admin(mid)
     if not admin_mode(request):
         raise HTTPException(403, "Turn on admin mode first.")
+    if backup_first:  # a way back if the update goes wrong; a few seconds at our size
+        st = backup.run(archive.club, base_url(request))
+        if not st["ok"]:
+            return RedirectResponse("/admin/updates?error=" + quote(f"The backup before the update failed, so the update "
+                                                                   f"didn't start: {st['error']}"), status_code=303)
+        _admin_log(request, backup="before the update")
     try:
         updates.request(mid, target, bool(notes_done))
     except ValueError as e:
         return RedirectResponse("/admin/updates?error=" + quote(str(e)), status_code=303)
     _admin_log(request, update_requested=target)
-    _log.info("update to %s requested by %s", target, mid)
+    _log.info("update to %s requested by %s", one_line(target), one_line(mid))
     return RedirectResponse("/admin/updates?note=" + quote("Update started. The app restarts in a minute or two; "
                                                            "this page shows the result when it's done."), status_code=303)
 
@@ -795,7 +853,7 @@ def admin_view_as(request: Request, member: str = Form(""), next: str = Form("/"
         raise HTTPException(404)
     authn.set_view_as(request.cookies.get(COOKIE), member or None)
     _admin_log(request, view_as=member or None)
-    _log.info("%s %s", mid, f"viewing as {member}" if member else "stopped viewing as another member")
+    _log.info("%s %s", one_line(mid), one_line(f"viewing as {member}" if member else "stopped viewing as another member"))
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -863,7 +921,7 @@ def profile_photo_remove(mid: str = Depends(me)):
 def member_photo_remove(request: Request, who: str, mid: str = Depends(officer)):
     """Officers (and admins in admin mode) can take down someone's picture."""
     if avatars.remove(who):
-        _log.info("%s removed the profile picture of %s", mid, who)
+        _log.info("%s removed the profile picture of %s", one_line(mid), one_line(who))
     return RedirectResponse(f"/members/{who}", status_code=303)
 
 
@@ -947,6 +1005,54 @@ async def roster_add(request: Request, mid: str = Depends(roster_keeper)):
                     classes=membership.CLASSES, today=dt.date.today().isoformat(),
                     invite_after=archive.club.info.get("invite_after_visits", 3))
     return RedirectResponse(f"/members/{new}?added=1", status_code=303)
+
+
+# ---------------- offices: who holds each, who held them when, and changing a holder ----------------
+
+def office_admin(request: Request) -> str:
+    """Changing offices: admins, in admin mode."""
+    if not admin_mode(request):
+        raise HTTPException(403, "Only an admin, in admin mode, can change who holds an office.")
+    return request.state.member
+
+
+@app.get("/offices", response_class=HTMLResponse)
+def offices_page(request: Request, error: str = "", note: str = "", mid: str = Depends(me)):
+    club = archive.club
+    rows = [{**o, "holders": offices.holders(club, o["title"]), "terms": offices.terms(club, o["title"])}
+            for o in offices.offices(club)]
+    members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
+                     key=lambda m: (m.last, m.first))
+    return page(request, "offices.html", rows=rows, members=members, error=error, note=note,
+                can_change=admin_mode(request), today=dt.date.today().isoformat())
+
+
+def _office_change(request: Request, fn, note: str):
+    try:
+        fn()
+    except (ValueError, SheetError) as e:
+        return RedirectResponse("/offices?error=" + quote(str(e)), status_code=303)
+    return RedirectResponse("/offices?note=" + quote(note), status_code=303)
+
+
+@app.post("/offices/change")
+def offices_change(request: Request, title: str = Form(...), out: str = Form(""), new: str = Form(""),
+                   date: str = Form(""), mid: str = Depends(office_admin)):
+    """Hand an office over (after an election), fill a vacancy, or record a resignation."""
+    def run():
+        offices.change(archive.club, title, out or None, owner_id(new), date, mid, url=base_url(request))
+        _admin_log(request, office=title, left=out or None, took=owner_id(new), date=date)
+    return _office_change(request, run, f"{title} updated.")
+
+
+@app.post("/offices/term")
+def offices_term(request: Request, title: str = Form(...), member: str = Form(...), start: str = Form(""),
+                 end: str = Form(""), mid: str = Depends(office_admin)):
+    """A past term, from before the app kept the history."""
+    def run():
+        offices.record_term(archive.club, title, owner_id(member) or "", start, end, mid)
+        _admin_log(request, office=title, past_term=owner_id(member), date=f"{start}..{end}")
+    return _office_change(request, run, "Past term recorded.")
 
 
 @app.get("/roster/changes", response_class=HTMLResponse)
@@ -1094,14 +1200,18 @@ def view(request: Request, slug: str):
                 emailed=console.email_status(archive, slug))
 
 
-def render_pdf(m) -> tuple[str, bytes]:
-    """(file name, PDF bytes) for submitted minutes."""
+def html_to_pdf(template: str, **ctx) -> bytes:
     try:
         from weasyprint import HTML
     except OSError as e:  # missing system libraries (pango)
         raise HTTPException(503, f"PDF rendering unavailable on this server: {e}")
-    html = templates.get_template("minutes_doc.html").render(m=m, pdf=True)
-    return f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes.pdf".lower(), HTML(string=html, base_url=str(HERE)).write_pdf()
+    html = templates.get_template(template).render(club=archive.club, pdf=True, **ctx)
+    return HTML(string=html, base_url=str(HERE)).write_pdf()
+
+
+def render_pdf(m) -> tuple[str, bytes]:
+    """(file name, PDF bytes) for submitted minutes."""
+    return f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes.pdf".lower(), html_to_pdf("minutes_doc.html", m=m)
 
 
 @app.get("/meetings/{slug}/minutes.pdf")
@@ -1185,7 +1295,81 @@ def member(request: Request, mid: str):
     contact = [(f, v if v and club.can_see(viewer, mid, f, elevated) else None, href) for f, (v, href) in values.items()]
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
                 contact=contact, is_me=viewer == mid, is_officer=privileged(request), is_officer_or_admin=privileged(request),
-                can_view_as=elevated and mid != request.state.real_member)
+                can_view_as=elevated and mid != request.state.real_member,
+                can_edit_roster=archive.club.keeps_roster(viewer) or elevated)
+
+
+STATUSES = ("Active", "Inactive", "Silent Key", "Prospect")
+
+
+@app.get("/members/{who}/edit", response_class=HTMLResponse)
+def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, mid: str = Depends(roster_keeper)):
+    """Roster keepers (and admins in admin mode) edit what the roster sheet holds about a member."""
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    m = archive.club.members[who]
+    return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
+                statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
+                events=membership.EVENTS, today=dt.date.today().isoformat())
+
+
+@app.post("/members/{who}/edit")
+async def member_edit(request: Request, who: str, mid: str = Depends(roster_keeper)):
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    m, f = archive.club.members[who], await request.form()
+    back = f"/members/{quote(who, safe='')}/edit"
+    first, last, email = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split()), f.get("email", "").strip()
+    try:
+        if not first or not last or " " in first:
+            raise ValueError("First and last name are both needed; put a middle name with the last name.")
+        if f.get("license_class") not in ("", *membership.CLASSES) or f.get("status") not in (*STATUSES, m.status):
+            raise ValueError("Pick a license class and status from the lists.")
+        if email and not valid_email(email):
+            raise ValueError(f"{email} doesn't look like an email address.")
+        # An address is a way to sign in (and an admin's, to confirm admin mode): only an admin changes an admin's.
+        if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
+            raise ValueError("Only an admin, in admin mode, can change an admin's email.")
+        new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
+               "role": ", ".join(t.strip() for t in f.get("role", "").split(",") if t.strip()),
+               "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
+               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", "")),
+               **{k: "TRUE" if f.get(k) else "FALSE" for k in ("officer", "board", "minutes_editor", "calendar_editor")}}
+        if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
+            new["address"] = m.address or ""
+        profile.change(archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+    except (ValueError, SheetError) as e:
+        return RedirectResponse(_safe_next(back + "?error=" + quote(str(e))), status_code=303)
+    return RedirectResponse(_safe_next(back + "?saved=1"), status_code=303)
+
+
+@app.post("/members/{who}/callsign")
+def member_callsign(request: Request, who: str, callsign: str = Form(""), date: str = Form(""),
+                    mid: str = Depends(roster_keeper)):
+    """A new callsign: the roster sheet, and the member's id in every record (callsign.py). Backed up first."""
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    try:
+        with business.locked(), events.locked(), _chow_lock:  # nothing else writes those files meanwhile
+            new = callsign_mod.change(archive.club, who, callsign, date, mid)
+        archive.reload()
+    except (ValueError, SheetError, backup.BackupError) as e:
+        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#callsign"), status_code=303)
+    if admin_mode(request):
+        _admin_log(request, callsign_change=f"{who} to {new}")
+    return RedirectResponse(_safe_next(f"/members/{quote(new, safe='')}/edit?saved=1#callsign"), status_code=303)
+
+
+@app.post("/members/{who}/log")
+def member_log_event(request: Request, who: str, event: str = Form(""), date: str = Form(""), note: str = Form(""),
+                     mid: str = Depends(roster_keeper)):
+    if who not in archive.club.members:
+        raise HTTPException(404)
+    try:
+        membership.add_event(archive.club, who, event, date, note, mid)
+    except (ValueError, SheetError) as e:
+        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#log"), status_code=303)
+    return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?saved=1#log"), status_code=303)
 
 
 @app.get("/roster", response_class=HTMLResponse)
@@ -1277,7 +1461,9 @@ def about(request: Request):
     changelog = None
     if changes.exists():  # show the versions, without the file's own title and intro
         text = re.sub(r"## Unreleased\s*(?=## )", "", changes.read_text())  # hide an empty Unreleased section
-        changelog = Markup(markdown.markdown(text[text.find("\n## "):]))
+        # one (version, notes) per release, newest first; the page folds all but the latest
+        changelog = [(head.strip(), Markup(markdown.markdown(body)))
+                     for head, _, body in (s.partition("\n") for s in text.split("\n## ")[1:])]
     return page(request, "about.html", deps=dependencies(), changelog=changelog, license=_license("w8lbz-minutes"))
 
 
@@ -1329,7 +1515,7 @@ def _security_admin(request: Request) -> str:
 
 
 SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
-                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
+                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("backups", "Backups"), ("server", "Server"))
 
 
 def admin_action(e: dict) -> str:
@@ -1354,19 +1540,26 @@ templates.env.filters["admin_action"] = admin_action
 
 @app.get("/admin/security", response_class=HTMLResponse)
 @app.get("/admin/security/{tab}", response_class=HTMLResponse)
-def security_page(request: Request, tab: str = "signins", member: str = "", mid: str = Depends(real_me)):
+def security_page(request: Request, tab: str = "signins", member: str = "", error: str = "", note: str = "",
+                  mid: str = Depends(real_me)):
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
-    if not admin_mode(request):
-        return RedirectResponse(f"/admin/confirm?next=/admin/security/{quote(tab)}", status_code=303)
-    if tab not in dict(SECURITY_TABS):
+    if tab not in dict(SECURITY_TABS):  # before the redirect, so only a known tab goes into its address
         raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse(f"/admin/confirm?next=/admin/security/{tab}", status_code=303)
     p = DATA / "admin-log.jsonl"
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
     roster = DATA / "roster.json"
     events = authn.events(100)
-    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS,
+    bs = backup.settings()
+    bs["s3"] = {k: v for k, v in bs["s3"].items() if k != "secret_enc"} | {"secret": bool(bs["s3"].get("secret_enc"))}  # never sent back
+    return page(request, "security.html", tab=tab, tabs=SECURITY_TABS, backup_status=backup.status(), bs=bs, error=error, note=note,
+                local_backups=[(p.name, p.stat().st_size) for p in backup.local_copies()], env_s3=bool(os.environ.get("W8LBZ_S3_SECRET")),
+                passphrase_set=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12, drive_key=KEY_FILE.exists(),
+                data_size=backup.data_size() if tab == "backups" else 0, rec=backup.RECOMMENDED,
+                suggestion=backup.suggest() if tab == "backups" else "",
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
@@ -1386,6 +1579,59 @@ def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), re
     authn.ban(ip, hours or None, reason or "banned by an admin", mid)
     _admin_log(request, ban=ip, hours=hours or None)
     return RedirectResponse("/admin/security/bans", status_code=303)
+
+
+@app.post("/admin/security/backups/settings")
+async def security_backup_settings(request: Request):
+    _security_admin(request)
+    form = dict(await request.form())
+    try:
+        s = backup.save_settings(form)
+    except backup.BackupError as e:
+        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, backup_settings=", ".join(k for k in ("s3", "drive") if s[k]["on"]) or "server only")
+    return RedirectResponse("/admin/security/backups?note=" + quote("Saved. Back up now to try it."), status_code=303)
+
+
+@app.post("/admin/security/backups/check")
+def security_backup_check(request: Request, passphrase: str = Form("")):
+    """Is this the server's passphrase, is it strong, has it leaked? The passphrase itself is never stored or logged."""
+    _security_admin(request)
+    ok, msg = backup.check(passphrase)
+    _admin_log(request, backup="checked a passphrase")
+    return RedirectResponse("/admin/security/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
+
+
+@app.post("/admin/security/backups/download")
+def security_backup_download_now(request: Request):
+    """A fresh backup straight to the admin's computer: compressed and encrypted, like the others."""
+    _security_admin(request)
+    try:
+        name, blob, _ = backup.make()
+    except backup.BackupError as e:
+        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, backup_downloaded=name)
+    return Response(blob, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/admin/security/backup")
+def security_backup_now(request: Request, background: BackgroundTasks):
+    """Run tonight's backup now (in the background; the page shows the result when it's done)."""
+    _security_admin(request)
+    _admin_log(request, backup="started")
+    background.add_task(backup.run, archive.club, base_url(request))
+    return RedirectResponse("/admin/security/backups", status_code=303)
+
+
+@app.get("/admin/security/backups/{name}")
+def security_backup_download(request: Request, name: str):
+    """A local copy, still encrypted: safe to keep on your own computer."""
+    _security_admin(request)
+    p = next((p for p in backup.local_copies() if p.name == name), None)
+    if not p:
+        raise HTTPException(404)
+    _admin_log(request, backup_downloaded=name)
+    return FileResponse(p, media_type="application/octet-stream", filename=name)
 
 
 @app.post("/admin/security/unban")
@@ -1717,6 +1963,37 @@ def stats(request: Request, period: str = "", p: str = Query("1", alias="page"),
 @app.get("/guests", response_class=HTMLResponse)
 def guests(request: Request):
     return page(request, "guests.html", guests=archive.guests())
+
+
+@app.get("/api/roster")
+def roster_api(request: Request):
+    """Active members' callsign, name, email, officer tick and former callsigns, for the club's other tools (the Discord bot, in its
+    own container on the same Proxmox host). Only from this server itself or the addresses in
+    W8LBZ_ROSTER_API_ALLOW (comma-separated), never through the web proxy, with the token in W8LBZ_ROSTER_API_TOKEN
+    (both in /etc/w8lbz-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
+    import hmac
+    import os
+    want = os.environ.get("W8LBZ_ROSTER_API_TOKEN", "")
+    host = request.client.host if request.client else ""
+    allowed = {"127.0.0.1", "::1"} | {a.strip() for a in os.environ.get("W8LBZ_ROSTER_API_ALLOW", "").split(",") if a.strip()}
+    local = host in allowed and not any(h in request.headers for h in ("x-forwarded-for", "x-forwarded-proto"))
+    got = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    ok = bool(want) and local and hmac.compare_digest(got.encode(), want.encode())
+    former: dict[str, list[str]] = {}  # earlier callsigns (kept as aliases), so the bot can follow a callsign change
+    for old, mid in archive.club.former_ids.items():
+        former.setdefault(mid, []).append(old.upper())
+    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": m.officer, "former": sorted(former.get(m.id, []))}
+            for m in sorted(archive.club.members.values(), key=lambda m: (m.last, m.first)) if m.status.lower() == "active"] if ok else []
+    p = DATA / "api-log.jsonl"
+    with p.open("a") as f:
+        f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
+                            "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
+    p.chmod(0o600)
+    if not want:
+        raise HTTPException(404)
+    if not ok:
+        raise HTTPException(403, "Not allowed.")
+    return rows
 
 
 @app.get("/api/meetings/{slug}/live", response_class=HTMLResponse)

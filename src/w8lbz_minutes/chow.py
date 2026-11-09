@@ -429,6 +429,34 @@ def minutes_section(club: Club, s: dict, s_log: list[dict], date: str, n: int = 
     return ([tonight] if tonight else []) + meeting_notes(s_log, club, date) + [describe(club, d, x) for d, x in later]
 
 
+# ---------------- the printable chow list (PDF), emailed when a leader releases it ----------------
+
+def _list(s: dict, today: dt.date | None = None) -> dict[str, list]:
+    return {d: [x.get("member"), x.get("status"), x.get("note") or ""] for d, x in upcoming(s, today, n=10_000)}
+
+
+def list_changed(s: dict, today: dt.date | None = None) -> bool:
+    """Do the nights still to come differ from the list last emailed (ignoring nights since passed)?"""
+    sent = s.get("emailed")
+    if not sent:
+        return True
+    today_s = (today or dt.date.today()).isoformat()
+    return _list(s, today) != {d: v for d, v in sent["nights"].items() if d >= today_s}
+
+
+def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: str, url: str) -> int:
+    """Send the chow list PDF and remember what was sent, so the Chow page can tell when it has changed."""
+    callsign = club.info.get("callsign", "W8LBZ")
+    sent = auth.send_email(to, f"{callsign} chow list", f"The chow list as of {dt.date.today():%B %-d, %Y} is attached: "
+                           f"who brings chow on each meeting night still to come.\n\nCan't make your night? Ask someone "
+                           f"to swap on the chow page: {url}/chow\n\nTo stop getting the chow list: {url}/profile/email"
+                           f"\n\n73,\n{callsign} Minutes", attachments=[(pdf[0], pdf[1], "application/pdf")],
+                           only_to=club.email_only_to())
+    s["emailed"] = {"at": int(time.time()), "by": by, "nights": _list(s)}
+    _log("email_list", by, sent=sent)
+    return sent
+
+
 def _day(date: str) -> str:
     return dt.date.fromisoformat(date).strftime("%A, %B %-d")
 

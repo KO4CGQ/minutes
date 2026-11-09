@@ -5,17 +5,11 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Next
-- **Chow list, what's left** (see below): the printable chow list.
 - **Email the minutes to the whole club:** remove test mode (`email.only_to`) once the club is ready.
-
-## Chow list, what's left
-The schedule, rotation, swaps, reminders, meeting-night records and the minutes' Upcoming Chow section are done.
-- **Printable chow list:** a PDF of the nights still to come, emailed only when the list is released or changes (not with every set of minutes), replacing the Secretary's spreadsheet.
 
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below).
-- **Motions as records:** keep a motion's mover, seconder and result as data, not just text, so bylaws amendments and spending can be traced to the motion that approved them (see Bylaws).
 
 ## Look and feel: ideas to consider
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
@@ -23,13 +17,9 @@ The schedule, rotation, swaps, reminders, meeting-night records and the minutes'
 - **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 
 ## Backups
-Today the server relies on Proxmox snapshots of the container. A backup the app makes itself, kept somewhere else:
-- **What:** the whole data folder (minutes, chow, business items, calendars, settings, the sign-in database), in one archive.
-- **Encrypted** before it leaves the server, with a passphrase only the admins hold, so the storage provider can't read club data.
-- **Where:** Google Drive (the service account already exists), S3 or S3-compatible storage (Backblaze B2, Wasabi), or another server over SFTP; one or more at a time.
-- **Configured from the app** (admin mode): destinations, schedule (e.g. nightly), how many to keep, and the last backup's result, with an email to the admins if one fails.
-- **Download a backup** from the app, encrypted, for safekeeping on your own computer.
-- **Restore:** a documented, tested way to restore onto a fresh server, and a periodic check that a backup actually opens.
+Built (README → Backups): encrypted, scheduled and configured from the app, to S3 and/or Google Drive. Later, if wanted:
+- **SFTP** to another server, as a third destination.
+- **A restore drill:** a periodic test restore onto a scratch container, beyond the check that each backup opens.
 
 ## Admin tools
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
@@ -41,17 +31,14 @@ The Google Sheet is the source of truth today; the app writes values back to it 
 
 ### Roster in the app (retire the Google Sheet)
 Nobody uses the sheet directly any more; one other club tool on the same server reads four columns from it (callsign, name, email, officer). Serve that from the app and the app can own the roster outright, with no Google dependency left.
-- **Roster API:** `GET /api/roster`, read-only: active members' callsign, name, email and officer flag. It answers only requests made on the server itself (not through the web proxy) that carry a token kept on the server, outside the repo; every call is logged.
-- **Edit everything in the app:** roster keepers (Secretary, Treasurer) and admins edit what the sheet holds today: name, callsign, email, titles, officer and board, license class, status, aliases, `minutes_editor` / `calendar_editor`, member since and the Membership Log. Members keep editing their own contact details. Every change logged, with undo, as profile changes are now.
-- **Offices:** a page listing the club's offices (President, Vice President, Secretary, Treasurer, board seats; the list from the bylaws, kept in club.yaml) and who holds each. Changing a holder (after an election, or a resignation) is one step: pick the member, give the date, and the app sets their title and officer/board flags, takes them off the previous holder, and records both as Membership Log events. That's the "Officer history" item below, built in. Who may change offices: admins in admin mode, with the change emailed to the officers (open question: also the Secretary?).
+- **Roster API:** built (`GET /api/roster`). Next: point the other tool at it.
+- **Offices:** built (Roster → Offices). Open question: should the Secretary also change offices, not only admins?
 - **Move over once:** import the sheet and its Membership Log tab, show what differs, then turn off the sync and the write-back. The sheet stays as a read-only archive.
 - **Then remove** the Google Sheets code and the service account's access to the sheet. With no copy to Google Calendar either (decided 2026-11-08), the app needs no Google account at all.
-- **Before this:** Backups (below). Once the roster lives only in the app, the app's own encrypted, off-server backup is the only copy.
 
 - **Celebrations:** birthdays (opt-in; a month-only birthday at the first meeting of that month) and membership anniversaries shown in the console on meeting night ("Happy birthday, …", "5 years as a member").
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".
 - **Associate members** (GMRS or unlicensed), only if the bylaws add them; today a member must hold an amateur license.
-- **Officer history:** when someone starts or ends an office, recorded as Membership Log events, so the app can show who held each office when.
 - **Admin page for officers:** sync the roster now, email test mode on/off, delete test minutes, review imported minutes.
 
 ## Bylaws

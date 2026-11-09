@@ -19,6 +19,7 @@ KINDS = {
                                     "off": "Don't email them"}, "pdf"),
     "digest": ("Meeting-day reminder", {"on": "Send it", "off": "Don't send it"}, "on"),
     "business": ("Club business you're looking after", {"now": "Remind me", "off": "Don't remind me"}, "now"),
+    "chowlist": ("The chow list", {"pdf": "Email it with the PDF attached", "off": "Don't email it"}, "pdf"),
     "roster": ("Roster updates", {"now": "Email me", "off": "Don't email me"}, "now"),
 }
 HELP = {
@@ -26,6 +27,7 @@ HELP = {
     "digest": "The morning of each meeting: when it starts, whether you're bringing chow, any club business you're "
               "looking after, upcoming events, and a link to last week's minutes.",
     "business": "When something you took on at a meeting is due soon, or overdue.",
+    "chowlist": "When the Secretary sends out the chow schedule: a new list, or one that has changed.",
     "roster": "Because you keep the roster: when someone's details change or a new member is added.",
 }
 CHOW_DAYS = (7, 3, 1)  # reminders before your chow night, days ahead

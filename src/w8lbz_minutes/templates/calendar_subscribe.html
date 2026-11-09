@@ -13,11 +13,14 @@
 <script nonce="{{ csp_nonce }}">
 // The link names what's ticked (?show=events,chow); all ticked is the plain link.
 (() => {
-  const base = {{ private|tojson }}, box = document.getElementById("feedlink"), boxes = [...document.querySelectorAll(".feedkind")];
+  // The kinds come from the server, in the order of the boxes; the boxes only say which are ticked.
+  const base = {{ private|tojson }}, kinds = {{ kinds.keys()|list|tojson }}, box = document.getElementById("feedlink"),
+    boxes = [...document.querySelectorAll(".feedkind")];
   const update = () => {
-    const on = boxes.filter((b) => b.checked).map((b) => b.value);
-    box.value = on.length === boxes.length ? base : base + "?show=" + on.join(",");
-    document.getElementById("feedwebcal").href = box.value.replace(/^https?:/, "webcal:");
+    const on = kinds.filter((k, i) => boxes[i].checked);
+    const url = on.length === boxes.length ? base : base + "?show=" + on.join(",");
+    box.value = url;
+    document.getElementById("feedwebcal").href = url.replace(/^https?:/, "webcal:");
     document.getElementById("feednone").hidden = on.length > 0;
   };
   boxes.forEach((b) => b.onchange = update);

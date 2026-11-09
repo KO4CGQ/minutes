@@ -191,7 +191,9 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .rename { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; } .rename .pkname { flex: 1 1 6rem; } .rename input { flex: 1 1 8rem; min-width: 0; padding: .25rem .45rem; }
 .about dl, .contactcard { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.2rem; }
 .about dt, .contactcard dt { color: var(--muted); } .about dd, .contactcard dd { margin: 0; min-width: 0; overflow-wrap: anywhere; } .contactcard dd.address { white-space: pre-line; }
-.changelog h2 { font-size: 1.05rem; margin: 1.2rem 0 .3rem; } .changelog li { margin: .2rem 0; }
+.changelog h2, .changelog h3 { font-size: 1rem; margin: .8rem 0 .3rem; } .changelog li { margin: .2rem 0; }
+.changelog details { border-bottom: 1px solid var(--border, #dde); padding: .4rem 0; } .changelog summary { cursor: pointer; }
+.changelog pre, .deploynotes pre { overflow-x: auto; max-width: 100%; }  /* a long command scrolls inside its box on a phone */
 form.profile { max-width: 36rem; } form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
 form.profile input[type=email], form.profile input[type=tel], form.profile textarea { width: 100%; }

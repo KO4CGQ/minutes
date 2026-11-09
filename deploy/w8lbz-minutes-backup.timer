@@ -1,0 +1,9 @@
+[Unit]
+Description=Check hourly whether a backup is due (the schedule is on the Backups page)
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -120,6 +120,64 @@ def add(s: dict, text: str, by: str | None, owner: str | None = None, due: str |
     return x
 
 
+# ---------------- motions: a business item that also keeps who moved and seconded it, and the result ----------------
+RESULTS = ("Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second")
+
+
+def motion_text(club: Club, m: dict) -> str:
+    """The line in the minutes: "Motion: Amy Able moved to buy a new antenna, seconded by Bob Baker. Passed." """
+    what = m["what"]
+    if m["result"] == "Died for lack of a second":
+        return f"Motion: {club.name(m['mover'])} moved to {what}. The motion died for lack of a second."
+    sec = f", seconded by {club.name(m['seconder'])}" if m.get("seconder") else ""
+    return f"Motion: {club.name(m['mover'])} moved to {what}{sec}. {m['result']}."
+
+
+def _motion(mover: str | None, seconder: str | None, what: str, result: str) -> dict:
+    what = " ".join(what.split()).rstrip(".")
+    what = what[3:] if what.lower().startswith("to ") else what
+    if not mover or not what:
+        raise ValueError("A motion needs who moved it and what it was.")
+    if result not in RESULTS:
+        raise ValueError("Pick the motion's result.")
+    if seconder == mover:
+        raise ValueError("The mover can't second their own motion.")
+    if result == "Died for lack of a second":
+        seconder = None
+    return {"mover": mover, "seconder": seconder or None, "what": what[:MAX_TEXT - 100], "result": result}
+
+
+def add_motion(s: dict, club: Club, by: str, mover: str | None, seconder: str | None, what: str, result: str,
+               opened: str | None = None, past: bool = False) -> dict:
+    """A motion made at a meeting (the console), or recorded afterwards (past=True, e.g. from old minutes: closed at
+    once, so it never shows up in a later meeting's Old Business)."""
+    m = _motion(mover, seconder, what, result)
+    x = add(s, motion_text(club, m), by, opened=opened, note="recorded a past motion" if past else "added")
+    x["motion"] = m
+    if past:
+        x["status"], x["closed"] = "done", x["opened"]
+    return x
+
+
+def set_motion(s: dict, club: Club, iid: str, by: str, mover: str | None, seconder: str | None, what: str,
+               result: str) -> dict:
+    """Correct a motion, or record what became of a tabled one. The item's text follows."""
+    x = get(s, iid)
+    if "motion" not in x:
+        raise ValueError("That item isn't a motion.")
+    m = _motion(mover, seconder, what, result)
+    changes = {k: [x["motion"].get(k), v] for k, v in m.items() if x["motion"].get(k) != v}
+    if changes:
+        x["motion"], x["text"] = m, motion_text(club, m)
+        _note(x, by, "changed " + ", ".join(changes), changes=changes)
+    return x
+
+
+def motions(s: dict) -> list[dict]:
+    """Every recorded motion, newest meeting first."""
+    return sorted((x for x in s["items"] if "motion" in x), key=lambda x: x["opened"], reverse=True)
+
+
 def edit(s: dict, iid: str, by: str, meeting: str | None = None, **fields) -> dict:
     """Change text, owner, due or agenda (None/"" clears owner and dates). Each change keeps the old
     and new value in the item's history, with the meeting it was made at (if any)."""

@@ -9,7 +9,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 import secrets
 import smtplib
 import sqlite3
@@ -23,7 +22,7 @@ from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
                                       ResidentKeyRequirement, UserVerificationRequirement)
 
-from .club import DATA, PREVIEW, Club
+from .club import DATA, PREVIEW, Club, one_line, valid_email
 
 log = logging.getLogger("w8lbz.auth")
 
@@ -265,7 +264,7 @@ class Auth:
     def start_email_change(self, member: str, email: str, base_url: str | None = None) -> str | None:
         """Email a confirmation link to the new address. Returns an error message, or None if sent."""
         email = email.strip()
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        if not valid_email(email):
             return "That doesn't look like an email address."
         other = self.member_by_email(email)
         if other and other != member:
@@ -397,7 +396,7 @@ def _preview_outbox(recipients, subject, body, attachments, only_to, reply_to) -
     p = DATA / "preview-outbox.jsonl"
     with p.open("a") as f:
         f.write(json.dumps(entry) + "\n")
-    log.info("preview: email %r recorded in the outbox, not sent", subject)
+    log.info("preview: email %r recorded in the outbox, not sent", one_line(subject))
     return len(allowed)
 
 
@@ -436,7 +435,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
         withheld = [r for r in recipients if r not in allowed]
         if withheld:
             log.warning("email test mode: withheld %r from %d recipient(s) not in email.only_to",
-                        subject, len(withheld))
+                        one_line(subject), len(withheld))
         recipients = allowed
     entry = {"to": recipients, "withheld": withheld, "subject": subject, "body": body, "reply_to": reply_to,
              "attachments": [a[0] for a in attachments]}
@@ -446,7 +445,8 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
     user = os.environ.get("W8LBZ_SMTP_USER")
     password = (os.environ.get("W8LBZ_SMTP_PASSWORD") or "").replace(" ", "")  # Google shows app passwords in groups
     if not (user and password):
-        log.warning("SMTP not configured; email to %s not sent:\n%s\n%s", ", ".join(recipients), subject, body)
+        log.warning("SMTP not configured; email to %s not sent: %s | %s", one_line(", ".join(recipients)), one_line(subject),
+                    one_line(body)[:2000])
         _email_log({**entry, "status": "not sent (no SMTP settings)"})
         return 0
     try:
@@ -476,5 +476,5 @@ def _smtp_send(recipients, subject, body, attachments, reply_to, user, password)
                 maintype, subtype = mime.split("/", 1)
                 msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=name)
             s.send_message(msg)
-    log.info("email %r sent to %d recipient(s)", subject, len(recipients))
+    log.info("email %r sent to %d recipient(s)", one_line(subject), len(recipients))
     return len(recipients)

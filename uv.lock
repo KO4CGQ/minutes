@@ -1386,9 +1386,10 @@ wheels = [
 
 [[package]]
 name = "w8lbz-minutes"
-version = "0.11.0"
+version = "0.12.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "google-auth", extra = ["requests"] },
     { name = "httpx" },
@@ -1411,6 +1412,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastapi", specifier = ">=0.162.0" },
     { name = "google-auth", extras = ["requests"], specifier = ">=2.62.1" },
     { name = "httpx", specifier = ">=0.28.1" },

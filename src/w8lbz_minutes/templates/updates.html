@@ -34,6 +34,8 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
       <div class="deploynotes">{{ newer.deploy_notes|md }}</div>
       <label class="wk"><input type="checkbox" name="notes_done" value="1" required> I've done these steps</label></div>{% endif %}
     <details open><summary class="muted">What's in it</summary><div class="relnotes changelog">{{ newer.notes|md }}</div></details>
+    {% if backup_ready %}<label class="check"><input type="checkbox" name="backup_first" value="1" checked> Back up first (recommended): a full backup, kept on the server and sent off it as usual. If it fails, the update doesn't start.</label>
+    {% else %}<p class="hint">Backups aren't set up (no passphrase), so there's no backup before the update. Admin mode → Security → Backups.</p>{% endif %}
     <div class="formrow"><button class="btn" data-confirm="Update the app to {{ newer.version }} now? It restarts, so anyone using it is interrupted for a moment.">Update now</button></div>
     <p class="hint">Runs the same update as <code>update.sh</code> on the server: the latest main from GitHub, then a restart. Avoid doing it during a meeting.</p>
   </form>

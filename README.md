@@ -9,7 +9,7 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROA
 - **Minutes:** the archive (`/minutes`) in the modernized layout with PDF download (View original instead for imported minutes), one search box for the minutes (full text), members, guests, business items, chow nights and calendar events, per-member history, attendance stats and guest tracking.
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode.
-- **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders.
+- **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders. Motions keep their mover, seconder and result (Business → Motions).
 - **Calendar:** the club's calendars kept by the app, with .ics import, subscriptions and an optional copy to Google (see Club calendars below).
 - **Chow schedule:** the rotation, swaps, reminders before your night, and who provided, missed or covered each night.
 - **Email preferences:** each member turns each kind of email on or off, including a meeting-day email (the time, your chow, your business items, the calendar until the next meeting and last meeting's minutes). Every optional email ends with a link to change it. The daily `reminders` timer (8 am) sends business and chow reminders and the meeting-day email.
@@ -35,7 +35,29 @@ curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh 
 /opt/w8lbz-minutes/deploy/update.sh                                                    # after each merge to main
 ```
 Then put `club.yaml` and `google-service-account.json` in `/etc/w8lbz-minutes/`, and data in `/var/lib/w8lbz-minutes/`.
-The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00.
+The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00; backups run on the schedule set on the Backups page.
+
+## Backups
+The app backs up its whole data folder (minutes, chow, business, calendars, settings, logs, the roster cache, and a consistent copy of the sign-in database) into one compressed `.tar.gz`, encrypts it (scrypt + AES-256-GCM) with a passphrase only the admins hold, and decrypts it again to check it opens. It keeps the newest on the server (`backups/` in the data folder) and sends each to **S3-compatible storage** (Backblaze B2), a **Google Drive** folder, or both. If anything fails, the admins get an email.
+
+Admin mode → Security → **Backups** has everything else: the size of the data and of the last backup, Back up now, **Download a backup now** (a fresh one, compressed and encrypted, to your computer), the server's copies, the **schedule** (daily, weekly, or only by hand, at a chosen hour; the `w8lbz-minutes-backup.timer` checks hourly), **how many to keep** on the server and on Drive, and the S3 and Drive settings, with the recommended values: daily, 7 on the server, 30 on Drive, 90 days on S3. The settings are in `backup-settings.json`, which holds the S3 secret and is left out of the backups (re-enter it after a restore).
+
+**Setup:**
+1. A long passphrase in `/etc/w8lbz-minutes/env`: `W8LBZ_BACKUP_PASSPHRASE=...`, then restart. Keep a copy somewhere other than the server (a password manager the admins share, and a printed copy somewhere safe): without it no backup can be opened. It's not set from the app on purpose: a stolen admin sign-in could otherwise set one it knows. The Backups page **suggests** one (24 capitals and digits without look-alikes, in groups of four: easy to type from paper, about 119 bits) and **checks** one: whether it matches the server's, its strength, and whether it's in Have I Been Pwned's leaked passwords (free Pwned Passwords range API: only the first 5 characters of the SHA-1 are sent). Neither stores nor logs the passphrase.
+2. **S3 / Backblaze B2:** a private bucket with a lifecycle rule for the folder (B2: Lifecycle Settings → custom rule for `minutes/`: hide files 90 days after upload, delete them 1 day after hiding), and an application key limited to that bucket with read and write. Enter the endpoint, region, bucket, key ID and secret on the Backups page (`W8LBZ_S3_KEY_ID` / `W8LBZ_S3_SECRET` in the env file override them). The app never deletes anything there.
+3. **Google Drive:** a folder in a **Shared Drive** (Google Workspace). Google gives service accounts no storage of their own, so a folder in someone's My Drive fails with a storage-quota error. Add the service account (its email is in `google-service-account.json`) to the Shared Drive as **Content manager**, so it can delete backups beyond the number to keep, and paste the folder's link on the Backups page.
+4. Back up now, and check the page says where it was sent.
+
+Until the passphrase is set, scheduled backups don't run (and send no "failed" emails); the Backups page shows "Passphrase: not set". With only the passphrase (no S3 or Drive), backups are kept on the server and can be downloaded: enough to undo a mistake, not to survive losing the server.
+
+**Restore** (onto this server or a fresh one set up with `setup.sh`):
+```sh
+sudo -u minutes /opt/w8lbz-minutes/.venv/bin/w8lbz-minutes restore BACKUP.tar.gz.enc /tmp/restored   # asks for the passphrase
+systemctl stop w8lbz-minutes
+rsync -a /tmp/restored/ /var/lib/w8lbz-minutes/ && chown -R minutes:minutes /var/lib/w8lbz-minutes
+systemctl start w8lbz-minutes
+```
+`restore` only unpacks into an empty folder, never over live data. Members stay signed in (the sign-in database is in the backup); passkeys keep working as long as the hostname is the same.
 
 ## Server hardening (recommended)
 The app blocks web visitors itself after repeated failed sign-ins (admin **Security** page). For SSH, use fail2ban:
@@ -58,7 +80,7 @@ The app blocks web visitors itself after repeated failed sign-ins (admin **Secur
 
 To lift a ban: `fail2ban-client set sshd unbanip ADDRESS`.
 
-Also worth doing: SSH with keys only (`PasswordAuthentication no` in `/etc/ssh/sshd_config`), automatic security updates (`apt install unattended-upgrades`), and a firewall that allows only SSH and the app's port.
+Also worth doing: SSH with keys only (`PasswordAuthentication no` in `/etc/ssh/sshd_config`), automatic security updates with restarts afterwards (`apt install unattended-upgrades needrestart`, then `dpkg-reconfigure -plow unattended-upgrades`, and `$nrconf{restart} = 'a';` plus, in a container, `$nrconf{kernelhints} = 0;` in `/etc/needrestart/conf.d/50-auto.conf`: Debian's needrestart otherwise only lists the services still running an updated library), and a firewall that allows only SSH and the app's port.
 
 ## Login
 Members sign in with a passkey, or with a one-time link emailed to their roster address.
@@ -71,7 +93,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 Officers and members ticked `minutes_editor` in the roster sheet can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
 
 ## Config
-`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the club links, the roster sheet's address and the private never-record list. People, offices and who may lead come from the roster sheet.
+`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the club links, the roster sheet's address and the private never-record list. People, their titles and who may lead come from the roster sheet; the list of offices is `offices:` in club.yaml.
 
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
 
@@ -86,6 +108,10 @@ Members edit their own email, phone, address, birthday and sharing choices at `/
 - **Setup:** share the roster sheet with the service account as **Editor**, and add `birthday` and `share` columns to the Member Roster tab (headers exactly; any position).
 - Each change is logged in `profile-changes.jsonl` in the data directory, emailed to members whose title includes Secretary, and can be undone by any officer at `/roster/changes`.
 - Officers see all contact details; other members see only what each member shares.
+- **Roster keepers edit the roster** (Secretary and Treasurer by default, `roster_keepers:`; admins in admin mode): **Edit roster details** on a member's page (`/members/ID/edit`) changes name, class, status, email, phone, address, titles, aliases and the `is_officer`, `is_board`, `minutes_editor` and `calendar_editor` ticks, through the same path as members' own edits (values only, logged, undoable, emailed). It also adds Membership Log rows. Not birthday or sharing (the member's own choices).
+- **Callsign changes** (same page, **New callsign**): the callsign is the member's id across the data folder, so a change renames it everywhere (`callsign.py`): current state (`chow.json`, `business.json`, `events.json`, `calendar-feeds.json`, `ask-about.json`, `email-prefs.json`, `settings.json`, drafts' `console.json`), the minutes' front matter and report tags (never their text), the sign-in database and the picture. Logs (`*.jsonl`) keep the old id as history. It needs the backup passphrase (a backup is taken first and kept as `…-before-NEWCALL.tar.gz.enc`); the old call goes into `aliases` on the sheet, so `Club.canonical` maps it to the member (club.yaml's `admins:` and `email.only_to` included). Needs `aliases`, `minutes_editor` and `calendar_editor` columns on the sheet to change those.
+- **Roster API** (`GET /api/roster`), for the club's other tools on the same server: active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON. Off until `W8LBZ_ROSTER_API_TOKEN=...` (a long random string) is in `/etc/w8lbz-minutes/env`; then it answers only requests with `Authorization: Bearer <token>` from the server itself or an address in `W8LBZ_ROSTER_API_ALLOW` (comma-separated; the Discord bot's container), and never through the web proxy. E.g. from the bot's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`. Give the bot's container a fixed IP, and ideally limit port 8000 to it with the Proxmox firewall. Every call, allowed or not, is logged in `api-log.jsonl` in the data directory.
+- **Offices** (`/offices`, linked from the Roster): the offices in club.yaml's `offices:` (a title is an officer's office with one seat; `{title: Trustee, officer: false, seats: 3}` is a board seat), who holds each, and who held them when, from the Membership Log's "Took office" / "Left office" rows (the office in the `note` column). An admin in admin mode changes a holder in one step: the app writes `Title(s)`, `is_officer` and `is_board` for both members (officer if any office they hold is an officer's, board if any is in the list; other titles are kept), adds the log rows, and emails the officers. "Add a past term" adds history only.
 - **Email** and **Settings** tabs: which emails each member gets (`email-prefs.json`) and how the app shows things to them, e.g. the first day of the week (`settings.json`), both in the data directory.
 
 ## Admin mode
@@ -111,7 +137,7 @@ Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos 
 - **Stacked PRs** (one branch built on another, while earlier ones wait for review): each PR targets the branch below it, so its diff shows only its own change. To release the stack, a release PR from the top branch into main carries everything. Just before merging it, retarget every PR in the stack to main; GitHub then marks each one merged when the release lands, because its commits are in main. A PR left targeting another branch stays open and has to be closed by hand. Keep stacks short where possible.
 - To release: in a PR, rename "Unreleased" to the new version and date and bump `version` in `pyproject.toml` (then `uv lock`). When it merges, the Release workflow tags the merge commit `vX.Y.Z` and publishes a GitHub release with that CHANGELOG section. Deploy with `update.sh`; the footer then shows the new version.
 - **Releases that need steps by hand** (a config change, a data file to copy, a new secret): add a line `- **Deploy notes:**` to that version's CHANGELOG section, with the steps indented under it as a numbered list. Put each command or file content in its own code block (indented 8 spaces under its step), one step per action, so they can be followed and copied. The admin Updates page shows them, formatted, and asks the admin to confirm they're done before updating. Only steps the release needs belong here; optional server hardening goes in this README.
-- **Updating from the app:** admins in admin mode see "Version X is available" and an **Updates** page with **Update now**. It writes `update-request.json` in the data folder; the root-owned `w8lbz-minutes-update.path` unit sees it and runs `deploy/update-from-app.sh` (which runs `update.sh` and records the result). `update.sh` installs and enables that unit, so the first update after this feature arrives is still by hand.
+- **Updating from the app:** admins in admin mode see "Version X is available" and an **Updates** page with **Update now**. It writes `update-request.json` in the data folder; the root-owned `w8lbz-minutes-update.path` unit sees it and runs `deploy/update-from-app.sh` (which runs `update.sh` and records the result). `update.sh` installs and enables that unit, so the first update after this feature arrives is still by hand. **Back up first** is ticked by default once backups are set up: a full backup (kept and sent off as usual) runs before the update is requested, and if it fails the update doesn't start.
 - Every pull request runs the tests (the Tests workflow).
 
 ## Security checks
@@ -145,6 +171,7 @@ Previews never copy to Google.
 `/chow` is the chow list; the app is the source of truth (state in `chow.json`, every change in `chow-log.jsonl`, both in the data directory).
 - One-time import of the Secretary's spreadsheet: `w8lbz-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
 - Members ask each other to swap; leaders edit directly; the console records provided, missed or covered on meeting night.
+- The printable list (`/chow/list.pdf`): every night still to come. Officers email it to members from the Chow page (each member can turn it off); the page shows whether the schedule changed since it was last sent.
 
 ## License
 Copyright © 2026 James Flattery, KO4CGQ.

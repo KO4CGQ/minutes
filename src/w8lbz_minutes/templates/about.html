@@ -11,7 +11,7 @@
 </dl>
 
 {% if changelog %}<h2>What's new</h2>
-<div class="changelog">{{ changelog }}</div>{% endif %}
+<div class="changelog">{% for version, notes in changelog %}<details{{ ' open' if loop.first }}><summary><b>{{ version }}</b></summary>{{ notes }}</details>{% endfor %}</div>{% endif %}
 
 <h2>Built with</h2>
 <p class="muted">Open-source software this app depends on directly, as installed on this server.</p>

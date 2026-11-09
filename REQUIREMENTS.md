@@ -111,7 +111,7 @@ The minutes follow a fixed template. The system should generate exactly this str
   - The person with the floor is shown prominently.
 - **FR-20** Show follow-up prompts for the person with the floor, taken from their earlier reports in the archive. Examples: "Waiting on test results, ask how it went", "Hex beam build: done?", "Selling a radio: sold?". The leader can dismiss a prompt, or mark it resolved or still open.
 - **FR-21** Under Old Business, list the open tracked items. For each one, the leader can record an update, close it, or carry it forward. Items that haven't been touched in N weeks are flagged as possibly stale.
-- **FR-22** Under New Business, quick buttons create a **Motion** (mover, seconder, result), an **Action item** (owner, due date) or an **Event** (date, time, location).
+- **FR-22** Under New Business, quick buttons create a **Motion** (mover, seconder, result; kept as data, listed on Business → Motions), an **Action item** (owner, due date) or an **Event** (date, time, location).
 - **FR-23** Show a live draft of the minutes next to the transcript, updated within about 30–60 s, in the club's terse style.
 
 ### 4.4 Collaboration
@@ -148,7 +148,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 - **FR-35b** Proposed extra columns in the sheet (to agree with whoever maintains the Discord side): `Short name`, `Aliases` (spellings seen in old minutes), `Officer role`, `minutes_editor` (may lead and suggest edits), `Attends remotely`, `Status` (active / SK / prospect / guest), `Email`.
 - **FR-36** The roster's single source of truth is the Google Sheet (the Discord roster). It is read through the Google Sheets API with a service account and contains name, callsign, preferred short name (first name plus last initial when a first name is shared), **email** (for minutes delivery and login), status (active, SK, prospect), whether they attend remotely, and the Discord ID.
 - **FR-37** Replace the website roster xlsx with an export generated from the Google Sheet.
-- **FR-38** The chow rotation lives in the app (decided), with swaps, blackout dates and a reminder before each member's night.
+- **FR-38** The chow rotation lives in the app (decided), with swaps, blackout dates and a reminder before each member's night. Its printable list (PDF) replaces the Secretary's xlsx, emailed when a leader sends it (a new or changed list), not every week.
 
 ### 4.8 Personal items and names that are never recorded
 - **FR-40a** A private **never-record list** of names, for example visiting family members or minors, lives only in the server's local config. It is never kept in git. Listed names are dropped from imported minutes, and the original PDF isn't served for those meetings. Nothing marks the removal, so it doesn't draw attention.

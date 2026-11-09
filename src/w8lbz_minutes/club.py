@@ -26,6 +26,28 @@ PREVIEW = os.environ.get("W8LBZ_PREVIEW") or None
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,3}$", re.I)
 
 
+def valid_email(s: str) -> bool:
+    """name@domain.tld, no spaces, at most 254 characters. No regex: a crafted address can't make it slow."""
+    if not s or len(s) > 254 or any(ch.isspace() for ch in s) or s.count("@") != 1:
+        return False
+    local, domain = s.split("@")
+    return bool(local) and "." in domain and not domain.startswith(".") and not domain.endswith(".")
+
+
+def inside(folder: Path, name: str) -> Path:
+    """folder/name, refused unless it really is a file directly in that folder (no "..", no slashes)."""
+    base = os.path.realpath(folder)
+    p = os.path.realpath(os.path.join(base, name))
+    if not p.startswith(base + os.sep) or os.path.dirname(p) != base:
+        raise ValueError(f"{name!r} isn't a plain file name.")
+    return Path(p)
+
+
+def one_line(v) -> str:
+    """A value for a log line: line breaks shown as \\n, so typed text can't add a fake log entry."""
+    return str(v).replace("\r", "\\r").replace("\n", "\\n")
+
+
 def _n(s: str) -> str:
     return re.sub(r"[^a-z]", "", s.lower())
 
@@ -70,6 +92,7 @@ class Club:
         self.ai = cfg.get("ai") or {}  # AI assistance (ai.py): model, and whether it's on
         self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
         # Offices whose holders add new members to the roster (bylaws IV.C: the Secretary keeps it).
+        self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
 
         self._mtime = None  # set when the people come from the roster cache, so refresh() can notice a sync
@@ -137,7 +160,7 @@ class Club:
             return None
         out = set()
         for x in only:
-            m = self.members.get(str(x).lower())
+            m = self.members.get(self.canonical(str(x).lower()))
             addr = m.email if m else str(x)
             if addr and "@" in addr:
                 out.add(addr.strip().lower())
@@ -158,7 +181,7 @@ class Club:
 
     def is_admin(self, mid: str | None) -> bool:
         """Listed under admins: in club.yaml. Admin rights apply only while admin mode is on."""
-        return bool(mid) and mid in self.admins
+        return bool(mid) and mid in {self.canonical(a) for a in self.admins}  # club.yaml may still have an old call
 
     def can_see(self, viewer: str | None, mid: str, fld: str, elevated: bool = False) -> bool:
         """Contact details: officers, admins in admin mode, and the member always; others only what was shared."""
@@ -185,11 +208,11 @@ class Club:
 
     # ---- names ----
     def name(self, mid: str | None) -> str:
-        m = self.members.get(mid or "")
+        m = self.members.get(self.canonical(mid or ""))
         return m.name if m else (mid or "").title()
 
     def short(self, mid: str) -> str:
-        m = self.members.get(mid)
+        m = self.members.get(self.canonical(mid))
         return (m.short or m.first or m.last) if m else mid.title()
 
     def resolve_surname(self, word: str) -> str | None:

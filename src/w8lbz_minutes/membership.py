@@ -12,7 +12,7 @@ import logging
 import re
 
 from . import auth, chow, prefs, profile
-from .club import ROSTER_CACHE, Club
+from .club import ROSTER_CACHE, Club, one_line, valid_email
 from .roster import Sheet, SheetError
 
 log = logging.getLogger("w8lbz.membership")
@@ -42,7 +42,7 @@ def clean(form: dict) -> dict:
         raise ValueError("A callsign and license class are needed: members must be licensed.")
     if not re.fullmatch(r"[A-Z0-9]{3,7}", f["callsign"]):
         raise ValueError(f"{f['callsign']} doesn't look like a callsign.")
-    if f["email"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", f["email"]):
+    if f["email"] and not valid_email(f["email"]):
         raise ValueError(f"{f['email']} doesn't look like an email address.")
     if f["license_class"] not in CLASSES:
         raise ValueError("Unknown license class.")
@@ -95,7 +95,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
 
     # Who added them: in Recent changes (here), the Membership Log note (sheet) and the Secretary's email.
     profile.log_added(mid, by, {k: f[k] for k in ("callsign", "email", "phone", "address", "license_class", "joined") if f[k]})
-    log.info("new member %s (%s) added by %s", name, mid, by)
+    log.info("new member %s (%s) added by %s", one_line(name), one_line(mid), one_line(by))
     to = [club.members[x].email for x in club.secretaries if x != by and club.members[x].email and prefs.wants(x, "roster") == "now"]
     if to:
         try:
@@ -106,3 +106,41 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
         except Exception:
             log.exception("couldn't email the Secretary about new member %s", mid)
     return mid
+
+
+EVENTS = ("Joined", "Rejoined", "Left", "Silent Key", "Callsign Change", "Other")
+
+
+def add_event(club: Club, mid: str, event: str, date: str, note: str, by: str, sheet: Sheet | None = None) -> dict:
+    """A Membership Log row (Joined, Left, Silent Key, ...): on the sheet, then in the app. "Member since" follows
+    the latest Joined or Rejoined. Status isn't changed here; the editor's Status box does that."""
+    if event not in EVENTS:
+        raise ValueError("Pick what happened.")
+    note = " ".join(note.split())[:200]
+    if event == "Other" and not note:
+        raise ValueError("Say what happened in the note.")
+    try:
+        date = dt.date.fromisoformat(date).isoformat()
+    except ValueError:
+        raise ValueError("Give the date it happened.")
+    m = club.members[mid]
+    (sheet or Sheet()).add_row({"callsign": m.callsign or "", "full_name": m.name, "date": date,
+                                "event": note if event == "Other" else event, "note": "" if event == "Other" else note},
+                               tab=LOG_TAB, optional=("callsign", "note"))
+    e = {"date": date, "event": note if event == "Other" else event, "note": (None if event == "Other" else note) or None}
+    m.events.append(e)
+    joins = [x["date"] for x in m.events if x["event"] in ("Joined", "Rejoined") and x.get("date")]
+    m.member_since = max(joins) if joins else m.member_since
+    rows = json.loads(ROSTER_CACHE.read_text()) if ROSTER_CACHE.exists() else []
+    for r in rows:
+        if r["id"] == mid:
+            r.update(events=m.events, member_since=m.member_since)
+    if rows:
+        tmp = ROSTER_CACHE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(rows, indent=1))
+        tmp.chmod(0o600)
+        tmp.replace(ROSTER_CACHE)
+    profile._append({"id": profile.secrets.token_hex(6), "at": int(profile.time.time()), "member": mid, "by": by,
+                     "logged": True, "old": {}, "new": {"membership_log": f"{e['event']}, {date}" + (f" ({e['note']})" if e["note"] else "")}})
+    log.info("membership log: %s %s %s, by %s", one_line(mid), one_line(e["event"]), date, one_line(by))
+    return e
