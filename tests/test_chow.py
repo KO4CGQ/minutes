@@ -232,15 +232,27 @@ def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
     chow.save(s)
     monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
     prefs.save("bob", {"chowlist": "off"})
-    html = []  # WeasyPrint needs system libraries; render the template, fake the PDF step
-    monkeypatch.setattr(web, "html_to_pdf", lambda tpl, **ctx: html.append(
-        web.templates.get_template(tpl).render(club=club, pdf=True, **ctx)) or b"%PDF")
+    html = []  # the template as rendered; the real PDF too where WeasyPrint's system libraries (pango) are installed
+    real_pdf = web.html_to_pdf
+
+    def to_pdf(tpl, **ctx):
+        html.append(web.templates.get_template(tpl).render(club=club, pdf=True, **ctx))
+        try:
+            return real_pdf(tpl, **ctx)
+        except web.HTTPException:  # no pango here
+            return b"%PDF"
+    monkeypatch.setattr(web, "html_to_pdf", to_pdf)
     who = {"id": "amy"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
     c = TestClient(web.app)
     r = c.get("/chow/list.pdf")
     assert r.status_code == 200 and r.content.startswith(b"%PDF")
     assert "Amy Able" in html[0] and "No chow (Snowed in)" in html[0]
+    if len(r.content) > 4:  # a real PDF: its text says the same
+        import io
+        from pypdf import PdfReader
+        text = PdfReader(io.BytesIO(r.content)).pages[0].extract_text()
+        assert "Amy Able" in text and "No chow (Snowed in)" in text
     assert c.post("/chow/email").status_code == 403 and "Email the list" not in c.get("/chow").text
     who["id"] = "sec"
     assert "Not emailed yet" in c.get("/chow").text
