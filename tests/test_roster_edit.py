@@ -83,3 +83,16 @@ def test_only_roster_keepers(env):
     assert c.post("/members/kd8aaa/edit", data=form(first="Mallory")).status_code == 403
     assert c.post("/members/kd8aaa/log", data={"event": "Left", "date": "2026-11-05"}).status_code == 403
     assert club.members["kd8aaa"].first == "Amy"
+
+
+def test_admins_email_needs_admin_mode(env, monkeypatch):
+    """A roster keeper can't point an admin's sign-in (and admin-mode confirmation) email at another inbox."""
+    club, tmp, _, who, c = env
+    club.admins = {"kd8bbb"}
+    r = c.post("/members/kd8bbb/edit", data=form(email="mallory@example.org"), follow_redirects=False)
+    assert "Only%20an%20admin" in r.headers["location"] and club.members["kd8bbb"].email == "bob@example.org"
+    c.post("/members/kd8bbb/edit", data=form(phone="419-555-0102"))  # other details are fine
+    assert club.members["kd8bbb"].phone == "419-555-0102"
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c.post("/members/kd8bbb/edit", data=form(email="bob@new.example.org"))
+    assert club.members["kd8bbb"].email == "bob@new.example.org"

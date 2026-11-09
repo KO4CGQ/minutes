@@ -31,7 +31,7 @@ from .meeting import SECTIONS
 from .store import Archive
 
 HERE = Path(__file__).parent
-app = FastAPI(title="W8LBZ Minutes")
+app = FastAPI(title="W8LBZ Minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 archive = Archive()
@@ -167,6 +167,9 @@ async def security_headers(request: Request, call_next):
     h.setdefault("X-Content-Type-Options", "nosniff")
     h.setdefault("Referrer-Policy", "same-origin")
     h.setdefault("X-Robots-Tag", "noindex, nofollow")  # members-only; keep the public hostname out of search engines
+    h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    if is_https(request):  # browsers then refuse a downgraded (http) connection to this hostname for a year
+        h.setdefault("Strict-Transport-Security", "max-age=31536000")
     return response
 
 
@@ -1324,6 +1327,9 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
             raise ValueError("Pick a license class and status from the lists.")
         if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
             raise ValueError(f"{email} doesn't look like an email address.")
+        # An address is a way to sign in (and an admin's, to confirm admin mode): only an admin changes an admin's.
+        if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
+            raise ValueError("Only an admin, in admin mode, can change an admin's email.")
         new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
                "role": ", ".join(t.strip() for t in f.get("role", "").split(",") if t.strip()),
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
@@ -1959,14 +1965,16 @@ def guests(request: Request):
 
 @app.get("/api/roster")
 def roster_api(request: Request):
-    """Active members' callsign, name, email and officer tick, for the club's other tools on this server.
-    Only from the server itself, never through the web proxy, with the token in W8LBZ_ROSTER_API_TOKEN
-    (/etc/w8lbz-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
+    """Active members' callsign, name, email and officer tick, for the club's other tools (the Discord bot, in its
+    own container on the same Proxmox host). Only from this server itself or the addresses in
+    W8LBZ_ROSTER_API_ALLOW (comma-separated), never through the web proxy, with the token in W8LBZ_ROSTER_API_TOKEN
+    (both in /etc/w8lbz-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
     import hmac
     import os
     want = os.environ.get("W8LBZ_ROSTER_API_TOKEN", "")
     host = request.client.host if request.client else ""
-    local = host in ("127.0.0.1", "::1") and not any(h in request.headers for h in ("x-forwarded-for", "x-forwarded-proto"))
+    allowed = {"127.0.0.1", "::1"} | {a.strip() for a in os.environ.get("W8LBZ_ROSTER_API_ALLOW", "").split(",") if a.strip()}
+    local = host in allowed and not any(h in request.headers for h in ("x-forwarded-for", "x-forwarded-proto"))
     got = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     ok = bool(want) and local and hmac.compare_digest(got.encode(), want.encode())
     rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": m.officer}
