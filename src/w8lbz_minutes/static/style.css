@@ -89,6 +89,8 @@ button.btn { cursor: pointer; font: inherit; font-weight: 500; } .btn.small { pa
 button.act { font: inherit; font-size: .86rem; padding: .25rem .8rem; border: 1px solid var(--border-strong); border-radius: 1rem;
   background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s; }
 button.act:hover { background: var(--accent-soft); } button.act.on { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
+/* Calmer cards: secondary buttons (History, Comment) appear on hover, keyboard focus or a tap on the card. */
+.card:not(:hover):not(:focus-within):not(.tapped) button.act.quiet:not(.on) { opacity: 0; }
 button.linkbtn { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: .85rem; padding: 0 .2rem; }
 button.linkbtn:hover { color: var(--danger); } button.linkbtn.more { color: var(--accent-text); margin-bottom: .2rem; }
 
@@ -229,7 +231,7 @@ details.edit[open] { display: block; background: var(--surface-2); border: 1px s
 @media (max-width: 560px) { .card-head { flex-direction: column; } }
 .comments { margin-top: .6rem; } .comment { background: var(--surface-2); border-radius: .6rem; padding: .5rem .75rem; margin: .35rem 0; }
 .comment .ctext { white-space: pre-wrap; margin-top: .15rem; }
-.itemacts { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; align-items: center; } .itemacts form { margin: 0; display: inline; }
+
 .panel { margin-top: .7rem; padding: .7rem 0 .5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .timeline { list-style: none; padding: 0; margin: 0; max-height: 22rem; overflow-y: auto; }
 .timeline li { padding: .5rem .75rem; border-radius: .5rem; margin: .15rem 0; }
@@ -344,8 +346,8 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
   .cols { gap: 0; }
   /* business cards: the buttons as even rows, big enough to tap */
   .topacts { flex-wrap: wrap; width: 100%; }
-  .topacts > *, .itemacts > * { flex: 1 1 0; }
-  .topacts button.act, .itemacts button.act { width: 100%; min-height: 2.4rem; font-size: .9rem; white-space: nowrap; }
+  .topacts > * { flex: 1 1 0; }
+  .topacts button.act { width: 100%; min-height: 2.4rem; font-size: .9rem; white-space: nowrap; }
   .pager { flex-wrap: wrap; }
 }
 /* top bar: ☰ (left) opens a drawer with every page; the meeting pill, clock, search and name stay in the bar,

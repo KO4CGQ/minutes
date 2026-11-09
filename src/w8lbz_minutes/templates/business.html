@@ -1,7 +1,6 @@
 {% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}{% block title %}Business{% endblock %}{% block body %}
 <h1>Business items</h1>
-<p class="muted">Club business from the meetings. Each item stays in Old Business every week until it's marked done, so nothing gets dropped.
-{% if leader %}Officers can change any item; members can update the ones they own.{% else %}Anyone can comment; if an item is yours, you can update it or mark it done. Whoever leads a meeting manages items from the console.{% endif %}</p>
+<p class="muted">Club business from the meetings: each item comes up in Old Business every week until it's marked done.</p>
 <nav class="tabs">{% for t, label in tabs %}<a href="/business?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 {% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
@@ -24,7 +23,8 @@
     <div class="topacts">
       {% if mine %}<button type="button" class="act" data-panel="e{{ x.id }}" title="Edit the wording, owner or dates">{{ emoji('✏️', 'pencil') }} Edit</button>
       <form method="post" action="/business/{{ x.id }}/done" class="inline" data-confirm="Mark this item done? It shows as done in the next minutes, then drops off."><button class="act" title="Mark done">{{ emoji('✅', 'check') }} Mark done</button></form>{% endif %}
-      <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + cs|length }})</button>
+      <button type="button" class="act quiet" data-panel="c{{ x.id }}">{{ emoji('💬', 'chat') }} Comment</button>
+      <button type="button" class="act quiet" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + cs|length }})</button>
     </div></div>
   <div class="card-meta">
     {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a></span>{% else %}<span class="chip muted">No owner</span>{% endif %}
@@ -52,7 +52,6 @@
       {% if leader or c.by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?"><button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
       <div class="ctext">{{ c.text }}</div></div>{% endfor %}
   </div>{% endif %}
-  <div class="itemacts"><button type="button" class="act" data-panel="c{{ x.id }}">{{ emoji('💬', 'chat') }} Comment</button></div>
   <div class="panel" id="c{{ x.id }}" hidden>
     <form method="post" action="/business/{{ x.id }}/comment" class="modern"><textarea name="text" rows="4" required placeholder="Write an update, a question, or an offer to help…"></textarea>
       <div class="formrow"><button class="btn small">Add comment</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>
@@ -89,7 +88,7 @@
   <div class="card-head"><div class="card-text">{{ emoji('✅', 'check') }} {{ x.text }}</div>
     <div class="topacts">
       {% if leader or x.owner == me.id %}<form method="post" action="/business/{{ x.id }}/done" class="inline"><input type="hidden" name="done" value="0"><button class="act" title="Open it again">{{ emoji('🔄', 'refresh') }} Reopen</button></form>{% endif %}
-      <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + (x.comments or [])|length }})</button>
+      <button type="button" class="act quiet" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + (x.comments or [])|length }})</button>
     </div></div>
   <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{{ x.owner_name }}</span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>
     <span class="chip">{{ emoji('📅', 'calendar') }} first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span></div>
@@ -111,7 +110,7 @@
   <div class="card-head"><div class="card-text">{{ x.text }}</div>
     <div class="topacts">
       {% if leader %}<button type="button" class="act" data-panel="m{{ x.id }}" title="Correct it, or record what became of a tabled motion">{{ emoji('✏️', 'pencil') }} Edit</button>{% endif %}
-      <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + (x.comments or [])|length }})</button>
+      <button type="button" class="act quiet" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + (x.comments or [])|length }})</button>
     </div></div>
   <div class="card-meta"><span class="chip">{{ mo.result }}</span>
     <span class="chip">{{ emoji('📅', 'calendar') }} <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>
@@ -165,6 +164,8 @@ document.querySelectorAll("button.act[data-panel]").forEach((b) => b.addEventLis
   const cs = card.querySelector(".comments");
   if (cs) cs.hidden = !p.hidden && b.dataset.panel.startsWith("h");
 }));
+// History and Comment stay faded until the card is hovered, focused or tapped (style.css: button.act.quiet).
+document.querySelectorAll(".card").forEach((c) => c.addEventListener("click", () => c.classList.add("tapped")));
 document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => {
   b.closest(".panel").hidden = true; b.closest(".card").querySelectorAll("button.act").forEach((x) => x.classList.remove("on"));
   const cs = b.closest(".card").querySelector(".comments"); if (cs) cs.hidden = false;
