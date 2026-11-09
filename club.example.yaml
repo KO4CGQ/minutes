@@ -62,9 +62,10 @@ offices:
 #   model: provider/model-name   # any chat model id from openrouter.ai/models
 #   enabled: true
 
-roster:  # the club roster Google Sheet (share it with the service account as Viewer)
+roster:  # the club roster Google Sheet (share it with the service account as Editor)
   sheet_id: REPLACE_ME
   tab: Member Roster
+  # source: app   # after `w8lbz-minutes roster --import`: the app keeps the roster itself (docs/server-admin.md)
 
 privacy:
   never_record: []  # names never shown in minutes or the archive

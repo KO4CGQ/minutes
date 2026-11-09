@@ -179,7 +179,48 @@ def context(archive: Archive, m: Meeting) -> dict:
         "chow": chow_tonight(archive, m),
         "business": business_items(archive, m.slug),
         "ask_about": ask_about_for(history),
+        "celebrations": celebrations(club, m.date),
+        "paid_since": paid_since(archive, m.date),
     }
+
+
+def paid_since(archive: Archive, date: dt.date) -> list[str]:
+    """What the Treasurer recorded as paid since the last meeting, for the leader to read under Bills (and add on a tap)."""
+    from . import treasurer
+    s = treasurer.load()
+    if not treasurer.on(s):
+        return []
+    prev = previous(archive, date)
+    lo = prev.date.isoformat() if prev else (date - dt.timedelta(days=7)).isoformat()
+    return [f"Paid {treasurer.money(e['cents'])}: {e['note'] or treasurer.categories(s).get(e.get('category'), 'expense')}"
+            for e in sorted(s["entries"], key=lambda e: e["date"]) if e["kind"] == "expense" and lo < e["date"] <= date.isoformat()]
+
+
+def _on(year: int, mmdd: str) -> dt.date:
+    """MM-DD (or MM, meaning the 1st) in a given year; Feb 29 falls on the 28th in other years."""
+    month, day = int(mmdd[:2]), int(mmdd[3:5]) if len(mmdd) > 2 else 1
+    return dt.date(year, month, 28 if (month, day) == (2, 29) and year % 4 else day)
+
+
+def celebrations(club, date: dt.date) -> list[str]:
+    """Birthdays (shared with members only) and membership anniversaries in the week up to tonight, so each is
+    greeted at exactly one weekly meeting. A month-only birthday counts from the 1st: the month's first meeting."""
+    out = []
+    for m in club.members.values():
+        if m.status.lower() in ("inactive", "silent key"):
+            continue
+        for year in {date.year, (date - dt.timedelta(days=6)).year}:
+            try:
+                if m.birthday and "birthday" in m.share and 0 <= (date - _on(year, m.birthday)).days < 7:
+                    month = len(m.birthday) == 2 and f" ({_on(year, m.birthday):%B})" or ""
+                    out.append(f"Happy birthday, {m.name}!{month}")
+                since = m.member_since and dt.date.fromisoformat(m.member_since)
+                if since and year > since.year and 0 <= (date - _on(year, f"{since:%m-%d}")).days < 7:
+                    n = year - since.year
+                    out.append(f"{m.name}: {n} year{'s' if n > 1 else ''} as a member")
+            except ValueError:
+                continue  # something odd typed into the sheet
+    return sorted(out)
 
 
 def _when(v) -> str | None:

@@ -9,7 +9,9 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     imp = sub.add_parser("import", help="import historical minutes (PDFs + *CORRECTED*.txt) into the archive")
     imp.add_argument("src", type=Path)
-    sub.add_parser("roster", help="sync the roster from the club Google Sheet")
+    ro = sub.add_parser("roster", help="rebuild the roster cache from the club Google Sheet, or from the app's own copy once moved")
+    ro.add_argument("--import", dest="import_sheet", action="store_true",
+                    help="once: copy the Google Sheet's roster into the app, then set roster: source: app in club.yaml")
     lk = sub.add_parser("login-link", help="print a one-time sign-in link for a member (admin recovery)")
     lk.add_argument("who", help="callsign, or the member's email")
     lk.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
@@ -54,6 +56,12 @@ def main() -> None:
         from . import backup
         n = backup.restore(a.file.read_bytes(), os.environ.get("W8LBZ_BACKUP_PASSPHRASE") or getpass.getpass("Passphrase: "), a.dest)
         print(f"Restored {n} files into {a.dest}. Stop the app, move them into the data folder (chown minutes), start it.")
+    elif a.cmd == "roster" and a.import_sheet:
+        from .roster import _local, import_sheet
+        diff = import_sheet()
+        print(f"Copied the sheet's roster and Membership Log into {_local()}.")
+        print("\n".join(["Differences from the app's current roster:", *diff]) if diff else "No differences from the app's current roster.")
+        print("Next: add `source: app` under `roster:` in club.yaml and restart the app.")
     elif a.cmd == "roster":
         from .roster import sync
         ms = sync()
@@ -108,6 +116,20 @@ def main() -> None:
                 print(f"reminded {m.name} about {len(items)} item(s)")
             if not a.dry_run:
                 business.save(s)
+        # members who just reached the arrears line, to the Treasurer and the Board (when the Treasurer turned alerts on)
+        from . import treasurer
+        with treasurer.locked():
+            ts = treasurer.load()
+            alert = treasurer.arrears_alert(club, ts, today)
+            if alert and a.dry_run:
+                print(f"--- to {', '.join(alert[0])}: {alert[1]}\n{alert[2]}\n")
+            elif alert:
+                try:
+                    auth.send_email(alert[0], alert[1], alert[2], only_to=club.email_only_to())
+                    treasurer.save(ts)  # only once it went: a failed send tries again tomorrow
+                    print(alert[1])
+                except Exception as e:
+                    print(f"couldn't send the dues alert: {e}")
         # chow reminders and the meeting-day email, each sent once even if this runs twice
         from .store import Archive
         from .club import MEETINGS

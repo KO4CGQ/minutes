@@ -1,14 +1,13 @@
 {% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}{% block title %}Business{% endblock %}{% block body %}
 <h1>Business items</h1>
-<p class="muted">Club business from the meetings. Each item stays in Old Business every week until it's marked done, so nothing gets dropped.
-{% if leader %}Officers can change any item; members can update the ones they own.{% else %}Anyone can comment; if an item is yours, you can update it or mark it done. Whoever leads a meeting manages items from the console.{% endif %}</p>
+<p class="muted">Club business from the meetings: each item comes up in Old Business every week until it's marked done.</p>
 <nav class="tabs">{% for t, label in tabs %}<a href="/business?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 {% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 
-{% macro timeline(x) %}{# changes and comments together, newest first #}
+{% macro timeline(x, comments=True) %}{# changes (and comments) together, newest first #}
 {% set ev = [] %}{% for e in x.history %}{% set _ = ev.append({'at': e.at, 'e': e}) %}{% endfor %}
-{% for c in x.comments or [] %}{% set _ = ev.append({'at': c.at, 'c': c}) %}{% endfor %}
+{% if comments %}{% for c in x.comments or [] %}{% set _ = ev.append({'at': c.at, 'c': c}) %}{% endfor %}{% endif %}
 <ul class="timeline">{% for t in ev|sort(attribute='at', reverse=True) %}<li>
   <div class="tl-head">{% set who = (t.e or t.c).by %}{% if who %}<span class="chip">{{ avatar(who, 'xs') }}<a href="/members/{{ who }}">{{ club.short(who) }}</a></span>{% endif %}
     <span class="muted small">{{ t.at|tsfull }}{% if t.e and t.e.meeting %} · at the <a href="/meetings/{{ t.e.meeting }}">{{ fmt(t.e.meeting) }}</a> meeting{% endif %}</span></div>
@@ -17,23 +16,33 @@
 </li>{% endfor %}</ul>
 {% endmacro %}
 
-{% if tab == 'open' %}
-<div class="cards">{% for x in open_items %}{% set mine = leader or x.owner == me.id %}{% set cs = x.comments or [] %}
-<article class="card{{ ' overdue' if x.overdue }}" id="i{{ x.id }}">
-  <div class="card-head"><div class="card-text">{{ x.text }}</div>
-    <div class="topacts">
-      {% if mine %}<button type="button" class="act" data-panel="e{{ x.id }}" title="Edit the wording, owner or dates">{{ emoji('✏️', 'pencil') }} Edit</button>
-      <form method="post" action="/business/{{ x.id }}/done" class="inline" data-confirm="Mark this item done? It shows as done in the next minutes, then drops off."><button class="act" title="Mark done">{{ emoji('✅', 'check') }} Mark done</button></form>{% endif %}
-      <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + cs|length }})</button>
-    </div></div>
-  <div class="card-meta">
-    {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a></span>{% else %}<span class="chip muted">No owner</span>{% endif %}
+{# Each item is a small card; clicking it opens a dialog with everything else (#i<id> in the address opens it too). #}
+{% macro card(x, extra='') %}
+<article class="card bcard{{ ' overdue' if x.overdue }}{{ ' done' if x.status == 'done' }}" id="i{{ x.id }}" data-open="d{{ x.id }}">
+  <button type="button" class="cardopen" aria-haspopup="dialog"><span class="card-text">{% if x.status == 'done' %}{{ emoji('✅', 'check') }} {% endif %}{{ x.text }}</span></button>
+  <div class="card-meta">{{ caller() }}{% if (x.comments or [])|length %}<span class="chip">{{ emoji('💬', 'chat') }} {{ x.comments|length }}</span>{% endif %}</div>
+</article>{% endmacro %}
+{% macro history(x, comments) %}{% set n = x.history|length + (0 if not comments else (x.comments or [])|length) %}
+<details class="hist"><summary>History ({{ n }} change{{ 's' if n != 1 }})</summary>{{ timeline(x, comments) }}</details>{% endmacro %}
+{% macro shell(x) %}<dialog class="modal wide" id="d{{ x.id }}" aria-labelledby="t{{ x.id }}"><form method="dialog" class="x"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form>
+<div class="body"><h2 id="t{{ x.id }}">{{ x.text }}</h2>{{ caller() }}</div></dialog>{% endmacro %}
+
+{% macro chips(x, full=False) %}{# full: in the dialog, with links and when it was first mentioned #}
+    {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{% if full %}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a>{% else %}{{ x.owner_name }}{% endif %}</span>{% else %}<span class="chip muted">No owner</span>{% endif %}
     {% if x.due %}<span class="chip{{ ' late' if x.overdue }}">{{ emoji('⏰', 'clock') }} due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}
     {% if x.agenda and x.agenda > today %}<span class="chip">{{ emoji('⏸️', 'pause') }} on the agenda for {{ fmt(x.agenda) }}</span>{% endif %}
     {% if x.quiet %}<span class="chip warn" title="Nothing has changed on it for weeks">quiet for a while: still on?</span>{% endif %}
-    <span class="chip">{{ emoji('📅', 'calendar') }} first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>
-  </div>
-  {% if mine %}<div class="panel" id="e{{ x.id }}" hidden>
+    {% if full %}<span class="chip">{{ emoji('📅', 'calendar') }} first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>{% endif %}
+{% endmacro %}
+
+{% if tab == 'open' %}
+<div class="cards">{% for x in open_items %}{% set mine = leader or x.owner == me.id %}{% set cs = x.comments or [] %}
+{% call card(x) %}{{ chips(x) }}{% endcall %}
+{% call shell(x) %}
+  <div class="card-meta">{{ chips(x, True) }}</div>
+  {% if mine %}<div class="dacts"><button type="button" class="act" data-toggle="e{{ x.id }}">{{ emoji('✏️', 'pencil') }} Edit</button>
+    <form method="post" action="/business/{{ x.id }}/done" class="inline" data-confirm="Mark this item done? It shows as done in the next minutes, then drops off."><button class="act">{{ emoji('✅', 'check') }} Mark done</button></form></div>
+  <div class="panel" id="e{{ x.id }}" hidden>
     <form method="post" action="/business/{{ x.id }}/edit" class="modern">
       <label>Item<textarea name="text" rows="3" required>{{ x.text }}</textarea>
         <span class="hint">Minutes already submitted keep the wording they had; the change shows from the next meeting on.</span></label>
@@ -43,20 +52,17 @@
       {% if leader %}<label>Hold for the meeting on<input type="date" name="agenda" value="{{ x.agenda or '' }}"></label>{% endif %}
       </div>
       {% if leader %}<p class="hint">Hold keeps it out of Old Business until that night (e.g. the President's State of the Club).</p>{% endif %}
-      <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>{% endif %}
-  <div class="panel" id="h{{ x.id }}" hidden>{{ timeline(x) }}</div>
-  {% if cs %}<div class="comments">
-    {% if cs|length > 2 %}<button type="button" class="linkbtn more" data-more="m{{ x.id }}">Show all {{ cs|length }} comments</button>{% endif %}
-    {% for c in cs %}<div class="comment"{% if loop.revindex > 2 %} data-group="m{{ x.id }}" hidden{% endif %}>
+      <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-toggle="e{{ x.id }}">Cancel</button></div></form></div>{% endif %}
+  <h3>Comments</h3>
+  <div class="comments">{% for c in cs %}<div class="comment">
       <span class="chip">{{ avatar(c.by, 'xs') }}<a href="/members/{{ c.by }}">{{ club.short(c.by) }}</a></span> <span class="muted small">{{ c.at|tsfull }}</span>
       {% if leader or c.by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?"><button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
-      <div class="ctext">{{ c.text }}</div></div>{% endfor %}
-  </div>{% endif %}
-  <div class="itemacts"><button type="button" class="act" data-panel="c{{ x.id }}">{{ emoji('💬', 'chat') }} Comment</button></div>
-  <div class="panel" id="c{{ x.id }}" hidden>
-    <form method="post" action="/business/{{ x.id }}/comment" class="modern"><textarea name="text" rows="4" required placeholder="Write an update, a question, or an offer to help…"></textarea>
-      <div class="formrow"><button class="btn small">Add comment</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>
-</article>{% else %}<p class="muted">Nothing open.</p>{% endfor %}</div>
+      <div class="ctext">{{ c.text }}</div></div>{% else %}<p class="muted small">No comments yet.</p>{% endfor %}</div>
+  <form method="post" action="/business/{{ x.id }}/comment" class="modern"><textarea name="text" rows="3" required placeholder="Write an update, a question, or an offer to help…" aria-label="Comment"></textarea>
+    <div class="formrow"><button class="btn small">Add comment</button></div></form>
+  {{ history(x, False) }}
+{% endcall %}
+{% else %}<p class="muted">Nothing open.</p>{% endfor %}</div>
 
 {% elif tab == 'add' %}
 <form method="post" action="/business/add" class="modern card">
@@ -85,16 +91,15 @@
   <div class="card-text">{{ n.text }}</div></article>{% endfor %}</div>{% endif %}
 
 {% elif tab == 'done' %}
-<div class="cards">{% for x in done %}<article class="card done" id="i{{ x.id }}">
-  <div class="card-head"><div class="card-text">{{ emoji('✅', 'check') }} {{ x.text }}</div>
-    <div class="topacts">
-      {% if leader or x.owner == me.id %}<form method="post" action="/business/{{ x.id }}/done" class="inline"><input type="hidden" name="done" value="0"><button class="act" title="Open it again">{{ emoji('🔄', 'refresh') }} Reopen</button></form>{% endif %}
-      <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + (x.comments or [])|length }})</button>
-    </div></div>
-  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{{ x.owner_name }}</span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>
+<div class="cards">{% for x in done %}
+{% call card(x) %}{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{{ x.owner_name }}</span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>{% endcall %}
+{% call shell(x) %}
+  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a></span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>
     <span class="chip">{{ emoji('📅', 'calendar') }} first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span></div>
-  <div class="panel" id="h{{ x.id }}" hidden>{{ timeline(x) }}</div>
-</article>{% else %}<p class="muted">Nothing yet.</p>{% endfor %}</div>
+  {% if leader or x.owner == me.id %}<div class="dacts"><form method="post" action="/business/{{ x.id }}/done" class="inline"><input type="hidden" name="done" value="0"><button class="act">{{ emoji('🔄', 'refresh') }} Reopen</button></form></div>{% endif %}
+  {{ history(x, True) }}
+{% endcall %}
+{% else %}<p class="muted">Nothing yet.</p>{% endfor %}</div>
 
 {% elif tab == 'motions' %}
 {% macro motion_fields(mo) %}
@@ -107,21 +112,20 @@
 {% endmacro %}
 <p class="muted">Every motion recorded in the leader console: who moved and seconded it, and how it went. Spending and bylaws changes can be traced to the motion that approved them.</p>
 <nav class="tabs small"><a href="/business?tab=motions" class="{{ 'on' if not result }}">All</a>{% for r in results %}<a href="/business?tab=motions&result={{ r|urlencode }}" class="{{ 'on' if result == r }}">{{ r }}</a>{% endfor %}</nav>
-<div class="cards">{% for x in motions %}{% set mo = x.motion %}<article class="card" id="i{{ x.id }}">
-  <div class="card-head"><div class="card-text">{{ x.text }}</div>
-    <div class="topacts">
-      {% if leader %}<button type="button" class="act" data-panel="m{{ x.id }}" title="Correct it, or record what became of a tabled motion">{{ emoji('✏️', 'pencil') }} Edit</button>{% endif %}
-      <button type="button" class="act" data-panel="h{{ x.id }}" title="Changes and comments">{{ emoji('🕘', 'clock') }} History ({{ x.history|length + (x.comments or [])|length }})</button>
-    </div></div>
+<div class="cards">{% for x in motions %}{% set mo = x.motion %}
+{% call card(x) %}<span class="chip">{{ mo.result }}</span><span class="chip">{{ emoji('📅', 'calendar') }} {{ fmt(x.opened) }}</span>{% endcall %}
+{% call shell(x) %}
   <div class="card-meta"><span class="chip">{{ mo.result }}</span>
     <span class="chip">{{ emoji('📅', 'calendar') }} <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>
     <span class="chip">{{ avatar(mo.mover, 'xs') }}moved by {{ club.name(mo.mover) }}</span>
     {% if mo.seconder %}<span class="chip">{{ avatar(mo.seconder, 'xs') }}seconded by {{ club.name(mo.seconder) }}</span>{% endif %}</div>
-  {% if leader %}<div class="panel" id="m{{ x.id }}" hidden><form method="post" action="/business/{{ x.id }}/motion" class="modern">
+  {% if leader %}<div class="dacts"><button type="button" class="act" data-toggle="m{{ x.id }}" title="Correct it, or record what became of a tabled motion">{{ emoji('✏️', 'pencil') }} Edit</button></div>
+  <div class="panel" id="m{{ x.id }}" hidden><form method="post" action="/business/{{ x.id }}/motion" class="modern">
     {{ motion_fields(mo) }}
-    <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>{% endif %}
-  <div class="panel" id="h{{ x.id }}" hidden>{{ timeline(x) }}</div>
-</article>{% else %}<p class="muted">No motions{{ ' with that result' if result }} yet. Motions are recorded with "+ Motion" under New Business in the leader console.</p>{% endfor %}</div>
+    <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-toggle="m{{ x.id }}">Cancel</button></div></form></div>{% endif %}
+  {{ history(x, True) }}
+{% endcall %}
+{% else %}<p class="muted">No motions{{ ' with that result' if result }} yet. Motions are recorded with "+ Motion" under New Business in the leader console.</p>{% endfor %}</div>
 {% if leader %}<h2>Record a past motion</h2>
 <form method="post" action="/business/motion" class="modern card">
   <p class="hint">From minutes written before the app kept motions. It's filed under that meeting's date and never comes up in Old Business.</p>
@@ -155,22 +159,17 @@
 <datalist id="roster-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
 <script nonce="{{ csp_nonce }}">
-// One panel (Comment / Edit / History) open at a time in each card.
-document.querySelectorAll("button.act[data-panel]").forEach((b) => b.addEventListener("click", () => {
-  const card = b.closest(".card"), p = document.getElementById(b.dataset.panel), wasOpen = !p.hidden;
-  card.querySelectorAll(".panel").forEach((x) => (x.hidden = true));
-  card.querySelectorAll("button.act").forEach((x) => x.classList.remove("on"));
-  if (!wasOpen) { p.hidden = false; b.classList.add("on"); p.querySelector("textarea")?.focus(); }
-  // History lists the comments too, so don't show them twice.
-  const cs = card.querySelector(".comments");
-  if (cs) cs.hidden = !p.hidden && b.dataset.panel.startsWith("h");
+// A card opens its dialog (a click anywhere on it but its links); #i<id> in the address opens one too, so after a
+// comment or an edit the page comes back with that item open.
+const openItem = (id) => { const d = document.getElementById(id); if (d && !d.open) d.showModal(); };
+document.querySelectorAll("article.bcard").forEach((c) => c.addEventListener("click", (e) => {
+  if (e.target.closest("a")) return;
+  history.replaceState(null, "", "#" + c.id); openItem(c.dataset.open);
 }));
-document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => {
-  b.closest(".panel").hidden = true; b.closest(".card").querySelectorAll("button.act").forEach((x) => x.classList.remove("on"));
-  const cs = b.closest(".card").querySelector(".comments"); if (cs) cs.hidden = false;
-}));
-document.querySelectorAll("[data-more]").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll(`[data-group="${b.dataset.more}"]`).forEach((x) => (x.hidden = false)); b.remove();
+document.querySelectorAll("dialog.modal").forEach((d) => d.addEventListener("close", () => history.replaceState(null, "", location.pathname + location.search)));
+if (/^#i\w+$/.test(location.hash)) openItem("d" + location.hash.slice(2));
+document.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", () => {  // Edit / Cancel
+  const p = document.getElementById(b.dataset.toggle); p.hidden = !p.hidden; if (!p.hidden) p.querySelector("textarea, input")?.focus();
 }));
 </script>
 {% endblock %}

@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_avatar.html" import avatar %}{% block title %}Offices{% endblock %}{% block body %}
 <h1>Offices</h1>
 <p class="muted">The club's offices from the bylaws, who holds each now, and who held them before (from the roster's Membership Log).
-{% if can_change %}Changing a holder updates their title and officer and board ticks on the roster sheet, adds the dates to its Membership Log, and emails the officers.{% else %}After an election or a resignation, an admin records the change here.{% endif %}</p>
+{% if can_change %}Changing a holder updates their title and officer and board ticks on the roster, adds the dates to its Membership Log, and emails the officers.{% else %}After an election or a resignation, an admin records the change here.{% endif %}</p>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 {% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% macro day(d) %}{{ (d|isodate)|listdate if d else '?' }}{% endmacro %}
@@ -13,7 +13,7 @@
   <div class="card-meta">{% for h in o.holders %}<span class="chip">{{ avatar(h, 'xs') }}<a href="/members/{{ h }}">{{ club.name(h) }}</a></span>{% endfor %}
     {% for _ in range(o.seats - o.holders|length) %}<span class="chip muted">vacant</span>{% endfor %}</div>
   {% if o.terms %}<ul class="small">{% for t in o.terms %}<li>{{ club.name(t.member) }}: {% if t.start %}{{ day(t.start) }}{% else %}before the records{% endif %} – {% if t.end %}{{ day(t.end) }}{% elif t.open %}now{% else %}?{% endif %}</li>{% endfor %}</ul>{% endif %}
-  {% if can_change %}<div class="panel" id="c{{ loop.index }}" hidden><form method="post" action="/offices/change" class="modern" data-confirm="Change who holds {{ o.title }}? The roster sheet is updated and the officers are emailed.">
+  {% if can_change %}<div class="panel" id="c{{ loop.index }}" hidden><form method="post" action="/offices/change" class="modern" data-confirm="Change who holds {{ o.title }}? The roster is updated and the officers are emailed.">
     <input type="hidden" name="title" value="{{ o.title }}">
     <div class="formrow">
       <label>Leaving<select name="out"><option value="">(nobody{{ ': a vacant seat' if o.holders|length < o.seats }})</option>{% for h in o.holders %}<option value="{{ h }}" {{ 'selected' if loop.first and o.holders|length >= o.seats }}>{{ club.name(h) }}</option>{% endfor %}</select></label>

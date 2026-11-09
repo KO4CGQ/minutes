@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_avatar.html" import avatar %}{% import "_pager.html" as pager %}{% block title %}Roster{% endblock %}{% block body %}
 <div class="headrow"><h1>Roster</h1>
 <p>{% if can_add %}<a class="btn small" href="/roster/add">Add a member</a> · {% endif %}<a href="/profile">Edit your details and what you share</a> · <a href="/offices">Offices</a>{% if is_officer %} · <a href="/roster/changes">Recent changes</a>{% endif %}</p></div>
-<p class="muted">{{ active }} active members. From the club roster sheet, synced daily. Click a name for contact details{% if not is_officer %} the member has shared{% endif %} and their meeting history.</p>
+<p class="muted">{{ active }} active members. Click a name for contact details{% if not is_officer %} the member has shared{% endif %} and their meeting history.</p>
 <form class="filter"><label>Status <select name="status" data-autosubmit>
   {% for st in statuses %}<option {{ 'selected' if st == status }}>{{ st }}</option>{% endfor %}<option value="all" {{ 'selected' if status == 'all' }}>Everyone</option>
 </select></label> {{ pager.size(pg) }}<input type="hidden" name="view" value="{{ view }}"><noscript><button class="btn small">Show</button></noscript>

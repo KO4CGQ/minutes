@@ -13,7 +13,7 @@ import io
 from .club import DATA, inside
 
 SIZE = 256
-MAX_UPLOAD = 8 * 1024 * 1024  # bytes
+from . import limits  # the largest upload: an admin's setting (Security -> Server)
 FORMATS = {"JPEG", "PNG", "WEBP", "MPO"}  # MPO: some phone cameras
 
 
@@ -34,8 +34,8 @@ def save(mid: str, data: bytes) -> None:
     from PIL import Image, ImageOps, UnidentifiedImageError
     if not data:
         raise ValueError("Pick a picture first.")
-    if len(data) > MAX_UPLOAD:
-        raise ValueError("That picture is too big (8 MB at most).")
+    if len(data) > limits.max_upload():
+        raise ValueError(f"That picture is too big ({limits.upload_mb()} MB at most).")
     try:
         img = Image.open(io.BytesIO(data))
         if img.format not in FORMATS:

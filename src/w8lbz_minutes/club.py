@@ -1,15 +1,17 @@
 """Club config and people.
 
-People come only from the roster Google Sheet (synced to data/roster.json by
-`w8lbz-minutes roster`). club.yaml (local only, never in git) holds app settings.
+People come only from the roster (the Google Sheet, or the app's own copy once moved; synced to
+data/roster.json by `w8lbz-minutes roster`). club.yaml (local only, never in git) holds app settings.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
+import threading
 from dataclasses import dataclass, field, fields
-from functools import cached_property
+from functools import cached_property, wraps
 from pathlib import Path
 
 import yaml
@@ -18,6 +20,35 @@ ROOT = Path(os.environ.get("W8LBZ_ROOT", Path(__file__).resolve().parents[2]))
 DATA = Path(os.environ.get("W8LBZ_DATA", ROOT / "data"))
 MEETINGS = DATA / "meetings"
 ROSTER_CACHE = DATA / "roster.json"
+ROSTER_LOCK = threading.RLock()  # one roster change at a time: the sheet, then roster.json (read, change, write)
+_depth = 0  # nesting of roster_locked calls in this process (changed only while ROSTER_LOCK is held)
+
+
+def roster_locked(fn):
+    """For whatever changes the roster: the web app's threads (ROSTER_LOCK) and the nightly sync, a separate process
+    (roster.lock in the data folder, taken by the outermost call only, so one locked function can call another)."""
+    @wraps(fn)
+    def run(*a, **k):
+        global _depth
+        with ROSTER_LOCK:
+            f = None
+            if _depth == 0:
+                DATA.mkdir(parents=True, exist_ok=True)
+                f = open(DATA / "roster.lock", "w")
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX)
+                except BaseException:
+                    f.close()
+                    raise
+            _depth += 1
+            try:
+                return fn(*a, **k)
+            finally:
+                _depth -= 1
+                if f:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+                    f.close()
+    return run
 # Preview mode (deploy/preview.sh): set to the branch name. Email goes to an outbox file instead of
 # SMTP, and roster edits go to a local copy of the sheet, never the real one.
 PREVIEW = os.environ.get("W8LBZ_PREVIEW") or None

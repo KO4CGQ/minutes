@@ -12,6 +12,7 @@
   --nav-bg: #2b3a19; --nav-text: #eef4e2; --nav-hover: rgba(255, 255, 255, .12); --nav-on: rgba(255, 255, 255, .2);
   --focus: rgba(91, 122, 47, .28); --mark: #fbe58a; --sheet-h: #c3d69b;
   --inperson-bg: #dcebc4; --inperson-edge: #7da04a; --online-bg: #d6e4f7; --online-edge: #5a86c4;
+  --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a; --chart-4: #eda100; --chart-5: #e87ba4; --chart-6: #008300; --chart-7: #6250d6; --chart-8: #e34948;  /* chart series, checked for colour blindness */
   --shadow: 0 1px 2px rgba(20, 30, 10, .06), 0 4px 16px rgba(20, 30, 10, .05);
   --shadow-pop: 0 10px 30px rgba(20, 30, 10, .18);
   --radius: .8rem; --radius-sm: .55rem;
@@ -28,6 +29,7 @@
   --nav-bg: #161b12; --nav-text: #e2ead6; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
   --focus: rgba(156, 196, 105, .3); --mark: #6b5a12; --sheet-h: #34442180;
   --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
+  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
 }
@@ -44,6 +46,7 @@
     --nav-bg: #161b12; --nav-text: #e2ead6; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
     --focus: rgba(156, 196, 105, .3); --mark: #6b5a12; --sheet-h: #34442180;
     --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
+    --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
   }
@@ -226,7 +229,7 @@ details.edit[open] { display: block; background: var(--surface-2); border: 1px s
 @media (max-width: 560px) { .card-head { flex-direction: column; } }
 .comments { margin-top: .6rem; } .comment { background: var(--surface-2); border-radius: .6rem; padding: .5rem .75rem; margin: .35rem 0; }
 .comment .ctext { white-space: pre-wrap; margin-top: .15rem; }
-.itemacts { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; align-items: center; } .itemacts form { margin: 0; display: inline; }
+
 .panel { margin-top: .7rem; padding: .7rem 0 .5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .timeline { list-style: none; padding: 0; margin: 0; max-height: 22rem; overflow-y: auto; }
 .timeline li { padding: .5rem .75rem; border-radius: .5rem; margin: .15rem 0; }
@@ -237,6 +240,8 @@ ul.chowlist { margin: .3rem 0 1rem; }
 
 /* modern forms */
 form.modern label { display: flex; flex-direction: column; gap: .25rem; font-weight: 600; font-size: .9rem; margin: .5rem 0; }
+form.modern label.check { flex-direction: row; align-items: center; gap: .5rem; font-weight: normal; }
+form.modern select { max-width: 100%; min-width: 0; } form.modern .formrow > label { min-width: 0; }
 form.modern textarea { width: 100%; min-height: 5.5rem; }
 form.modern input[type=date], form.modern .combo > input, form.modern select { height: 2.75rem; }
 form.modern .formrow { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; margin-top: .4rem; }
@@ -341,8 +346,8 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
   .cols { gap: 0; }
   /* business cards: the buttons as even rows, big enough to tap */
   .topacts { flex-wrap: wrap; width: 100%; }
-  .topacts > *, .itemacts > * { flex: 1 1 0; }
-  .topacts button.act, .itemacts button.act { width: 100%; min-height: 2.4rem; font-size: .9rem; white-space: nowrap; }
+  .topacts > * { flex: 1 1 0; }
+  .topacts button.act { width: 100%; min-height: 2.4rem; font-size: .9rem; white-space: nowrap; }
   .pager { flex-wrap: wrap; }
 }
 /* top bar: ☰ (left) opens a drawer with every page; the meeting pill, clock, search and name stay in the bar,
@@ -384,6 +389,7 @@ body.drawer-open .drawer .scrim { opacity: 1; } body.drawer-open .drawer .panel 
 .homegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr)); gap: 1rem; align-items: start; margin-top: 1rem; }
 .homegrid h2 { font-size: 1.02rem; margin: 0 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .homegrid p { margin: .35rem 0; } .homegrid .big { font-size: 1.2rem; font-weight: 600; }
+.homegrid p.late, table.list tr.late td, table.list span.late { color: var(--danger-text); }
 ul.plain { list-style: none; padding: 0; margin: .3rem 0; } ul.plain li { padding: .3rem 0; border-bottom: 1px solid var(--border); } ul.plain li:last-child { border: 0; }
 nav.top .me .name { margin-right: .35rem; }
 /* Links page editor (admins) */
@@ -428,10 +434,10 @@ ul.agenda .caltime { flex: none; width: 4.6rem; font-size: .9rem; } ul.agenda .d
 table.month button.calopen { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; }
 table.month button.calopen:hover { background: var(--accent-soft); }
 /* the details dialog */
-dialog#calmodal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
-  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop { background: rgba(0,0,0,.45); }
-dialog#calmodal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
-dialog#calmodal form { position: absolute; top: .5rem; right: .5rem; margin: 0; }
+dialog#calmodal, dialog.modal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
+  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop, dialog.modal::backdrop { background: rgba(0,0,0,.45); }
+dialog#calmodal .body, dialog.modal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2, dialog.modal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
+dialog#calmodal form, dialog.modal form.x { position: absolute; top: .5rem; right: .5rem; margin: 0; }
 button.calclose { font: inherit; background: none; border: 0; cursor: pointer; min-width: 2.5rem; min-height: 2.5rem; border-radius: 50%; color: var(--muted); }
 button.calclose:hover { background: var(--accent-soft); }
 .calcal { margin: 0; font-size: .85rem; color: var(--muted); } .calwhen { font-weight: 600; } .calnotes { white-space: pre-line; overflow-wrap: anywhere; }
@@ -460,3 +466,28 @@ button.calkind { font: inherit; display: inline-flex; align-items: center; gap: 
 button.calkind:hover { border-color: var(--border-strong); } button.calkind[aria-pressed=false] { opacity: .5; text-decoration: line-through; }
 button.calkind[aria-pressed=false] .dot { background: transparent !important; box-shadow: inset 0 0 0 2px var(--muted); }
 table.month li.extra { display: none; }
+
+/* Charts (Attendance): stacked bars in plain HTML; each bar's title is its tooltip, the table below has the numbers */
+.chart { margin: 0 0 1.5rem; padding: 1rem 1rem .6rem 2.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.chart.wide-axis { padding-left: 4rem; } .chart.wide-axis .bars { justify-content: space-around; } .chart.wide-axis .legend { margin-left: -3rem; }  /* "$4,800" needs more room than "40" */
+.chart .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .85rem; color: var(--muted); margin: 0 0 .8rem -1.4rem; }
+.chart .legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: -.05rem; }
+.chart .k1 { background: var(--chart-1); } .chart .k2 { background: var(--chart-2); } .chart .k3 { background: var(--chart-3); }
+.chart .k4 { background: var(--chart-4); } .chart .k5 { background: var(--chart-5); } .chart .k6 { background: var(--chart-6); } .chart .k7 { background: var(--chart-7); } .chart .k8 { background: var(--chart-8); }
+.chart .plot { position: relative; height: 11rem; }
+.chart .grid { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
+.chart .grid span { position: absolute; right: 100%; margin-right: .4rem; transform: translateY(-50%); font-size: .75rem; color: var(--faint); }
+.chart .bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+.chart .bar { flex: 1 1 0; max-width: 1.6rem; display: flex; flex-direction: column; gap: 2px; border-radius: 4px 4px 0 0; overflow: hidden; }
+.chart .bar i { flex-basis: 0; min-height: 2px; } .chart .bar:hover, .chart .bar:focus-visible { opacity: .75; }
+.chart figcaption { display: flex; justify-content: space-between; font-size: .75rem; color: var(--faint); margin-top: .3rem; }
+table.list td select { max-width: 7.5rem; font-size: .8rem; display: block; margin-top: .2rem; }
+.swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -.05rem; } .swatch.k1 { background: var(--chart-1); } .swatch.k2 { background: var(--chart-2); } .swatch.k3 { background: var(--chart-3); } .swatch.k4 { background: var(--chart-4); } .swatch.k5 { background: var(--chart-5); } .swatch.k6 { background: var(--chart-6); } .swatch.k7 { background: var(--chart-7); } .swatch.k8 { background: var(--chart-8); }
+input.cellinput { font: inherit; font-size: .9rem; width: 100%; min-width: 10rem; border: 1px solid transparent; background: transparent; color: inherit; padding: .15rem .3rem; border-radius: .3rem; } input.cellinput:hover, input.cellinput:focus { border-color: var(--border-strong); background: var(--surface); }
+/* Business items: a small card that opens a dialog with the details, comments, history and actions */
+article.bcard { cursor: pointer; transition: border-color .15s; } article.bcard:hover { border-color: var(--border-strong); }
+button.cardopen { all: unset; display: block; width: 100%; cursor: pointer; } button.cardopen:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: .3rem; }
+dialog.modal.wide { width: min(40rem, calc(100vw - 2rem)); } dialog.modal h3 { font-size: 1rem; margin: 1.1rem 0 .3rem; }
+dialog.modal .dacts { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 .2rem; } dialog.modal .dacts form { margin: 0; }
+details.hist { margin-top: 1rem; } details.hist summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+button.cardopen .card-text { display: block; }

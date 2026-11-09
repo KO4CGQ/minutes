@@ -19,8 +19,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, updates
+from . import ai, avatars, limits, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
+from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW, one_line, valid_email
@@ -67,6 +68,7 @@ DATES = {"list": "%b %-d, %Y", "document": "%B %-d, %Y", **(archive.club.info.ge
 templates.env.filters["linkify"] = linkify
 templates.env.filters["longdate"] = lambda d: d.strftime(DATES["document"])
 templates.env.filters["listdate"] = lambda d: d.strftime(DATES["list"])
+templates.env.filters["isodate"] = lambda d: dt.date.fromisoformat(d).strftime(DATES["list"])  # "2026-11-09" in the list format
 templates.env.filters["by_last_name"] = by_last_name
 templates.env.filters["clock"] = lambda t: dt.datetime.fromtimestamp(t).strftime("%-I:%M %p")
 def monthday(md: str | None) -> str:
@@ -145,6 +147,16 @@ CALENDAR_PATHS = ("/chow", "/api/meetings", "/console", "/calendar")  # changes 
 
 
 @app.middleware("http")
+async def upload_limit(request: Request, call_next):
+    """Turn away a request bigger than the admin's upload limit before reading it (a huge upload would fill the disk)."""
+    size = request.headers.get("content-length", "")
+    if size.isdigit() and int(size) > limits.max_upload() + limits.FORM_ROOM:
+        return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
+                            status_code=413)
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def calendar_after_changes(request: Request, call_next):
     """After a chow or console change, sync the club calendars a little later (see gcal.soon)."""
     response = await call_next(request)
@@ -215,10 +227,19 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
                       f"{archive.club.info.get('meeting_time', '19:30')}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
+        **_money_nav(request, mid),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         "update_available": _update_badge(request),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
+
+
+def _money_nav(request: Request, mid: str | None) -> dict:
+    """Menu links: Treasurer for a fund's keepers too, Spending for whoever may see it."""
+    if not mid:
+        return {"keeps_fund": False, "show_spending": False}
+    s = treasurer.load()
+    return {"keeps_fund": bool(treasurer.kept_accounts(archive.club, s, mid)), "show_spending": spending_visible(request, s)}
 
 
 def _update_badge(request: Request) -> str | None:
@@ -259,6 +280,14 @@ def start_session(request: Request, response: Response, member: str, method: str
     response.set_cookie(COOKIE, token, max_age=authn.session_days * 86400, httponly=True, samesite="lax",
                         secure=is_https(request))
     return response
+
+
+async def _json(request: Request):
+    """The request's JSON body; anything that isn't JSON is a bad request (400), not a server error."""
+    try:
+        return await request.json()
+    except ValueError:
+        raise HTTPException(400, "That request wasn't readable.") from None
 
 
 def get_meeting(slug: str):
@@ -492,7 +521,7 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
         if "owner" in fields:
             fields["owner"] = owner_id(fields["owner"])
         business.edit(s, iid, mid, meeting=form.get("meeting") or None, **fields)
-    return business_change(request, run, form.get("meeting", ""))
+    return await run_in_threadpool(business_change, request, run, form.get("meeting", ""))
 
 
 @app.post("/business/{iid}/comment")
@@ -615,6 +644,171 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
                 log=chow.history(30) if leader else [], fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
 
 
+def is_treasurer(request: Request) -> bool:
+    """Recording money and the settings: whoever holds Treasurer, and admins in admin mode. Other officers only look."""
+    m = archive.club.members.get(request.state.member or "")
+    return bool(m and m.role and "treasurer" in m.role.lower()) or admin_mode(request)
+
+
+def treasurer_only(request: Request) -> str:
+    if not is_treasurer(request):
+        raise HTTPException(403, "Only the Treasurer can do that.")
+    return request.state.member
+
+
+@app.get("/treasurer", response_class=HTMLResponse)
+def treasurer_page(request: Request, tab: str = "standing", error: str = "", everyone: int = 0, show: str = "waiting",
+                   mid: str = Depends(me)):
+    """Officers see who owes what; the Treasurer records payments, expenses and bills, and runs the settings. A fund's
+    keepers (the drinks committee, say) see and record only their fund's account."""
+    club, s = archive.club, treasurer.load()
+    c, kept, full = treasurer.config(s), treasurer.kept_accounts(club, s, mid), privileged(request)
+    if not (full or kept):
+        raise HTTPException(403, "Only officers can do that.")
+    tab = tab if full else "money"
+    if tab not in ("standing", "money", "bills", "settings"):
+        raise HTTPException(404)
+    members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
+                     key=lambda m: (m.last, m.first))
+    edit, running = is_treasurer(request), treasurer.on(s)
+    entries = [e for e in s["entries"] if full or e["account"] in kept]
+    standings = treasurer.standings(club, s) if full and running else []
+    return page(request, "treasurer.html", tab=tab, everyone=everyone, bond_note=treasurer.BOND_NOTE,
+                owing=sum(1 for x in standings if x["owed"] > 0 or x["certificate_late"]), error=error, cfg=c, edit=edit, full=full, kept=kept, members=members, running=running,
+                standings=standings,
+                entries=sorted(entries, key=lambda e: (e["date"], e["at"]), reverse=True),
+                bills=treasurer.bills(archive, s, treasurer.bills_from(s)) if full and running else [], bills_from=treasurer.bills_from(s),
+                show=show if show in ("waiting", "paid", "dismissed", "all") else "waiting", regular=treasurer.regular_due(s, dt.date.today()),
+                regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=treasurer.RATES, bond=treasurer.BOND,
+                labels=treasurer.LABELS, kinds=treasurer.KINDS if edit else treasurer.NO_MEMBER, accounts=c["accounts"] if edit else kept,
+                rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
+                money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
+
+
+def money_change(fn, tab: str):
+    with treasurer.locked():
+        s = treasurer.load()
+        try:
+            fn(s)
+        except ValueError as e:
+            return RedirectResponse(f"/treasurer?tab={tab}&error=" + quote(str(e)), status_code=303)
+        treasurer.save(s)
+    return RedirectResponse(f"/treasurer?tab={tab}", status_code=303)
+
+
+@app.post("/treasurer/record")
+def treasurer_record(request: Request, kind: str = Form(...), amount: str = Form(...), date: str = Form(...), account: str = Form(...),
+                     member: str = Form(""), note: str = Form(""), bill: str = Form(""), regular: str = Form(""),
+                     category: str = Form(""), mid: str = Depends(me)):
+    def run(s):
+        if not is_treasurer(request) and not (kind in treasurer.NO_MEMBER and account in treasurer.kept_accounts(archive.club, s, mid)
+                                              and not bill and not regular):
+            raise HTTPException(403, "Only the Treasurer can do that.")
+        treasurer.record(archive.club, s, mid, kind, amount, date, account, owner_id(member), note, bill or None, regular or None,
+                         category or None)
+    return money_change(run, "bills" if bill or regular else "money")
+
+
+@app.post("/treasurer/entries/{eid}/delete")
+def treasurer_delete(request: Request, eid: str, mid: str = Depends(me)):
+    def run(s):
+        e = next((x for x in s["entries"] if x["id"] == eid), None)
+        if not (is_treasurer(request) or (e and e["account"] in treasurer.kept_accounts(archive.club, s, mid))):
+            raise HTTPException(403, "Only the Treasurer can do that.")
+        treasurer.delete(s, eid, mid)
+    return money_change(run, "money")
+
+
+@app.post("/treasurer/entries/{eid}/note")
+def treasurer_note(eid: str, note: str = Form(""), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.set_note(s, eid, note, mid), "money")
+
+
+@app.post("/treasurer/entries/{eid}/category")
+def treasurer_category(eid: str, category: str = Form(...), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.set_category(s, eid, category, mid), "money")
+
+
+def spending_visible(request: Request, s: dict) -> bool:
+    """The club's spending (never anyone's dues): every member once tracking is on; officers during a preview."""
+    return treasurer.members_see(s) or (treasurer.on(s) and privileged(request))
+
+
+@app.get("/spending", response_class=HTMLResponse)
+def spending_page(request: Request, mid: str = Depends(me)):
+    s = treasurer.load()
+    if not spending_visible(request, s):
+        raise HTTPException(404)
+    return page(request, "spending.html", sp=treasurer.spending(s, dt.date.today(), club=archive.club), colour=(c := treasurer.colours(s)),
+                # in colour order, so the bands that touch in a bar are the neighbours the palette was checked for
+                cats=dict(sorted(treasurer.categories(s).items(), key=lambda kv: c[kv[0]])), money=treasurer.money,
+                preview=not treasurer.members_see(s), month=lambda k: dt.date.fromisoformat(k + "-01").strftime("%b %Y"))
+
+
+@app.post("/treasurer/bills/dismiss")
+def treasurer_dismiss(key: str = Form(...), undo: int = Form(0), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.dismiss_bill(s, key, mid, bool(undo)), "bills")
+
+
+@app.post("/treasurer/bills/from")
+def treasurer_bills_from(date: str = Form(""), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.set_bills_from(s, mid, date or None), "bills")
+
+
+@app.post("/treasurer/regular")
+def treasurer_regular(payee: str = Form(...), amount: str = Form(...), every: str = Form(...), month: int = Form(0),
+                      mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.add_regular(s, mid, payee, amount, every, month or None), "bills")
+
+
+@app.post("/treasurer/regular/{rid}/remove")
+def treasurer_regular_remove(rid: str, mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.remove_regular(s, rid, mid), "bills")
+
+
+@app.post("/treasurer/settings")
+def treasurer_settings(mode: str = Form(...), start: str = Form(""), arrears_weeks: int = Form(4), certificate_years: int = Form(2),
+                       alerts: int = Form(0), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.set_general(s, mid, mode, start, arrears_weeks, certificate_years, bool(alerts)), "settings")
+
+
+@app.post("/treasurer/settings/rate")
+def treasurer_rate(kind: str = Form(...), start: str = Form(...), amount: str = Form(""), remove: int = Form(0),
+                   mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.remove_rate(s, mid, kind, start) if remove else treasurer.add_rate(s, mid, kind, start, amount),
+                        "settings")
+
+
+@app.post("/treasurer/settings/account")
+def treasurer_account(name: str = Form(...), remove: int = Form(0), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.remove_account(s, mid, name) if remove else treasurer.add_account(s, mid, name), "settings")
+
+
+@app.post("/treasurer/settings/category")
+def treasurer_category_settings(key: str = Form(""), label: str = Form(""), remove: int = Form(0), mid: str = Depends(treasurer_only)):
+    def run(s):
+        if remove:
+            treasurer.remove_category(s, mid, key)
+        elif key:
+            treasurer.rename_category(s, mid, key, label)
+        else:
+            treasurer.add_category(s, mid, label)
+    return money_change(run, "settings")
+
+
+@app.post("/treasurer/settings/fund")
+def treasurer_fund(name: str = Form(...), account: str = Form(""), keepers: str = Form(""), remove: int = Form(0),
+                   mid: str = Depends(treasurer_only)):
+    def run(s):
+        if remove:
+            return treasurer.remove_fund(s, mid, name)
+        ids = [owner_id(k) for k in keepers.split(",") if k.strip()]
+        if None in ids or not ids:
+            raise ValueError("List the keepers by name or callsign, separated by commas.")
+        treasurer.set_fund(s, mid, name, account, ids)
+    return money_change(run, "settings")
+
+
 def _form_date(v: str) -> None:
     try:
         dt.date.fromisoformat(v)
@@ -696,8 +890,8 @@ async def chow_constraints(request: Request, mid: str = Depends(chow_leader)):
     weeks = [int(w) for w in form.getlist("not_weeks") if w.isdigit()]
     away = [[form.get("away_from", ""), form.get("away_to", "")]] if form.get("away_from") else []
     skip = int(form.get("skip") or 0) if str(form.get("skip") or "0").isdigit() else 0
-    return chow_change(request, lambda s: chow.set_constraints(s, who, weeks, away, form.get("note", ""), mid, skip),
-                       back="/chow/rotation")
+    return await run_in_threadpool(chow_change, request, lambda s: chow.set_constraints(s, who, weeks, away, form.get("note", ""), mid, skip),
+                                   "/chow/rotation")
 
 
 # ---------------- admin mode ----------------
@@ -758,7 +952,7 @@ def admin_confirm_options(mid: str = Depends(real_me)):
 @app.post("/admin/confirm/verify")
 async def admin_confirm_verify(request: Request, mid: str = Depends(real_me)):
     _admin(mid)
-    body = await request.json()
+    body = await _json(request)
     try:
         authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"], kind="step-up", member=mid)
     except Exception as e:
@@ -906,9 +1100,9 @@ async def profile_photo(request: Request, mid: str = Depends(me)):
     """Upload (or replace) your own profile picture."""
     form = await request.form()
     f = form.get("photo")
-    data = await f.read(avatars.MAX_UPLOAD + 1) if f is not None and hasattr(f, "read") else b""
+    data = await f.read(limits.max_upload() + 1) if f is not None and hasattr(f, "read") else b""
     try:
-        avatars.save(mid, data)
+        await run_in_threadpool(avatars.save, mid, data)
     except ValueError as e:
         return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
     return RedirectResponse("/profile?photo=1", status_code=303)
@@ -956,12 +1150,12 @@ async def profile_save(request: Request, mid: str = Depends(me)):
     new = {"phone": form.get("phone", "").strip()[:40], "address": address, "birthday": birthday,
            "share": ", ".join(f for f in SHAREABLE if f in form.getlist("share"))}
     try:
-        profile.change(archive.club, mid, new, by=mid, url=base_url(request))
+        await run_in_threadpool(profile.change, archive.club, mid, new, by=mid, url=base_url(request))
     except SheetError as e:
         return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
     email = form.get("email", "").strip()
     if email and email.lower() != (m.email or "").lower():
-        err = authn.start_email_change(mid, email, base_url(request))
+        err = await run_in_threadpool(authn.start_email_change, mid, email, base_url(request))
         if err:
             return RedirectResponse("/profile?saved=1&error=" + quote(err), status_code=303)
         return RedirectResponse("/profile?saved=1&email_sent=" + quote(email), status_code=303)
@@ -1001,7 +1195,7 @@ def roster_add_form(request: Request, guest: str = "", error: str = "", mid: str
 async def roster_add(request: Request, mid: str = Depends(roster_keeper)):
     form = dict(await request.form())
     try:
-        new = membership.add_member(archive.club, form, mid, url=base_url(request))
+        new = await run_in_threadpool(membership.add_member, archive.club, form, mid, url=base_url(request))
     except (ValueError, SheetError) as e:
         ready = membership.ready_guests(archive.guests(), int(archive.club.info.get("invite_after_visits", 3)))
         return page(request, "roster_add.html", ready=ready, guest=None, f=form, error=str(e),
@@ -1100,7 +1294,7 @@ def passkey_register_options(request: Request, mid: str = Depends(me)):
 
 @app.post("/auth/passkey/register/verify")
 async def passkey_register_verify(request: Request, mid: str = Depends(me)):
-    body = await request.json()
+    body = await _json(request)
     try:
         authn.register(mid, request.cookies.get(CHALLENGE_COOKIE), body["credential"], body.get("label", ""))
     except Exception as e:  # verification errors come from several exception types
@@ -1118,7 +1312,7 @@ def passkey_login_options():
 
 @app.post("/auth/passkey/login/verify")
 async def passkey_login_verify(request: Request):
-    body = await request.json()
+    body = await _json(request)
     try:
         member = authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"])
     except Exception as e:
@@ -1180,7 +1374,7 @@ def home(request: Request, mid: str = Depends(me)):
     coming = [e for e in coming if e.kind != "chow"][:8]
     # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
     undated = [i.text for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
-    return page(request, "home.html", next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+    return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, bond_note=treasurer.BOND_NOTE, money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
@@ -1229,6 +1423,7 @@ def pdf(request: Request, slug: str):
 
 @app.get("/meetings/{slug}/original.pdf")
 def original(slug: str):
+    get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
     p = archive.root / slug / "original.pdf"
     if not p.exists():
         raise HTTPException(404)
@@ -1302,7 +1497,7 @@ def member(request: Request, mid: str):
                 can_edit_roster=archive.club.keeps_roster(viewer) or elevated)
 
 
-STATUSES = ("Active", "Inactive", "Silent Key", "Prospect")
+STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
 
 
 @app.get("/members/{who}/edit", response_class=HTMLResponse)
@@ -1340,7 +1535,7 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
                **{k: "TRUE" if f.get(k) else "FALSE" for k in ("officer", "board", "minutes_editor", "calendar_editor")}}
         if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
             new["address"] = m.address or ""
-        profile.change(archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+        await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
     except (ValueError, SheetError) as e:
         return RedirectResponse(_safe_next(back + "?error=" + quote(str(e))), status_code=303)
     return RedirectResponse(_safe_next(back + "?saved=1"), status_code=303)
@@ -1566,7 +1761,19 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS)
+                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
+                upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
+
+
+@app.post("/admin/security/limits")
+def security_limits(request: Request, upload_mb: int = Form(...)):
+    _security_admin(request)
+    try:
+        limits.set_upload_mb(upload_mb)
+    except ValueError as e:
+        return RedirectResponse("/admin/security/server?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, upload_mb=upload_mb)
+    return RedirectResponse("/admin/security/server?note=" + quote(f"Uploads up to {upload_mb} MB."), status_code=303)
 
 
 @app.post("/admin/security/ban")
@@ -1589,7 +1796,7 @@ async def security_backup_settings(request: Request):
     _security_admin(request)
     form = dict(await request.form())
     try:
-        s = backup.save_settings(form)
+        s = await run_in_threadpool(backup.save_settings, form)
     except backup.BackupError as e:
         return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_settings=", ".join(k for k in ("s3", "drive") if s[k]["on"]) or "server only")
@@ -1908,10 +2115,10 @@ async def calendar_import(request: Request, mid: str = Depends(me)):
     cal, f = form.get("cal", ""), form.get("file")
     if cal not in events.CALS or f is None or not hasattr(f, "read"):
         raise HTTPException(400, "Pick a calendar and an .ics file.")
-    raw = await f.read(10_000_001)
+    raw = await f.read(limits.max_upload() + 1)
     try:
-        if len(raw) > 10_000_000:
-            raise ValueError("That file is over 10 MB.")
+        if len(raw) > limits.max_upload():
+            raise ValueError(f"That file is over {limits.upload_mb()} MB.")
         text = raw.decode("utf-8-sig")
         if "BEGIN:VCALENDAR" not in text[:2000].upper():
             raise ValueError("That isn't an .ics calendar file.")
@@ -2035,7 +2242,7 @@ def console_page(request: Request, slug: str, mid: str = Depends(leader)):
 async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     try:
-        console.apply(archive, slug, await request.json())
+        console.apply(archive, slug, await _json(request))
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}

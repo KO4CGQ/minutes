@@ -151,6 +151,7 @@
     };
     const n = (w) => w === "inperson" ? M.in_person.length : M.remote.length;
     return h("div", {},
+      D.celebrations.length ? h("p", { class: "msg ok" }, emo("🎉", "star"), " ", D.celebrations.join(" · ")) : null,
       h("h2", {}, `Attendance: ${M.in_person.length} in person, ${M.remote.length} online, ${M.guests.length + M.visitors} guest${M.guests.length + M.visitors === 1 ? "" : "s"}`),
       h("p", { class: "legend" }, "Tap a name to cycle: ", h("span", { class: "mbtn" }, "absent"), "→",
         h("span", { class: "mbtn inperson" }, `in person (${n("inperson")})`), "→", h("span", { class: "mbtn online" }, `online (${n("online")})`)),
@@ -285,7 +286,12 @@
     const set = (a) => { M.sections[sec] = a.map((t) => ({ text: t, member: null })); };
     const rows = itemRows(arr, set);
     const hint = [HINTS[sec], EMPTY_NOTE].filter(Boolean).join(" ");
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), rows);
+    // Bills: what the Treasurer recorded as paid since the last meeting, to read out; added to the minutes only on a tap
+    const paid = sec === "Bills and Communications" ? (D.paid_since || []).filter((t) => !arr.includes(t)) : [];
+    const treasurer = paid.length ? h("div", { class: "card" }, h("p", { class: "hint" }, "The Treasurer recorded these as paid since the last meeting:"),
+      h("ul", {}, paid.map((t) => h("li", {}, t))),
+      h("button", { class: "btn small ghost", onclick: () => { set(arr.concat(paid)); render(); save(); } }, "Add to tonight's bills")) : null;
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), treasurer, rows);
   }
 
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
@@ -363,7 +369,10 @@
         h("div", { class: "row meta" }, owner, due,
           x.overdue ? h("span", { class: "badge warn" }, `overdue since ${fmtDate(x.due)}`) : null,
           !isNew ? h("span", { class: "hint" }, `first mentioned ${fmtDate(x.opened)}`) : null),
-        (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, `${c.name}: `), c.text)));
+        // comments since the last meeting, each with when it was written ("Tue 7:41 PM")
+        (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, c.name), " ",
+          h("span", { class: "hint" }, new Date(c.at * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })),
+          h("b", {}, ": "), c.text)));
     };
     const add = () => {
       const ta = h("textarea", { rows: 1, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });

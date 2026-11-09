@@ -158,6 +158,8 @@ def test_stats_periods(client):
     assert "33 meetings on record" in client.get("/stats?period=all").text
     html = client.get("/stats?period=2024").text
     assert "30 meetings in 2024" in html and "Page 1 of 3" in html
+    assert html.count('class="bar"') == 30  # the chart has every meeting in the period, not just the table's page
+    assert 'class="chart"' not in client.get("/stats?period=12m").text  # one meeting: no chart
     assert "1 meeting in the last 12 months" in client.get("/stats?period=12m").text
     assert "1 meeting in %d" % dt.date.today().year in client.get("/stats").text  # this year by default
 

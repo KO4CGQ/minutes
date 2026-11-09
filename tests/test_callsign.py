@@ -38,6 +38,7 @@ def env(tmp_path, monkeypatch):
     (d / "business.json").write_text(json.dumps({"items": [{"owner": "kd8aaa", "text": "kd8aaa stays as text? no: exact only",
                                                             "history": [{"by": "kd8aaa"}]}]}))
     (d / "email-prefs.json").write_text(json.dumps({"kd8aaa": {"digest": "off"}}))
+    (d / "treasurer.json").write_text(json.dumps({"entries": [{"member": "kd8aaa", "kind": "dues", "cents": 350}], "bills": {}}))
     (d / "avatars").mkdir()
     (d / "avatars" / "kd8aaa.jpg").write_bytes(b"jpg")
     db = sqlite3.connect(d / "auth.sqlite")
@@ -73,6 +74,7 @@ def test_callsign_change_renames_everything(env):
     biz = json.loads((d / "business.json").read_text())["items"][0]
     assert biz["owner"] == "w8amy" and biz["history"][0]["by"] == "w8amy" and biz["text"].startswith("kd8aaa")  # text untouched
     assert "w8amy" in json.loads((d / "email-prefs.json").read_text())
+    assert json.loads((d / "treasurer.json").read_text())["entries"][0]["member"] == "w8amy"  # payments follow the member
     md = (d / "meetings" / "2026-11-05" / "minutes.md").read_text()
     assert "leader: w8amy" in md and "  - w8amy\n  - kd8bbb" in md and "<!-- member: w8amy -->" in md
     assert "KD8AAA's friend" in md  # text in the minutes is left as written

@@ -13,7 +13,7 @@ import secrets
 import time
 
 from . import auth, prefs
-from .club import DATA, ROSTER_CACHE, Club, one_line
+from .club import DATA, ROSTER_CACHE, Club, one_line, roster_locked
 from .roster import COLUMNS, EDITABLE, FLAGS, Sheet, _truthy
 
 log = logging.getLogger("w8lbz.profile")
@@ -82,6 +82,7 @@ def _apply_locally(club: Club, mid: str, new: dict[str, str]) -> None:
         tmp.replace(ROSTER_CACHE)
 
 
+@roster_locked
 def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | None = None,
            url: str = "", undoes: str | None = None, allowed=EDITABLE) -> dict | None:
     """Write a member's changed fields (field -> text, as as_cell gives it) to the sheet, log them, tell the
@@ -106,6 +107,7 @@ def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | No
     return entry
 
 
+@roster_locked
 def undo(club: Club, change_id: str, by: str, sheet: Sheet | None = None, url: str = "") -> dict:
     """Put back the old values of a change, unless the member has changed those fields again since."""
     e = next((x for x in history(10_000) if x["id"] == change_id), None)

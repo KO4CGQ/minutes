@@ -51,7 +51,7 @@
 {% endif %}
 {% if tab == 'backups' %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
-<p class="muted">On the schedule below the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one compressed archive, encrypts it with the backup passphrase, checks it opens, keeps the newest here and sends it to the places ticked below. If it fails, the admins get an email. Restoring: README → Backups.</p>
+<p class="muted">On the schedule below the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one compressed archive, encrypts it with the backup passphrase, checks it opens, keeps the newest here and sends it to the places ticked below. If it fails, the admins get an email. Restoring: the server admin guide → Backups.</p>
 <ul class="plain">
 <li>Passphrase: {% if passphrase_set %}set{% else %}<b>not set</b>: put <code>W8LBZ_BACKUP_PASSPHRASE=…</code> (12+ characters) in <code>/etc/w8lbz-minutes/env</code> and restart. Keep a copy off the server: without it no backup opens.{% endif %}</li>
 <li>The data now: {{ (data_size / 1048576)|round(1) }} MB before compression{% if backup_status.size %}; the last backup came to {{ (backup_status.size / 1048576)|round(1) }} MB compressed{% endif %}.</li>
@@ -84,7 +84,7 @@
   </div>
   <h3>Where backups go</h3>
   <label class="check"><input type="checkbox" name="s3_on" value="1" {{ 'checked' if bs.s3.on }}> <b>S3-compatible storage</b> (Backblaze B2, AWS, Wasabi)</label>
-  <p class="hint">A private bucket, and a key limited to it with read and write. How long backups are kept there is the bucket's lifecycle rule (README → Backups).</p>
+  <p class="hint">A private bucket, and a key limited to it with read and write. How long backups are kept there is the bucket's lifecycle rule (the server admin guide → Backups).</p>
   <div class="formrow">
     <label>Endpoint<input name="s3_endpoint" value="{{ bs.s3.endpoint or '' }}" placeholder="https://s3.us-west-004.backblazeb2.com"></label>
     <label>Region<input name="s3_region" value="{{ bs.s3.region or '' }}" placeholder="us-west-004" size="12"></label>
@@ -113,11 +113,16 @@
 <ul class="plain">{% for name, size in local_backups %}<li><a href="/admin/security/backups/{{ name }}">{{ name }}</a> <span class="muted small">{{ (size / 1048576)|round(1) }} MB</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}</ul>
 {% endif %}
 {% if tab == 'server' %}
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 <ul class="plain">
 <li>Version {{ VERSION }}</li>
 <li>Roster last synced: {{ roster_synced|tsfull if roster_synced else 'never' }}</li>
 <li>Email: {{ 'test mode (only the addresses in email.only_to get mail)' if test_mode else 'sent to members' }}</li>
 <li>Signed-in devices: {{ sessions|length }}</li>
+<li><form method="post" action="/admin/security/limits" class="modern"><div class="formrow">
+  <label>Largest upload (MB)<input type="number" name="upload_mb" min="{{ upload_range[0] }}" max="{{ upload_range[1] }}" value="{{ upload_mb }}" required></label>
+  <button class="btn small">Save</button></div>
+  <p class="hint">Profile pictures and calendar .ics files. Anything bigger is turned away before it's read. If a proxy sits in front of the app (Caddy, nginx, Traefik), its own limit has to be at least this.</p></form></li>
 <li>Copy to Google Calendar (optional): {% if not calendars %}off (<code>club.calendars</code> in club.yaml turns it on){% elif not calendar %}not copied yet{% elif calendar.error %}<b>last sync failed</b> {{ calendar.at|tsfull }}: {{ calendar.error }}{% else %}synced {{ calendar.at|tsfull }}{% for k, c in calendar.counts.items() %}; {{ k }}: {{ c.added }} added, {{ c.changed }} changed, {{ c.removed }} removed{% endfor %}{% endif %}</li>
 </ul>
 {% endif %}
