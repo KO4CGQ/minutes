@@ -78,7 +78,7 @@ The app blocks web visitors itself after repeated failed sign-ins (admin **Secur
 
 To lift a ban: `fail2ban-client set sshd unbanip ADDRESS`.
 
-Also worth doing: SSH with keys only (`PasswordAuthentication no` in `/etc/ssh/sshd_config`), automatic security updates (`apt install unattended-upgrades`), and a firewall that allows only SSH and the app's port.
+Also worth doing: SSH with keys only (`PasswordAuthentication no` in `/etc/ssh/sshd_config`), automatic security updates with restarts afterwards (`apt install unattended-upgrades needrestart`, then `dpkg-reconfigure -plow unattended-upgrades`, and `$nrconf{restart} = 'a';` plus, in a container, `$nrconf{kernelhints} = 0;` in `/etc/needrestart/conf.d/50-auto.conf`: Debian's needrestart otherwise only lists the services still running an updated library), and a firewall that allows only SSH and the app's port.
 
 ## Login
 Members sign in with a passkey, or with a one-time link emailed to their roster address.
