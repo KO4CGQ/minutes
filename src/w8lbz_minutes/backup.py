@@ -52,6 +52,68 @@ def passphrase() -> str:
     return p
 
 
+# ---------------- choosing and checking the passphrase (never stored or logged by these) ----------------
+# Capitals and digits without look-alikes (0/O, 1/I/L), in groups of four: easy to read off a printout and type.
+ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
+
+def suggest(groups: int = 6) -> str:
+    """A random passphrase like 7KQ4-M2XH-R9TB-W3PD-6YNC-HE8V (24 characters, about 119 bits)."""
+    import secrets
+    return "-".join("".join(secrets.choice(ALPHABET) for _ in range(4)) for _ in range(groups))
+
+
+def strength(pw: str) -> tuple[str, int]:
+    """(weak | good | strong, estimated bits), assuming it was chosen at random: a password manager's generator,
+    dice, or suggest(). Words separated by spaces or dashes count as words (about 12.9 bits each, as dice words);
+    otherwise characters count by the kinds used. Separators add nothing."""
+    import math
+    import re as _re
+    chunks = [c for c in _re.split(r"[\s\-_.]+", pw) if c]
+    if len(chunks) >= 3 and all(c.isalpha() for c in chunks) and sum(map(len, chunks)) / len(chunks) >= 3:
+        bits = round(len(chunks) * 12.9)
+    else:
+        chars = "".join(chunks)
+        pool = sum(n for test, n in ((str.islower, 26), (str.isupper, 26), (str.isdigit, 10)) if any(test(ch) for ch in chars))
+        pool += 33 if any(not ch.isalnum() for ch in chars) else 0
+        bits = round(len(chars) * math.log2(pool)) if pool else 0
+    return ("strong" if bits >= 90 else "good" if bits >= 64 else "weak"), bits
+
+
+def pwned(pw: str) -> int | None:
+    """How often it appears in Have I Been Pwned's leaked passwords (0: not found), or None if HIBP can't be
+    reached. Only the first 5 characters of its SHA-1 leave the server (k-anonymity), and the reply is padded."""
+    import httpx
+    h = hashlib.sha1(pw.encode()).hexdigest().upper()
+    try:
+        r = httpx.get(f"https://api.pwnedpasswords.com/range/{h[:5]}", timeout=10,
+                      headers={"Add-Padding": "true", "User-Agent": "W8LBZ-Minutes-backup-check"})
+        r.raise_for_status()
+    except httpx.HTTPError:
+        return None
+    for line in r.text.splitlines():
+        suffix, _, count = line.partition(":")
+        if suffix.strip() == h[5:]:
+            return int(count)  # padding lines have a count of 0
+    return 0
+
+
+def check(pw: str) -> tuple[bool, str]:
+    """For the Backups page: (all good?, one line saying whether it's the server's passphrase, its strength,
+    and whether it's leaked)."""
+    server = os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")
+    matches = bool(server) and hmac.compare_digest(pw.encode(), server.encode())
+    level, bits = strength(pw)
+    leaks = pwned(pw)
+    parts = ["It matches the server's passphrase." if matches else
+             "It does NOT match the server's passphrase." if server else "The server has no passphrase set yet.",
+             f"Strength: {level} (about {bits} bits, if it was chosen at random)." + (" Use a longer one." if level == "weak" else ""),
+             "Leaks: couldn't reach Have I Been Pwned to check." if leaks is None else
+             "Leaks: not found in Have I Been Pwned's leaked passwords." if not leaks else
+             f"Leaks: FOUND {leaks:,} times in leaked passwords. Don't use it."]
+    return matches and level != "weak" and not leaks, " ".join(parts)
+
+
 def _key(pw: str, salt: bytes) -> bytes:
     return hashlib.scrypt(pw.encode(), salt=salt, n=2 ** 15, r=8, p=1, maxmem=64 * 2 ** 20, dklen=32)
 

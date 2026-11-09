@@ -142,3 +142,29 @@ def test_schedule_and_page(data, tmp_path, monkeypatch):
     assert r.status_code == 200 and r.content.startswith(backup.MAGIC) and "attachment" in r.headers["content-disposition"]
     c.post("/admin/security/backups/settings", data={"every": "daily", "hour": "2", "keep_local": "7", "drive_on": "1", "drive_folder": "bad folder!"})
     assert backup.settings()["schedule"]["every"] == "off"  # refused: nothing saved
+
+
+def test_passphrase_suggest_strength_and_leaks(monkeypatch):
+    import hashlib
+    s = backup.suggest()
+    assert len(s) == 29 and s.count("-") == 5 and not set(s) & set("01OIL") and backup.strength(s)[0] == "strong"
+    assert backup.strength("correct horse battery staple")[0] == "weak"         # 4 words
+    assert backup.strength("Gl8-zN2-pQ7-xR4-Mv9-kT3-Bw6")[0] == "strong"
+    assert backup.strength("password1234")[0] == "weak"
+    h = hashlib.sha1(b"password1234").hexdigest().upper()
+    asked = []
+
+    def fake_get(url, timeout, headers):
+        asked.append((url, headers))
+        return type("R", (), {"text": f"{h[5:]}:4321\r\n0000000000000000000000000000000000A:0", "raise_for_status": lambda self: None})()
+    monkeypatch.setattr("httpx.get", fake_get)
+    assert backup.pwned("password1234") == 4321 and asked[0][0].endswith("/range/" + h[:5]) and asked[0][1]["Add-Padding"] == "true"
+    assert backup.pwned(s) == 0
+    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", s)
+    ok, msg = backup.check(s)
+    assert ok and "matches" in msg and "not found" in msg
+    ok, msg = backup.check("password1234")
+    assert not ok and "does NOT match" in msg and "FOUND 4,321" in msg and "weak" in msg
+    import httpx
+    monkeypatch.setattr("httpx.get", lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("offline")))
+    assert "couldn't reach" in backup.check(s)[1]
