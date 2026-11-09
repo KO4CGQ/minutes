@@ -49,6 +49,16 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
 <form method="post" action="/admin/view-as"><input type="hidden" name="member" value=""><input type="hidden" name="next" value="/members/{{ viewing_as }}"><button type="submit">Stop</button></form></div>{% endif %}
+{% if viewing_as %}<dialog id="readonly" class="modal" aria-labelledby="readonly-title"><form method="dialog" class="x"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form>
+  <div class="body"><h2 id="readonly-title">Read-only</h2><p>You're viewing the app as {{ club.name(viewing_as) }}, so nothing can be changed. To make changes, press <b>Stop</b> in the banner at the top.</p>
+  <form method="dialog"><button class="btn small">OK</button></form></div></dialog>
+<script nonce="{{ csp_nonce }}">  // viewing as someone: a change opens this dialog instead of a page saying no (the server refuses it either way)
+document.addEventListener("submit", (e) => {
+  const f = e.target, action = new URL(f.action, location).pathname;
+  if ((f.method || "").toLowerCase() === "post" && !action.startsWith("/admin/")) {
+    e.preventDefault(); e.stopImmediatePropagation(); document.getElementById("readonly").showModal(); }
+}, true);
+</script>{% endif %}
 {% if admin_until %}<div class="adminbar">Admin mode is on until {{ admin_until|clock }}: you can see and change what officers can.{% if update_available %} <a href="/admin/updates" class="updlink">Version {{ update_available }} is available</a>{% endif %}
 <form method="post" action="/admin/mode"><input type="hidden" name="on" value="0"><input type="hidden" name="next" value="{{ request.url.path }}"><button type="submit">Turn off</button></form></div>{% endif %}
 {% if update_available and not admin_until %}<div class="updbar">Version {{ update_available }} of the app is available. <a href="/admin/updates">Install it when you're ready</a> (you'll turn on admin mode first).</div>{% endif %}

@@ -86,3 +86,42 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
     assert lists == [["(nobody)"], ["(nobody)"]], lists
     assert not too_wide, f"pages wider than a 375px phone: {too_wide}"
     assert not blocked, f"blocked by the security policy, or a script error: {blocked}"
+
+
+def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True},
+                                               {"id": "kd8bbb", "first": "Bob", "last": "Baker", "email": "bob@example.org"}])
+    club.admins = {"kd8adm"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tok = a.new_session("kd8adm")
+    a.set_admin(tok, 60)
+    a.set_view_as(tok, "kd8bbb")
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, tok)
+    posts = []
+
+    def serve(route):
+        if route.request.method == "POST":
+            posts.append(route.request.url)
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), follow_redirects=False)
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no Chromium for Playwright: {e}")
+        page = browser.new_page()
+        page.route("http://testserver/**", serve)
+        page.goto("http://testserver/business?tab=notes")
+        page.fill("textarea[name=text]", "Away this week")
+        page.click("text=Send note")
+        assert page.is_visible("#readonly") and "Bob Baker" in page.inner_text("#readonly") and not posts
+        page.click("#readonly >> text=OK")
+        assert not page.is_visible("#readonly")
+        browser.close()

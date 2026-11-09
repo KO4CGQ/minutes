@@ -47,7 +47,7 @@
 <tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ e.date|isodate }}{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" style="display:block" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form>{% endif %}</td><td>{{ labels[e.kind] }}{% if e.kind == 'expense' %}{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/category" class="inline"><select name="category" data-autosubmit aria-label="Category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if e.category == k }}>{{ v }}</option>{% endfor %}</select></form>{% elif e.category %}<br><span class="muted small">{{ cats[e.category] }}</span>{% endif %}{% endif %}</td>
   <td>{% if e.member %}<a href="/members/{{ e.member }}">{{ club.name(e.member) }}</a>{% endif %}</td>
   <td class="n" data-sort="{{ -e.cents if e.kind == 'expense' else e.cents }}">{{ money(-e.cents) if e.kind == 'expense' else money(e.cents) }}</td>
-  <td class="opt">{{ e.account or 'on file' }}</td><td class="opt">{{ e.note }}</td>
+  <td class="opt">{{ e.account or 'on file' }}</td><td class="opt">{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/note" class="inline"><input name="note" value="{{ e.note }}" maxlength="300" data-autosubmit aria-label="Name or note" class="cellinput"></form>{% else %}{{ e.note }}{% endif %}</td>
 </tr>
 {% else %}<tr><td colspan="6" class="muted">Nothing recorded yet.</td></tr>{% endfor %}</tbody></table>
 
@@ -78,7 +78,7 @@
   {% for r in regular_all %}<form method="post" action="/treasurer/regular/{{ r.id }}/remove" class="inline" data-confirm="Stop expecting {{ r.payee }}? Payments already recorded stay."><button class="linkbtn">Remove {{ r.payee }}</button></form> {% endfor %}
 </details>{% endif %}
 <h2>Read at meetings</h2>
-{% set waiting = bills|selectattr('status', 'equalto', 'waiting')|list %}
+
 <p class="hint">Each amount read under Bills and Communications{% if bills_from %} since {{ bills_from|isodate }}{% endif %} gets its own card; a bullet with several amounts is split. Nothing counts until you mark it paid (it becomes an expense) or not a bill.</p>
 {% if edit and cfg.start %}<details class="card"><summary>{% if bills_from and bills_from < cfg.start %}Reading minutes from {{ bills_from|isodate }}, before tracking started{% else %}Look in older minutes{% endif %}</summary>
   <form method="post" action="/treasurer/bills/from" class="modern"><p class="hint">Bills read before {{ cfg.start|isodate }} aren't listed unless you ask: pick how far back to look. Going back to the start date hides the older ones again; any you already marked paid stay recorded.</p>
@@ -86,14 +86,14 @@
       <button class="btn small">Look back</button></div></form>
   {% if bills_from and bills_from < cfg.start %}<form method="post" action="/treasurer/bills/from" class="inline"><button class="btn small ghost">Back to {{ cfg.start|isodate }} only</button></form>{% endif %}
 </details>{% endif %}
-<nav class="tabs small"><a href="/treasurer?tab=bills" class="{{ 'on' if waiting_only }}">Waiting ({{ waiting|length }})</a><a href="/treasurer?tab=bills&everyone=1" class="{{ 'on' if not waiting_only }}">All ({{ bills|length }})</a></nav>
-<div class="cards">{% for b in bills if not waiting_only or b.status == 'waiting' %}<article class="card{{ ' done' if b.status != 'waiting' }}">
+<nav class="tabs small">{% for k, label in (('waiting', 'Waiting'), ('paid', 'Paid'), ('dismissed', 'Not a bill'), ('all', 'All')) %}<a href="/treasurer?tab=bills&show={{ k }}" class="{{ 'on' if show == k }}">{{ label }} ({{ bills|length if k == 'all' else bills|selectattr('status', 'equalto', k)|list|length }})</a>{% endfor %}</nav>
+<div class="cards">{% for b in bills if show == 'all' or b.status == show %}<article class="card{{ ' done' if b.status != 'waiting' }}">
   {% if b.split %}<div class="card-text">{{ b.label }}: {{ money(b.cents) }}</div><div class="muted small">Part of “{{ b.text }}”</div>
   {% else %}<div class="card-text">{{ b.text }}</div>{% endif %}
   <div class="card-meta"><span class="chip"><a href="/meetings/{{ b.meeting }}">{{ fmt(b.meeting) }}</a></span><span class="chip">{{ money(b.cents) }}</span>{% if b.repeated %}<span class="chip warn" title="The same words as the week before: copied forward?">same as last week</span>{% endif %}
     <span class="chip{{ ' warn' if b.status == 'waiting' }}">{{ {'waiting': 'waiting', 'paid': 'paid', 'dismissed': 'not a bill'}[b.status] }}</span></div>
   {% if edit and b.status == 'waiting' %}<form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="expense"><input type="hidden" name="bill" value="{{ b.key }}">
-    <input type="hidden" name="note" value="{{ (b.label if b.split else b.text)[:300] }}">
+    <label>Name<input name="note" maxlength="300" value="{{ (b.label if b.split else b.text)[:300] }}"></label>
     <div class="formrow"><label>Paid<input name="amount" inputmode="decimal" required value="{{ '%d.%02d'|format(b.cents // 100, b.cents % 100) }}"></label>
       <label>On<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
       <label>From<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
@@ -102,7 +102,7 @@
       <button class="btn small">Mark paid</button></div></form>
   <form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><button class="btn small ghost">Not a bill</button></form>
   {% elif edit and b.status == 'dismissed' %}<form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><input type="hidden" name="undo" value="1"><button class="linkbtn">Undo</button></form>{% endif %}
-</article>{% else %}<p class="muted">{{ 'Nothing waiting.' if waiting_only else 'No bills with amounts yet.' }}</p>{% endfor %}</div>
+</article>{% else %}<p class="muted">{{ {'waiting': 'Nothing waiting.', 'paid': 'None marked paid yet.', 'dismissed': 'None marked not a bill.'}.get(show, 'No bills with amounts yet.') }}</p>{% endfor %}</div>
 
 {% elif tab == 'settings' %}
 {% set ro = '' if edit else 'disabled' %}

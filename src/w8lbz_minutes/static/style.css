@@ -436,10 +436,10 @@ ul.agenda .caltime { flex: none; width: 4.6rem; font-size: .9rem; } ul.agenda .d
 table.month button.calopen { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; }
 table.month button.calopen:hover { background: var(--accent-soft); }
 /* the details dialog */
-dialog#calmodal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
-  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop { background: rgba(0,0,0,.45); }
-dialog#calmodal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
-dialog#calmodal form { position: absolute; top: .5rem; right: .5rem; margin: 0; }
+dialog#calmodal, dialog.modal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
+  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop, dialog.modal::backdrop { background: rgba(0,0,0,.45); }
+dialog#calmodal .body, dialog.modal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2, dialog.modal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
+dialog#calmodal form, dialog.modal form.x { position: absolute; top: .5rem; right: .5rem; margin: 0; }
 button.calclose { font: inherit; background: none; border: 0; cursor: pointer; min-width: 2.5rem; min-height: 2.5rem; border-radius: 50%; color: var(--muted); }
 button.calclose:hover { background: var(--accent-soft); }
 .calcal { margin: 0; font-size: .85rem; color: var(--muted); } .calwhen { font-weight: 600; } .calnotes { white-space: pre-line; overflow-wrap: anywhere; }
@@ -485,3 +485,4 @@ table.month li.extra { display: none; }
 .chart figcaption { display: flex; justify-content: space-between; font-size: .75rem; color: var(--faint); margin-top: .3rem; }
 table.list td select { max-width: 7.5rem; font-size: .8rem; display: block; margin-top: .2rem; }
 .swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -.05rem; } .swatch.k1 { background: var(--chart-1); } .swatch.k2 { background: var(--chart-2); } .swatch.k3 { background: var(--chart-3); } .swatch.k4 { background: var(--chart-4); } .swatch.k5 { background: var(--chart-5); } .swatch.k6 { background: var(--chart-6); } .swatch.k7 { background: var(--chart-7); } .swatch.k8 { background: var(--chart-8); }
+input.cellinput { font: inherit; font-size: .9rem; width: 100%; min-width: 10rem; border: 1px solid transparent; background: transparent; color: inherit; padding: .15rem .3rem; border-radius: .3rem; } input.cellinput:hover, input.cellinput:focus { border-color: var(--border-strong); background: var(--surface); }

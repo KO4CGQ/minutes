@@ -35,7 +35,7 @@ When a leader submits the minutes, they go to every roster member with an email 
 ## Admin mode
 Callsigns listed under `admins:` in `club.yaml` get **Turn on admin mode** in the name menu. For an hour (or until turned off) that sign-in can see and do what officers can, with a red banner showing. Each switch is logged in `admin-log.jsonl` in the data directory.
 
-In admin mode, a member's page has **View the app as …**: the app as that member sees it, read-only (no changes, and not their sign-in or passkey page), until **Stop** or admin mode ends. Also logged.
+In admin mode, a member's page has **View the app as …**: the app as that member sees it, read-only (no changes, and not their sign-in or passkey page), until **Stop** or admin mode ends. Also logged. Trying to save anything while viewing as someone opens a small "Read-only" dialog instead.
 
 ## Backups
 The app backs up its whole data folder (minutes, chow, business, calendars, settings, logs, the roster cache, and a consistent copy of the sign-in database) into one compressed `.tar.gz`, encrypts it (scrypt + AES-256-GCM) with a passphrase only the admins hold, and decrypts it again to check it opens. It keeps the newest on the server (`backups/` in the data folder) and sends each to **S3-compatible storage** (Backblaze B2), a **Google Drive** folder, or both. If anything fails, the admins get an email.

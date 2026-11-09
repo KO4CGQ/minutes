@@ -285,6 +285,14 @@ def bills(archive, s: dict, start: str | None) -> list[dict]:
     return out
 
 
+def set_note(s: dict, eid: str, note: str, by: str) -> None:
+    e = next((x for x in s["entries"] if x["id"] == eid), None)
+    if not e:
+        raise ValueError("That entry is gone.")
+    _log("note", by, entry=eid, old=e["note"], note=note.strip()[:300])
+    e["note"] = note.strip()[:300]
+
+
 def set_category(s: dict, eid: str, category: str, by: str) -> None:
     e = next((x for x in s["entries"] if x["id"] == eid and x["kind"] == "expense"), None)
     if not e or category not in categories(s):

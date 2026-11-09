@@ -353,3 +353,23 @@ def test_bills_from_older_minutes_only_when_asked(club, tmp_path):
     assert len(treasurer.bills(archive, s, treasurer.bills_from(s))) == 3
     treasurer.set_bills_from(s, "tre", None)  # undo
     assert len(treasurer.bills(archive, s, treasurer.bills_from(s))) == 2
+
+
+def test_bill_tabs_names_and_the_read_only_dialog(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tre = TestClient(web.app)
+    tre.cookies.set(web.COOKIE, a.new_session("tre"))
+    with treasurer.locked():
+        s = started("preview")
+        e = treasurer.record(club, s, "tre", "expense", "81", "2026-11-12", "Checking", note="Gas Bill $81 and more")
+        treasurer.save(s)
+    tre.post(f"/treasurer/entries/{e['id']}/note", data={"note": "Gas, November"})
+    assert treasurer.load()["entries"][0]["note"] == "Gas, November"
+    page = tre.get("/treasurer?tab=bills&show=dismissed").text
+    assert 'class="on">Not a bill (0)' in page and "None marked not a bill." in page
+    assert 'id="readonly"' not in page  # the dialog only comes with View as

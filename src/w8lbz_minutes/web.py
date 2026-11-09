@@ -638,7 +638,8 @@ def treasurer_only(request: Request) -> str:
 
 
 @app.get("/treasurer", response_class=HTMLResponse)
-def treasurer_page(request: Request, tab: str = "standing", error: str = "", everyone: int = 0, mid: str = Depends(me)):
+def treasurer_page(request: Request, tab: str = "standing", error: str = "", everyone: int = 0, show: str = "waiting",
+                   mid: str = Depends(me)):
     """Officers see who owes what; the Treasurer records payments, expenses and bills, and runs the settings. A fund's
     keepers (the drinks committee, say) see and record only their fund's account."""
     club, s = archive.club, treasurer.load()
@@ -658,7 +659,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                 standings=standings,
                 entries=sorted(entries, key=lambda e: (e["date"], e["at"]), reverse=True),
                 bills=treasurer.bills(archive, s, treasurer.bills_from(s)) if full and running else [], bills_from=treasurer.bills_from(s),
-                waiting_only=not everyone, regular=treasurer.regular_due(s, dt.date.today()),
+                show=show if show in ("waiting", "paid", "dismissed", "all") else "waiting", regular=treasurer.regular_due(s, dt.date.today()),
                 regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=treasurer.RATES, bond=treasurer.BOND,
                 labels=treasurer.LABELS, kinds=treasurer.KINDS if edit else treasurer.NO_MEMBER, accounts=c["accounts"] if edit else kept,
                 rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
@@ -697,6 +698,11 @@ def treasurer_delete(request: Request, eid: str, mid: str = Depends(me)):
             raise HTTPException(403, "Only the Treasurer can do that.")
         treasurer.delete(s, eid, mid)
     return money_change(run, "money")
+
+
+@app.post("/treasurer/entries/{eid}/note")
+def treasurer_note(eid: str, note: str = Form(""), mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.set_note(s, eid, note, mid), "money")
 
 
 @app.post("/treasurer/entries/{eid}/category")
