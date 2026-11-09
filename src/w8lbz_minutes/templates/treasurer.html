@@ -1,7 +1,8 @@
 {% extends "base.html" %}{% block title %}Treasurer{% endblock %}{% block body %}
 <h1>Treasurer</h1>
-<p class="muted">Dues, fees and the club's bills (bylaws VII). Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
-<nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills')) %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
+{% if full %}<p class="muted">Dues, fees and the club's bills (bylaws VII). Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
+{% else %}<p class="muted">The money in and out of {{ kept|join(' and ') }}, which you look after.</p>{% endif %}
+<nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 {% if not cfg.start %}<p class="msg err">The Treasurer pages aren't turned on yet: nothing is owed until the date tracking starts is set in the server's club.yaml (<code>treasurer:</code> → <code>start: YYYY-MM-DD</code>, under <code>club:</code>). To turn them on, ask {{ admins or 'an admin' }}.</p>{% endif %}
 
@@ -15,29 +16,53 @@
 {% else %}<tr><td colspan="5" class="muted">No one yet.</td></tr>{% endfor %}</tbody></table>
 
 {% elif tab == 'money' %}
-{% if edit %}<form method="post" action="/treasurer/record" class="modern card">
+{% if edit or kept %}<form method="post" action="/treasurer/record" class="modern card">
   <div class="formrow">
     <label>What for<select name="kind" required>{% for k in kinds %}<option value="{{ k }}">{{ labels[k] }}</option>{% endfor %}</select></label>
-    <label>Member<input name="member" data-combo="roster-names" placeholder="Type a name… (not for an expense)"></label>
+    {% if edit %}<label>Member<input name="member" data-combo="roster-names" placeholder="Type a name… (not for income or an expense)"></label>{% endif %}
   </div>
   <div class="formrow">
     <label>Amount<input name="amount" inputmode="decimal" required placeholder="3.50"></label>
     <label>Date<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
-    <label>Account<select name="account">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+    <label>Account<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
   </div>
   <label>Note<input name="note" maxlength="300" placeholder="e.g. paid through December"></label>
-  <p class="hint">An adjustment charges a member (e.g. a balance from before the app); a negative one is a credit (e.g. a night with no meeting).</p>
+  {% if edit %}<p class="hint">An adjustment charges a member (e.g. a balance from before the app); a negative one is a credit (e.g. a night with no meeting). Other income is money in that isn't from a member's account (drink sales, a donation).</p>{% endif %}
   <div class="formrow"><button class="btn small">Record</button></div>
 </form>{% endif %}
-<table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th>{% if edit %}<th></th>{% endif %}</tr></thead>
+<table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th>{% if edit or kept %}<th></th>{% endif %}</tr></thead>
 <tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ fmt(e.date) }}</td><td>{{ labels[e.kind] }}</td>
   <td>{% if e.member %}<a href="/members/{{ e.member }}">{{ club.name(e.member) }}</a>{% endif %}</td>
   <td class="n" data-sort="{{ -e.cents if e.kind == 'expense' else e.cents }}">{{ money(-e.cents) if e.kind == 'expense' else money(e.cents) }}</td>
   <td class="opt">{{ e.account }}</td><td class="opt">{{ e.note }}</td>
-  {% if edit %}<td><form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form></td>{% endif %}</tr>
+  {% if edit or kept %}<td>{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form>{% endif %}</td>{% endif %}</tr>
 {% else %}<tr><td colspan="7" class="muted">Nothing recorded yet.</td></tr>{% endfor %}</tbody></table>
 
 {% elif tab == 'bills' %}
+{% macro regular_pick() %}{% if regular_all %}<label>Regular bill<select name="regular"><option value="">(not one of them)</option>{% for r in regular_all %}<option value="{{ r.id }}">{{ r.payee }}</option>{% endfor %}</select></label>{% endif %}{% endmacro %}
+<h2>Regular bills</h2>
+<p class="hint">What the club pays every month or year (bylaws IV.C: gas, electricity, water, phone and internet, taxes, insurance), whether or not it's read at a meeting.</p>
+<div class="cards">{% for r in regular %}<article class="card{{ ' done' if r.paid }}">
+  <div class="card-text">{{ r.payee }}</div>
+  <div class="card-meta"><span class="chip">about {{ money(r.cents) }}</span><span class="chip">{{ every[r.every] }}{% if r.month %} ({{ '%02d'|format(r.month) }}){% endif %}</span>
+    {% for e in r.paid %}<span class="chip">paid {{ money(e.cents) }} on {{ fmt(e.date) }}</span>{% else %}<span class="chip warn">not paid {{ 'this month' if r.every == 'month' else 'this year' }}</span>{% endfor %}</div>
+  {% if edit and not r.paid %}<form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="expense"><input type="hidden" name="regular" value="{{ r.id }}">
+    <input type="hidden" name="note" value="{{ r.payee }}">
+    <div class="formrow"><label>Paid<input name="amount" inputmode="decimal" required value="{{ '%d.%02d'|format(r.cents // 100, r.cents % 100) }}"></label>
+      <label>On<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
+      <label>From<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+      <button class="btn small">Mark paid</button></div></form>{% endif %}
+</article>{% else %}<p class="muted">None listed{{ ' yet: add them below' if edit }}.</p>{% endfor %}</div>
+{% if edit %}<details class="card"><summary>Add or remove a regular bill</summary>
+  <form method="post" action="/treasurer/regular" class="modern">
+    <div class="formrow"><label>Payee<input name="payee" required maxlength="80" placeholder="e.g. Gas company"></label>
+      <label>About<input name="amount" inputmode="decimal" required placeholder="80"></label>
+      <label>How often<select name="every">{% for k, v in every.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      <label>Month (yearly)<select name="month"><option value="0">—</option>{% for n in range(1, 13) %}<option value="{{ n }}">{{ '%02d'|format(n) }}</option>{% endfor %}</select></label></div>
+    <div class="formrow"><button class="btn small">Add</button></div></form>
+  {% for r in regular_all %}<form method="post" action="/treasurer/regular/{{ r.id }}/remove" class="inline" data-confirm="Stop expecting {{ r.payee }}? Payments already recorded stay."><button class="linkbtn">Remove {{ r.payee }}</button></form> {% endfor %}
+</details>{% endif %}
+<h2>Read at meetings</h2>
 <p class="hint">Items read under Bills and Communications with a $ amount{% if cfg.start %}, since {{ fmt(cfg.start) }}{% endif %}. Mark each one paid (it becomes an expense) or not a bill.</p>
 <div class="cards">{% for b in bills %}<article class="card{{ ' done' if b.status != 'waiting' }}">
   <div class="card-text">{{ b.text }}</div>
@@ -47,7 +72,8 @@
     <input type="hidden" name="note" value="{{ b.text[:300] }}">
     <div class="formrow"><label>Paid<input name="amount" inputmode="decimal" required value="{{ '%d.%02d'|format(b.cents // 100, b.cents % 100) }}"></label>
       <label>On<input type="date" name="date" required value="{{ today }}" max="{{ today }}"></label>
-      <label>From<select name="account">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+      <label>From<select name="account">{% for a in accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+      {{ regular_pick() }}
       <button class="btn small">Mark paid</button></div></form>
   <form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><button class="btn small ghost">Not a bill</button></form>
   {% elif edit and b.status == 'dismissed' %}<form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><input type="hidden" name="undo" value="1"><button class="linkbtn">Undo</button></form>{% endif %}

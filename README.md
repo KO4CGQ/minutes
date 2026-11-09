@@ -176,8 +176,10 @@ Previews never copy to Google.
 ## Treasurer
 **Treasurer** in the menu (`/treasurer`), for officers; whoever holds Treasurer, and admins in admin mode, record the money (`treasurer.py`, `treasurer.json` in the data folder, every change logged in `treasurer-log.jsonl`).
 - **Who owes what** is worked out, never typed: dues for each meeting night since tracking started (or since the member joined), the initiation fee for members who joined since then, a charge for each chow night marked missed, plus adjustments, minus payments. Every meeting night counts, holidays included (52 × $3.50 is the bylaws' $182 a year); a credit covers a night the club calls off. Members may pay weekly, monthly or for the year: paying ahead shows as "paid through" a date. Four weeks or more behind shows in red. It also shows who still owes a Certificate of Indebtedness, and by when.
-- **Money in and out:** payments (dues, initiation fee, missed chow, certificate), adjustments (a charge, or a credit when negative: a balance from before the app, a night with no meeting) and expenses, each with a date and an account. Delete fixes a mistake; the log keeps it.
-- **Bills:** each Bills and Communications item with a $ amount (`Gas Bill $81`) since tracking started waits for the Treasurer to mark it paid (an expense) or not a bill.
+- **Money in and out:** payments (dues, initiation fee, missed chow, certificate), other income (drink sales, donations), adjustments (a charge, or a credit when negative: a balance from before the app, a night with no meeting) and expenses, each with a date and an account. Delete fixes a mistake; the log keeps it.
+- **Regular bills** (Bills tab): the Treasurer lists what the club pays every month or year (payee, about how much; a yearly one's month), and the tab shows which haven't been paid this month or year, whether or not they were read at a meeting.
+- **Bills read at meetings:** each Bills and Communications item with a $ amount (`Gas Bill $81`) since tracking started waits for the Treasurer to mark it paid (an expense) or not a bill; when it's one of the regular bills, pick which, so it isn't counted twice.
+- **Funds** run by a committee (a drinks fund with its own checking account, say): list them in the config with their keepers' callsigns. Keepers get the Treasurer page with only their fund's account: they record its income and expenses and see only those; the Treasurer sees everything.
 - **Home** shows each member their own figures, never anyone else's.
 - **Config** under `club:` in club.yaml; only `start` is needed, the rest default to the bylaws (VII):
 
@@ -190,6 +192,8 @@ Previews never copy to Google.
         certificate_years: 2
         missed_chow: 35
         arrears_weeks: 4
+        funds:
+          - {name: Drinks fund, account: Drinks Checking, keepers: [KD8AAA, KD8BBB]}
 
   When the bylaws change an amount, list it with the date it starts, so earlier weeks keep the old amount (the certificate's is the one in effect when a member joined):
 

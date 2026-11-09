@@ -215,6 +215,7 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
                       f"{archive.club.info.get('meeting_time', '19:30')}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
+        "keeps_fund": bool(treasurer.kept_accounts(archive.club, mid)),  # a fund's keepers get the Treasurer page too
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         "update_available": _update_badge(request),
@@ -631,18 +632,26 @@ def treasurer_only(request: Request) -> str:
 
 
 @app.get("/treasurer", response_class=HTMLResponse)
-def treasurer_page(request: Request, tab: str = "standing", error: str = "", mid: str = Depends(officer)):
-    """Officers see who owes what; the Treasurer records payments, expenses and bills."""
+def treasurer_page(request: Request, tab: str = "standing", error: str = "", mid: str = Depends(me)):
+    """Officers see who owes what; the Treasurer records payments, expenses and bills. A fund's keepers (the drinks
+    committee, say) see and record only their fund's account."""
+    club, s = archive.club, treasurer.load()
+    c, kept, full = treasurer.config(club), treasurer.kept_accounts(club, mid), privileged(request)
+    if not (full or kept):
+        raise HTTPException(403, "Only officers can do that.")
+    tab = tab if full else "money"
     if tab not in ("standing", "money", "bills"):
         raise HTTPException(404)
-    club, s = archive.club, treasurer.load()
-    c = treasurer.config(club)
     members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
                      key=lambda m: (m.last, m.first))
-    return page(request, "treasurer.html", tab=tab, error=error, cfg=c, edit=is_treasurer(request), members=members,
-                standings=treasurer.standings(club, s), entries=sorted(s["entries"], key=lambda e: (e["date"], e["at"]), reverse=True),
-                bills=treasurer.bills(archive, s, c["start"]), labels=treasurer.LABELS, kinds=treasurer.KINDS, at=treasurer.at,
-                admins=' or '.join(sorted(club.name(a) for a in club.admins)),
+    edit = is_treasurer(request)
+    entries = [e for e in s["entries"] if full or e["account"] in kept]
+    return page(request, "treasurer.html", tab=tab, error=error, cfg=c, edit=edit, full=full, kept=kept, members=members,
+                standings=treasurer.standings(club, s) if full else [], entries=sorted(entries, key=lambda e: (e["date"], e["at"]), reverse=True),
+                bills=treasurer.bills(archive, s, c["start"]) if full else [], regular=treasurer.regular_due(s, dt.date.today()),
+                regular_all=s["regular"], every=treasurer.EVERY,
+                labels=treasurer.LABELS, kinds=treasurer.KINDS if edit else treasurer.NO_MEMBER, accounts=c["accounts"] if edit else kept,
+                at=treasurer.at, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
 
 
@@ -658,20 +667,40 @@ def money_change(fn, tab: str):
 
 
 @app.post("/treasurer/record")
-def treasurer_record(kind: str = Form(...), amount: str = Form(...), date: str = Form(...), account: str = Form(...),
-                     member: str = Form(""), note: str = Form(""), bill: str = Form(""), mid: str = Depends(treasurer_only)):
+def treasurer_record(request: Request, kind: str = Form(...), amount: str = Form(...), date: str = Form(...), account: str = Form(...),
+                     member: str = Form(""), note: str = Form(""), bill: str = Form(""), regular: str = Form(""),
+                     mid: str = Depends(me)):
+    if not is_treasurer(request) and not (kind in treasurer.NO_MEMBER and account in treasurer.kept_accounts(archive.club, mid)
+                                          and not bill and not regular):
+        raise HTTPException(403, "Only the Treasurer can do that.")
     return money_change(lambda s: treasurer.record(archive.club, s, mid, kind, amount, date, account, owner_id(member),
-                                                   note, bill or None), "bills" if bill else "money")
+                                                   note, bill or None, regular or None), "bills" if bill or regular else "money")
 
 
 @app.post("/treasurer/entries/{eid}/delete")
-def treasurer_delete(eid: str, mid: str = Depends(treasurer_only)):
-    return money_change(lambda s: treasurer.delete(s, eid, mid), "money")
+def treasurer_delete(request: Request, eid: str, mid: str = Depends(me)):
+    def run(s):
+        e = next((x for x in s["entries"] if x["id"] == eid), None)
+        if not (is_treasurer(request) or (e and e["account"] in treasurer.kept_accounts(archive.club, mid))):
+            raise HTTPException(403, "Only the Treasurer can do that.")
+        treasurer.delete(s, eid, mid)
+    return money_change(run, "money")
 
 
 @app.post("/treasurer/bills/dismiss")
 def treasurer_dismiss(key: str = Form(...), undo: int = Form(0), mid: str = Depends(treasurer_only)):
     return money_change(lambda s: treasurer.dismiss_bill(s, key, mid, bool(undo)), "bills")
+
+
+@app.post("/treasurer/regular")
+def treasurer_regular(payee: str = Form(...), amount: str = Form(...), every: str = Form(...), month: int = Form(0),
+                      mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.add_regular(s, mid, payee, amount, every, month or None), "bills")
+
+
+@app.post("/treasurer/regular/{rid}/remove")
+def treasurer_regular_remove(rid: str, mid: str = Depends(treasurer_only)):
+    return money_change(lambda s: treasurer.remove_regular(s, rid, mid), "bills")
 
 
 def _form_date(v: str) -> None:

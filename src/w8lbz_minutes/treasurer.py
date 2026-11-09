@@ -29,9 +29,10 @@ from . import chow
 from .club import DATA, Club
 
 PAYMENTS = ("dues", "initiation", "chow", "certificate")
-KINDS = PAYMENTS + ("adjustment", "expense")
+KINDS = PAYMENTS + ("adjustment", "income", "expense")
+NO_MEMBER = ("income", "expense")  # money in or out of the club as a whole
 LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": "Certificate of Indebtedness",
-          "adjustment": "Adjustment", "expense": "Expense"}
+          "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
 BYLAWS = {"dues_weekly": 3.50, "initiation": 25, "certificate": 100, "certificate_years": 2, "missed_chow": 35, "arrears_weeks": 4,
           "accounts": ["Checking", "Cash"]}
 AMOUNT = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{2})?)")
@@ -41,7 +42,14 @@ def config(club: Club) -> dict:
     """club.yaml `club: treasurer:`; `start` (when tracking began) must be set before anything is owed."""
     c = {**BYLAWS, **(club.info.get("treasurer") or {})}
     c["start"] = str(c["start"]) if c.get("start") else None
+    c["funds"] = [{**f, "keepers": [str(k).lower() for k in f.get("keepers") or []]} for f in c.get("funds") or []]
+    c["accounts"] = list(dict.fromkeys(list(c["accounts"]) + [f["account"] for f in c["funds"]]))  # a fund's account counts too
     return c
+
+
+def kept_accounts(club: Club, mid: str | None) -> list[str]:
+    """The fund accounts a member looks after (`funds:` keepers, e.g. a drinks committee): they record its money."""
+    return [f["account"] for f in config(club)["funds"] if mid and club.canonical(mid) in {club.canonical(k) for k in f["keepers"]}]
 
 
 def cents(v) -> int:
@@ -76,6 +84,7 @@ def load() -> dict:
     s = json.loads(p.read_text()) if p.exists() else {}
     s.setdefault("entries", [])
     s.setdefault("bills", {})
+    s.setdefault("regular", [])  # bills the club pays every month or year: {id, payee, cents, every, month}
     return s
 
 
@@ -96,14 +105,14 @@ def _log(action: str, by: str, **details) -> None:
 
 
 def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, account: str, member: str | None = None,
-           note: str = "", bill: str | None = None) -> dict:
+           note: str = "", bill: str | None = None, regular: str | None = None) -> dict:
     if kind not in KINDS:
         raise ValueError("Pick what the money is for.")
     c = cents(amount)
     if kind != "adjustment" and c <= 0:
         raise ValueError("The amount must be more than zero (use an adjustment for a credit).")
     dt.date.fromisoformat(date)  # ValueError if it isn't a date
-    if kind == "expense":
+    if kind in NO_MEMBER:
         member = None
     elif member not in club.members:
         raise ValueError("Pick a member.")
@@ -111,6 +120,10 @@ def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, acco
         raise ValueError("Pick an account.")
     e = {"id": secrets.token_hex(5), "date": date, "kind": kind, "member": member, "cents": c, "account": account,
          "note": note.strip()[:300], "bill": bill, "by": by, "at": int(time.time())}
+    if regular:
+        if kind != "expense" or not any(r["id"] == regular for r in s["regular"]):
+            raise ValueError("That regular bill is gone.")
+        e["regular"] = regular
     s["entries"].append(e)
     if bill:
         s["bills"][bill] = {"status": "paid", "entry": e["id"]}
@@ -134,6 +147,39 @@ def dismiss_bill(s: dict, key: str, by: str, undo: bool = False) -> None:
     else:
         s["bills"][key] = {"status": "dismissed"}
     _log("undismiss" if undo else "dismiss", by, bill=key)
+
+
+EVERY = {"month": "Every month", "year": "Every year"}
+
+
+def add_regular(s: dict, by: str, payee: str, amount: str, every: str, month: int | None = None) -> dict:
+    payee = " ".join(payee.split())[:80]
+    if not payee or every not in EVERY or (every == "year" and month not in range(1, 13)):
+        raise ValueError("Give the payee, and how often (and for a yearly bill, its month).")
+    r = {"id": secrets.token_hex(4), "payee": payee, "cents": cents(amount), "every": every, "month": month if every == "year" else None}
+    s["regular"].append(r)
+    _log("add regular", by, regular=r)
+    return r
+
+
+def remove_regular(s: dict, rid: str, by: str) -> None:
+    """Payments already made keep their record; the bill just stops being expected."""
+    r = next((x for x in s["regular"] if x["id"] == rid), None)
+    if r:
+        s["regular"].remove(r)
+        _log("remove regular", by, regular=r)
+
+
+def regular_due(s: dict, today: dt.date) -> list[dict]:
+    """Each regular bill for this period (this month; a yearly one from its month to the year's end): paid or not."""
+    out = []
+    for r in s["regular"]:
+        period = today.strftime("%Y-%m") if r["every"] == "month" else str(today.year)
+        if r["every"] == "year" and today.month < r["month"]:
+            continue
+        paid = [e for e in s["entries"] if e.get("regular") == r["id"] and e["date"].startswith(period)]
+        out.append({**r, "period": period, "paid": paid})
+    return sorted(out, key=lambda r: (bool(r["paid"]), r["payee"].lower()))
 
 
 def bills(archive, s: dict, start: str | None) -> list[dict]:

@@ -123,3 +123,42 @@ def test_officers_look_the_treasurer_records_members_see_their_own(club, tmp_pat
     c.info["treasurer"] = {}
     c.admins = {"pres"}
     assert "ask Pat Prez" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text
+
+
+def test_regular_bills_this_month_or_year(club):
+    s = treasurer.load()
+    gas = treasurer.add_regular(s, "tre", "Gas company", "80", "month")
+    ins = treasurer.add_regular(s, "tre", "Insurance", "900", "year", 3)
+    with pytest.raises(ValueError):
+        treasurer.add_regular(s, "tre", "Taxes", "500", "year")  # a yearly bill needs its month
+    assert [r["payee"] for r in treasurer.regular_due(s, dt.date(2026, 2, 10))] == ["Gas company"]  # insurance from March
+    treasurer.record(club, s, "tre", "expense", "81.20", "2026-03-04", "Checking", regular=gas["id"])
+    due = {r["payee"]: r for r in treasurer.regular_due(s, dt.date(2026, 3, 20))}
+    assert due["Gas company"]["paid"][0]["cents"] == 8120 and not due["Insurance"]["paid"]
+    assert not {r["payee"]: r for r in treasurer.regular_due(s, dt.date(2026, 4, 1))}["Gas company"]["paid"]  # a new month
+    treasurer.remove_regular(s, ins["id"], "tre")
+    assert [r["payee"] for r in treasurer.regular_due(s, dt.date(2026, 3, 20))] == ["Gas company"]
+
+
+def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    club.info["treasurer"]["funds"] = [{"name": "Drinks", "account": "Drinks Checking", "keepers": ["BOB"]}]
+    assert treasurer.config(club)["accounts"] == ["Checking", "Cash", "Drinks Checking"] and treasurer.kept_accounts(club, "bob") == ["Drinks Checking"]
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    bob = TestClient(web.app)
+    bob.cookies.set(web.COOKIE, a.new_session("bob"))
+    sale = {"kind": "income", "amount": "42", "date": "2026-11-12", "account": "Drinks Checking", "note": "can sales"}
+    assert bob.post("/treasurer/record", data=sale, follow_redirects=False).status_code == 303
+    assert bob.post("/treasurer/record", data={**sale, "account": "Checking"}).status_code == 403
+    assert bob.post("/treasurer/record", data={**sale, "kind": "dues", "member": "Amy Able"}).status_code == 403
+    s = treasurer.load()
+    treasurer.record(club, s, "tre", "dues", "7", "2026-11-12", "Cash", "amy")
+    treasurer.save(s)
+    page = bob.get("/treasurer?tab=standing").text  # keepers only get their fund's money
+    assert "can sales" in page and "Dues" not in page.split("<tbody>")[1] and "Who owes what" not in page
+    assert bob.post(f"/treasurer/entries/{s['entries'][1]['id']}/delete").status_code == 403
+    assert bob.post(f"/treasurer/entries/{s['entries'][0]['id']}/delete", follow_redirects=False).status_code == 303
