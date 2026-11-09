@@ -12,6 +12,7 @@
   --nav-bg: #2b3a19; --nav-text: #eef4e2; --nav-hover: rgba(255, 255, 255, .12); --nav-on: rgba(255, 255, 255, .2);
   --focus: rgba(91, 122, 47, .28); --mark: #fbe58a; --sheet-h: #c3d69b;
   --inperson-bg: #dcebc4; --inperson-edge: #7da04a; --online-bg: #d6e4f7; --online-edge: #5a86c4;
+  --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a;  /* chart series, checked for colour blindness */
   --shadow: 0 1px 2px rgba(20, 30, 10, .06), 0 4px 16px rgba(20, 30, 10, .05);
   --shadow-pop: 0 10px 30px rgba(20, 30, 10, .18);
   --radius: .8rem; --radius-sm: .55rem;
@@ -28,6 +29,7 @@
   --nav-bg: #161b12; --nav-text: #e2ead6; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
   --focus: rgba(156, 196, 105, .3); --mark: #6b5a12; --sheet-h: #34442180;
   --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
+  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
 }
@@ -44,6 +46,7 @@
     --nav-bg: #161b12; --nav-text: #e2ead6; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
     --focus: rgba(156, 196, 105, .3); --mark: #6b5a12; --sheet-h: #34442180;
     --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
+    --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
   }
@@ -460,3 +463,16 @@ button.calkind { font: inherit; display: inline-flex; align-items: center; gap: 
 button.calkind:hover { border-color: var(--border-strong); } button.calkind[aria-pressed=false] { opacity: .5; text-decoration: line-through; }
 button.calkind[aria-pressed=false] .dot { background: transparent !important; box-shadow: inset 0 0 0 2px var(--muted); }
 table.month li.extra { display: none; }
+
+/* Charts (Attendance): stacked bars in plain HTML; each bar's title is its tooltip, the table below has the numbers */
+.chart { margin: 0 0 1.5rem; padding: 1rem 1rem .6rem 2.4rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.chart .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .85rem; color: var(--muted); margin: 0 0 .8rem -1.4rem; }
+.chart .legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: -.05rem; }
+.chart .k1 { background: var(--chart-1); } .chart .k2 { background: var(--chart-2); } .chart .k3 { background: var(--chart-3); }
+.chart .plot { position: relative; height: 11rem; }
+.chart .grid { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
+.chart .grid span { position: absolute; right: 100%; margin-right: .4rem; transform: translateY(-50%); font-size: .75rem; color: var(--faint); }
+.chart .bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+.chart .bar { flex: 1 1 0; max-width: 1.6rem; display: flex; flex-direction: column; gap: 2px; border-radius: 4px 4px 0 0; overflow: hidden; }
+.chart .bar i { flex-basis: 0; min-height: 2px; } .chart .bar:hover, .chart .bar:focus-visible { opacity: .75; }
+.chart figcaption { display: flex; justify-content: space-between; font-size: .75rem; color: var(--faint); margin-top: .3rem; }

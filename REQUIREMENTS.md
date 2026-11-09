@@ -163,7 +163,7 @@ Members share personal news in their reports (health, jobs, family), and **those
 - **FR-43** Per meeting: the in-person, Teams, guest and total counts, plus the average.
 - **FR-44** Per member: meetings attended (in person and on Teams), attendance rate, and when they last attended. Each member has a history page.
 - **FR-45** Guests are grouped by callsign, or by name if there's no callsign, with their number of visits and first and last visit. The system marks guests who later became members (with the date they joined), and flags guests with 3 or more visits as **"regular, invite to join?"**. In the live console, the leader sees a guest's visit count when adding them.
-- **FR-46** (Later) Charts of attendance over time, and how many guests convert to members.
+- **FR-46** A chart of attendance over time (in person, online, guests) on the Attendance page. (Later) How many guests convert to members.
 
 ### 4.10 Reminders and Discord (later phase)
 - **FR-41** Post a weekly reminder before the meeting: chow person, open action items, upcoming events.

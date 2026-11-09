@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Attendance:** a chart of each meeting's attendance (in person, online, guests) over the chosen period, above the tables. Hover or tap a bar for its numbers; click to open that meeting.
 
 ## 0.12.1 (2026-11-09)
 - **Motions:** Moved by and Seconded by each leave out whoever is picked in the other (leader console and Business → Motions).
