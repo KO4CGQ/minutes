@@ -152,10 +152,17 @@ def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, acco
         member = None
     elif member not in club.members:
         raise ValueError("Pick a member.")
-    if account not in config(s)["accounts"]:
+    start = config(s)["start"]
+    before = bool(start) and date < start
+    if before and kind in ("dues", "initiation", "chow"):
+        raise ValueError("Nothing was owed before tracking started. For an older balance, use an adjustment dated on the start date.")
+    on_file = before and kind == "certificate" and not account  # a bond bought years ago: on record, no money moves now
+    if not on_file and account not in config(s)["accounts"]:
         raise ValueError("Pick an account.")
-    e = {"id": secrets.token_hex(5), "date": date, "kind": kind, "member": member, "cents": c, "account": account,
+    e = {"id": secrets.token_hex(5), "date": date, "kind": kind, "member": member, "cents": c, "account": None if on_file else account,
          "note": note.strip()[:300], "bill": bill, "by": by, "at": int(time.time())}
+    if on_file:
+        e["on_file"] = True
     if kind == "expense":
         e["category"] = category if category in CATEGORIES else guess(note)
     if regular:
@@ -326,7 +333,9 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     paid = sum(e["cents"] for e in mine if e["kind"] in PAYMENTS and e["kind"] != "certificate")
     owed = charged - paid
     # the bond's price when they joined: a later rise doesn't ask existing holders for more
-    cert = sum(e["cents"] for e in mine if e["kind"] == "certificate") >= rate(c, "certificate", joined)
+    bonds = [e for e in mine if e["kind"] == "certificate"]
+    # a bond on file from before tracking counts whatever it cost then; otherwise paid in full at the price when they joined
+    cert = any(e.get("on_file") for e in bonds) or sum(e["cents"] for e in bonds) >= rate(c, "certificate", joined)
     cert_due = None
     if not cert and m.member_since:
         j = dt.date.fromisoformat(m.member_since)
@@ -335,7 +344,7 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     later = chow.meeting_nights(club, today + dt.timedelta(days=1), today + dt.timedelta(weeks=ahead + 1))
     return {"member": mid, "owed": owed, "weeks_behind": -(-owed // weekly) if owed > 0 else 0,
             "behind": owed >= int(c["arrears_weeks"]) * weekly, "missed_chow": missed, "certificate": cert,
-            "suspended": m.status.lower() == "suspended", "paid_through": later[ahead - 1].isoformat() if ahead else None,
+            "certificate_bought": max(e["date"] for e in bonds) if cert else None, "suspended": m.status.lower() == "suspended", "paid_through": later[ahead - 1].isoformat() if ahead else None,
             "certificate_due": cert_due.isoformat() if cert_due else None,
             "certificate_late": bool(cert_due and cert_due < today)}
 

@@ -9,7 +9,7 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
-- **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below).
+- **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
 
 ## Look and feel: ideas to consider
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
@@ -46,6 +46,7 @@ Nobody uses the sheet directly any more; one other club tool on the same server 
 ## Treasurer
 Built (officers guide → Treasurer): who owes what, payments, missed-chow charges, certificates, bills from the minutes, and each member's own figures on Home. Next:
 - **Monthly report:** the bylaws (IV.C) want a report at the first meeting of each month; fill the Financial Report step from the recorded money, with account balances.
+- **Hardship, deferral or reduced dues** (waiting on the Treasurer and the Board: the bylaws don't provide for it, so it's their policy to set first). Possible shapes: a reduced weekly rate for a member from a date, payments deferred until a date (no arrears email meanwhile), or forgiving a balance. Today an adjustment (a credit) covers a one-off.
 - **Bond on the roster:** show whether each member has bought their bond (Certificate of Indebtedness) on the Roster page (bylaws VII.E).
 - **Bookkeeping, if wanted:** every entry already has an account and whole-cent amounts, so a proper ledger (opening balances, transfers between accounts) or a QuickBooks export can be built on it without re-keying.
 
