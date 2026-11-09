@@ -13,7 +13,7 @@ from w8lbz_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
-EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/kd8adm/edit", "/treasurer?tab=money", "/treasurer?tab=bills"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")]
+EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/kd8adm/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")]
 IPV6 = "2001:db8:85a3:1234:5678:8a2e:370:7334"  # real addresses can be this long
 LONG_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
@@ -29,7 +29,11 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
     from w8lbz_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True}])
     club.admins = {"kd8adm"}
-    club.info["treasurer"] = {"start": "2026-01-01"}  # so Who owes what has rows
+    from w8lbz_minutes import treasurer
+    ts = treasurer.load()
+    treasurer.set_general(ts, "kd8adm", "preview", "2026-01-01", 4, 2, True)  # so Who owes what has rows
+    treasurer.set_fund(ts, "kd8adm", "Drinks fund", "Cash", ["kd8adm"])
+    treasurer.save(ts)
     club._yaml_links = [{"label": "Constitution and Bylaws of the club, the long version", "url": "https://example.org/a/very/long/address/bylaws.pdf"}]
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)

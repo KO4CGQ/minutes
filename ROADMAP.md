@@ -46,7 +46,7 @@ Nobody uses the sheet directly any more; one other club tool on the same server 
 ## Treasurer
 Built (officers guide → Treasurer): who owes what, payments, missed-chow charges, certificates, bills from the minutes, and each member's own figures on Home. Next:
 - **Monthly report:** the bylaws (IV.C) want a report at the first meeting of each month; fill the Financial Report step from the recorded money, with account balances.
-- **Certificate on the roster:** show whether each member has bought one on the Roster page (bylaws VII.E).
+- **Bond on the roster:** show whether each member has bought their bond (Certificate of Indebtedness) on the Roster page (bylaws VII.E).
 - **Bookkeeping, if wanted:** every entry already has an account and whole-cent amounts, so a proper ledger (opening balances, transfers between accounts) or a QuickBooks export can be built on it without re-keying.
 
 ## AI assistance

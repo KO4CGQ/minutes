@@ -10,13 +10,11 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Celebrations:** the leader console's Attendance step opens with the week's shared birthdays ("Happy birthday, …"; a month-only birthday at the month's first meeting) and membership anniversaries ("5 years as a member").
 - **Previews** (`deploy/preview.sh`) use the local branch when there is one, so work can be tried before it's pushed.
 - **Docs by audience:** the README is now a short overview; the detail moved to guides in `docs/`: members, officers, server admins and developers.
-- **Treasurer** (officers' menu): who owes what, worked out from the bylaws ($3.50 a meeting night, the $25 initiation fee, $35 for each missed chow night, and the $100 Certificate of Indebtedness within two years); payments, adjustments and expenses, each with an account; and the bills read under Bills and Communications, picked up by their $ amount for the Treasurer to mark paid or not a bill. Dues paid ahead (monthly, yearly) show as "paid through" a date, and an amount the bylaws change can be listed with the date it starts. Officers look; the Treasurer (and admins in admin mode) record. Each member sees their own figures on Home.
+- **Treasurer** (officers' menu): who owes what, worked out from the bylaws ($3.50 a meeting night, the $25 initiation fee, $35 for each missed chow night, and the $100 Bond (Certificate of Indebtedness) within two years); payments, adjustments and expenses, each with an account; and the bills read under Bills and Communications, picked up by their $ amount for the Treasurer to mark paid or not a bill. Dues paid ahead (monthly, yearly) show as "paid through" a date, and an amount the bylaws change can be listed with the date it starts. Officers look; the Treasurer (and admins in admin mode) record. Each member sees their own figures on Home.
+- **Treasurer settings on the page:** the Treasurer turns dues tracking off, to Preview (officers only, no emails: for checking the figures on the live app) or on, sets the start date, changes the amounts with the date each takes effect, and adds accounts and funds. Nothing goes in club.yaml.
+- **Arrears:** an optional daily email to the Treasurer and the Board when a member reaches the arrears line (bylaws VII.B). Suspending stays with the Board (bylaws VIII): members can now be given the status Suspended, and the Membership Log has Suspended and Reinstated rows.
+- **Bills from the minutes:** every amount in a bullet is its own bill, amounts without a $ count, and a bullet repeated from the week before is marked.
 - **Treasurer, more:** regular bills (what the club pays every month or year) show whether they've been paid this month or year; other income (drink sales, donations); and funds a committee runs, like a drinks fund with its own checking account, whose keepers record that account's money and see only it.
-- **Deploy notes:** set the date tracking starts, under `club:` in club.yaml (nothing is owed before it):
-
-          treasurer:
-            start: 2026-11-12
-            accounts: [Checking, Cash]
 
 ## 0.12.1 (2026-11-09)
 - **Motions:** Moved by and Seconded by each leave out whoever is picked in the other (leader console and Business → Motions).

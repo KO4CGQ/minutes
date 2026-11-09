@@ -242,6 +242,8 @@ ul.chowlist { margin: .3rem 0 1rem; }
 
 /* modern forms */
 form.modern label { display: flex; flex-direction: column; gap: .25rem; font-weight: 600; font-size: .9rem; margin: .5rem 0; }
+form.modern label.check { flex-direction: row; align-items: center; gap: .5rem; font-weight: normal; }
+form.modern select { max-width: 100%; min-width: 0; } form.modern .formrow > label { min-width: 0; }
 form.modern textarea { width: 100%; min-height: 5.5rem; }
 form.modern input[type=date], form.modern .combo > input, form.modern select { height: 2.75rem; }
 form.modern .formrow { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; margin-top: .4rem; }

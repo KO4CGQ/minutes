@@ -38,33 +38,14 @@ Previews never copy to Google.
 - The printable list (`/chow/list.pdf`): every night still to come. Officers email it to members from the Chow page (each member can turn it off); the page shows whether the schedule changed since it was last sent.
 
 ## Treasurer
-**Treasurer** in the menu (`/treasurer`), for officers; whoever holds Treasurer, and admins in admin mode, record the money (`treasurer.py`, `treasurer.json` in the data folder, every change logged in `treasurer-log.jsonl`).
-- **Who owes what** is worked out, never typed: dues for each meeting night since tracking started (or since the member joined), the initiation fee for members who joined since then, a charge for each chow night marked missed, plus adjustments, minus payments. Every meeting night counts, holidays included (52 × $3.50 is the bylaws' $182 a year); a credit covers a night the club calls off. Members may pay weekly, monthly or for the year: paying ahead shows as "paid through" a date. Four weeks or more behind shows in red. It also shows who still owes a Certificate of Indebtedness, and by when.
-- **Money in and out:** payments (dues, initiation fee, missed chow, certificate), other income (drink sales, donations), adjustments (a charge, or a credit when negative: a balance from before the app, a night with no meeting) and expenses, each with a date and an account. Delete fixes a mistake; the log keeps it.
+**Treasurer** in the menu (`/treasurer`), for officers; whoever holds Treasurer, and admins in admin mode, record the money and change the settings (`treasurer.py`, `treasurer.json` in the data folder, every change logged in `treasurer-log.jsonl`). Nothing goes in club.yaml.
+- **Settings** (a tab): dues tracking **Off**, **Preview** (officers see everything, members see nothing, no emails go out: for checking the figures on the live app first) or **On** (members see their own figures on Home); the date tracking starts (nothing is owed before it; older balances go in as adjustments); how many weeks behind counts as in arrears (4, bylaws VII.B); the years a new member has to buy the bond (2); the arrears email; the **amounts** (dues each meeting night, the initiation fee, the bond, a missed chow night), each change with the date it takes effect, so earlier weeks keep the old amount and the bond costs what it did when a member joined; the **accounts**; and the **funds**.
+- **Who owes what** is worked out, never typed: dues for each meeting night since tracking started (or since the member joined), the initiation fee for members who joined since then, a charge for each chow night marked missed, plus adjustments, minus payments. Every meeting night counts, holidays included (52 × $3.50 is the bylaws' $182 a year); a credit covers a night the club calls off. Members may pay weekly, monthly or for the year: paying ahead shows as "paid through" a date. Members in arrears show in red; it also shows who still owes the **Bond (Certificate of Indebtedness)**, and by when.
+- **Arrears and suspension:** with the arrears email on (and tracking On), the daily job emails the Treasurer and the Board when a member reaches the arrears line, once each time. The app never suspends anyone: under bylaws VIII only the Board can, after notice by certified mail at least five days before its meeting, and the member may answer and appeal. When the Board suspends someone, a roster keeper sets their status to **Suspended** and adds a Suspended (later Reinstated) row to the Membership Log on their member page. Dues keep counting while suspended.
+- **Money in and out:** payments (dues, initiation fee, missed chow, the bond), other income (drink sales, donations), adjustments (a charge, or a credit when negative: a balance from before the app, a night with no meeting) and expenses, each with a date and an account. Delete fixes a mistake; the log keeps it.
 - **Regular bills** (Bills tab): the Treasurer lists what the club pays every month or year (payee, about how much; a yearly one's month), and the tab shows which haven't been paid this month or year, whether or not they were read at a meeting.
-- **Bills read at meetings:** each Bills and Communications item with a $ amount (`Gas Bill $81`) since tracking started waits for the Treasurer to mark it paid (an expense) or not a bill; when it's one of the regular bills, pick which, so it isn't counted twice.
-- **Funds** run by a committee (a drinks fund with its own checking account, say): list them in the config with their keepers' callsigns. Keepers get the Treasurer page with only their fund's account: they record its income and expenses and see only those; the Treasurer sees everything.
-- **Home** shows each member their own figures, never anyone else's.
-- **Config** under `club:` in club.yaml; only `start` is needed, the rest default to the bylaws (VII):
-
-      treasurer:
-        start: 2026-11-12        # nothing is owed before this date
-        accounts: [Checking, Cash]
-        dues_weekly: 3.50
-        initiation: 25
-        certificate: 100
-        certificate_years: 2
-        missed_chow: 35
-        arrears_weeks: 4
-        funds:
-          - {name: Drinks fund, account: Drinks Checking, keepers: [KD8AAA, KD8BBB]}
-
-  When the bylaws change an amount, list it with the date it starts, so earlier weeks keep the old amount (the certificate's is the one in effect when a member joined):
-
-      dues_weekly:
-        - {from: 2020-01-01, amount: 3.50}
-        - {from: 2027-01-01, amount: 4.00}
-
-  Until `start` is set, officers opening the page are told to ask an admin (named from `admins:`), and members see nothing.
+- **Bills read at meetings:** every amount under Bills and Communications since tracking started, one card each (a bullet like "$99 gas bill $35 raffle tickets" is two; "Electric 50.64" counts without a $). A bullet word for word the same as the week before is marked "same as last week". The Treasurer marks each paid (an expense) or not a bill; when it's one of the regular bills, pick which, so it isn't counted twice. With an early start date in Preview, the whole history in the minutes shows up, with nothing to import.
+- **Funds** run by a committee (the drinks fund with its own checking account, say): added under Settings with an account and keepers. Keepers get the Treasurer page with only their fund's account: they record its income and expenses and see only those; the Treasurer sees everything.
+- **Home** shows each member their own figures (when tracking is On), never anyone else's.
 
 Not a bookkeeping system: there are no account balances or transfers yet (ROADMAP → Treasurer).

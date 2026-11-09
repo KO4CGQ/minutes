@@ -108,7 +108,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
     return mid
 
 
-EVENTS = ("Joined", "Rejoined", "Left", "Silent Key", "Callsign Change", "Other")
+EVENTS = ("Joined", "Rejoined", "Suspended", "Reinstated", "Left", "Silent Key", "Callsign Change", "Other")
 
 
 def add_event(club: Club, mid: str, event: str, date: str, note: str, by: str, sheet: Sheet | None = None) -> dict:

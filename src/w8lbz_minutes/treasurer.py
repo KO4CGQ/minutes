@@ -1,28 +1,31 @@
 """Treasurer: what each member owes and has paid, and the club's bills (bylaws VII). Not a bookkeeping system.
 
 State lives in treasurer.json in the data directory; every change is appended to treasurer-log.jsonl.
+- settings: set by the Treasurer on the page, never in club.yaml: mode (off; preview: officers see it all, members
+  see nothing and no emails go out; on), start (the date tracking starts), dated amounts, accounts, funds, alerts.
 - entries: one money movement each, in whole cents, always with an account, so a real ledger (or an export
   for QuickBooks) can be built from them later without re-keying anything:
-  {id, date, kind, member, cents, account, note, bill, by, at}
-  kind: dues, initiation, chow (payments from a member), certificate (a Certificate of Indebtedness bought),
-  adjustment (a charge to a member, or a credit when negative), expense (money out; member is None).
-- bills: "Bills and Communications" items with a $ amount, keyed by meeting and text: {key: {status, entry}}.
-  status "paid" (an expense entry) or "dismissed" (not a bill).
+  {id, date, kind, member, cents, account, note, bill, regular, by, at}
+  kind: dues, initiation, chow (payments from a member), certificate (the bond, a Certificate of Indebtedness),
+  adjustment (a charge to a member, or a credit when negative), income and expense (no member).
+- bills: amounts read under "Bills and Communications", keyed by meeting, text and position: {key: {status, entry}}.
+- regular: bills the club pays every month or year. alerted: {member: date} for the arrears emails.
 
-What a member owes is worked out, never stored: $3.50 for each meeting night since tracking started (or since
-they joined), the initiation fee if they joined since then, $35 for each chow night marked missed, plus
-adjustments, minus payments. Paying ahead (monthly, yearly) shows as "paid through" a date. Amounts come from
-`treasurer:` under `club:` in club.yaml, the bylaws' by default; each can be a dated list when the bylaws change it.
+What a member owes is worked out, never stored: the weekly dues for each meeting night since tracking started (or
+since they joined), the initiation fee if they joined since then, a charge for each chow night marked missed, plus
+adjustments, minus payments. Each amount has dates it takes effect, so a bylaws change doesn't rewrite the past.
 """
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
 import re
 import secrets
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import chow
@@ -31,25 +34,56 @@ from .club import DATA, Club
 PAYMENTS = ("dues", "initiation", "chow", "certificate")
 KINDS = PAYMENTS + ("adjustment", "income", "expense")
 NO_MEMBER = ("income", "expense")  # money in or out of the club as a whole
-LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": "Certificate of Indebtedness",
+BOND = "Bond (Certificate of Indebtedness)"
+LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": BOND,
           "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
-BYLAWS = {"dues_weekly": 3.50, "initiation": 25, "certificate": 100, "certificate_years": 2, "missed_chow": 35, "arrears_weeks": 4,
-          "accounts": ["Checking", "Cash"]}
-AMOUNT = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{2})?)")
+RATES = {"dues_weekly": "Dues, each meeting night", "initiation": "Initiation fee", "certificate": BOND, "missed_chow": "Missed chow night"}
+MODES = {"off": "Off", "preview": "Preview: officers only", "on": "On: members see their own figures"}
+# the bylaws (VII); amounts in cents, each a list of {from, cents} so a change takes effect on a date
+DEFAULTS = {"mode": "off", "start": None, "certificate_years": 2, "arrears_weeks": 4, "alerts": False,
+            "rates": {"dues_weekly": 350, "initiation": 2500, "certificate": 10000, "missed_chow": 3500},
+            "accounts": ["Checking", "Cash"], "funds": []}
+AMOUNTS = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{1,2})?)|(?<![\d$.,])(\d{1,5}\.\d{2})\b")  # "$81", "$1,200.50", "Electric 50.64"
 
 
-def config(club: Club) -> dict:
-    """club.yaml `club: treasurer:`; `start` (when tracking began) must be set before anything is owed."""
-    c = {**BYLAWS, **(club.info.get("treasurer") or {})}
-    c["start"] = str(c["start"]) if c.get("start") else None
-    c["funds"] = [{**f, "keepers": [str(k).lower() for k in f.get("keepers") or []]} for f in c.get("funds") or []]
-    c["accounts"] = list(dict.fromkeys(list(c["accounts"]) + [f["account"] for f in c["funds"]]))  # a fund's account counts too
+def config(s: dict) -> dict:
+    c = {**DEFAULTS, **s.get("settings", {})}
+    c["rates"] = {k: (c["rates"].get(k) if isinstance(c["rates"].get(k), list) else [{"from": "2000-01-01", "cents": v}])
+                  for k, v in DEFAULTS["rates"].items()}
     return c
 
 
-def kept_accounts(club: Club, mid: str | None) -> list[str]:
-    """The fund accounts a member looks after (`funds:` keepers, e.g. a drinks committee): they record its money."""
-    return [f["account"] for f in config(club)["funds"] if mid and club.canonical(mid) in {club.canonical(k) for k in f["keepers"]}]
+def on(s: dict) -> bool:
+    """Tracking is running (preview or on) and has a start date."""
+    c = config(s)
+    return c["mode"] in ("preview", "on") and bool(c["start"])
+
+
+def members_see(s: dict) -> bool:
+    return on(s) and config(s)["mode"] == "on"
+
+
+def rate(c: dict, kind: str, day: str) -> int:
+    """The amount in effect on a day, in cents (before the first change, the first amount)."""
+    steps = sorted(c["rates"][kind], key=lambda x: x["from"])
+    return ([x for x in steps if x["from"] <= day] or steps[:1])[-1]["cents"]
+
+
+def kept_accounts(club: Club, s: dict, mid: str | None) -> list[str]:
+    """The fund accounts a member looks after (a drinks committee, say): they record its money."""
+    return [f["account"] for f in config(s)["funds"] if mid and club.canonical(mid) in {club.canonical(k) for k in f["keepers"]}]
+
+
+@contextmanager
+def locked():
+    """Held around load-change-save, by the web app and the daily job alike (they're separate processes)."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "treasurer.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def cents(v) -> int:
@@ -60,15 +94,6 @@ def cents(v) -> int:
     whole, _, frac = s.lstrip("-").partition(".")
     n = int(whole) * 100 + int((frac + "00")[:2])
     return -n if s.startswith("-") else n
-
-
-def at(v, day: str) -> int:
-    """An amount from the config, in cents: a number, or a list of `{from: YYYY-MM-DD, amount: N}` when the bylaws
-    change it (the amount in effect on that day; before the first `from`, the first amount)."""
-    if isinstance(v, list):
-        steps = sorted(v, key=lambda x: str(x["from"]))
-        v = ([x for x in steps if str(x["from"]) <= day] or steps[:1])[-1]["amount"]
-    return cents(v)
 
 
 def money(c: int) -> str:
@@ -116,7 +141,7 @@ def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, acco
         member = None
     elif member not in club.members:
         raise ValueError("Pick a member.")
-    if account not in config(club)["accounts"]:
+    if account not in config(s)["accounts"]:
         raise ValueError("Pick an account.")
     e = {"id": secrets.token_hex(5), "date": date, "kind": kind, "member": member, "cents": c, "account": account,
          "note": note.strip()[:300], "bill": bill, "by": by, "at": int(time.time())}
@@ -183,40 +208,45 @@ def regular_due(s: dict, today: dt.date) -> list[dict]:
 
 
 def bills(archive, s: dict, start: str | None) -> list[dict]:
-    """Every "Bills and Communications" item with a $ amount in minutes since tracking started, newest first."""
-    out = []
-    for m in archive.meetings:
-        if m.status == "draft" or not start or m.slug < start:
+    """Each amount read under "Bills and Communications" since tracking started, newest first. One bullet often
+    holds several ("$99 gas bill $35 Raffle tickets"), each its own bill; a bullet word for word the same as the
+    week before is marked `repeated` (copied forward, most likely)."""
+    out, ms = [], [m for m in archive.meetings if m.status != "draft"]  # newest first
+    for i, m in enumerate(ms):
+        if not start or m.slug < start:
             continue
+        before = {it.text for it in ms[i + 1].items("Bills and Communications")} if i + 1 < len(ms) else set()
         for it in m.items("Bills and Communications"):
-            found = AMOUNT.search(it.text)
-            if found:
-                key = f"{m.slug}:{hashlib.sha1(it.text.encode()).hexdigest()[:8]}"
-                out.append({"key": key, "meeting": m.slug, "text": it.text, "cents": cents(found.group(1)),
+            h = hashlib.sha1(it.text.encode()).hexdigest()[:8]
+            for n, found in enumerate(AMOUNTS.finditer(it.text)):
+                key = f"{m.slug}:{h}:{n}"
+                out.append({"key": key, "meeting": m.slug, "text": it.text, "amount": found.group(0),
+                            "cents": cents(found.group(1) or found.group(2)), "repeated": it.text in before,
                             **s["bills"].get(key, {"status": "waiting"})})
     return out
 
 
 def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights: dict | None = None) -> dict | None:
-    """What one member owes. None when tracking hasn't started (no `start`) or they aren't an active member."""
-    c, today = config(club), today or dt.date.today()
+    """What one member owes. None when tracking is off or they aren't a current member (a suspended member still
+    owes: dues keep counting while the Board decides)."""
+    c, today = config(s), today or dt.date.today()
     m = club.members.get(mid)
-    if not c["start"] or not m or m.status.lower() in ("inactive", "silent key"):
+    if not on(s) or not m or m.status.lower() in ("inactive", "silent key", "prospect"):
         return None
     start, joined = max(c["start"], m.member_since or ""), m.member_since or c["start"]
-    weekly = at(c["dues_weekly"], today.isoformat())
+    weekly = rate(c, "dues_weekly", today.isoformat())
     # Every meeting night accrues dues, holidays included: 52 x $3.50 is the bylaws' $182 a year.
     nights_owed = chow.meeting_nights(club, dt.date.fromisoformat(start), today)
     missed = sorted(d for d, x in (nights if nights is not None else chow.load()["nights"]).items()
                     if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat())
     mine = [e for e in s["entries"] if e["member"] == mid]
-    charged = (sum(at(c["dues_weekly"], d.isoformat()) for d in nights_owed) + sum(at(c["missed_chow"], d) for d in missed)
-               + (at(c["initiation"], joined) if m.member_since and m.member_since >= c["start"] else 0)
+    charged = (sum(rate(c, "dues_weekly", d.isoformat()) for d in nights_owed) + sum(rate(c, "missed_chow", d) for d in missed)
+               + (rate(c, "initiation", joined) if m.member_since and m.member_since >= c["start"] else 0)
                + sum(e["cents"] for e in mine if e["kind"] == "adjustment"))
     paid = sum(e["cents"] for e in mine if e["kind"] in PAYMENTS and e["kind"] != "certificate")
     owed = charged - paid
-    # the certificate's price when they joined: a later rise doesn't ask existing holders for more
-    cert = sum(e["cents"] for e in mine if e["kind"] == "certificate") >= at(c["certificate"], joined)
+    # the bond's price when they joined: a later rise doesn't ask existing holders for more
+    cert = sum(e["cents"] for e in mine if e["kind"] == "certificate") >= rate(c, "certificate", joined)
     cert_due = None
     if not cert and m.member_since:
         j = dt.date.fromisoformat(m.member_since)
@@ -225,7 +255,7 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     later = chow.meeting_nights(club, today + dt.timedelta(days=1), today + dt.timedelta(weeks=ahead + 1))
     return {"member": mid, "owed": owed, "weeks_behind": -(-owed // weekly) if owed > 0 else 0,
             "behind": owed >= int(c["arrears_weeks"]) * weekly, "missed_chow": missed, "certificate": cert,
-            "paid_through": later[ahead - 1].isoformat() if ahead else None,
+            "suspended": m.status.lower() == "suspended", "paid_through": later[ahead - 1].isoformat() if ahead else None,
             "certificate_due": cert_due.isoformat() if cert_due else None,
             "certificate_late": bool(cert_due and cert_due < today)}
 
@@ -234,3 +264,107 @@ def standings(club: Club, s: dict, today: dt.date | None = None) -> list[dict]:
     nights = chow.load()["nights"]
     out = [standing(club, s, mid, today, nights) for mid in club.members]
     return sorted((x for x in out if x), key=lambda x: (-x["owed"], club.members[x["member"]].last))
+
+
+# ---- settings (the Treasurer, and admins in admin mode) ----
+
+def _settings(s: dict) -> dict:
+    s.setdefault("settings", {})
+    for k in ("rates", "accounts", "funds"):  # copy the defaults in before changing them
+        s["settings"].setdefault(k, config(s)[k])
+    return s["settings"]
+
+
+def set_general(s: dict, by: str, mode: str, start: str, arrears_weeks: int, certificate_years: int, alerts: bool) -> None:
+    if mode not in MODES:
+        raise ValueError("Pick off, preview or on.")
+    if start:
+        dt.date.fromisoformat(start)
+    elif mode != "off":
+        raise ValueError("Give the date tracking starts before turning it on.")
+    if not (1 <= arrears_weeks <= 52 and 0 <= certificate_years <= 10):
+        raise ValueError("Weeks behind: 1 to 52; years to buy the bond: 0 to 10.")
+    new = {"mode": mode, "start": start or None, "arrears_weeks": arrears_weeks, "certificate_years": certificate_years, "alerts": alerts}
+    _settings(s).update(new)
+    _log("settings", by, **new)
+
+
+def add_rate(s: dict, by: str, kind: str, start: str, amount: str) -> None:
+    """A new amount from a date on (or a correction of the one starting that day)."""
+    if kind not in RATES:
+        raise ValueError("Pick which amount.")
+    dt.date.fromisoformat(start)
+    c = cents(amount)
+    if c < 0:
+        raise ValueError("The amount can't be negative.")
+    steps = [x for x in _settings(s)["rates"][kind] if x["from"] != start] + [{"from": start, "cents": c}]
+    s["settings"]["rates"][kind] = sorted(steps, key=lambda x: x["from"])
+    _log("rate", by, kind=kind, start=start, cents=c)
+
+
+def remove_rate(s: dict, by: str, kind: str, start: str) -> None:
+    steps = _settings(s)["rates"].get(kind) or []
+    if len(steps) < 2:
+        raise ValueError("Keep at least one amount.")
+    s["settings"]["rates"][kind] = [x for x in steps if x["from"] != start]
+    _log("remove rate", by, kind=kind, start=start)
+
+
+def add_account(s: dict, by: str, name: str) -> None:
+    name = " ".join(name.split())[:60]
+    if not name or name in _settings(s)["accounts"]:
+        raise ValueError("Give the account a new name.")
+    s["settings"]["accounts"].append(name)
+    _log("add account", by, account=name)
+
+
+def remove_account(s: dict, by: str, name: str) -> None:
+    """Only one nothing uses: entries and funds keep their account."""
+    if any(e["account"] == name for e in s["entries"]) or any(f["account"] == name for f in _settings(s)["funds"]):
+        raise ValueError(f"{name} has money recorded or a fund: it stays.")
+    if len(s["settings"]["accounts"]) < 2:
+        raise ValueError("Keep at least one account.")
+    s["settings"]["accounts"] = [a for a in s["settings"]["accounts"] if a != name]
+    _log("remove account", by, account=name)
+
+
+def set_fund(s: dict, by: str, name: str, account: str, keepers: list[str]) -> None:
+    """A fund a committee runs (the drinks fund): its account, and the members who record its money."""
+    name = " ".join(name.split())[:60]
+    if not name or account not in _settings(s)["accounts"]:
+        raise ValueError("Give the fund a name and pick its account (add the account first).")
+    s["settings"]["funds"] = [f for f in s["settings"]["funds"] if f["name"] != name] + [{"name": name, "account": account, "keepers": keepers}]
+    _log("fund", by, name=name, account=account, keepers=keepers)
+
+
+def remove_fund(s: dict, by: str, name: str) -> None:
+    s["settings"]["funds"] = [f for f in _settings(s)["funds"] if f["name"] != name]
+    _log("remove fund", by, name=name)
+
+
+# ---- arrears alerts (the daily job) ----
+
+def arrears_alert(club: Club, s: dict, today: dt.date) -> tuple[list[str], str, str] | None:
+    """Members who have just reached the arrears line (bylaws VII.B), for the Treasurer and the Board, once each time
+    they cross it. Only with alerts on and tracking on (not in preview). The Board decides; the app never suspends."""
+    c = config(s)
+    if not (members_see(s) and c["alerts"]):
+        return None
+    behind = {x["member"]: x for x in standings(club, s, today) if x["behind"] and not x["suspended"]}
+    alerted = s.setdefault("alerted", {})
+    for mid in list(alerted):
+        if mid not in behind:
+            del alerted[mid]  # caught up: a later slip alerts again
+    new = [x for mid, x in behind.items() if mid not in alerted]
+    if not new:
+        return None
+    for x in new:
+        alerted[x["member"]] = today.isoformat()
+    to = sorted({m.email for m in club.members.values() if m.email and m.status.lower() == "active"
+                 and (m.board or "treasurer" in (m.role or "").lower())})
+    lines = "\n".join(f"- {club.name(x['member'])}: {money(x['owed'])}, about {x['weeks_behind']} weeks" for x in new)
+    body = (f"These members are now {c['arrears_weeks']} or more weeks behind on dues (bylaws VII.B):\n\n{lines}\n\n"
+            "Under bylaws VIII only the Board can suspend a member, after notice by certified mail at least five days "
+            "before the Board meeting, and the member may answer the charges and appeal. If the Board suspends someone, "
+            "record it on their member page (status Suspended, and a Membership Log row).\n")
+    return to, f"Dues: {len(new)} member{'s' if len(new) > 1 else ''} {c['arrears_weeks']}+ weeks behind", body

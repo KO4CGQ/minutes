@@ -2,14 +2,15 @@
 <h1>Treasurer</h1>
 {% if full %}<p class="muted">Dues, fees and the club's bills (bylaws VII). Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
 {% else %}<p class="muted">The money in and out of {{ kept|join(' and ') }}, which you look after.</p>{% endif %}
-<nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
+<nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills'), ('settings', 'Settings')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-{% if not cfg.start %}<p class="msg err">The Treasurer pages aren't turned on yet: nothing is owed until the date tracking starts is set in the server's club.yaml (<code>treasurer:</code> → <code>start: YYYY-MM-DD</code>, under <code>club:</code>). To turn them on, ask {{ admins or 'an admin' }}.</p>{% endif %}
+{% if full and not running %}<p class="msg err">Dues tracking is off. {% if edit %}Turn it on under <a href="/treasurer?tab=settings">Settings</a>: pick the date tracking starts, and try it in Preview first (officers see everything, members see nothing and no emails go out).{% else %}The Treasurer turns it on under Settings{% if admins %}; for help, ask {{ admins }}{% endif %}.{% endif %}</p>
+{% elif full and cfg.mode == 'preview' %}<p class="msg ok">Preview: officers see everything here; members don't see their figures yet, and no emails go out. Switch it on under <a href="/treasurer?tab=settings">Settings</a> when it looks right.</p>{% endif %}
 
 {% if tab == 'standing' %}
-<p class="hint">Dues are {{ money(at(cfg.dues_weekly, today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(at(cfg.missed_chow, today)) }} for each missed chow night and the {{ money(at(cfg.initiation, today)) }} initiation fee for new members. Four weeks or more behind is in red.</p>
-<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th><th class="n opt">Missed chow</th><th>Certificate</th></tr></thead>
-<tbody>{% for x in standings %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a></td>
+<p class="hint">Dues are {{ money(rate(cfg, 'dues_weekly', today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_weeks }} weeks or more behind is in red.</p>
+<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th><th class="n opt">Missed chow</th><th>Bond</th></tr></thead>
+<tbody>{% for x in standings %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a>{% if x.suspended %} <span class="chip late">suspended</span>{% endif %}</td>
   <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.weeks_behind or '' }}</td>
   <td class="n opt">{{ x.missed_chow|length or '' }}</td>
   <td>{% if x.certificate %}bought{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td></tr>
@@ -63,10 +64,10 @@
   {% for r in regular_all %}<form method="post" action="/treasurer/regular/{{ r.id }}/remove" class="inline" data-confirm="Stop expecting {{ r.payee }}? Payments already recorded stay."><button class="linkbtn">Remove {{ r.payee }}</button></form> {% endfor %}
 </details>{% endif %}
 <h2>Read at meetings</h2>
-<p class="hint">Items read under Bills and Communications with a $ amount{% if cfg.start %}, since {{ fmt(cfg.start) }}{% endif %}. Mark each one paid (it becomes an expense) or not a bill.</p>
+<p class="hint">Amounts read under Bills and Communications (one card each; the one meant is in ⟨ ⟩){% if cfg.start %}, since {{ fmt(cfg.start) }}{% endif %}. Mark each one paid (it becomes an expense) or not a bill.</p>
 <div class="cards">{% for b in bills %}<article class="card{{ ' done' if b.status != 'waiting' }}">
-  <div class="card-text">{{ b.text }}</div>
-  <div class="card-meta"><span class="chip"><a href="/meetings/{{ b.meeting }}">{{ fmt(b.meeting) }}</a></span><span class="chip">{{ money(b.cents) }}</span>
+  <div class="card-text">{{ b.text|replace(b.amount, '⟨' ~ b.amount ~ '⟩') }}</div>
+  <div class="card-meta"><span class="chip"><a href="/meetings/{{ b.meeting }}">{{ fmt(b.meeting) }}</a></span><span class="chip">{{ money(b.cents) }}</span>{% if b.repeated %}<span class="chip warn" title="The same words as the week before: copied forward?">same as last week</span>{% endif %}
     <span class="chip{{ ' warn' if b.status == 'waiting' }}">{{ {'waiting': 'waiting', 'paid': 'paid', 'dismissed': 'not a bill'}[b.status] }}</span></div>
   {% if edit and b.status == 'waiting' %}<form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="expense"><input type="hidden" name="bill" value="{{ b.key }}">
     <input type="hidden" name="note" value="{{ b.text[:300] }}">
@@ -78,6 +79,54 @@
   <form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><button class="btn small ghost">Not a bill</button></form>
   {% elif edit and b.status == 'dismissed' %}<form method="post" action="/treasurer/bills/dismiss" class="inline"><input type="hidden" name="key" value="{{ b.key }}"><input type="hidden" name="undo" value="1"><button class="linkbtn">Undo</button></form>{% endif %}
 </article>{% else %}<p class="muted">No bills with amounts yet.</p>{% endfor %}</div>
+
+{% elif tab == 'settings' %}
+{% set ro = '' if edit else 'disabled' %}
+{% if not edit %}<p class="hint">Only the Treasurer (or an admin in admin mode) changes these.</p>{% endif %}
+<form method="post" action="/treasurer/settings" class="modern card"><h2>Dues tracking</h2>
+  {% for k, v in modes.items() %}<label class="check"><input type="radio" name="mode" value="{{ k }}" {{ 'checked' if cfg.mode == k }} {{ ro }}> {{ v }}</label>{% endfor %}
+  <div class="formrow">
+    <label>Tracking starts<input type="date" name="start" value="{{ cfg.start or '' }}" {{ ro }}></label>
+    <label>Behind after (weeks)<input type="number" name="arrears_weeks" min="1" max="52" value="{{ cfg.arrears_weeks }}" {{ ro }}></label>
+    <label>Years to buy the bond<input type="number" name="certificate_years" min="0" max="10" value="{{ cfg.certificate_years }}" {{ ro }}></label>
+  </div>
+  <label class="check"><input type="checkbox" name="alerts" value="1" {{ 'checked' if cfg.alerts }} {{ ro }}> Email the Treasurer and the Board when a member reaches that many weeks behind (only when On; the Board decides on any suspension, bylaws VIII)</label>
+  <p class="hint">Nothing is owed before the start date: enter older balances as adjustments. Preview is for checking the figures: officers see everything, members see nothing, and no emails go out.</p>
+  {% if edit %}<div class="formrow"><button class="btn small">Save</button></div>{% endif %}
+</form>
+
+<div class="card"><h2>Amounts</h2>
+  <p class="hint">The bylaws' amounts (VII). When they change, add the new amount with the date it takes effect: earlier weeks keep the old one, and the bond's price is the one in effect when a member joined.</p>
+  <table class="list"><thead><tr><th>What</th><th>From</th><th class="n">Amount</th>{% if edit %}<th></th>{% endif %}</tr></thead><tbody>
+  {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ money(x.cents) }}</td>
+    {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}
+  </tbody></table>
+  {% if edit %}<form method="post" action="/treasurer/settings/rate" class="modern"><div class="formrow">
+    <label>What<select name="kind">{% for k, label in rates.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+    <label>Takes effect<input type="date" name="start" required></label>
+    <label>Amount<input name="amount" inputmode="decimal" required placeholder="4.00"></label>
+    <button class="btn small">Add the change</button></div></form>{% endif %}
+</div>
+
+<div class="card"><h2>Accounts</h2>
+  <p>{{ cfg.accounts|join(' · ') }}</p>
+  {% if edit %}<form method="post" action="/treasurer/settings/account" class="modern"><div class="formrow">
+    <label>New account<input name="name" required maxlength="60" placeholder="e.g. Emergency Fund"></label><button class="btn small">Add</button></div></form>
+  <form method="post" action="/treasurer/settings/account" class="modern"><input type="hidden" name="remove" value="1"><div class="formrow">
+    <label>Remove an unused account<select name="name">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label><button class="btn small ghost">Remove</button></div></form>{% endif %}
+</div>
+
+<div class="card"><h2>Funds</h2>
+  <p class="hint">A fund a committee runs, like the drinks fund: its keepers get this page with only their fund's account, to record its money in and out.</p>
+  {% for f in cfg.funds %}<p><b>{{ f.name }}</b> · {{ f.account }} · kept by {% for k in f.keepers %}{{ club.name(k) }}{{ ', ' if not loop.last }}{% endfor %}
+    {% if edit %}<form method="post" action="/treasurer/settings/fund" class="inline" data-confirm="Remove the {{ f.name }}? Its money stays recorded."><input type="hidden" name="name" value="{{ f.name }}"><input type="hidden" name="remove" value="1"><button class="linkbtn">Remove</button></form>{% endif %}</p>
+  {% else %}<p class="muted">None.</p>{% endfor %}
+  {% if edit %}<form method="post" action="/treasurer/settings/fund" class="modern"><div class="formrow">
+    <label>Fund<input name="name" required maxlength="60" placeholder="e.g. Drinks fund"></label>
+    <label>Account<select name="account">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label>
+    <label>Keepers<input name="keepers" required placeholder="Names or callsigns, with commas"></label>
+    <button class="btn small">Add or change</button></div></form>{% endif %}
+</div>
 {% endif %}
 
 <datalist id="roster-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>

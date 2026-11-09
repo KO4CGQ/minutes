@@ -108,6 +108,20 @@ def main() -> None:
                 print(f"reminded {m.name} about {len(items)} item(s)")
             if not a.dry_run:
                 business.save(s)
+        # members who just reached the arrears line, to the Treasurer and the Board (when the Treasurer turned alerts on)
+        from . import treasurer
+        with treasurer.locked():
+            ts = treasurer.load()
+            alert = treasurer.arrears_alert(club, ts, today)
+            if alert and a.dry_run:
+                print(f"--- to {', '.join(alert[0])}: {alert[1]}\n{alert[2]}\n")
+            elif alert:
+                try:
+                    auth.send_email(alert[0], alert[1], alert[2], only_to=club.email_only_to())
+                    treasurer.save(ts)  # only once it went: a failed send tries again tomorrow
+                    print(alert[1])
+                except Exception as e:
+                    print(f"couldn't send the dues alert: {e}")
         # chow reminders and the meeting-day email, each sent once even if this runs twice
         from .store import Archive
         from .club import MEETINGS

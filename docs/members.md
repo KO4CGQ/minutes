@@ -27,4 +27,4 @@ Your name menu → **Your profile**:
 **Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google.
 
 ## Your dues
-Once the Treasurer has turned tracking on, Home shows what you owe (or that you're paid up, and through which date) and whether you still need to buy your Certificate of Indebtedness. Only you and the officers see your figures. Pay the Treasurer at a meeting.
+Once the Treasurer has turned tracking on, Home shows what you owe (or that you're paid up, and through which date) and whether you still need to buy your bond (Certificate of Indebtedness). Only you and the officers see your figures. Pay the Treasurer at a meeting.
