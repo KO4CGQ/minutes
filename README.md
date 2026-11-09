@@ -48,6 +48,8 @@ Admin mode → Security → **Backups** has everything else: the size of the dat
 3. **Google Drive:** a folder in a **Shared Drive** (Google Workspace). Google gives service accounts no storage of their own, so a folder in someone's My Drive fails with a storage-quota error. Add the service account (its email is in `google-service-account.json`) to the Shared Drive as **Content manager**, so it can delete backups beyond the number to keep, and paste the folder's link on the Backups page.
 4. Back up now, and check the page says where it was sent.
 
+Until the passphrase is set, scheduled backups don't run (and send no "failed" emails); the Backups page shows "Passphrase: not set". With only the passphrase (no S3 or Drive), backups are kept on the server and can be downloaded: enough to undo a mistake, not to survive losing the server.
+
 **Restore** (onto this server or a fresh one set up with `setup.sh`):
 ```sh
 sudo -u minutes /opt/w8lbz-minutes/.venv/bin/w8lbz-minutes restore BACKUP.tar.gz.enc /tmp/restored   # asks for the passphrase

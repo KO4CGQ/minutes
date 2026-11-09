@@ -211,6 +211,8 @@ def due(now: dt.datetime | None = None) -> bool:
     """The hourly timer asks this: is a scheduled backup due? One try per day (or week) from the chosen hour on,
     counting a failed try too, so a broken destination means one email a day, not one an hour."""
     now = now or dt.datetime.now()
+    if len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) < 12:
+        return False  # backups not set up yet: no nightly "backup failed" email (the Backups page says so)
     sch = settings()["schedule"]
     if sch.get("every") == "off" or now.hour < sch.get("hour", 2):
         return False

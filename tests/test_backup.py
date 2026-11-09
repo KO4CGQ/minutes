@@ -128,6 +128,11 @@ def test_schedule_and_page(data, tmp_path, monkeypatch):
     assert not backup.due(dt.datetime(2026, 11, 14, 5)) and backup.due(dt.datetime(2026, 11, 16, 4))
     backup.save_settings({"every": "off"})
     assert not backup.due(dt.datetime(2026, 12, 1, 12))
+    backup.save_settings({"every": "daily", "hour": "2"})
+    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "")
+    assert not backup.due(dt.datetime(2026, 12, 1, 12))  # no passphrase yet: the schedule waits, quietly
+    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "correct horse battery")
+    backup.save_settings({"every": "off"})
     assert backup.data_size() > 0
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"}])
     club.admins = {"kd8adm"}
