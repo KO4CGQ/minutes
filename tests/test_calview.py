@@ -84,7 +84,13 @@ def test_form_checks():
 def test_change_this_following_every_date():
     evs, e = net()
     events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-17", time="20:30", end_time="21:30", title="Net (late)", repeat="weekly"), "this")
-    assert events.occurrence(e, dt.date(2026, 11, 17))["start"] == "2026-11-17T20:30" and events.occurrence(e, dt.date(2026, 11, 24))["title"] == "Weekly net"
+    assert events.occurrence(e, dt.date(2026, 11, 17))["start"] == "2026-11-17T20:30"
+    moved = {**e, "changes": {"2026-11-17": {**e["changes"]["2026-11-17"], "start": "2026-11-27T20:00", "end": "2026-11-27T21:00"}}}
+    with events.locked():  # one date moved to another day shows there, even in a range without its original date
+        events.save([moved])
+    c = club()
+    got = calview.entries(c, Archive(events.DATA, c), "kd8bbb", dt.date(2026, 11, 20), dt.date(2026, 11, 30))[0]
+    assert sorted(x.start.isoformat() for x in got if x.id == e["id"]) == ["2026-11-24", "2026-11-27"] and events.occurrence(e, dt.date(2026, 11, 24))["title"] == "Weekly net"
     evs, e = net()
     events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-18", time="19:00", end_time="20:00", repeat="weekly"), "all")
     assert e["start"] == "2026-11-11T19:00" and e["end"] == "2026-11-11T20:00" and days(e, *NOV)[0] == "2026-11-11"  # moved to Wednesdays

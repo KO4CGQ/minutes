@@ -159,6 +159,13 @@ def dates(e: dict, lo: dt.date, hi: dt.date) -> list[dt.date]:
     return [d for d in out if d.isoformat() not in skip]
 
 
+def reach(e: dict) -> dt.timedelta:
+    """How far a date of this event can sit from its original date: a day (another time zone) plus the
+    furthest any one date was moved. Look that much either side of a range, then keep what lands in it."""
+    return dt.timedelta(days=1 + max((abs((_dt(c["start"]).date() - dt.date.fromisoformat(d)).days)
+                                      for d, c in e.get("changes", {}).items()), default=0))
+
+
 def occurrence(e: dict, d: dt.date) -> dict:
     """The event as it is on date d (an original date): moved to that day, with any one-date changes."""
     start = _dt(e["start"])

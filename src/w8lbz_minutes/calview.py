@@ -107,7 +107,8 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     for e in store.load():
         if e["cal"] not in kinds:
             continue
-        for d in store.dates(e, lo - dt.timedelta(days=1), hi + dt.timedelta(days=1)):  # a day either side: another zone's date can differ
+        pad = store.reach(e)  # a date moved to another day, or another zone's date, can land in the range from outside it
+        for d in store.dates(e, lo - pad, hi + pad):
             o = store.occurrence(e, d)
             x = _entry(store.in_zone(o, e.get("tz"), tz), e["cal"], id=e["id"], repeats=bool(e.get("repeat")),
                        occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz))
