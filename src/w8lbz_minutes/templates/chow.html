@@ -19,6 +19,9 @@
 {% endfor %}
 
 {% if tab == 'schedule' %}
+<div class="formrow"><a class="btn small ghost" href="/chow/list.pdf">Printable list (PDF)</a>
+{% if leader %}<form method="post" action="/chow/email" class="inline" data-confirm="Email the chow list to every member who gets it?"><button class="btn small{{ ' ghost' if not list_changed }}">Email the list to members</button></form>
+<span class="hint">{% if emailed %}Last emailed {{ emailed.at|ts }}{% if list_changed %}; the schedule has changed since{% else %}; no changes since{% endif %}.{% else %}Not emailed yet.{% endif %}</span>{% endif %}</div>
 <ol class="rotlist nights">{% for d, x in upcoming %}{% set dd = d|isodate %}<li class="{{ 'mine' if x.member == me.id }}{{ ' none' if x.status == 'none' }}{{ ' tonight' if d == today }}">
   <span class="dateblk"><b>{{ dd.day }}</b><small>{{ dd.strftime('%b') }}</small></span>
   <div class="rot-main">

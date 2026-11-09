@@ -543,6 +543,26 @@ def chow_leader(request: Request) -> str:
     return request.state.member
 
 
+def chow_list_pdf() -> tuple[str, bytes]:
+    today = dt.date.today()
+    return (f"chow-list-{today:%Y-%m-%d}.pdf", html_to_pdf("chow_list.html", nights=chow.upcoming(chow.load(), today, n=10_000),
+                                                           today=today))
+
+
+@app.get("/chow/list.pdf")
+def chow_pdf(mid: str = Depends(me)):
+    name, data = chow_list_pdf()
+    return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
+@app.post("/chow/email")
+def chow_email(request: Request, mid: str = Depends(chow_leader)):
+    """Send the chow list to every member who wants it (Email tab), e.g. after filling or changing the schedule."""
+    to = sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == "pdf"}, key=str.lower)
+    pdf = chow_list_pdf()
+    return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, to, mid, base_url(request)))
+
+
 @app.get("/chow", response_class=HTMLResponse)
 @app.get("/chow/{tab}", response_class=HTMLResponse)
 def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str = Depends(me)):
@@ -559,6 +579,7 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
                 asked=[r for r in s["swaps"] if r["status"] == "pending" and mid in (r["with"], r["requester"])],
                 next_up=chow.next_up(club, s), today=today.isoformat(),
                 default_until=(today + dt.timedelta(days=180)).isoformat(),
+                list_changed=chow.list_changed(s), emailed=s.get("emailed"),
                 log=chow.history(30) if leader else [], fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
 
 
@@ -1094,14 +1115,18 @@ def view(request: Request, slug: str):
                 emailed=console.email_status(archive, slug))
 
 
-def render_pdf(m) -> tuple[str, bytes]:
-    """(file name, PDF bytes) for submitted minutes."""
+def html_to_pdf(template: str, **ctx) -> bytes:
     try:
         from weasyprint import HTML
     except OSError as e:  # missing system libraries (pango)
         raise HTTPException(503, f"PDF rendering unavailable on this server: {e}")
-    html = templates.get_template("minutes_doc.html").render(m=m, pdf=True)
-    return f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes.pdf".lower(), HTML(string=html, base_url=str(HERE)).write_pdf()
+    html = templates.get_template(template).render(club=archive.club, pdf=True, **ctx)
+    return HTML(string=html, base_url=str(HERE)).write_pdf()
+
+
+def render_pdf(m) -> tuple[str, bytes]:
+    """(file name, PDF bytes) for submitted minutes."""
+    return f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes.pdf".lower(), html_to_pdf("minutes_doc.html", m=m)
 
 
 @app.get("/meetings/{slug}/minutes.pdf")

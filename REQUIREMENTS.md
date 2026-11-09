@@ -148,7 +148,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 - **FR-35b** Proposed extra columns in the sheet (to agree with whoever maintains the Discord side): `Short name`, `Aliases` (spellings seen in old minutes), `Officer role`, `minutes_editor` (may lead and suggest edits), `Attends remotely`, `Status` (active / SK / prospect / guest), `Email`.
 - **FR-36** The roster's single source of truth is the Google Sheet (the Discord roster). It is read through the Google Sheets API with a service account and contains name, callsign, preferred short name (first name plus last initial when a first name is shared), **email** (for minutes delivery and login), status (active, SK, prospect), whether they attend remotely, and the Discord ID.
 - **FR-37** Replace the website roster xlsx with an export generated from the Google Sheet.
-- **FR-38** The chow rotation lives in the app (decided), with swaps, blackout dates and a reminder before each member's night.
+- **FR-38** The chow rotation lives in the app (decided), with swaps, blackout dates and a reminder before each member's night. Its printable list (PDF) replaces the Secretary's xlsx, emailed when a leader sends it (a new or changed list), not every week.
 
 ### 4.8 Personal items and names that are never recorded
 - **FR-40a** A private **never-record list** of names, for example visiting family members or minors, lives only in the server's local config. It is never kept in git. Listed names are dropped from imported minutes, and the original PDF isn't served for those meetings. Nothing marks the removal, so it doesn't draw attention.

@@ -5,12 +5,7 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Next
-- **Chow list, what's left** (see below): the printable chow list.
 - **Email the minutes to the whole club:** remove test mode (`email.only_to`) once the club is ready.
-
-## Chow list, what's left
-The schedule, rotation, swaps, reminders, meeting-night records and the minutes' Upcoming Chow section are done.
-- **Printable chow list:** a PDF of the nights still to come, emailed only when the list is released or changes (not with every set of minutes), replacing the Secretary's spreadsheet.
 
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).

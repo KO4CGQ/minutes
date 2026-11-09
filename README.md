@@ -145,6 +145,7 @@ Previews never copy to Google.
 `/chow` is the chow list; the app is the source of truth (state in `chow.json`, every change in `chow-log.jsonl`, both in the data directory).
 - One-time import of the Secretary's spreadsheet: `w8lbz-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
 - Members ask each other to swap; leaders edit directly; the console records provided, missed or covered on meeting night.
+- The printable list (`/chow/list.pdf`): every night still to come. Officers email it to members from the Chow page (each member can turn it off); the page shows whether the schedule changed since it was last sent.
 
 ## License
 Copyright © 2026 James Flattery, KO4CGQ.

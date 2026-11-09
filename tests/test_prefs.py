@@ -19,9 +19,9 @@ def club():
 
 
 def test_defaults_and_validation():
-    assert prefs.get("kd8aaa") == {"digest": "on", "minutes": "pdf", "business": "now", "roster": "now", "chow_days": [3]}
+    assert prefs.get("kd8aaa") == {"digest": "on", "minutes": "pdf", "business": "now", "roster": "now", "chowlist": "pdf", "chow_days": [3]}
     p = prefs.save("kd8aaa", {"minutes": "link", "business": "nonsense", "roster": "on", "evil": "x", "chow_days": ["7", "1", "5", "x"]})
-    assert p == {"digest": "on", "minutes": "link", "business": "now", "roster": "now", "chow_days": [7, 1]}
+    assert p == {"digest": "on", "minutes": "link", "business": "now", "roster": "now", "chowlist": "pdf", "chow_days": [7, 1]}
     assert prefs.save("kd8aaa", {"chow_days": []})["chow_days"] == []  # none ticked: off
 
 
@@ -92,7 +92,7 @@ def test_email_tab(tmp_path, monkeypatch):
     assert r.status_code == 200 and "Roster changes" not in r.text  # Secretaries only
     r = t.post("/profile/email", data={"digest": "off", "minutes": "off", "business": "now", "chow_days": ["7", "1"]}, follow_redirects=False)
     assert r.headers["location"] == "/profile/email?saved=1"
-    assert prefs.get("kd8aaa") == {"digest": "off", "minutes": "off", "business": "now", "roster": "now", "chow_days": [7, 1]}
+    assert prefs.get("kd8aaa") == {"digest": "off", "minutes": "off", "business": "now", "roster": "now", "chowlist": "pdf", "chow_days": [7, 1]}
 
 
 def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):

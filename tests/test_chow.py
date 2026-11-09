@@ -220,3 +220,35 @@ def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
     assert "different%20nights" in r.headers["location"] and not chow.history(5)  # no swap logged, nobody emailed
     r = t.post("/chow/generate", data={"until": "2400-01-01"}, follow_redirects=False)
     assert "two%20years" in r.headers["location"] and list(chow.load()["nights"]) == [d]
+
+
+def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
+    """Anyone can print the list; officers email it, and the page tells them when it has changed since."""
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import prefs, web
+    club, s, sent = env
+    s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"},
+                   "2099-01-08": {"member": None, "status": "none", "note": "Snowed in"}}
+    chow.save(s)
+    monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
+    prefs.save("bob", {"chowlist": "off"})
+    html = []  # WeasyPrint needs system libraries; render the template, fake the PDF step
+    monkeypatch.setattr(web, "html_to_pdf", lambda tpl, **ctx: html.append(
+        web.templates.get_template(tpl).render(club=club, pdf=True, **ctx)) or b"%PDF")
+    who = {"id": "amy"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    r = c.get("/chow/list.pdf")
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+    assert "Amy Able" in html[0] and "No chow (Snowed in)" in html[0]
+    assert c.post("/chow/email").status_code == 403 and "Email the list" not in c.get("/chow").text
+    who["id"] = "sec"
+    assert "Not emailed yet" in c.get("/chow").text
+    c.post("/chow/email")
+    to, subject, _ = sent[-1]
+    assert "bob@example.org" not in to and "amy@example.org" in to and "chow list" in subject
+    assert not chow.list_changed(chow.load()) and "no changes since" in c.get("/chow").text
+    c.post("/chow/assign", data={"date": "2099-01-01", "member": "bob"})
+    assert "has changed since" in c.get("/chow").text
+    # a night passing isn't a change
+    assert not chow.list_changed({**chow.load(), "nights": {}, "emailed": {"nights": {"2000-01-01": ["amy", "scheduled", ""]}}})
