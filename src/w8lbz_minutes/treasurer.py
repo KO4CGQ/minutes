@@ -112,14 +112,35 @@ def locked():
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
+MAX_CENTS = 100_000_000  # $1,000,000: anything bigger is a typo
+BILL_KEY = re.compile(r"\d{4}-\d{2}-\d{2}:[0-9a-f]{8}:\d{1,3}")
+
+
 def cents(v) -> int:
-    """'12.50', '$1,200', 12.5 -> cents. Raises ValueError for anything else."""
-    s = str(v).replace("$", "").replace(",", "").strip()
-    if not re.fullmatch(r"-?\d+(\.\d{1,2})?", s):
+    """'12.50', '$1,200', 12.5 -> cents. Plain digits only, commas only between thousands. ValueError otherwise."""
+    s = str(v).replace("$", "").strip()
+    if not re.fullmatch(r"-?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{1,2})?", s):
         raise ValueError("That isn't an amount.")
-    whole, _, frac = s.lstrip("-").partition(".")
+    whole, _, frac = s.lstrip("-").replace(",", "").partition(".")
     n = int(whole) * 100 + int((frac + "00")[:2])
+    if n > MAX_CENTS:
+        raise ValueError("That amount is too big: check it.")
     return -n if s.startswith("-") else n
+
+
+def today() -> dt.date:  # one place for "now", so tests can set it
+    return dt.date.today()
+
+
+def day(v: str, latest: dt.date | None = None) -> str:
+    """A date as YYYY-MM-DD, whatever ISO form came in ("20261109" too); not after `latest` when given."""
+    try:
+        d = dt.date.fromisoformat(str(v).strip())
+    except ValueError:
+        raise ValueError("That isn't a date.") from None
+    if latest and d > latest:
+        raise ValueError(f"That date is after {latest:%b %-d, %Y}.")
+    return d.isoformat()
 
 
 def money(c: int) -> str:
@@ -162,7 +183,9 @@ def record(club: Club, s: dict, by: str, kind: str, amount: str, date: str, acco
     c = cents(amount)
     if kind != "adjustment" and c <= 0:
         raise ValueError("The amount must be more than zero (use an adjustment for a credit).")
-    dt.date.fromisoformat(date)  # ValueError if it isn't a date
+    date = day(date, today() + dt.timedelta(days=1))  # money can't move in the future (a day's slack for time zones)
+    if bill and not BILL_KEY.fullmatch(bill):
+        raise ValueError("That bill is gone.")
     if kind in NO_MEMBER:
         member = None
     elif member not in club.members:
@@ -202,6 +225,8 @@ def delete(s: dict, eid: str, by: str) -> None:
 
 
 def dismiss_bill(s: dict, key: str, by: str, undo: bool = False) -> None:
+    if not BILL_KEY.fullmatch(key):
+        raise ValueError("That bill is gone.")
     if undo:
         s["bills"].pop(key, None)
     else:
@@ -252,7 +277,9 @@ def set_bills_from(s: dict, by: str, date: str | None) -> None:
     """Read bills from older minutes (a date before the start), or None to go back to the start date. Bills already
     marked paid or not a bill keep that either way."""
     if date:
-        dt.date.fromisoformat(date)
+        date = day(date)
+        if config(s)["start"] and date > config(s)["start"]:
+            raise ValueError("Pick a date before tracking started; later minutes are read already.")
     _settings(s)["bills_from"] = date or None
     _log("bills from", by, date=date)
 
@@ -411,7 +438,7 @@ def set_general(s: dict, by: str, mode: str, start: str, arrears_weeks: int, cer
     if mode not in MODES:
         raise ValueError("Pick off, preview or on.")
     if start:
-        dt.date.fromisoformat(start)
+        start = day(start)
     elif mode != "off":
         raise ValueError("Give the date tracking starts before turning it on.")
     if not (1 <= arrears_weeks <= 52 and 0 <= certificate_years <= 10):
@@ -425,7 +452,7 @@ def add_rate(s: dict, by: str, kind: str, start: str, amount: str) -> None:
     """A new amount from a date on (or a correction of the one starting that day)."""
     if kind not in RATES:
         raise ValueError("Pick which amount.")
-    dt.date.fromisoformat(start)
+    start = day(start)
     c = cents(amount)
     if c < 0:
         raise ValueError("The amount can't be negative.")

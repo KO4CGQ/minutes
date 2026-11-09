@@ -24,6 +24,7 @@ PEOPLE = [
 @pytest.fixture
 def club(tmp_path, monkeypatch):
     monkeypatch.setattr(treasurer, "DATA", tmp_path)
+    monkeypatch.setattr(treasurer, "today", lambda: dt.date(2027, 6, 1))  # the tests record money up to then
     c = Club(FIX / "test-club.yaml", roster=PEOPLE)
     c.info.update(meeting_day="Thursday")
     return c
@@ -373,3 +374,80 @@ def test_bill_tabs_names_and_the_read_only_dialog(club, tmp_path, monkeypatch):
     page = tre.get("/treasurer?tab=bills&show=dismissed").text
     assert 'class="on">Not a bill (0)' in page and "None marked not a bill." in page
     assert 'id="readonly"' not in page  # the dialog only comes with View as
+
+
+def test_amounts_and_dates_that_are_typos_or_tricks(club):
+    for bad in ("1e5", "0x10", "١٢", "12.", ".5", "+5", "1,2,3", "12.345", "$", "", "10000000.01"):
+        with pytest.raises(ValueError):
+            treasurer.cents(bad)
+    assert treasurer.cents(" $1,000,000 ") == 100_000_000 and treasurer.cents("-0") == 0
+    assert treasurer.day("20261109") == "2026-11-09"  # stored the one way, whatever ISO form came in
+    s = started()
+    e = treasurer.record(club, s, "tre", "dues", "7", "2026-W46-4", "Cash", "amy")
+    assert e["date"] == "2026-11-12"
+    with pytest.raises(ValueError):
+        treasurer.record(club, s, "tre", "dues", "7", "2027-06-03", "Cash", "amy")  # after "today" (+1 day)
+    for key in ("../../etc", "2026-11-05:zzzz:0", "x" * 500):
+        with pytest.raises(ValueError):
+            treasurer.dismiss_bill(s, key, "tre")
+        with pytest.raises(ValueError):
+            treasurer.record(club, s, "tre", "expense", "5", "2026-11-12", "Cash", bill=key)
+    with pytest.raises(ValueError):
+        treasurer.set_bills_from(s, "tre", "2026-12-01")  # after the start: nothing to look back for
+
+
+def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    with treasurer.locked():
+        s = started("on")
+        treasurer.add_account(s, "tre", "Drinks")
+        treasurer.set_fund(s, "tre", "Drinks fund", "Drinks", ["bob"])
+        e = treasurer.record(club, s, "tre", "dues", "7", "2026-11-12", "Cash", "amy")
+        treasurer.save(s)
+    before = treasurer.load()
+    every = {"kind": "dues", "amount": "5", "date": "2026-11-12", "account": "Cash", "member": "Amy Able", "key": "2026-11-05:abcdef12:0",
+             "payee": "Gas", "every": "month", "mode": "on", "start": "2026-11-05", "name": "X", "label": "X", "note": "x",
+             "category": "other", "keepers": "Bob Baker"}
+    posts = [r.path.replace("{eid}", e["id"]).replace("{rid}", "x") for r in web.app.routes
+             if r.path.startswith("/treasurer") and "POST" in getattr(r, "methods", ())]
+    assert len(posts) >= 11
+    for who in ("amy", "bob"):  # an ordinary member; the drinks fund's keeper
+        t = TestClient(web.app)
+        t.cookies.set(web.COOKIE, a.new_session(who))
+        for path in posts:
+            assert t.post(path, data=every, follow_redirects=False).status_code == 403, (who, path)
+    assert treasurer.load() == before  # nothing changed
+    signed_out = TestClient(web.app).post("/treasurer/record", data=every, follow_redirects=False)
+    assert signed_out.status_code in (303, 401, 403) and treasurer.load() == before
+
+
+def test_text_from_the_minutes_and_members_is_never_run_as_html(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import business, web
+    from w8lbz_minutes.auth import Auth
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    evil = '<script>alert(1)</script><img src=x onerror=alert(2)> $45'
+    Meeting(date=dt.date(2026, 11, 12), status="published", sections={"Bills and Communications": [Item(evil)]}).save(tmp_path / "m")
+    monkeypatch.setattr(web, "archive", Archive(tmp_path / "m", club))
+    with treasurer.locked():
+        s = started("on")
+        treasurer.add_category(s, "tre", '"><script>alert(3)</script>')
+        treasurer.record(club, s, "tre", "expense", "5", "2026-11-12", "Cash", note=evil)
+        treasurer.save(s)
+    bs = business.load()
+    business.add(bs, evil, "tre")
+    business.save(bs)
+    tre = TestClient(web.app)
+    tre.cookies.set(web.COOKIE, a.new_session("tre"))
+    for path in ("/treasurer?tab=bills&show=all", "/treasurer?tab=money", "/treasurer?tab=settings", "/spending", "/business"):
+        html = tre.get(path).text
+        assert "<script>alert" not in html and "<img src=x" not in html, path
+        if path != "/spending":  # it's on the page, as text
+            assert "&lt;script&gt;alert" in html or "&lt;img src=x" in html, path
