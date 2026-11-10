@@ -4,9 +4,6 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
-## Next
-- **Remove the dead Google code** (Members and roster management, below).
-
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
@@ -26,16 +23,8 @@ Built (server admin guide → Backups): encrypted, scheduled and configured from
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Members and roster management
-The roster lives in the app (moved on the club's server 2026-11-09, 0.13.0); the Google Sheet is a read-only archive, to be deleted. The Discord bot reads the roster from the roster API.
+The roster lives in the app (since 0.13.0); the Discord bot reads it from the roster API.
 - **Offices:** open question: should the Secretary also change offices, not only admins?
-
-### Remove the dead Google code (next)
-Since the roster moved into the app and the calendars stay in the app (no copy to Google, decided 2026-11-08), none of this runs on the club's server any more. Remove it, so the app has one way of doing each thing:
-- **Roster ↔ Google Sheet** (`roster.py`): the Sheets API reads and writes, `_sheet()` and `roster: sheet_id`/`tab`, `roster --import` and `import_sheet()`, and the `roster: source: app` switch (the app's own copy becomes the only mode; keep `roster-sheet.json` and its format, so nothing on the server changes). The "needs Editor access" and "no … column" errors that only a sheet could cause.
-- **Copy to Google Calendar** (`gcal.py`): the sync, its after-change trigger in web.py, the daily catch-up in `reminders`, the Security page's "Copy to Google Calendar" line and `calendars:` in club.example.yaml. Keep `latest_events()` (the calendar page uses it): move it next to its caller.
-- **Docs:** the sheet and Google Calendar setup in docs/officers.md, docs/server-admin.md ("Moving the roster into the app" becomes history), docs/developers.md, README, club.example.yaml, and REQUIREMENTS (FR-35a/35b/36/36a/37, the Roster row in the tech table).
-- **What stays:** Google Drive as a backup destination (still planned), so `google-auth` and `W8LBZ_GOOGLE_KEY` stay, owned by `backup.py` instead of `roster.py`. If Drive backups are dropped or move to signing in with the club's own Google account, `google-auth` and the service-account key go too.
-- **Afterwards, by hand:** `roster: source: app` can come out of the server's club.yaml (ignored once the app's copy is the only mode; the club's server is down to that one line under `roster:` since 2026-11-09). Remove the minutes service account's access to the archived sheet (or delete the sheet), and delete `private/google-service-account.json` on dev machines that only used it for the roster.
 
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".
 - **Associate members** (GMRS or unlicensed), only if the bylaws add them; today a member must hold an amateur license.

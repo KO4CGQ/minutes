@@ -51,7 +51,6 @@ class FakeSheets:
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(profile, "DATA", tmp_path)
     monkeypatch.setattr(profile, "ROSTER_CACHE", tmp_path / "roster.json")
-    monkeypatch.setattr(roster, "_sheet", lambda: ("sheet-id", "Member Roster"))
     sent = []
     monkeypatch.setattr(profile.auth, "send_email", lambda to, subject, body, **kw: sent.append((to, subject, body, kw)))
     people = [{"id": "kd8aaa", "first": "Jane", "last": "Doe", "callsign": "KD8AAA", "email": "jane@example.org",
@@ -105,8 +104,6 @@ def test_undo_restores_and_refuses_if_changed_again(env):
 
 def test_sheet_problems_change_nothing(env):
     club, _, fake, sent = env
-    with pytest.raises(SheetError, match="Editor"):
-        profile.change(club, "kd8ccc", {"address": "9 Oak Ave"}, by="kd8ccc", sheet=Sheet(FakeSheets(fake.rows, writable=False)))
     old = FakeSheets([HEADER[:7]] + [r[:7] for r in fake.rows[1:]])
     with pytest.raises(SheetError, match="birthday"):
         profile.change(club, "kd8ccc", {"birthday": "07-04"}, by="kd8ccc", sheet=Sheet(old))
@@ -213,7 +210,6 @@ def test_preview_mode_never_sends_or_touches_the_real_sheet(tmp_path, monkeypatc
     monkeypatch.setattr(roster, "PREVIEW", "some-branch")
     monkeypatch.setattr(roster, "DATA", tmp_path)
     monkeypatch.setattr(roster, "CACHE", tmp_path / "roster.json")
-    monkeypatch.setattr(roster, "_sheet", lambda: (_ for _ in ()).throw(AssertionError("real sheet used")))
     (tmp_path / "roster.json").write_text(json.dumps([{"id": "kd8ccc", "first": "Bob", "last": "Member", "callsign": "KD8CCC"}]))
     sheet = Sheet()
     assert sheet.update_member("KD8CCC", "Bob Member", {"phone": "419-555-0111"}) == {"phone": ""}

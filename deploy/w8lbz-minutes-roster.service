@@ -1,5 +1,5 @@
 [Unit]
-Description=Sync the W8LBZ roster (from the Google Sheet, or the app's own copy once moved)
+Description=Rebuild the W8LBZ roster cache from the roster the app keeps
 
 [Service]
 Type=oneshot
@@ -8,7 +8,6 @@ Group=minutes
 WorkingDirectory=/opt/w8lbz-minutes
 Environment=W8LBZ_CONFIG=/etc/w8lbz-minutes/club.yaml
 Environment=W8LBZ_DATA=/var/lib/w8lbz-minutes
-Environment=W8LBZ_GOOGLE_KEY=/etc/w8lbz-minutes/google-service-account.json
 ExecStart=/opt/w8lbz-minutes/.venv/bin/w8lbz-minutes roster
 # Pick up roster changes in the running app
 ExecStartPost=+/bin/systemctl try-restart w8lbz-minutes

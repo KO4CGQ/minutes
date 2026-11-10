@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
-from . import business, chow, events as store, gcal
+from . import business, chow, events as store
 from .club import DATA, Club
 
 KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays",
@@ -168,7 +168,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
                 out.append(x)
     if "events" in kinds:  # the minutes' dated Upcoming Events, unless the same event is already on the calendar
         seen = {(x.start, x.title.lower()) for x in out}
-        for i in gcal.latest_events(archive):
+        for i in (archive.meetings[0].items("Upcoming Events") if archive.meetings else []):  # the newest list (a draft counts)
             if i.when:
                 s, f, all_day = i.span()
                 o = {"title": i.text, "start": i.when, "end": i.until or (None if all_day else f.strftime("%Y-%m-%dT%H:%M"))}

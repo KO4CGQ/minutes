@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import calview, chow, events, gcal
+from w8lbz_minutes import calview, chow, events
 from w8lbz_minutes.club import Club
 from w8lbz_minutes.meeting import Item, Meeting
 from w8lbz_minutes.store import Archive
@@ -241,7 +241,6 @@ def signed_in(tmp_path, monkeypatch, who):
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", c)
-    monkeypatch.setattr(gcal, "soon", lambda *a, **k: None)
     t = TestClient(web.app)
     t.cookies.set(web.COOKIE, a.new_session(who))
     return t, c, a
@@ -486,8 +485,6 @@ def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
     due = [e for e in calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)[0] if e.title.startswith("Due:")]
     assert [(e.start.isoformat(), e.kind, e.title) for e in due] == [("2026-11-20", "planning", "Due: Order the Field Day banner")]
     assert "Bob Baker" in due[0].notes
-    want = gcal.wanted(c, [], dt.date(2026, 11, 1))
-    assert any(v["summary"] == "Due: Order the Field Day banner" for v in want["planning"].values())
     # calendar editors: a member ticked calendar_editor may change events; others may not
     m, c2, _ = signed_in(tmp_path, monkeypatch, "kd8bbb")
     assert m.get("/calendar/edit").status_code == 403

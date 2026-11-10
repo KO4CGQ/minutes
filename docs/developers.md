@@ -6,19 +6,19 @@ For working on the code: running it locally, previews, tests, releases and the s
 ```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh     # once
 uv sync
-uv run w8lbz-minutes roster                          # sync people from the roster (Google Sheet, or roster-sheet.json once moved)
+uv run w8lbz-minutes roster                          # rebuild data/roster.json from data/roster-sheet.json
 uv run w8lbz-minutes import archive                  # (re)build data/ from archive/
 uv run w8lbz-minutes serve --host 0.0.0.0 --port 8765
 uv run playwright install chromium                  # once: the mobile-first test uses it (skipped without it)
 uv run pytest -q
 ```
-The roster sync needs a Google service-account key at `private/google-service-account.json`. Share the sheet with the account's email as Editor (profile edits are written back to it).
+People come from `data/roster-sheet.json` (the roster's two tabs, Member Roster and Membership Log, as grids of values). Copy it from a backup of the club's server, or start one by hand with the column headers listed in `roster.py`.
 
 PDF generation needs the system Pango library: `sudo apt install libpango-1.0-0 libpangoft2-1.0-0`.
 
 ## Previewing a branch
 `deploy/preview.sh BRANCH` runs a branch on a development machine (ports from 8100) so it can be tried before merging, without touching the live server. It uses the local branch when there is one, so work can be previewed before it's pushed; otherwise the branch on GitHub. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
-- **Preview mode:** a banner on every page; email is recorded on the **Email log** page (name menu → Email log, in admin mode) instead of being sent; roster edits go to a local copy of the sheet.
+- **Preview mode:** a banner on every page; email is recorded on the **Email log** page (name menu → Email log, in admin mode) instead of being sent; roster edits go to a copy of the roster (`preview-sheet.json`), never the real one.
 - Each preview has its own checkout and a fresh copy of `data/` (meetings, roster cache, bylaws) on every update; its sign-ins are kept.
 - `deploy/preview.sh --list` shows running previews; `deploy/preview.sh --stop BRANCH` stops one and deletes its copy.
 - They run as user services (`systemctl --user`), so they stop if this user logs out entirely, unless lingering is enabled (`loginctl enable-linger`).

@@ -8,26 +8,13 @@ As root on the container:
 curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh | bash   # first time
 /opt/w8lbz-minutes/deploy/update.sh                                                    # after each merge to main
 ```
-Then put `club.yaml` and `google-service-account.json` in `/etc/w8lbz-minutes/`, and data in `/var/lib/w8lbz-minutes/`.
-The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00 (from the Google Sheet, or once moved, from the app's own copy); backups run on the schedule set on the Backups page.
+Then put `club.yaml` in `/etc/w8lbz-minutes/` (and `google-service-account.json`, only for backups to Google Drive), and data in `/var/lib/w8lbz-minutes/`.
+The app runs as the `minutes` user on port 8000. The roster cache (`roster.json`) is rebuilt daily at 04:00 from the roster the app keeps (`roster-sheet.json`); backups run on the schedule set on the Backups page.
 
 ## Config
-`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the club links, the roster sheet's address and the private never-record list. People, their titles and who may lead come from the roster sheet; the list of offices is `offices:` in club.yaml.
+`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the starting club links and the private never-record list. People, their titles and who may lead come from the roster the app keeps (`roster-sheet.json` in the data folder, edited on the Roster pages; moved off the club's Google Sheet in 0.13.0); the list of offices is `offices:` in club.yaml.
 
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
-
-### Moving the roster into the app (once)
-`w8lbz-minutes` below is the helper `setup.sh` installs in `/usr/local/bin`. A server set up before it existed doesn't have it; there, use `sudo -u minutes env W8LBZ_CONFIG=/etc/w8lbz-minutes/club.yaml W8LBZ_DATA=/var/lib/w8lbz-minutes W8LBZ_GOOGLE_KEY=/etc/w8lbz-minutes/google-service-account.json /opt/w8lbz-minutes/.venv/bin/w8lbz-minutes` instead.
-Afterwards the app keeps the roster itself (`roster-sheet.json` in the data folder: the sheet's two tabs, same columns), every roster edit goes there, and nothing reads or writes the Google Sheet. The app is stopped meanwhile, so no edit lands in the sheet after the copy.
-```bash
-pct snapshot 103 before-roster-move                   # on the Proxmox host
-systemctl stop w8lbz-minutes
-w8lbz-minutes roster --import                         # copies both tabs; lists differences from the app's roster (expect none)
-# club.yaml, under roster:   source: app   (keep sheet_id: it's only read by --import)
-w8lbz-minutes roster                                  # rebuilds the roster from the app's copy: same counts as before
-systemctl start w8lbz-minutes
-```
-Then make the sheet read-only (Share: everyone Viewer) and keep it as an archive. To go back: remove `source: app`, restart; edits made since stay only in `roster-sheet.json`.
 
 ## Login
 Members sign in with a passkey, or with a one-time link emailed to their roster address.
@@ -37,7 +24,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 - **AI** (optional) needs `W8LBZ_OPENROUTER_KEY` in `/etc/w8lbz-minutes/env` and `ai: {model: ...}` in club.yaml. Each call is logged to `ai-log.jsonl` in the data folder (time, model, size, cost; never the text).
 - **Recovery:** an admin on the server can print a one-time link for a member: `w8lbz-minutes login-link KD8XYZ`
 
-Officers and members ticked `minutes_editor` in the roster sheet can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
+Officers and members ticked `minutes_editor` on the roster can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
 
 ## Emailing the minutes
 When a leader submits the minutes, they go to every roster member with an email address (except Inactive and Silent Key), each getting their own copy: the PDF attached, or a link, as each member chose on the Email tab of their profile (or not at all, if they turned it off). Replies go to the meeting's leader.

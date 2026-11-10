@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **No more Google for the roster or calendars:** the roster is only ever the app's own (`roster-sheet.json`), so the Google Sheets code, `roster --import` and the `roster: source: app` setting are gone (it can come out of club.yaml), and so is the optional copy to Google Calendar (`calendars:` in club.yaml is ignored). Google Drive backups are unchanged.
 - **Docs:** the roadmap lists the Google code left unused now that the roster and calendars live in the app (removal is next); REQUIREMENTS records the roster move.
 
 ## 0.14.0 (2026-11-09)

@@ -51,7 +51,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 | Role | Who | Can |
 |---|---|---|
 | Member | Anyone on the roster who is logged in | Read the live transcript, the draft and the archive. **Flag** a paragraph ("this is wrong" plus an optional note) but not edit text. |
-| Leader / editor | The officers, and members ticked **`minutes_editor`** in the roster sheet, or someone a leader picks for one meeting. Whoever leads is recorded as "Led by" in the minutes. | **Lead** a meeting: run the console, accept or reject suggestions and flags, edit directly, submit. While someone else leads, **suggest edits** to the live minutes (shown as tracked suggestions). |
+| Leader / editor | The officers, and members ticked **`minutes_editor`** on the roster, or someone a leader picks for one meeting. Whoever leads is recorded as "Led by" in the minutes. | **Lead** a meeting: run the console, accept or reject suggestions and flags, edit directly, submit. While someone else leads, **suggest edits** to the live minutes (shown as tracked suggestions). |
 | Admin | Club IT: the callsigns under `admins:` in the server's `club.yaml` | Admin mode: roster sync, settings, app updates, viewing the app as a member. Separate from leading: an admin leads only if they're also an officer or editor. |
 
 ## 4. Functional requirements
@@ -144,10 +144,8 @@ The minutes follow a fixed template. The system should generate exactly this str
 - **FR-35** **Members-only.** The archive is behind the member login (§7.3).
 
 ### 4.7 Roster and chow
-- **FR-35a** *(Updated 2026-11-09: the roster now lives in the app, FR-36a; the Google Sheet is a read-only archive.)* The roster Google Sheet is the **single source of truth** for people: members, guests and prospects, officer roles, and who can lead or edit. The app keeps only a read-only cache, and **no roster data is kept in git or in local config**.
-- **FR-35b** Proposed extra columns in the sheet (to agree with whoever maintains the Discord side): `Short name`, `Aliases` (spellings seen in old minutes), `Officer role`, `minutes_editor` (may lead and suggest edits), `Attends remotely`, `Status` (active / SK / prospect / guest), `Email`.
-- **FR-36a** *(Done on the club's server 2026-11-09.)* The roster can move into the app once (`roster --import`, then `roster: source: app`): from then on the app's own copy of the sheet's tabs, in its data folder and its backups, is the single source of truth, and the Google Sheet is a read-only archive.
-- **FR-36** *(Superseded by FR-36a.)* The roster's single source of truth is the Google Sheet (the Discord roster). It is read through the Google Sheets API with a service account and contains name, callsign, preferred short name (first name plus last initial when a first name is shared), **email** (for minutes delivery and login), status (active, SK, prospect), whether they attend remotely, and the Discord ID.
+- **FR-35a** The app keeps the roster (`roster-sheet.json` in its data folder, and so in its backups): the **single source of truth** for people: members, guests and prospects, officer roles, and who can lead or edit. It is edited on the Roster pages, and **no roster data is kept in git or in local config**. (It moved off the club's Google Sheet on 2026-11-09; the sheet is a read-only archive.)
+- **FR-36** The club's other tools (the Discord bot) read the roster from the app: a token-protected API that answers only on the local network (callsign, name, email, officer, former callsigns).
 - **FR-37** Replace the website roster xlsx with an export generated from the app's roster.
 - **FR-38** The chow rotation lives in the app (decided), with swaps, blackout dates and a reminder before each member's night. Its printable list (PDF) replaces the Secretary's xlsx, emailed when a leader sends it (a new or changed list), not every week.
 

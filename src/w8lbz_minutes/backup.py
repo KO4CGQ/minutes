@@ -29,7 +29,9 @@ import tempfile
 import time
 from pathlib import Path
 
-from .club import DATA, Club
+from .club import DATA, ROOT, Club
+
+KEY_FILE = Path(os.environ.get("W8LBZ_GOOGLE_KEY", ROOT / "private" / "google-service-account.json"))  # Drive backups only
 
 log = logging.getLogger("w8lbz.backup")
 MAGIC = b"W8LBZ-BACKUP-1\n"
@@ -325,7 +327,6 @@ DRIVE = "https://www.googleapis.com/drive/v3/files"
 def drive_session():
     import google.auth.transport.requests as gr
     from google.oauth2 import service_account
-    from .roster import KEY_FILE
     creds = service_account.Credentials.from_service_account_file(KEY_FILE, scopes=["https://www.googleapis.com/auth/drive"])
     return gr.AuthorizedSession(creds)
 

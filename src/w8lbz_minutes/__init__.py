@@ -9,9 +9,7 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     imp = sub.add_parser("import", help="import historical minutes (PDFs + *CORRECTED*.txt) into the archive")
     imp.add_argument("src", type=Path)
-    ro = sub.add_parser("roster", help="rebuild the roster cache from the club Google Sheet, or from the app's own copy once moved")
-    ro.add_argument("--import", dest="import_sheet", action="store_true",
-                    help="once: copy the Google Sheet's roster into the app, then set roster: source: app in club.yaml")
+    sub.add_parser("roster", help="rebuild the roster cache (roster.json) from the roster (roster-sheet.json)")
     lk = sub.add_parser("login-link", help="print a one-time sign-in link for a member (admin recovery)")
     lk.add_argument("who", help="callsign, or the member's email")
     lk.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
@@ -56,12 +54,6 @@ def main() -> None:
         from . import backup
         n = backup.restore(a.file.read_bytes(), os.environ.get("W8LBZ_BACKUP_PASSPHRASE") or getpass.getpass("Passphrase: "), a.dest)
         print(f"Restored {n} files into {a.dest}. Stop the app, move them into the data folder (chown minutes), start it.")
-    elif a.cmd == "roster" and a.import_sheet:
-        from .roster import _local, import_sheet
-        diff = import_sheet()
-        print(f"Copied the sheet's roster and Membership Log into {_local()}.")
-        print("\n".join(["Differences from the app's current roster:", *diff]) if diff else "No differences from the app's current roster.")
-        print("Next: add `source: app` under `roster:` in club.yaml and restart the app.")
     elif a.cmd == "roster":
         from .roster import sync
         ms = sync()
@@ -153,9 +145,6 @@ def main() -> None:
             prefs.mark_sent(sent, today)
         if not due and not new:
             print("nothing to remind")
-        if not a.dry_run:  # the daily catch-up for the club calendars (they also sync after each change)
-            from . import gcal
-            print("calendars:", gcal.run(club, Archive(MEETINGS, club)) or "not set up")
     elif a.cmd == "ai-ask-about":
         from . import console
         from .club import Club, MEETINGS

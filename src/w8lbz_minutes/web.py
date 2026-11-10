@@ -19,13 +19,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, limits, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, treasurer, updates
+from . import ai, avatars, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
 from .club import DATA, PREVIEW, one_line, valid_email
-from .roster import COLUMNS, KEY_FILE, SHAREABLE, SheetError
+from .backup import KEY_FILE
+from .roster import COLUMNS, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
 from .meeting import SECTIONS
@@ -143,7 +144,6 @@ async def require_login(request: Request, call_next):
     return JSONResponse({"detail": "Please sign in"}, status_code=401)
 
 
-CALENDAR_PATHS = ("/chow", "/api/meetings", "/console", "/calendar")  # changes here can move chow nights or events
 
 
 @app.middleware("http")
@@ -154,16 +154,6 @@ async def upload_limit(request: Request, call_next):
         return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
                             status_code=413)
     return await call_next(request)
-
-
-@app.middleware("http")
-async def calendar_after_changes(request: Request, call_next):
-    """After a chow or console change, sync the club calendars a little later (see gcal.soon)."""
-    response = await call_next(request)
-    if (request.method != "GET" and response.status_code < 400 and request.url.path.startswith(CALENDAR_PATHS)
-            and getattr(request.state, "member", None)):  # signed-in changes only
-        gcal.soon(lambda: archive.club, lambda: archive)
-    return response
 
 
 @app.middleware("http")  # added last, so it runs outermost and covers the login redirects too
@@ -1761,7 +1751,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
+                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
                 upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
 
 
@@ -2131,7 +2121,6 @@ async def calendar_import(request: Request, mid: str = Depends(me)):
         report = events.import_ics(evs, text, cal, mid, str(archive.club.info.get("timezone", "America/New_York")), since)
         events.save(evs)
     events.log(mid, f"imported {len(report['added'])} new and {len(report['updated'])} updated events into", {"cal": cal, "title": f.filename})
-    gcal.soon(lambda: archive.club, lambda: archive)
     return page(request, "calendar_import.html", cals=events.CALS, report=report, cal=cal, since=form.get("since", ""))
 
 

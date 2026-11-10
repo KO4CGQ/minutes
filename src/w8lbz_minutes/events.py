@@ -9,7 +9,6 @@ events.json in the data folder: {"events": [event, ...]}. An event:
     skip: [dates taken out of a repeating event], changes: {date: {title, where, notes, start, end}} (one date changed),
     tz: the IANA time zone start/end are in (timed events), when not the club's (club.yaml timezone), e.g. "UTC",
     uid: the .ics UID it was imported from, if any.
-Google Calendar, if set up, gets a copy (gcal.py); nothing here depends on it.
 """
 from __future__ import annotations
 
