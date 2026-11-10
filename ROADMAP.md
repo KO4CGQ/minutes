@@ -26,6 +26,7 @@ Built (server admin guide → Backups): encrypted, scheduled and configured from
 ## Members and roster management
 The roster lives in the app (since 0.13.0); the Discord bot reads it from the roster API.
 - **Offices:** open question: should the Secretary also change offices, not only admins?
+- **Nicknames in search:** a small built-in table of common English nicknames (Richard = Rich = Rick = Dick, Robert = Bob = Rob, William = Bill = Will, James = Jim, …), used only for the first names of people on the roster, so searching "Richard" also finds "Rich" when a Richard is a member, and "bill" doesn't find every William unless one is. The roster's Other spellings stay for anything the table doesn't know.
 
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".
 - **Associate members** (GMRS or unlicensed), only if the bylaws add them; today a member must hold an amateur license.
