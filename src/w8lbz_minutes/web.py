@@ -990,7 +990,7 @@ def admin_updates(request: Request, error: str = "", note: str = "", mid: str = 
     if not admin_mode(request):
         return RedirectResponse("/admin/confirm?next=/admin/updates", status_code=303)
     return page(request, "updates.html", running=updates.running(), rel=updates.latest(), st=updates.status(),
-                newer=updates.available(), error=error, note=note,
+                newer=updates.available(), error=error, note=note, auto=updates.auto_settings(),
                 backup_ready=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12)
 
 
@@ -1023,6 +1023,21 @@ def admin_updates_run(request: Request, target: str = Form(""), notes_done: int 
     _log.info("update to %s requested by %s", one_line(target), one_line(mid))
     return RedirectResponse("/admin/updates?note=" + quote("Update started. The app restarts in a minute or two; "
                                                            "this page shows the result when it's done."), status_code=303)
+
+
+@app.post("/admin/updates/auto")
+def admin_updates_auto(request: Request, on: int = Form(0), hour: str = Form(""), mid: str = Depends(real_me)):
+    _admin(mid)
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")
+    if on and len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) < 12:
+        return RedirectResponse("/admin/updates?error=" + quote("Set up backups first (a passphrase): every automatic "
+                                                               "update starts with one."), status_code=303)
+    updates.set_auto(bool(on), num(hour))
+    _admin_log(request, auto_update=bool(on))
+    st = updates.auto_settings()
+    return RedirectResponse("/admin/updates?note=" + quote(f"Automatic updates are on, nightly at {st['hour']}:30." if on
+                                                           else "Automatic updates are off."), status_code=303)
 
 
 @app.post("/admin/updates/cancel")
@@ -1727,7 +1742,8 @@ def admin_action(e: dict) -> str:
     if "ban" in e:
         return f"Banned {e['ban']} " + (f"for {e['hours']} hours" if e.get("hours") else "until lifted")
     words = {"step_up_email": lambda v: "Asked for an admin sign-in email", "update_requested": lambda v: f"Started the update to {v}",
-             "update_cancelled": lambda v: "Cancelled the update", "unban": lambda v: f"Lifted the ban on {v}",
+             "update_cancelled": lambda v: "Cancelled the update",
+             "auto_update": lambda v: f"Turned automatic updates {'on' if v else 'off'}", "unban": lambda v: f"Lifted the ban on {v}",
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
              "links": lambda v: f"Saved the club links ({len(v)})"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}

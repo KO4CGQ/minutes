@@ -6,6 +6,10 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 
+## 0.16.0 (2026-11-09)
+- **Automatic updates (off until turned on):** admin mode → Updates → Turn on. Every night (2:30 by default; the hour is set on the same page) the server installs the newest release if no release since the running one needs steps by hand, after a full backup (no backup, no update), and emails the admins how it went. A release with steps by hand is only emailed about.
+- **Updates install the release itself and roll back if the app doesn't come up:** "Update now" now installs exactly the release shown (its tag), not whatever is newest on main; if the app doesn't answer within 5 minutes afterwards, it goes back to the version it had. With several releases waiting, the page shows all their notes and steps by hand, not only the newest's.
+
 ## 0.15.0 (2026-11-09)
 - **Hardening (security review of this release):** a page number or year typed with characters like "²" no longer causes a server error (one shared number check, 8 places); a club link can't be a `/\…` address that browsers treat as another site; searches count their first 12 words; a missing roster file no longer shows the server's folder. New fuzz tests (`tests/test_fuzz.py`) throw thousands of hostile inputs at search, club links, sign-in redirects, the roster file, the roster API and every page.
 - **No more Google for the roster or calendars:** the roster is only ever the app's own (`roster-sheet.json`), so the Google Sheets code, `roster --import` and the `roster: source: app` setting are gone (it can come out of club.yaml), and so is the optional copy to Google Calendar (`calendars:` in club.yaml is ignored). Google Drive backups are unchanged.

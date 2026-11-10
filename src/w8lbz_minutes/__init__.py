@@ -23,6 +23,7 @@ def main() -> None:
     ci.add_argument("--write", action="store_true", help="save it (refuses if a chow schedule already exists)")
     rem = sub.add_parser("reminders", help="daily: business item and chow reminders, and the meeting-day email")
     rem.add_argument("--dry-run", action="store_true", help="print what would be sent; send and record nothing")
+    sub.add_parser("auto-update", help="nightly: install a newer release that needs no steps by hand, after a backup (if turned on)")
     sub.add_parser("ai-ask-about", help="ask the AI for 'ask about' prompts for each member's community report (also runs after each Submit)")
     bk = sub.add_parser("backup", help="an encrypted backup of the data folder, checked, kept and sent off the server")
     bk.add_argument("--if-due", action="store_true", help="only if the schedule on the Backups page says one is due (the hourly timer)")
@@ -145,6 +146,11 @@ def main() -> None:
             prefs.mark_sent(sent, today)
         if not due and not new:
             print("nothing to remind")
+    elif a.cmd == "auto-update":
+        from . import updates
+        from .club import Club
+        club = Club()
+        print(updates.auto(club, f"https://{club.auth.get('rp_id', 'localhost')}"))
     elif a.cmd == "ai-ask-about":
         from . import console
         from .club import Club, MEETINGS
