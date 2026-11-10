@@ -3,7 +3,7 @@
 For every member: what the app does for you, and where to find it. Back to the [README](../README.md).
 
 ## Signing in
-Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or ask for a one-time link by email to the address the club has for you. Add a passkey on your account page so next time is one tap. Stuck? Ask an admin.
+Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or ask for a one-time link by email to the address the club has for you. After an emailed link, the app offers to add a passkey on your device (or add one any time under Profile → Sign-in & passkeys), so next time is one tap. Stuck? Ask an admin.
 
 ## Home
 What's next for you: the next meeting (and, on meeting night, a link to follow the minutes live), your chow night and any swap requests to answer, your business items, your dues, the latest minutes and the next two weeks of the calendar.

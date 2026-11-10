@@ -63,6 +63,29 @@ document.addEventListener("submit", (e) => {
 <form method="post" action="/admin/mode"><input type="hidden" name="on" value="0"><input type="hidden" name="next" value="{{ request.url.path }}"><button type="submit">Turn off</button></form></div>{% endif %}
 {% if update_available and not admin_until %}<div class="updbar">Version {{ update_available }} of the app is available. <a href="/admin/updates">Install it when you're ready</a> (you'll turn on admin mode first).</div>{% endif %}
 {% if PREVIEW %}<div class="preview">PREVIEW of <b>{{ PREVIEW }}</b>: a copy of the data. Emails aren't sent{% if is_admin and admin_until %} (see the <a href="/admin/email">email log</a>){% endif %} and roster edits don't reach the real sheet.</div>{% endif %}
+{% if pk_offer %}<div class="msg ok pkoffer" id="pkoffer" hidden><span id="pkoffer-text">Sign in faster next time: add a passkey on this device (fingerprint, face or device PIN), with no email needed.</span>
+  <button id="pkoffer-add" class="btn small" type="button">Add passkey</button> <button id="pkoffer-no" class="btn small ghost" type="button">Not now</button></div>
+<script src="/static/auth.js?v={{ ASSETS }}"></script>
+<script nonce="{{ csp_nonce }}">  // after an emailed-link sign-in: offer a passkey, only if this device can make one
+(async () => {
+  const box = document.getElementById("pkoffer"), text = document.getElementById("pkoffer-text");
+  const done = (msg) => {  // no more offers until the next emailed-link sign-in
+    document.cookie = "pk_offer=; Max-Age=0; path=/; SameSite=Lax; Secure";
+    if (msg) { text.textContent = msg; box.querySelectorAll("button").forEach((b) => b.remove()); } else box.remove();
+  };
+  const can = passkeysSupported() && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.().catch(() => false);
+  if (!can) return;
+  box.hidden = false;
+  document.getElementById("pkoffer-no").onclick = () => done();
+  document.getElementById("pkoffer-add").onclick = async () => {
+    try { await passkeyRegister(""); done("Passkey added. Next time, sign in with it (rename it under Profile → Sign-in &amp; passkeys)."); }
+    catch (e) {
+      if (e.name === "NotAllowedError") return;  // cancelled: the offer stays
+      done(e.name === "InvalidStateError" ? "This device already has a passkey for your account." : e.message);
+    }
+  };
+})();
+</script>{% endif %}
 <main>{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
 <script nonce="{{ csp_nonce }}">  // what inline on…= handlers did, as data- attributes: the security policy runs no inline handlers

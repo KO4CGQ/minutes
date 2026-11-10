@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Passkey offer after an emailed link:** signing in with an emailed link now offers a passkey in a small banner on the page you were going to, if your device can make one (fingerprint, face or device PIN), even if you already have a passkey on another device. "Not now" hides it until the next emailed-link sign-in. It replaces the stop at the account page, which only members with no passkey at all saw, whether or not their device could make one.
 
 ## 0.14.0 (2026-11-09)
 - **Search finds other spellings:** a member's name also matches the other spellings the roster lists for them (so a name spelled one way in old minutes is found by the other), and if the minutes still turn up nothing, close spellings of the words are tried.
