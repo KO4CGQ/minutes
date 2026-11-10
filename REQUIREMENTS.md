@@ -51,7 +51,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 | Role | Who | Can |
 |---|---|---|
 | Member | Anyone on the roster who is logged in | Read the live transcript, the draft and the archive. **Flag** a paragraph ("this is wrong" plus an optional note) but not edit text. |
-| Leader / editor | The officers, and members ticked **`minutes_editor`** on the roster, or someone a leader picks for one meeting. Whoever leads is recorded as "Led by" in the minutes. | **Lead** a meeting: run the console, accept or reject suggestions and flags, edit directly, submit. While someone else leads, **suggest edits** to the live minutes (shown as tracked suggestions). |
+| Leader / editor | The officers, and members ticked **`minutes_editor`** on the roster, or someone a leader picks for one meeting. Whoever leads is recorded as "Led by" in the minutes. | **Lead** a meeting: run the console, handle flags, edit directly, submit. |
 | Admin | Club IT: the callsigns under `admins:` in the server's `club.yaml` | Admin mode: roster sync, settings, app updates, viewing the app as a member. Separate from leading: an admin leads only if they're also an officer or editor. |
 
 ## 4. Functional requirements
@@ -116,7 +116,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 
 ### 4.4 Collaboration
 - **FR-24** Multiple members see the live transcript and draft in real time.
-- **FR-25** Flags and suggestions follow §3. The leader handles them during or after the meeting.
+- **FR-25** Flags follow §3. The leader handles them during or after the meeting.
 
 ### 4.5 Review, submit, publish
 - **FR-26** After the meeting, the leader reviews the draft and the Sidebars panel. Each paragraph can be expanded to show the transcript behind it. The leader can attach images, for example the photos and maps that appear in the current minutes.
@@ -237,6 +237,6 @@ Not recommended as the foundation.
 |---|---|
 | 0: Spikes (1–2 weeks) | Test Vexa and Attendee on the club's consumer Teams link. Test browser mic capture alongside Teams on the leader's laptop. Run one recorded meeting (with consent) through Deepgram or AssemblyAI to judge accuracy and diarization. Try converting a few historical PDFs to Markdown. |
 | 1: MVP | Magic-link login and Tailscale Funnel. Start meeting with bot and room track. Live transcript. Leader console (attendance, report queue, sections). Live draft. Accurate pass. Review with the Sidebars panel. Submit: archive, PDF, email to the roster. |
-| 2: Archive and smarts | Import the 51 historical meetings. Search, per-member and per-item history. Follow-up prompts. Tracked Old Business items, motions and actions. Flags and suggestions. Versioned corrections. |
+| 2: Archive and smarts | Import the 51 historical meetings. Search, per-member and per-item history. Follow-up prompts. Tracked Old Business items, motions and actions. Flags. Versioned corrections. |
 | 3: Outreach | Discord summary and reminders, chow automation, Google Sheet as the roster of record, Zyro page replaced with a link. |
 | 4: Hardware and on-site | Permanent Linux room PC, multiple mics, on-site speech-to-text and LLM if hardware allows, Jitsi bot, a permanent way to reach the app (VPS, Headscale, or a w8lbz.org subdomain). |
