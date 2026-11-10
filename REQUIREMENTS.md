@@ -144,11 +144,11 @@ The minutes follow a fixed template. The system should generate exactly this str
 - **FR-35** **Members-only.** The archive is behind the member login (§7.3).
 
 ### 4.7 Roster and chow
-- **FR-35a** The roster Google Sheet is the **single source of truth** for people: members, guests and prospects, officer roles, and who can lead or edit. The app keeps only a read-only cache, and **no roster data is kept in git or in local config**.
+- **FR-35a** *(Updated 2026-11-09: the roster now lives in the app, FR-36a; the Google Sheet is a read-only archive.)* The roster Google Sheet is the **single source of truth** for people: members, guests and prospects, officer roles, and who can lead or edit. The app keeps only a read-only cache, and **no roster data is kept in git or in local config**.
 - **FR-35b** Proposed extra columns in the sheet (to agree with whoever maintains the Discord side): `Short name`, `Aliases` (spellings seen in old minutes), `Officer role`, `minutes_editor` (may lead and suggest edits), `Attends remotely`, `Status` (active / SK / prospect / guest), `Email`.
-- **FR-36a** The roster can move into the app once (`roster --import`, then `roster: source: app`): from then on the app's own copy of the sheet's tabs, in its data folder and its backups, is the single source of truth, and the Google Sheet is a read-only archive.
-- **FR-36** The roster's single source of truth is the Google Sheet (the Discord roster). It is read through the Google Sheets API with a service account and contains name, callsign, preferred short name (first name plus last initial when a first name is shared), **email** (for minutes delivery and login), status (active, SK, prospect), whether they attend remotely, and the Discord ID.
-- **FR-37** Replace the website roster xlsx with an export generated from the Google Sheet.
+- **FR-36a** *(Done on the club's server 2026-11-09.)* The roster can move into the app once (`roster --import`, then `roster: source: app`): from then on the app's own copy of the sheet's tabs, in its data folder and its backups, is the single source of truth, and the Google Sheet is a read-only archive.
+- **FR-36** *(Superseded by FR-36a.)* The roster's single source of truth is the Google Sheet (the Discord roster). It is read through the Google Sheets API with a service account and contains name, callsign, preferred short name (first name plus last initial when a first name is shared), **email** (for minutes delivery and login), status (active, SK, prospect), whether they attend remotely, and the Discord ID.
+- **FR-37** Replace the website roster xlsx with an export generated from the app's roster.
 - **FR-38** The chow rotation lives in the app (decided), with swaps, blackout dates and a reminder before each member's night. Its printable list (PDF) replaces the Secretary's xlsx, emailed when a leader sends it (a new or changed list), not every week.
 
 ### 4.8 Personal items and names that are never recorded
@@ -196,7 +196,7 @@ Members share personal news in their reports (health, jobs, family), and **those
 | Web app | FastAPI with WebSockets; SQLite with FTS5 for search; Markdown files as the archive of record | |
 | PDF | Markdown → HTML template → WeasyPrint | Reproduces the current look. |
 | Email | Gmail API or an SMTP app password for the club's Gmail account | Gmail's limit of about 500 recipients a day is plenty. |
-| Roster | Google Sheets API (service account) | |
+| Roster | Kept by the app (`roster-sheet.json` in the data folder); a token-protected local API for the Discord bot | Moved off the Google Sheet 2026-11-09. |
 
 ## 7. Decisions and open questions
 
