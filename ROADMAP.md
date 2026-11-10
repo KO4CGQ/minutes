@@ -5,7 +5,7 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Next
-- **Email the minutes to the whole club:** remove test mode (`email.only_to`) once the club is ready.
+- **Remove the dead Google code** (Members and roster management, below).
 
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
