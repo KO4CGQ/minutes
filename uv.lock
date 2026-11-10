@@ -1386,7 +1386,7 @@ wheels = [
 
 [[package]]
 name = "w8lbz-minutes"
-version = "0.14.0"
+version = "0.15.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },

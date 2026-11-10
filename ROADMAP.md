@@ -4,9 +4,6 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
-## Next
-- **Email the minutes to the whole club:** remove test mode (`email.only_to`) once the club is ready.
-
 ## Leader console
 - **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
@@ -21,17 +18,15 @@ Built (server admin guide → Backups): encrypted, scheduled and configured from
 - **A restore drill:** a periodic test restore onto a scratch container, beyond the check that each backup opens.
 
 ## Admin tools
+- **Moving the app to a new address** (e.g. members.w8lbz.org): change `auth.rp_id` in club.yaml and the proxy; club links to the app's pages already follow. Passkeys are tied to the address, so every member signs in once by emailed link and adds a new one (the offer after a link sign-in does this); old feed and sign-in links stop working. **A sub-path** (w8lbz.org/members) is a bigger job: every page links to `/…` from the site's root, so the app would need a path prefix throughout (FastAPI `root_path`, and the templates, scripts and redirects).
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
 - **Filter the Admin actions log** by admin, kind of action and date, with paging (it shows the last 50 today).
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
 
 ## Members and roster management
-The roster can now live in the app (`roster --import`, then `roster: source: app`; see docs/server-admin.md). The Discord bot reads it from the roster API.
-
-### Roster in the app (retire the Google Sheet)
-Nobody uses the sheet directly any more; one other club tool on the same server reads four columns from it (callsign, name, email, officer). Serve that from the app and the app can own the roster outright, with no Google dependency left.
-- **Offices:** built (Roster → Offices). Open question: should the Secretary also change offices, not only admins?
-- **Then remove** the Google Sheets code and the service account's access to the sheet. With no copy to Google Calendar either (decided 2026-11-08), the app needs no Google account at all.
+The roster lives in the app (since 0.13.0); the Discord bot reads it from the roster API.
+- **Offices:** open question: should the Secretary also change offices, not only admins?
+- **Nicknames in search:** a small built-in table of common English nicknames (Richard = Rich = Rick = Dick, Robert = Bob = Rob, William = Bill = Will, James = Jim, …), used only for the first names of people on the roster, so searching "Richard" also finds "Rich" when a Richard is a member, and "bill" doesn't find every William unless one is. The roster's Other spellings stay for anything the table doesn't know.
 
 - **Guest to member:** a fuller process (application, vote, initiation fee and dues) behind today's "Add a member".
 - **Associate members** (GMRS or unlicensed), only if the bylaws add them; today a member must hold an amateur license.

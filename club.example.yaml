@@ -1,5 +1,4 @@
 # Copy to club.yaml (local only, git-ignored) and fill in.
-# People will come from the roster Google Sheet; the members section is a stopgap.
 
 club:
   name: Example Radio Club
@@ -8,12 +7,6 @@ club:
   meeting_time: "19:30"     # 24-hour; the "Start meeting" button pulses from 30 minutes before
   invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit
   timezone: America/New_York  # for the club calendars
-  calendars:               # optional: copy the app's calendars to Google Calendar (share each with the service
-                           # account, "Make changes to events"); the app keeps the calendars itself either way
-    chow: abc123@group.calendar.google.com     # each chow night, at the meeting time
-    events: club@example.org                   # Club events (an account's main calendar: its address)
-    planning: def456@group.calendar.google.com   # officers' dates (the annual meeting)
-    community: ghi789@group.calendar.google.com  # what's on in the area
   public_calendars: []     # e.g. [events, community]: shown to anyone at /calendar/public and /calendar/public.ics
                            # (never chow or birthdays). Leave empty to keep every calendar members-only.
   remind_days_before: 3    # business item owners get an email this many days before the due date (and once if overdue)
@@ -40,8 +33,8 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
     url: https://teams.live.com/meet/REPLACE_ME
   - label: Club Discord
     url: https://discord.com/invite/REPLACE_ME
-  - label: Constitution and Bylaws   # the app's /bylaws page; use the full address so it works in the PDF
-    url: https://minutes.example-tailnet.ts.net/bylaws
+  - label: Constitution and Bylaws   # a page of this app: /page, shown in full in the minutes and their PDF
+    url: /bylaws
 
 # Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer).
 # roster_keepers: [Secretary, Treasurer]
@@ -62,12 +55,7 @@ offices:
 #   model: provider/model-name   # any chat model id from openrouter.ai/models
 #   enabled: true
 
-roster:  # the club roster Google Sheet (share it with the service account as Editor)
-  sheet_id: REPLACE_ME
-  tab: Member Roster
-  # source: app   # after `w8lbz-minutes roster --import`: the app keeps the roster itself (docs/server-admin.md)
-
 privacy:
   never_record: []  # names never shown in minutes or the archive
 
-# People come only from the roster Google Sheet (`w8lbz-minutes roster`).
+# People come only from the roster the app keeps (roster-sheet.json in the data folder).

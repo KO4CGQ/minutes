@@ -19,17 +19,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 
-from . import ai, avatars, limits, backup, business, calview, chow, console, events, gcal, membership, offices, prefs, profile, treasurer, updates
+from . import ai, avatars, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, PREVIEW, one_line, valid_email
-from .roster import COLUMNS, KEY_FILE, SHAREABLE, SheetError
+from .club import DATA, PREVIEW, num, one_line, valid_email
+from .backup import KEY_FILE
+from .roster import COLUMNS, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
 from .meeting import SECTIONS
-from .store import Archive, spellings
+from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
 app = FastAPI(title="W8LBZ Minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
@@ -143,27 +144,16 @@ async def require_login(request: Request, call_next):
     return JSONResponse({"detail": "Please sign in"}, status_code=401)
 
 
-CALENDAR_PATHS = ("/chow", "/api/meetings", "/console", "/calendar")  # changes here can move chow nights or events
 
 
 @app.middleware("http")
 async def upload_limit(request: Request, call_next):
     """Turn away a request bigger than the admin's upload limit before reading it (a huge upload would fill the disk)."""
     size = request.headers.get("content-length", "")
-    if size.isdigit() and int(size) > limits.max_upload() + limits.FORM_ROOM:
+    if (num(size) or 0) > limits.max_upload() + limits.FORM_ROOM:
         return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
                             status_code=413)
     return await call_next(request)
-
-
-@app.middleware("http")
-async def calendar_after_changes(request: Request, call_next):
-    """After a chow or console change, sync the club calendars a little later (see gcal.soon)."""
-    response = await call_next(request)
-    if (request.method != "GET" and response.status_code < 400 and request.url.path.startswith(CALENDAR_PATHS)
-            and getattr(request.state, "member", None)):  # signed-in changes only
-        gcal.soon(lambda: archive.club, lambda: archive)
-    return response
 
 
 @app.middleware("http")  # added last, so it runs outermost and covers the login redirects too
@@ -216,6 +206,9 @@ def officer(request: Request) -> str:
     return request.state.member
 
 
+PK_OFFER = "pk_offer"  # set by an emailed-link sign-in; base.html offers a passkey while it's there
+
+
 def page(request: Request, name: str, **ctx) -> HTMLResponse:
     mid = getattr(request.state, "member", None)
     return templates.TemplateResponse(request, name, {
@@ -231,6 +224,7 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         "update_available": _update_badge(request),
+        "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
 
 
@@ -324,10 +318,10 @@ def login_link(request: Request, t: str = ""):
         authn.event("bad_link", client_ip(request))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
-    # Offer a passkey right away to members who don't have one (only possible over HTTPS on the passkey host).
-    if not authn.passkeys(member) and request.url.hostname == authn.rp_id:
-        next_url = f"/account?welcome=1&next={quote(next_url)}"
-    return start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
+    response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
+    if request.url.hostname == authn.rp_id:  # passkeys only work there: offer one (base.html, if this device can make one)
+        response.set_cookie(PK_OFFER, "1", samesite="lax", secure=True)  # until the browser closes, Not now, or one is added
+    return response
 
 
 @app.post("/logout")
@@ -339,9 +333,9 @@ def logout(request: Request):
 
 
 @app.get("/account", response_class=HTMLResponse)
-def account(request: Request, welcome: int = 0, next: str = "/", mid: str = Depends(me)):
+def account(request: Request, mid: str = Depends(me)):
     return page(request, "account.html", passkeys=authn.passkeys(mid), sessions=authn.sessions(mid),
-                welcome=welcome, next=_safe_next(next), passkey_host=request.url.hostname == authn.rp_id)
+                passkey_host=request.url.hostname == authn.rp_id)
 
 
 # ---------------- tracked business items ----------------
@@ -887,9 +881,9 @@ async def chow_constraints(request: Request, mid: str = Depends(chow_leader)):
     who = form.get("member", "")
     if who not in archive.club.members:
         raise HTTPException(404)
-    weeks = [int(w) for w in form.getlist("not_weeks") if w.isdigit()]
+    weeks = [num(w) for w in form.getlist("not_weeks") if num(w) is not None]
     away = [[form.get("away_from", ""), form.get("away_to", "")]] if form.get("away_from") else []
-    skip = int(form.get("skip") or 0) if str(form.get("skip") or "0").isdigit() else 0
+    skip = num(form.get("skip")) or 0
     return await run_in_threadpool(chow_change, request, lambda s: chow.set_constraints(s, who, weeks, away, form.get("note", ""), mid, skip),
                                    "/chow/rotation")
 
@@ -1330,10 +1324,10 @@ PER_OPTIONS = (10, 25, 50, 0)  # list page sizes; 0 = all
 
 def paginate(items: list, p: str, per: str, default: int = 25) -> dict:
     """One page of a long list. p and per come from the query string as text (junk falls back to defaults)."""
-    n = int(per) if per.isdigit() and int(per) in PER_OPTIONS else default
+    n = num(per) if num(per) in PER_OPTIONS else default
     size = n or max(len(items), 1)
     pages = max(1, -(-len(items) // size))
-    p = min(max(int(p) if p.isdigit() else 1, 1), pages)
+    p = min(max(num(p) or 1, 1), pages)
     rows = items[(p - 1) * size:p * size]
     return {"rows": rows, "p": p, "pages": pages, "per": n, "options": PER_OPTIONS, "total": len(items),
             "first": (p - 1) * size + 1 if rows else 0, "last": (p - 1) * size + len(rows)}
@@ -1353,7 +1347,7 @@ def by_period(period: str) -> tuple[list, str, str]:
         return [m for m in archive.meetings if m.date > cutoff], period, label
     if period == "all":
         return list(archive.meetings), "all", "on record"
-    year = int(period) if period.isdigit() else today.year
+    year = num(period) or today.year
     return [m for m in archive.meetings if m.date.year == year], str(year), f"in {year}"
 
 
@@ -1448,7 +1442,7 @@ SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "
 def _has(q: str, *texts) -> bool:
     """Every word of q (or another spelling of a member's name, from the roster) is in one of the texts (any case)."""
     text, names = " ".join(t or "" for t in texts).lower(), spellings(archive.club)
-    return all(any(v in text for v in names.get(w, {w})) for w in q.lower().split())
+    return all(any(v in text for v in names.get(w, {w})) for w in q.lower().split()[:SEARCH_WORDS])
 
 
 def _search_lists(q: str) -> dict:
@@ -1614,7 +1608,7 @@ def link_icon(url: str) -> str:
     """Icon name for a club link, guessed from its address ("Auto" on the Links editor): a known site's icon,
     else a globe for a bare website address, else a chain link. A link can set `icon:` to any name in ICONS."""
     u = url.lower()
-    return next((icon for key, icon in LINK_ICONS if key in u), "globe" if u.count("/") <= 3 else "link")
+    return next((icon for key, icon in LINK_ICONS if key in u), "globe" if u.startswith("http") and u.count("/") <= 3 else "link")
 
 
 templates.env.filters["link_icon"] = link_icon
@@ -1622,10 +1616,17 @@ templates.env.filters["link_icon"] = link_icon
 
 def link_host(url: str) -> str:
     host = re.sub(r"^(https?://(www\.)?|mailto:|tel:)", "", url).split("/")[0]
-    return "on this site" if host == authn.rp_id else host
+    return "on this site" if url.startswith("/") or host == authn.rp_id else host
+
+
+def abs_url(url: str) -> str:
+    """A page of this app (/bylaws) as a full address, for the minutes and their PDF, which leave the site. Kept
+    relative everywhere else, so the links follow the app if its address changes (auth.rp_id in club.yaml)."""
+    return f"https://{authn.rp_id}{url}" if url.startswith("/") and authn.rp_id else url
 
 
 templates.env.filters["link_host"] = link_host
+templates.env.filters["abs_url"] = abs_url
 
 
 def _license(dist: str) -> str:
@@ -1761,7 +1762,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, calendar=gcal.status(), calendars=archive.club.info.get("calendars"), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
+                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
                 upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
 
 
@@ -1924,7 +1925,7 @@ AGENDA_WEEKS = {8: "8 weeks", 13: "3 months", 26: "6 months", 52: "a year"}
 
 
 def _calendar(request: Request, view: str, start: str, month: str, mid: str | None, weeks: str = "8") -> HTMLResponse:
-    weeks = int(weeks) if weeks.isdigit() and int(weeks) in AGENDA_WEEKS else 8
+    weeks = num(weeks) if num(weeks) in AGENDA_WEEKS else 8
     today = dt.date.today()
     try:
         first = dt.date.fromisoformat(month + "-01") if month else today.replace(day=1)
@@ -2131,7 +2132,6 @@ async def calendar_import(request: Request, mid: str = Depends(me)):
         report = events.import_ics(evs, text, cal, mid, str(archive.club.info.get("timezone", "America/New_York")), since)
         events.save(evs)
     events.log(mid, f"imported {len(report['added'])} new and {len(report['updated'])} updated events into", {"cal": cal, "title": f.filename})
-    gcal.soon(lambda: archive.club, lambda: archive)
     return page(request, "calendar_import.html", cals=events.CALS, report=report, cal=cal, since=form.get("since", ""))
 
 
@@ -2148,12 +2148,16 @@ async def links_save(request: Request, mid: str = Depends(me)):
     form = await request.form()
     rows = zip(form.getlist("label"), form.getlist("url"), form.getlist("icon"), form.getlist("show"))
     out = []
+    own = f"https://{authn.rp_id}/".lower() if authn.rp_id else None
     for label, url, icon, show in rows:
         label, url = label.strip(), url.strip()
         if not label and not url:
             continue
-        if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url):
-            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto: or tel: ({label or url})."), status_code=303)
+        if own and url.lower().startswith(own):  # a page of this app: kept as /page, so it follows the app if it moves
+            url = url[len(own) - 1:]
+        page_link = url.startswith("/") and _safe_next(url) == url and not re.search(r"\s", url)  # never //host or /\host
+        if not label or not (page_link or re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url)):
+            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto:, tel: or / for a page of this app ({label or url})."), status_code=303)
         page_, minutes_ = SHOW.get(show, (True, True))
         out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if valid_icon(icon) else {}), "page": page_, "minutes": minutes_})
     archive.club.save_links(out[:40])

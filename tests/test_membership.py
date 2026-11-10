@@ -27,7 +27,6 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(roster, "DATA", tmp_path)
     monkeypatch.setattr(chow, "DATA", tmp_path)
     monkeypatch.setattr(profile, "DATA", tmp_path)
-    monkeypatch.setattr(roster, "_sheet", lambda: (_ for _ in ()).throw(AssertionError("real sheet used")))
     sent = []
     monkeypatch.setattr(membership.auth, "send_email", lambda to, subject, body, **kw: sent.append((to, subject)))
     club = Club(FIX / "test-club.yaml", roster=json.loads(cache.read_text()))

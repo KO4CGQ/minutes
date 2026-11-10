@@ -10,7 +10,7 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROA
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode.
 - **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders. Motions keep their mover, seconder and result (Business → Motions).
-- **Calendar:** the club's calendars kept by the app, with .ics import, subscriptions and an optional copy to Google ([officers guide → Club calendars](docs/officers.md#club-calendars)).
+- **Calendar:** the club's calendars kept by the app, with .ics import and subscriptions ([officers guide → Club calendars](docs/officers.md#club-calendars)).
 - **Chow schedule:** the rotation, swaps, reminders before your night, and who provided, missed or covered each night.
 - **Treasurer:** who owes what (dues, fees, missed chow, certificates), payments and expenses, regular bills and bills read at meetings, and funds a committee keeps; each member sees their own figures on Home.
 - **Email preferences:** each member turns each kind of email on or off, including a meeting-day email (the time, your chow, your business items, the calendar until the next meeting and last meeting's minutes). Every optional email ends with a link to change it. The daily `reminders` timer (8 am) sends business and chow reminders and the meeting-day email.

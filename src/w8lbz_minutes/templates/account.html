@@ -1,10 +1,6 @@
 {% extends "base.html" %}{% block title %}Sign-in & passkeys{% endblock %}{% block body %}
 <h1>Your profile</h1>
 {% include "_profile_tabs.html" %}
-{% if welcome %}<div class="msg ok">
-  <b>You're signed in.</b> Add a passkey so next time you can sign in with your fingerprint, face or device PIN, with no email needed.
-  <a href="{{ next }}">Skip for now</a>
-</div>{% endif %}
 
 <h2>Passkeys</h2>
 {% if passkeys %}<table class="list"><thead><tr><th>Name</th><th class="opt">Added</th><th>Last used</th><th></th></tr></thead><tbody>
@@ -32,7 +28,7 @@
   <form method="post" action="/logout"><button class="btn ghost">Sign out</button></form>
   <form method="post" action="/account/sessions/end-all" data-confirm="Sign out on every device, including this one?"><button class="btn ghost">Sign out everywhere</button></form>
 </div>
-<script src="/static/auth.js?v={{ ASSETS }}"></script>
+{% if not pk_offer %}<script src="/static/auth.js?v={{ ASSETS }}"></script>{% endif %}{# base.html loads it for the offer #}
 <script nonce="{{ csp_nonce }}">
 // Passkey names: read-only until "Edit"; "Save" appears only once the name changes.
 document.querySelectorAll("form.rename").forEach((f) => {
@@ -52,7 +48,7 @@ if (add) {
       const msg = document.getElementById("pkmsg");
       try {
         await passkeyRegister("");  // named after the passkey provider (e.g. Bitwarden); rename it below
-        {% if welcome %}location.href = {{ next|tojson }};{% else %}location.reload();{% endif %}
+        location.reload();
       } catch (e) {
         if (e.name === "InvalidStateError") { msg.textContent = "This device already has a passkey for your account."; }
         else if (e.name === "NotAllowedError") { return; }

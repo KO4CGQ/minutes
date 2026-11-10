@@ -1,6 +1,5 @@
-"""The club roster: from its Google Sheet, or (after `w8lbz-minutes roster --import` and `roster: source: app`
-in club.yaml) from the app's own copy of that sheet, data/roster-sheet.json. Either way it's the single source
-of truth for people, and data/roster.json is built from it.
+"""The club roster: data/roster-sheet.json, the single source of truth for people (moved off the club's Google
+Sheet in 0.13.0; same tabs and columns). data/roster.json, what the rest of the app reads, is built from it.
 
 Reads columns by header name, so adding or reordering columns doesn't break it.
 Columns used: callsign, full_name, email, Title(s), is_officer, is_board, Class,
@@ -11,19 +10,15 @@ Also phone, address, birthday (MM-DD, or MM for a month only) and share (which o
 birthday the member shows to all members; officers always see them). The cache
 file is readable only by the app.
 
-Members' own profile edits are written back through `Sheet`, which only ever
-writes cell values to existing columns: never formatting, dropdowns or structure.
+Every change goes through `Sheet`, which only writes cell values to existing columns.
 """
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 
-from .club import DATA, PREVIEW, ROOT, ROSTER_CACHE as CACHE, roster_locked
-
-KEY_FILE = Path(os.environ.get("W8LBZ_GOOGLE_KEY", ROOT / "private" / "google-service-account.json"))
+from .club import DATA, PREVIEW, ROSTER_CACHE as CACHE, roster_locked
 
 
 def _truthy(v: str) -> bool:
@@ -34,27 +29,8 @@ def _split(v: str) -> list[str]:
     return [x.strip() for x in v.split(",") if x.strip()]
 
 
-def _cfg() -> dict:
-    """`roster:` in local club.yaml, never in git."""
-    import yaml
-    cfg = yaml.safe_load(Path(os.environ.get("W8LBZ_CONFIG", ROOT / "club.yaml")).read_text()) or {}
-    return cfg.get("roster") or {}
-
-
-def in_app() -> bool:
-    """The roster lives in the app (roster: source: app), not in the Google Sheet. Preview mode keeps its own copy."""
-    return not PREVIEW and _cfg().get("source") == "app"
-
-
 def _local() -> Path:
     return DATA / "roster-sheet.json"
-
-
-def _sheet() -> tuple[str, str]:
-    r = _cfg()
-    if not r.get("sheet_id"):
-        raise SystemExit("Set roster.sheet_id in club.yaml")
-    return r["sheet_id"], r.get("tab", "Member Roster")
 
 
 SHAREABLE = ("email", "phone", "address", "birthday")
@@ -82,24 +58,15 @@ class SheetError(Exception):
 
 
 class Sheet:
-    """Values-only read/write of the roster tab, for members' profile edits."""
+    """Values-only read/write of the roster's tabs. `session` is the store: the roster itself (LocalSheet), preview
+    mode's copy (PreviewSheet), or a test's stand-in; all answer the same values calls the Google Sheets API did."""
 
     def __init__(self, session=None):
-        if session is None and PREVIEW:
-            session = PreviewSheet()
-        elif session is None and in_app():
-            session = LocalSheet(_local())
-        if session is None:
-            import google.auth.transport.requests as gr
-            from google.oauth2 import service_account
-            creds = service_account.Credentials.from_service_account_file(
-                KEY_FILE, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-            session = gr.AuthorizedSession(creds)
-        self.s = session
-        self.sid, self.tab = ("local", "Member Roster") if isinstance(self.s, LocalSheet) else _sheet()
+        self.s = session or (PreviewSheet() if PREVIEW else LocalSheet(_local()))
+        self.tab = "Member Roster"
 
     def _url(self, rng: str = "") -> str:
-        return f"https://sheets.googleapis.com/v4/spreadsheets/{self.sid}/values{rng}"
+        return f"local/values{rng}"
 
     def read(self, tab: str | None = None) -> list[list[str]]:
         r = self.s.get(self._url(f"/'{tab or self.tab}'"), params={"valueRenderOption": "UNFORMATTED_VALUE"})
@@ -110,10 +77,7 @@ class Sheet:
         """cells: A1 address (e.g. D5) -> value. RAW, so nothing typed is ever parsed as a formula."""
         body = {"valueInputOption": "RAW",
                 "data": [{"range": f"'{tab or self.tab}'!{a1}", "values": [[v]]} for a1, v in cells.items()]}
-        r = self.s.post(self._url(":batchUpdate"), json=body)
-        if r.status_code == 403:
-            raise SheetError("The app can't write to the roster sheet yet (it needs Editor access).")
-        r.raise_for_status()
+        self.s.post(self._url(":batchUpdate"), json=body).raise_for_status()
 
     def update_member(self, callsign: str | None, full_name: str, changes: dict[str, str]) -> dict[str, str]:
         """Write `changes` (field -> new value) into the member's row. Returns the old values."""
@@ -121,7 +85,7 @@ class Sheet:
         header = [h.strip().lower() for h in values[0]]
         missing = [f for f in changes if f not in header]
         if missing:
-            raise SheetError(f"The roster sheet has no {', '.join(missing)} column yet.")
+            raise SheetError(f"The roster has no {', '.join(missing)} column yet.")
         key = header.index("callsign") if callsign else header.index("full_name")
         want = (callsign or full_name).strip().upper()
         rows = [i for i, row in enumerate(values[1:], start=2)
@@ -160,7 +124,7 @@ class LocalSheet:
 
     def _tabs(self) -> dict:
         if not self.path.exists():
-            raise SheetError(f"{self.path} is missing: run `w8lbz-minutes roster --import` (or restore a backup).")
+            raise SheetError(f"The roster ({self.path.name}) is missing: restore it from a backup (docs/server-admin.md → Backups).")
         return json.loads(self.path.read_text())
 
     def save(self, tabs: dict) -> None:
@@ -220,20 +184,6 @@ class PreviewSheet(LocalSheet):
             self.save({"Member Roster": [self.HEADER] + rows, "Membership Log": [self.LOG_HEADER]})
 
 
-def _google_values(tab: str | None = None) -> list[list]:
-    """One tab of the Google Sheet, as the API gives it (dates as serial numbers, ticks as booleans)."""
-    import google.auth.transport.requests as gr
-    from google.oauth2 import service_account
-
-    creds = service_account.Credentials.from_service_account_file(
-        KEY_FILE, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
-    r = gr.AuthorizedSession(creds).get(
-        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}".format(_sheet()[0], tab or _sheet()[1]),
-        params={"valueRenderOption": "UNFORMATTED_VALUE", "dateTimeRenderOption": "SERIAL_NUMBER"})
-    r.raise_for_status()
-    return r.json().get("values", [])
-
-
 def _dicts(values: list[list]) -> list[dict[str, str]]:
     """A grid (header row first) -> one dict per row, keyed by lowercase header."""
     if not values:
@@ -243,9 +193,7 @@ def _dicts(values: list[list]) -> list[dict[str, str]]:
 
 
 def fetch_rows(tab: str | None = None) -> list[dict[str, str]]:
-    if in_app():
-        return _dicts(LocalSheet(_local())._tabs().get(tab or "Member Roster", []))
-    return _dicts(_google_values(tab))
+    return _dicts(LocalSheet(_local())._tabs().get(tab or "Member Roster", []))
 
 
 def to_members(rows: list[dict[str, str]]) -> list[dict]:
@@ -334,27 +282,6 @@ def sync() -> list[dict]:
     tmp.chmod(0o600)
     tmp.replace(CACHE)
     return members
-
-
-@roster_locked
-def import_sheet() -> list[str]:
-    """Once: copy the Google Sheet's roster and Membership Log tabs into the app (data/roster-sheet.json), as the
-    API gives them. Returns how the roster built from that copy differs from roster.json (expected: nothing)."""
-    if in_app() or _local().exists():
-        raise SystemExit(f"The roster is already in the app ({_local()}). Nothing imported.")
-    tabs = {"Member Roster": _google_values(), "Membership Log": _google_values("Membership Log")}
-    LocalSheet(_local()).save(tabs)
-    new = to_members(_dicts(tabs["Member Roster"]))
-    attach_log(new, _dicts(tabs["Membership Log"]))
-    old = {m["id"]: m for m in load_cached() or []}
-    out = []
-    for m in new:
-        o = old.pop(m["id"], None)
-        if o is None:
-            out.append(f"{m['id']}: only in the sheet")
-        elif diff := sorted(k for k in set(m) | set(o) if m.get(k) != o.get(k)):
-            out.append(f"{m['id']}: {', '.join(diff)} differ")
-    return out + [f"{i}: only in roster.json" for i in old]
 
 
 def load_cached() -> list[dict] | None:
