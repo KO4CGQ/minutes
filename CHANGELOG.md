@@ -5,6 +5,8 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+
+## 0.16.0 (2026-11-09)
 - **Automatic updates (off until turned on):** admin mode → Updates → Turn on. Every night (2:30 by default; the hour is set on the same page) the server installs the newest release if no release since the running one needs steps by hand, after a full backup (no backup, no update), and emails the admins how it went. A release with steps by hand is only emailed about.
 - **Updates install the release itself and roll back if the app doesn't come up:** "Update now" now installs exactly the release shown (its tag), not whatever is newest on main; if the app doesn't answer within 5 minutes afterwards, it goes back to the version it had. With several releases waiting, the page shows all their notes and steps by hand, not only the newest's.
 
