@@ -249,6 +249,19 @@ def test_top_bar_links_everyone_to_tonights_live_meeting(client, monkeypatch):
     assert f'href="/meetings/{tonight.slug}"' in client.get("/").text.split("</nav>")[0]
 
 
+def test_console_link_in_the_live_badge_for_leaders_only(client, monkeypatch):
+    from w8lbz_minutes import web
+    tonight = next(m for m in web.archive.meetings if m.date == dt.date.today())
+    monkeypatch.setattr(tonight, "status", "draft")
+    link = f'href="/console/{tonight.slug}"'
+    page = client.get(f"/meetings/{tonight.slug}").text
+    assert link in page.split("Meeting in progress")[1].split("</p>")[0]
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "kim")  # a member who can't lead
+    assert link not in client.get(f"/meetings/{tonight.slug}").text
+    monkeypatch.setattr(tonight, "status", "published")
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
+    assert link not in client.get(f"/meetings/{tonight.slug}").text  # only while the meeting is live
+
 def test_roster_opens_as_cards_on_phones_until_a_view_is_picked(client):
     phone = {"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148"}
     assert 'class="membergrid"' in client.get("/roster", headers=phone).text

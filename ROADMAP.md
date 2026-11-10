@@ -9,7 +9,6 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Look and feel: ideas to consider
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
-- **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 
 ## Backups
 Built (server admin guide → Backups): encrypted, scheduled and configured from the app, to S3 and/or Google Drive. Later, if wanted:

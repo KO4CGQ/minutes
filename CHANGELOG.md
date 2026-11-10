@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Meeting page during a meeting:** "Open in the leader console" is a link at the end of the "Meeting in progress" badge instead of a big button above it, and only people who can lead see it.
 - **Plans:** suggested edits during a live meeting are dropped (an editor fixes things after the meeting, before Submit); the bylaws link item is done by the Bylaws page.
 
 ## 0.17.1 (2026-11-10)
