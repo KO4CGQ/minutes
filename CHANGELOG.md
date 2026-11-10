@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Fix: updates failed when a tag had moved on GitHub** (0.17.0 overnight, silently): the updater now takes GitHub's tags as they are, says which step failed, and the failure email no longer claims the app went back to its old version when nothing was installed.
 
 ## 0.17.0 (2026-11-09)
 - **Nicknames in search:** with a Richard on the roster, "Richard", "Rich", "Rick" and "Dick" find each other (about 90 common English names and their nicknames, for roster first names only). Nicknames that are everyday words in minutes ("will", a "bill", "jack") are left out unless they're the member's own name or in their Other spellings, and other spellings match whole words only, so "Al" for Alan doesn't find "all".

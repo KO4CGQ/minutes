@@ -216,9 +216,10 @@ def auto(club, url: str, wait: float = 900, poll: float = 10, now=None) -> str:
             ok = done.get("ok")
             _tell_admins(club, f"updated to {v}" if ok else f"the update to {v} failed",
                          (f"The app updated itself to {v} overnight, after a backup ({b.get('name')})."
-                          if ok else f"The automatic update to {v} failed, and the app went back to the version it had "
-                                     f"(if it couldn't, it says so below). It won't try {v} again by itself.\n\n"
-                                     f"{done.get('output', '')[-1500:]}") + f"\n\n{page}")
+                          if ok else f"The automatic update to {v} failed. The updater's last words are below: if it had "
+                                     f"installed anything, they say whether it went back to the version before. "
+                                     f"It won't try {v} again by itself.\n\n"
+                                     f"{done.get('output', '').strip()[-1500:] or '(It said nothing: see journalctl -u w8lbz-minutes-update on the server.)'}") + f"\n\n{page}")
             return f"{'updated to' if ok else 'failed:'} {v}"
         time.sleep(poll)
     _tell_admins(club, f"the update to {v} hasn't finished", f"The automatic update to {v} was asked for but hadn't "
