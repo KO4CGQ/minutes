@@ -6,6 +6,9 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 
+## 0.17.0 (2026-11-09)
+- **Nicknames in search:** with a Richard on the roster, "Richard", "Rich", "Rick" and "Dick" find each other (about 90 common English names and their nicknames, for roster first names only). Nicknames that are everyday words in minutes ("will", a "bill", "jack") are left out unless they're the member's own name or in their Other spellings, and other spellings match whole words only, so "Al" for Alan doesn't find "all".
+
 ## 0.16.0 (2026-11-09)
 - **Automatic updates (off until turned on):** admin mode → Updates → Turn on. Every night (2:30 by default; the hour is set on the same page) the server installs the newest release if no release since the running one needs steps by hand, after a full backup (no backup, no update), and emails the admins how it went. A release with steps by hand is only emailed about.
 - **Updates install the release itself and roll back if the app doesn't come up:** "Update now" now installs exactly the release shown (its tag), not whatever is newest on main; if the app doesn't answer within 5 minutes afterwards, it goes back to the version it had. With several releases waiting, the page shows all their notes and steps by hand, not only the newest's.

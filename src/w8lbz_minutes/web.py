@@ -1457,7 +1457,8 @@ SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "
 def _has(q: str, *texts) -> bool:
     """Every word of q (or another spelling of a member's name, from the roster) is in one of the texts (any case)."""
     text, names = " ".join(t or "" for t in texts).lower(), spellings(archive.club)
-    return all(any(v in text for v in names.get(w, {w})) for w in q.lower().split()[:SEARCH_WORDS])
+    return all(w in text or any(re.search(rf"\b{re.escape(v)}\b", text) for v in names.get(w, set()) - {w})
+               for w in q.lower().split()[:SEARCH_WORDS])  # other spellings as whole words: "al" isn't in "also"
 
 
 def _search_lists(q: str) -> dict:

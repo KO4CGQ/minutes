@@ -20,14 +20,40 @@ def _norm(s: str) -> str:
 SEARCH_WORDS = 12  # words of a search that count: enough for any real search, and a cap on the work one can cause
 
 
+# Common English given names and their nicknames, one group per line. Used only for the first names of people on
+# the roster: with a Richard on it, "Richard", "Rich", "Rick" and "Dick" find each other; without one, nothing changes.
+NICKNAMES = """richard rich rick ricky dick | robert rob bob bobby robbie bert | william bill billy will willy liam
+james jim jimmy jamie | john jack johnny jon | jonathan jon jonny | joseph joe joey | michael mike mikey mick
+thomas tom tommy | charles charlie chuck | edward ed eddie ted ned | theodore ted teddy theo | david dave davey
+daniel dan danny | steven steve stevie | stephen steve stevie | christopher chris kit | anthony tony
+andrew andy drew | kenneth ken kenny | ronald ron ronnie | donald don donnie | gerald gerry jerry | gregory greg
+lawrence larry | leonard len lenny leo | raymond ray | timothy tim timmy | matthew matt | patrick pat paddy
+peter pete | samuel sam sammy | benjamin ben benny | nicholas nick nicky | alexander alex al sandy | albert al bert
+alan al | alfred al alf fred | frederick fred freddy | francis frank fran | franklin frank | henry hank harry
+harold harry hal | walter walt wally | eugene gene | douglas doug | phillip phil | philip phil | jeffrey jeff
+geoffrey geoff jeff | terrence terry | terence terry | jerome jerry | russell russ | stanley stan | norman norm
+vincent vince vinny | leroy roy | louis lou | lewis lou | arthur art artie | maxwell max | zachary zach zack
+jacob jake | joshua josh | nathan nate | nathaniel nate nat | herbert herb bert | gilbert gil
+elizabeth liz beth betty betsy eliza | margaret maggie peggy meg | katherine kate kathy katie | catherine cathy kate katie
+kathleen kathy kate | patricia pat patty trish tricia | susan sue suzy susie | deborah deb debbie | rebecca becky becca
+jennifer jen jenny | jessica jess jessie | christine chris chrissy tina | christina chris tina | barbara barb
+dorothy dot dottie | virginia ginny | victoria vicky tori | cynthia cindy | pamela pam | sandra sandy | theresa terry tess
+judith judy | alexandra alex sandy | samantha sam | abigail abby | jacqueline jackie | nancy nan"""
+NICK_GROUPS = [set(g.split()) for g in NICKNAMES.replace("\n", " | ").split("|")]
+# Nicknames that are everyday words in minutes ("will", a "bill" to pay, "don't" read as "don", an antenna "jack"):
+# never added for someone else's name. A member's own name always counts, and Other spellings can add any of them.
+COMMON_WORDS = {"will", "bill", "don", "art", "frank", "ray", "sue", "max", "jack", "kit", "dot", "drew", "norm", "herb"}
+
+
 def spellings(club: Club) -> dict[str, set[str]]:
-    """Each member's first and last name with their other spellings from the roster (aliases), lowercase:
-    word -> every spelling of that name. An alias goes with whichever of first or last it's closer to."""
+    """Each member's first and last name with their other spellings from the roster (aliases) and, for the first
+    name, its common nicknames (NICKNAMES), lowercase: word -> every spelling of that name. An alias goes with
+    whichever of first or last it's closer to."""
     out: dict[str, set[str]] = {}
     sim = lambda a, b: difflib.SequenceMatcher(None, a, b).ratio()
     for m in club.members.values():
         first, last = m.first.lower(), m.last.lower()
-        groups = ({first}, {last})
+        groups = ({first} | {n for g in NICK_GROUPS if first in g for n in g} - (COMMON_WORDS - {first}), {last})
         for a in (w.lower() for al in m.aliases for w in re.findall(r"\w+", al)):
             groups[sim(a, first) < sim(a, last)].add(a)
         for g in groups:
@@ -76,16 +102,17 @@ class Archive:
         if not terms:
             return []
         names = spellings(self.club)
-        found = self._match([names.get(t, {t}) for t in terms], limit)
+        found = self._match([(t, names.get(t, set())) for t in terms], limit)
         if not found:
             vocab = [w for (w,) in self.db.execute("select term from vocab")]
-            found = self._match([names.get(t, {t}) | set(difflib.get_close_matches(t, vocab, n=3, cutoff=0.8))
+            found = self._match([(t, names.get(t, set()) | set(difflib.get_close_matches(t, vocab, n=3, cutoff=0.8)))
                                  for t in terms], limit)
         return found
 
-    def _match(self, alts: list[set[str]], limit: int) -> list[dict]:
-        """Rows with, for each set, at least one of its words (as a prefix)."""
-        fts = " AND ".join("(" + " OR ".join(f'"{w}"*' for w in sorted(a)) + ")" for a in alts)
+    def _match(self, alts: list[tuple[str, set[str]]], limit: int) -> list[dict]:
+        """Rows with, for each (typed word, other spellings), the typed word as the start of a word, or one of the
+        other spellings as a whole word ("Al" for Alan must not find "all")."""
+        fts = " AND ".join("(" + " OR ".join([f'"{t}"*'] + [f'"{w}"' for w in sorted(a - {t})]) + ")" for t, a in alts)
         cur = self.db.execute(
             "select slug, section, member, snippet(docs, 3, char(1), char(2), ' … ', 24) "
             "from docs where docs match ? order by slug desc limit ?", (fts, limit))
