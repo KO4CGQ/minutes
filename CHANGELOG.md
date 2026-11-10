@@ -5,6 +5,8 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+
+## 0.15.0 (2026-11-09)
 - **Hardening (security review of this release):** a page number or year typed with characters like "²" no longer causes a server error (one shared number check, 8 places); a club link can't be a `/\…` address that browsers treat as another site; searches count their first 12 words; a missing roster file no longer shows the server's folder. New fuzz tests (`tests/test_fuzz.py`) throw thousands of hostile inputs at search, club links, sign-in redirects, the roster file, the roster API and every page.
 - **No more Google for the roster or calendars:** the roster is only ever the app's own (`roster-sheet.json`), so the Google Sheets code, `roster --import` and the `roster: source: app` setting are gone (it can come out of club.yaml), and so is the optional copy to Google Calendar (`calendars:` in club.yaml is ignored). Google Drive backups are unchanged.
 - **Passkey offer after an emailed link:** signing in with an emailed link now offers a passkey in a small banner on the page you were going to, if your device can make one (fingerprint, face or device PIN), even if you already have a passkey on another device. "Not now" hides it until the next emailed-link sign-in. It replaces the stop at the account page, which only members with no passkey at all saw, whether or not their device could make one.
