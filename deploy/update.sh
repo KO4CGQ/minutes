@@ -5,7 +5,9 @@
 # git reset replaces this very file while it runs, and bash may have read only part of it; so everything
 # is inside main(), which bash reads in full before running any of it.
 main() {
-  set -euo pipefail
+  set -Eeuo pipefail
+  # set -e stops silently, and the git commands are quiet: say what failed, for the Updates page and the email
+  trap 'echo "Stopped: \"$BASH_COMMAND\" failed (exit $?)." >&2' ERR
   local APP=/opt/w8lbz-minutes BRANCH=${BRANCH:-main} TAG=${TAG:-}
   cd "$APP"
   install_and_restart() {
@@ -28,7 +30,9 @@ main() {
     return 1
   }
   local before; before=$(sudo -u minutes git rev-parse HEAD)
-  sudo -u minutes git fetch -q --tags origin
+  # --force: GitHub's tags are the truth (the server resets to them anyway); without it, a tag moved on GitHub
+  # makes every fetch fail ("would clobber existing tag"), as it did for 0.17.0
+  sudo -u minutes git fetch -q --tags --force origin
   if [ -n "$TAG" ]; then
     [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a release tag: $TAG" >&2; exit 2; }
     sudo -u minutes git reset -q --hard "refs/tags/$TAG"
