@@ -10,6 +10,7 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 ## Look and feel: ideas to consider
 - **Site name, logo and favicon set in the app** (admin): today "W8LBZ Minutes" and the logo are built in, so another club running the app has to change the code.
 - **Menu (nav panel) set from the Links page:** move pages and links up and down, add dividers, and choose which roles see each one (members, leaders, officers, admins), instead of the fixed list.
+- **24-hour clock:** a setting on Your profile → Settings to show times as 19:30 instead of 7:30 PM, across the app (and its emails, if wanted).
 - **Donate button:** a link in the app to a donation page the admin sets (the app handles no payments). Open question: also a "Support the app" link to the developer's sponsor page.
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
 

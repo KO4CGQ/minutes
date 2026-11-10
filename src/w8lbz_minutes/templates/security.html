@@ -9,6 +9,17 @@
 </tbody></table>{% else %}<p class="muted">None recorded yet (recording started with this version).</p>{% endif %}
 
 {% endif %}
+{% if tab == 'members' %}
+<p class="muted">Each member on the roster: when they last signed in, whether they've set up a passkey, and how many devices are signed in now. Sign-ins are recorded since 0.9; a member who signed in earlier and stayed signed in shows a device but no sign-in.</p>
+{% set people = club.members.values()|rejectattr('status', 'in', ['Inactive', 'Silent Key', 'inactive', 'silent key'])|sort(attribute='last') %}
+{% set with_pk = by_member.values()|selectattr('passkeys')|list|length %}
+<p>{{ by_member.values()|selectattr('last')|list|length }} have signed in; {{ with_pk }} have a passkey.</p>
+<table class="list"><thead><tr><th>Member</th><th>Last sign-in</th><th>Passkeys</th><th class="opt">Passkey last used</th><th>Devices now</th></tr></thead><tbody>
+{% for p in people %}{% set r = by_member.get(p.id, {}) %}<tr><td>{{ p.name }}</td><td>{{ r.last|tsfull if r.last else '' }}{% if not r.last %}<span class="muted">never</span>{% endif %}</td>
+<td>{{ r.passkeys or '' }}{% if not r.passkeys %}<span class="muted">none</span>{% endif %}</td><td class="opt">{{ r.pk_used|tsfull if r.pk_used else '' }}</td><td>{{ r.devices or '' }}</td></tr>{% endfor %}
+</tbody></table>
+
+{% endif %}
 {% if tab == 'devices' %}
 <p class="muted">Each stays signed in for {{ session_days }} days unless signed out. Sign out a lost phone, or someone who left the club.</p>
 {% set rows = sessions|selectattr('member', 'equalto', who)|list if who else sessions %}

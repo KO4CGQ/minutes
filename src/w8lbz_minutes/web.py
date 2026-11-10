@@ -16,7 +16,9 @@ from urllib.parse import quote
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from markupsafe import Markup, escape
 
 from . import ai, avatars, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
@@ -208,6 +210,17 @@ def officer(request: Request) -> str:
 
 
 PK_OFFER = "pk_offer"  # set by an emailed-link sign-in; base.html offers a passkey while it's there
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request: Request, exc: StarletteHTTPException):
+    """A page, not a line of JSON, when a browser opens an address that isn't there (or isn't allowed); the
+    app's own scripts ask for JSON and still get it."""
+    if request.method == "GET" and "text/html" in request.headers.get("accept", "") and exc.status_code in (403, 404):
+        r = page(request, "error.html", code=exc.status_code, detail=exc.detail if exc.status_code == 403 else "")
+        r.status_code = exc.status_code
+        return r
+    return await http_exception_handler(request, exc)
 
 
 def page(request: Request, name: str, **ctx) -> HTMLResponse:
@@ -614,9 +627,9 @@ def chow_pdf(mid: str = Depends(me)):
 @app.post("/chow/email")
 def chow_email(request: Request, mid: str = Depends(chow_leader)):
     """Send the chow list to every member who wants it (Email tab), e.g. after filling or changing the schedule."""
-    to = sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == "pdf"}, key=str.lower)
+    how = lambda k: sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == k}, key=str.lower)  # noqa: E731
     pdf = chow_list_pdf()
-    return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, to, mid, base_url(request)))
+    return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, how("pdf"), mid, base_url(request), how("link")))
 
 
 @app.get("/chow", response_class=HTMLResponse)
@@ -1730,7 +1743,7 @@ def _security_admin(request: Request) -> str:
     return mid
 
 
-SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
+SECURITY_TABS = (("signins", "Sign-ins"), ("members", "Members"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
                  ("bans", "Banned addresses"), ("admin", "Admin actions"), ("backups", "Backups"), ("server", "Server"))
 
 
@@ -1753,6 +1766,15 @@ def admin_action(e: dict) -> str:
 
 
 templates.env.filters["admin_action"] = admin_action
+
+
+@app.get("/admin")
+@app.get("/admin/")
+def admin_home(mid: str = Depends(real_me)):
+    """/admin on its own: the Security page (for anyone else, not found, like every admin page)."""
+    if not archive.club.is_admin(mid):
+        raise HTTPException(404)
+    return RedirectResponse("/admin/security", status_code=303)
 
 
 @app.get("/admin/security", response_class=HTMLResponse)
@@ -1778,6 +1800,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 data_size=backup.data_size() if tab == "backups" else 0, rec=backup.RECOMMENDED,
                 suggestion=backup.suggest() if tab == "backups" else "",
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
+                by_member=authn.by_member() if tab == "members" else {},
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
                 test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,

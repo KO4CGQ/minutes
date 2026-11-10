@@ -157,6 +157,16 @@ class Auth:
     def events(self, limit: int = 100) -> list[sqlite3.Row]:
         return self.db.execute("select * from events order by at desc limit ?", (limit,)).fetchall()
 
+    def by_member(self) -> dict[str, dict]:
+        """Per member: last sign-in, passkeys (how many, last used) and devices signed in now, for the Security page."""
+        out: dict[str, dict] = {}
+        for sql, cols in (("select member, max(at) from signins group by member", ("last",)),
+                          ("select member, count(*), max(last_used) from passkeys group by member", ("passkeys", "pk_used")),
+                          ("select member, count(*) from sessions where expires>? group by member", ("devices",))):
+            for r in self.db.execute(sql, (time.time(),) if "?" in sql else ()):
+                out.setdefault(r[0], {}).update(zip(cols, tuple(r)[1:]))
+        return out
+
     def all_sessions(self) -> list[sqlite3.Row]:
         return self.db.execute("select rowid, member, created, expires, agent, ip, method from sessions where expires>? "
                                "order by member, created desc", (time.time(),)).fetchall()

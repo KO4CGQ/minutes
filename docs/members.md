@@ -11,7 +11,7 @@ What's next for you: the next meeting (and, on meeting night, a link to follow t
 ## Your profile, emails and settings
 Your name menu → **Your profile**:
 - **Contact details and birthday:** change your email, phone, address and birthday (a month alone is fine). Officers always see them; other members see only what you tick to share. A shared birthday, and each year you've been a member, gets a mention at the meeting that week.
-- **Email:** turn each kind of email on or off: the minutes (with the PDF or as a link), the meeting-day reminder, reminders for business you're looking after, the chow list and roster updates.
+- **Email:** turn each kind of email on or off: the minutes (with the PDF or as a link), the meeting-day reminder, reminders for business you're looking after, the chow list (with the PDF or as a link) and roster updates.
 - **Settings:** how the app shows things to you, like the first day of the week.
 
 ## Minutes and search

@@ -264,3 +264,14 @@ def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
     assert "has changed since" in c.get("/chow").text
     # a night passing isn't a change
     assert not chow.list_changed({**chow.load(), "nights": {}, "emailed": {"nights": {"2000-01-01": ["amy", "scheduled", ""]}}})
+
+
+def test_the_chow_list_goes_as_a_pdf_or_a_link_as_each_chose(monkeypatch):
+    from w8lbz_minutes import auth
+    sent = []
+    monkeypatch.setattr(auth, "send_email", lambda to, subject, body, attachments=(), **kw: sent.append((list(to), body, len(attachments))) or len(to))
+    s = chow.load()
+    n = chow.email_list(Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[]), s, ("list.pdf", b"%PDF", ), ["amy@example.org"],
+                        "kd8aaa", "https://minutes.example.org", ["bob@example.org"])
+    assert n == 2 and sent[0][0] == ["amy@example.org"] and sent[0][2] == 1
+    assert sent[1][0] == ["bob@example.org"] and sent[1][2] == 0 and "https://minutes.example.org/chow" in sent[1][1]
