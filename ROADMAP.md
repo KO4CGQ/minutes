@@ -21,6 +21,7 @@ Built (server admin guide → Backups): encrypted, scheduled and configured from
 - **A restore drill:** a periodic test restore onto a scratch container, beyond the check that each backup opens.
 
 ## Admin tools
+- **Moving the app to a new address** (e.g. members.w8lbz.org): change `auth.rp_id` in club.yaml and the proxy; club links to the app's pages already follow. Passkeys are tied to the address, so every member signs in once by emailed link and adds a new one (the offer after a link sign-in does this); old feed and sign-in links stop working. **A sub-path** (w8lbz.org/members) is a bigger job: every page links to `/…` from the site's root, so the app would need a path prefix throughout (FastAPI `root_path`, and the templates, scripts and redirects).
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
 - **Filter the Admin actions log** by admin, kind of action and date, with paging (it shows the last 50 today).
 - **Act as a member:** View as is read-only today. A later option could let an admin make changes as the member to reproduce a problem, clearly logged and with emails still going to the admin, not the member.
