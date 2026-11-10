@@ -57,6 +57,12 @@ PREVIEW = os.environ.get("W8LBZ_PREVIEW") or None
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,3}$", re.I)
 
 
+def num(v) -> int | None:
+    """A whole number typed or sent as text, else None. Not str.isdigit(): it accepts "²" and "⁰", which int() can't read."""
+    v = str(v if v is not None else "").strip()
+    return int(v) if v.isascii() and v.isdecimal() and len(v) <= 9 else None
+
+
 def valid_email(s: str) -> bool:
     """name@domain.tld, no spaces, at most 254 characters. No regex: a crafted address can't make it slow."""
     if not s or len(s) > 254 or any(ch.isspace() for ch in s) or s.count("@") != 1:

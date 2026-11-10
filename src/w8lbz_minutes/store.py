@@ -17,6 +17,9 @@ def _norm(s: str) -> str:
     return re.sub(r"[^a-z]", "", s.lower())
 
 
+SEARCH_WORDS = 12  # words of a search that count: enough for any real search, and a cap on the work one can cause
+
+
 def spellings(club: Club) -> dict[str, set[str]]:
     """Each member's first and last name with their other spellings from the roster (aliases), lowercase:
     word -> every spelling of that name. An alias goes with whichever of first or last it's closer to."""
@@ -69,7 +72,7 @@ class Archive:
     def search(self, q: str, limit: int = 100) -> list[dict]:
         """Every word (or another spelling of a member's name from the roster); if that finds nothing, close
         spellings of the words in the minutes (a typo, or a spelling nobody has added to the roster)."""
-        terms = [t.lower() for t in re.findall(r"\w+", q)]
+        terms = [t.lower() for t in re.findall(r"\w+", q)][:SEARCH_WORDS]
         if not terms:
             return []
         names = spellings(self.club)

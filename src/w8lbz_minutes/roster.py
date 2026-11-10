@@ -124,7 +124,7 @@ class LocalSheet:
 
     def _tabs(self) -> dict:
         if not self.path.exists():
-            raise SheetError(f"{self.path} is missing: restore it from a backup (docs/server-admin.md → Backups).")
+            raise SheetError(f"The roster ({self.path.name}) is missing: restore it from a backup (docs/server-admin.md → Backups).")
         return json.loads(self.path.read_text())
 
     def save(self, tabs: dict) -> None:

@@ -24,13 +24,13 @@ from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, PREVIEW, one_line, valid_email
+from .club import DATA, PREVIEW, num, one_line, valid_email
 from .backup import KEY_FILE
 from .roster import COLUMNS, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
 from .meeting import SECTIONS
-from .store import Archive, spellings
+from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
 app = FastAPI(title="W8LBZ Minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
@@ -150,7 +150,7 @@ async def require_login(request: Request, call_next):
 async def upload_limit(request: Request, call_next):
     """Turn away a request bigger than the admin's upload limit before reading it (a huge upload would fill the disk)."""
     size = request.headers.get("content-length", "")
-    if size.isdigit() and int(size) > limits.max_upload() + limits.FORM_ROOM:
+    if (num(size) or 0) > limits.max_upload() + limits.FORM_ROOM:
         return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
                             status_code=413)
     return await call_next(request)
@@ -881,9 +881,9 @@ async def chow_constraints(request: Request, mid: str = Depends(chow_leader)):
     who = form.get("member", "")
     if who not in archive.club.members:
         raise HTTPException(404)
-    weeks = [int(w) for w in form.getlist("not_weeks") if w.isdigit()]
+    weeks = [num(w) for w in form.getlist("not_weeks") if num(w) is not None]
     away = [[form.get("away_from", ""), form.get("away_to", "")]] if form.get("away_from") else []
-    skip = int(form.get("skip") or 0) if str(form.get("skip") or "0").isdigit() else 0
+    skip = num(form.get("skip")) or 0
     return await run_in_threadpool(chow_change, request, lambda s: chow.set_constraints(s, who, weeks, away, form.get("note", ""), mid, skip),
                                    "/chow/rotation")
 
@@ -1324,10 +1324,10 @@ PER_OPTIONS = (10, 25, 50, 0)  # list page sizes; 0 = all
 
 def paginate(items: list, p: str, per: str, default: int = 25) -> dict:
     """One page of a long list. p and per come from the query string as text (junk falls back to defaults)."""
-    n = int(per) if per.isdigit() and int(per) in PER_OPTIONS else default
+    n = num(per) if num(per) in PER_OPTIONS else default
     size = n or max(len(items), 1)
     pages = max(1, -(-len(items) // size))
-    p = min(max(int(p) if p.isdigit() else 1, 1), pages)
+    p = min(max(num(p) or 1, 1), pages)
     rows = items[(p - 1) * size:p * size]
     return {"rows": rows, "p": p, "pages": pages, "per": n, "options": PER_OPTIONS, "total": len(items),
             "first": (p - 1) * size + 1 if rows else 0, "last": (p - 1) * size + len(rows)}
@@ -1347,7 +1347,7 @@ def by_period(period: str) -> tuple[list, str, str]:
         return [m for m in archive.meetings if m.date > cutoff], period, label
     if period == "all":
         return list(archive.meetings), "all", "on record"
-    year = int(period) if period.isdigit() else today.year
+    year = num(period) or today.year
     return [m for m in archive.meetings if m.date.year == year], str(year), f"in {year}"
 
 
@@ -1442,7 +1442,7 @@ SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "
 def _has(q: str, *texts) -> bool:
     """Every word of q (or another spelling of a member's name, from the roster) is in one of the texts (any case)."""
     text, names = " ".join(t or "" for t in texts).lower(), spellings(archive.club)
-    return all(any(v in text for v in names.get(w, {w})) for w in q.lower().split())
+    return all(any(v in text for v in names.get(w, {w})) for w in q.lower().split()[:SEARCH_WORDS])
 
 
 def _search_lists(q: str) -> dict:
@@ -1925,7 +1925,7 @@ AGENDA_WEEKS = {8: "8 weeks", 13: "3 months", 26: "6 months", 52: "a year"}
 
 
 def _calendar(request: Request, view: str, start: str, month: str, mid: str | None, weeks: str = "8") -> HTMLResponse:
-    weeks = int(weeks) if weeks.isdigit() and int(weeks) in AGENDA_WEEKS else 8
+    weeks = num(weeks) if num(weeks) in AGENDA_WEEKS else 8
     today = dt.date.today()
     try:
         first = dt.date.fromisoformat(month + "-01") if month else today.replace(day=1)
@@ -2155,7 +2155,8 @@ async def links_save(request: Request, mid: str = Depends(me)):
             continue
         if own and url.lower().startswith(own):  # a page of this app: kept as /page, so it follows the app if it moves
             url = url[len(own) - 1:]
-        if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*|/(?!/)\S*)$", url):
+        page_link = url.startswith("/") and _safe_next(url) == url and not re.search(r"\s", url)  # never //host or /\host
+        if not label or not (page_link or re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url)):
             return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto:, tel: or / for a page of this app ({label or url})."), status_code=303)
         page_, minutes_ = SHOW.get(show, (True, True))
         out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if valid_icon(icon) else {}), "page": page_, "minutes": minutes_})

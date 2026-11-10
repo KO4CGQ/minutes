@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from . import business, calview, chow
-from .club import DATA, Club
+from .club import DATA, Club, num
 
 # kind: (heading, {choice: what it means}, default), in the order the Email tab shows them. "roster" is for the Secretaries.
 KINDS = {
@@ -61,7 +61,7 @@ def get(mid: str) -> dict:
 def save(mid: str, choices: dict) -> dict:
     """Keep only valid choices (this is a trust boundary: it comes from a form)."""
     clean = {k: v for k, v in choices.items() if k in KINDS and v in KINDS[k][1]}
-    clean["chow_days"] = sorted({int(d) for d in choices.get("chow_days", []) if str(d).isdigit() and int(d) in CHOW_DAYS}, reverse=True)
+    clean["chow_days"] = sorted({num(d) for d in choices.get("chow_days", []) if num(d) in CHOW_DAYS}, reverse=True)
     allp = _read("email-prefs.json")
     allp[mid] = clean
     _write("email-prefs.json", allp)
