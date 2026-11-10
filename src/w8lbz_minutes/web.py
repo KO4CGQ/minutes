@@ -1608,7 +1608,7 @@ def link_icon(url: str) -> str:
     """Icon name for a club link, guessed from its address ("Auto" on the Links editor): a known site's icon,
     else a globe for a bare website address, else a chain link. A link can set `icon:` to any name in ICONS."""
     u = url.lower()
-    return next((icon for key, icon in LINK_ICONS if key in u), "globe" if u.count("/") <= 3 else "link")
+    return next((icon for key, icon in LINK_ICONS if key in u), "globe" if u.startswith("http") and u.count("/") <= 3 else "link")
 
 
 templates.env.filters["link_icon"] = link_icon
@@ -1616,10 +1616,17 @@ templates.env.filters["link_icon"] = link_icon
 
 def link_host(url: str) -> str:
     host = re.sub(r"^(https?://(www\.)?|mailto:|tel:)", "", url).split("/")[0]
-    return "on this site" if host == authn.rp_id else host
+    return "on this site" if url.startswith("/") or host == authn.rp_id else host
+
+
+def abs_url(url: str) -> str:
+    """A page of this app (/bylaws) as a full address, for the minutes and their PDF, which leave the site. Kept
+    relative everywhere else, so the links follow the app if its address changes (auth.rp_id in club.yaml)."""
+    return f"https://{authn.rp_id}{url}" if url.startswith("/") and authn.rp_id else url
 
 
 templates.env.filters["link_host"] = link_host
+templates.env.filters["abs_url"] = abs_url
 
 
 def _license(dist: str) -> str:
@@ -2141,12 +2148,15 @@ async def links_save(request: Request, mid: str = Depends(me)):
     form = await request.form()
     rows = zip(form.getlist("label"), form.getlist("url"), form.getlist("icon"), form.getlist("show"))
     out = []
+    own = f"https://{authn.rp_id}/".lower() if authn.rp_id else None
     for label, url, icon, show in rows:
         label, url = label.strip(), url.strip()
         if not label and not url:
             continue
-        if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*)$", url):
-            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto: or tel: ({label or url})."), status_code=303)
+        if own and url.lower().startswith(own):  # a page of this app: kept as /page, so it follows the app if it moves
+            url = url[len(own) - 1:]
+        if not label or not re.match(r"^(https?://\S+|mailto:\S+@\S+|tel:[+\d][\d ()-]*|/(?!/)\S*)$", url):
+            return RedirectResponse("/links?edit=1&error=" + quote(f"Each link needs a name and an address starting with https://, mailto:, tel: or / for a page of this app ({label or url})."), status_code=303)
         page_, minutes_ = SHOW.get(show, (True, True))
         out.append({"label": label[:80], "url": url[:500], **({"icon": icon} if valid_icon(icon) else {}), "page": page_, "minutes": minutes_})
     archive.club.save_links(out[:40])

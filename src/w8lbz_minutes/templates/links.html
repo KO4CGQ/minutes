@@ -2,13 +2,13 @@
 <div class="headrow"><h1>Club links</h1>{% if admin_until and not edit %}<a class="btn small ghost" href="/links?edit=1">{{ emoji('✏️', 'pencil') }} Edit links</a>{% endif %}</div>
 {% if edit %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-<p class="muted">Pick where each link shows: on this page, in the "Club Links" footer of the minutes (and their PDF), both, or neither. Use ↑ ↓ to change the order.
+<p class="muted">Pick where each link shows: on this page, in the "Club Links" footer of the minutes (and their PDF), both, or neither. Use ↑ ↓ to change the order. For a page of this app, start the address with / (e.g. <code>/bylaws</code>): it keeps working if the app's address changes, and the minutes show it in full.
 Click an icon to change it, or search over 3,000 brand logos (Home Assistant, Discord, YouTube…). <b>Auto</b> picks one from the address: a video camera for Teams or Zoom, a chat bubble for Discord, a document for PDFs and Google Docs, a globe for a plain website, and so on. Use full addresses (https://…) so they work in the PDF; mailto: and tel: addresses work too.</p>
 <form method="post" action="/links" class="linkedit">
 <table class="list"><thead><tr><th>Name</th><th>Address</th><th>Icon</th><th>Shows on</th><th></th></tr></thead>
 <tbody>{% for l in club.links + [{}] %}<tr{% if l %} class="folded"{% endif %}>
   <td><input name="label" value="{{ l.label or '' }}" aria-label="Name" placeholder="New link"></td>
-  <td><input name="url" value="{{ l.url or '' }}" aria-label="Address" placeholder="https://"></td>
+  <td><input name="url" value="{{ l.url or '' }}" aria-label="Address" placeholder="https://… or /page"></td>
   <td><input type="hidden" name="icon" value="{{ l.icon or '' }}">
     <details class="iconpick"><summary title="Pick an icon">{{ icon(l.icon or (l.url or '')|link_icon) }}<small>{{ 'Auto' if not l.icon else icon_label(l.icon) }}</small></summary>
     <div class="grid"><input type="search" class="iconsearch" placeholder="Search logos, e.g. Home Assistant" aria-label="Search brand logos" autocomplete="off">

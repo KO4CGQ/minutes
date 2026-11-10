@@ -200,6 +200,25 @@ def test_links_page_lists_club_links(monkeypatch):
     assert 'href="https://discord.example/x"' in html and "Club Discord" in html and 'href="/links"' in html
 
 
+def test_links_to_pages_of_the_app_stay_relative(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.club import Club
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
+    monkeypatch.setattr(web.authn, "rp_id", "minutes.example")
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    saved = []
+    monkeypatch.setattr(Club, "save_links", lambda self, links: saved.extend(links))
+    form = {"label": ["Bylaws", "Calendar", "Discord"], "url": ["https://Minutes.example/bylaws", "/calendar", "https://discord.example/x"],
+            "icon": ["", "", ""], "show": ["both", "both", "both"]}
+    assert TestClient(web.app).post("/links", data=form, follow_redirects=False).headers["location"] == "/links"
+    assert [x["url"] for x in saved] == ["/bylaws", "/calendar", "https://discord.example/x"]  # the app's own address: made relative
+    assert web.abs_url("/bylaws") == "https://minutes.example/bylaws" and web.abs_url("https://x.example") == "https://x.example"
+    assert web.link_host("/bylaws") == "on this site"
+    bad = {**form, "url": ["//evil.example/x", "/calendar", "https://discord.example/x"]}
+    assert "error=" in TestClient(web.app).post("/links", data=bad, follow_redirects=False).headers["location"]
+
+
 def test_link_icons():
     from w8lbz_minutes.web import link_icon
     assert link_icon("https://teams.live.com/meet/1?p=x") == "video"
