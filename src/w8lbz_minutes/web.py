@@ -29,7 +29,7 @@ from .roster import COLUMNS, KEY_FILE, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
 from .meeting import SECTIONS
-from .store import Archive
+from .store import Archive, spellings
 
 HERE = Path(__file__).parent
 app = FastAPI(title="W8LBZ Minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
@@ -1446,9 +1446,9 @@ SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "
 
 
 def _has(q: str, *texts) -> bool:
-    """Every word of q is in one of the texts (any case)."""
-    text = " ".join(t or "" for t in texts).lower()
-    return all(w in text for w in q.lower().split())
+    """Every word of q (or another spelling of a member's name, from the roster) is in one of the texts (any case)."""
+    text, names = " ".join(t or "" for t in texts).lower(), spellings(archive.club)
+    return all(any(v in text for v in names.get(w, {w})) for w in q.lower().split())
 
 
 def _search_lists(q: str) -> dict:

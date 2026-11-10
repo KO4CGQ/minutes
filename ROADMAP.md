@@ -59,7 +59,7 @@ Suggested follow-ups are done. Next, using the typed minutes we already have (no
 
 ## Later
 - **Audio capture and live transcription** (see REQUIREMENTS.md §4.1–4.2): browser room capture plus a meeting bot, cloud speech-to-text, OpenRouter drafting.
-- **Discord:** a post-meeting summary and weekly reminders.
+- **Discord:** a post-meeting summary and weekly reminders, and a post when a meeting starts (when the leader opens the console), with the link to join online.
 - **Clubhouse DNS override:** the club router resolves the app's hostname to the server's LAN address, and the server serves HTTPS locally with the Tailscale-issued certificate. Then the same URL works at the clubhouse without an internet round trip, even when the internet is down.
 - **Permanent hostname** (e.g. `minutes.w8lbz.org`) once the club controls its DNS. Members re-add passkeys once.
 - **Anubis proof-of-work in front of public pages** (sign-in, public calendar), to turn away scrapers. Signed-in members never see it:

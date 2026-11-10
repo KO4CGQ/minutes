@@ -17,6 +17,7 @@ The app runs as the `minutes` user on port 8000. The roster syncs daily at 04:00
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
 
 ### Moving the roster into the app (once)
+`w8lbz-minutes` below is the helper `setup.sh` installs in `/usr/local/bin`. A server set up before it existed doesn't have it; there, use `sudo -u minutes env W8LBZ_CONFIG=/etc/w8lbz-minutes/club.yaml W8LBZ_DATA=/var/lib/w8lbz-minutes W8LBZ_GOOGLE_KEY=/etc/w8lbz-minutes/google-service-account.json /opt/w8lbz-minutes/.venv/bin/w8lbz-minutes` instead.
 Afterwards the app keeps the roster itself (`roster-sheet.json` in the data folder: the sheet's two tabs, same columns), every roster edit goes there, and nothing reads or writes the Google Sheet. The app is stopped meanwhile, so no edit lands in the sheet after the copy.
 ```bash
 pct snapshot 103 before-roster-move                   # on the Proxmox host
