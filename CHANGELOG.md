@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Nicknames in search:** with a Richard on the roster, "Richard", "Rich", "Rick" and "Dick" find each other (about 90 common English names and their nicknames, for roster first names only). Nicknames that are everyday words in minutes ("will", a "bill", "jack") are left out unless they're the member's own name or in their Other spellings, and other spellings match whole words only, so "Al" for Alan doesn't find "all".
 
 ## 0.16.0 (2026-11-09)
 - **Automatic updates (off until turned on):** admin mode → Updates → Turn on. Every night (2:30 by default; the hour is set on the same page) the server installs the newest release if no release since the running one needs steps by hand, after a full backup (no backup, no update), and emails the admins how it went. A release with steps by hand is only emailed about.
