@@ -505,3 +505,56 @@ def test_ohio_election_days_on_community():
     c = club()
     nov = calview.entries(c, Archive(events.DATA, c), "kd8bbb", *NOV)[0]
     assert [(e.kind, e.start.day) for e in nov if e.title.startswith("Election Day")] == [("community", 3)]
+
+
+def test_console_reads_out_the_calendar_until_the_next_meeting(tmp_path):
+    from w8lbz_minutes import console
+    with events.locked():
+        evs, meet = net(title="W0TST meeting", date="2026-11-12", time="19:30", end_time="21:30")
+        meet["meeting"] = True  # the weekly meeting, as ensure_meeting makes it: left out unless unticked
+        del meet["quiet"]
+        events.add(evs, "events", form(title="Fox hunt", date="2026-11-14", time="14:00", end_time="16:00", where="the park"), "x")
+        events.add(evs, "events", form(title="Board dinner", date="2026-11-15", quiet="1"), "x")
+        events.add(evs, "planning", events.from_form({"title": "Budget due", "date": "2026-11-16"}), "x")
+        events.add(evs, "community", events.from_form({"title": "Hamfest", "date": "2026-12-05", "end_date": "2026-12-06"}), "x")
+        events.save(evs)
+    Meeting(date=dt.date(2026, 11, 12), status="draft", sections={"Upcoming Events": [Item("Swap meet", when="2026-11-18")]}).save(tmp_path)
+    c = club()
+    got = console.calendar_ahead(Archive(tmp_path, c), dt.date(2026, 11, 12))
+    titles = [x["title"] for x in got["calendar"]]
+    assert got["next_meeting"] == "2026-11-19"
+    assert {"Fox hunt", "Thanksgiving", "Hamfest", "Budget due"} <= set(titles)
+    assert not {"W0TST meeting", "Board dinner", "Swap meet", "Birthday: Cal Cole"} & set(titles)  # meeting, ticked, already in the minutes, private
+    assert next(x for x in got["calendar"] if x["title"] == "Budget due")["cal"] == "planning"
+    fox = next(x for x in got["calendar"] if x["title"] == "Fox hunt")
+    assert (fox["when"], fox["until"], fox["where"], fox["kind"]) == ("2026-11-14T14:00", "2026-11-14T16:00", "the park", "Club events")
+    assert next(x for x in got["calendar"] if x["title"] == "Hamfest")["until"] == "2026-12-06"
+    # the tick is on the event's form; the meeting shows it ticked, and unticking puts it back in the list
+    assert events.form_values(meet, None)["quiet"] and not events.form_values(evs[1], None)["quiet"]
+    with events.locked():
+        evs = events.load()
+        events.change(evs, meet["id"], None, "events", events.from_form({**events.form_values(meet, None), "quiet": ""}))
+        events.save(evs)
+    assert "W0TST meeting" in [x["title"] for x in console.calendar_ahead(Archive(tmp_path, c), dt.date(2026, 11, 12))["calendar"]]
+
+
+def test_upcoming_events_go_on_their_calendar_once(tmp_path):
+    with events.locked():
+        evs = []
+        events.add(evs, "events", form(title="Fox hunt", date="2026-11-14", time="14:00", end_time="16:00"), "x")
+        events.save(evs)
+    m = Meeting(date=dt.date(2026, 11, 12), status="draft", sections={"Upcoming Events": [
+        Item("Fox hunt, the park", when="2026-11-14T14:00", until="2026-11-14T16:00"),  # added from the console's list
+        Item("Thanksgiving", when="2026-11-26"),                                           # a holiday, added the same way
+        Item("Budget meeting", when="2026-11-18T19:00", cal="planning"),
+        Item("Road race", when="2026-11-21", cal="community")]})
+    assert Meeting.from_markdown(m.to_markdown()).items("Upcoming Events")[2].cal == "planning"  # kept in the file
+    m.save(tmp_path)
+    c = club()
+    c.info["public_calendars"] = ["events"]
+    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
+    seen = [(e.kind, e.title) for e in got]
+    assert [t for _, t in seen if t.startswith("Fox hunt")] == ["Fox hunt"] and [t for _, t in seen].count("Thanksgiving") == 1
+    assert ("planning", "Budget meeting") in seen and ("community", "Road race") in seen
+    pub, _ = calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)
+    assert not {"Budget meeting", "Road race"} & {e.title for e in pub}  # Planning and Community aren't public here

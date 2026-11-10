@@ -34,7 +34,7 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
         m.sections[sec] = []
     if prev:
         # events already past drop off; undated ones stay until a leader removes them
-        m.sections["Upcoming Events"] = [Item(i.text, when=i.when, until=i.until) for i in prev.items("Upcoming Events")
+        m.sections["Upcoming Events"] = [Item(i.text, when=i.when, until=i.until, cal=i.cal) for i in prev.items("Upcoming Events")
                                          if not i.when or (i.until or i.when)[:10] >= date.isoformat()]
     # Old Business: every tracked item still open (business.py).
     m.sections.update(business_sections(archive, m.slug))
@@ -164,7 +164,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
             "in_person": m.in_person, "remote": m.remote, "guests": m.guests, "visitors": m.visitors,
-            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until} for i in m.items(s)] for s in SECTIONS},
+            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until, "cal": i.cal} for i in m.items(s)] for s in SECTIONS},
         },
         "state": load_state(archive, m.slug),
         "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
@@ -181,6 +181,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "ask_about": ask_about_for(history),
         "celebrations": celebrations(club, m.date),
         "paid_since": paid_since(archive, m.date),
+        **calendar_ahead(archive, m.date),
     }
 
 
@@ -200,6 +201,28 @@ def _on(year: int, mmdd: str) -> dt.date:
     """MM-DD (or MM, meaning the 1st) in a given year; Feb 29 falls on the 28th in other years."""
     month, day = int(mmdd[:2]), int(mmdd[3:5]) if len(mmdd) > 2 else 1
     return dt.date(year, month, 28 if (month, day) == (2, 29) and year % 4 else day)
+
+
+READ_OUT = ("events", "community", "planning", "holiday", "birthday")  # chow has its own step
+
+
+def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
+    """What's on the calendar from the meeting's day on, for the leader to read out under Upcoming Events: club and
+    community events, Planning, holidays and birthdays shared with everyone. Left out: events ticked to leave out (the
+    weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events. next_meeting: the meeting
+    event's next date, else a week on."""
+    from . import calview, events as store
+    evs = store.load()
+    quiet = {e["id"] for e in evs if store.quiet(e)}
+    items, _ = calview.entries(archive.club, archive, "", date, date + dt.timedelta(days=days))  # "": no private birthdays
+    out = [{"start": e.start.isoformat(), "end": e.end.isoformat(), "time": e.time, "title": e.title, "where": e.where,
+            "kind": calview.KINDS[e.kind], "cal": e.kind if e.kind in store.CALS else "events",
+            # for "Add to the minutes": the same form as an Upcoming Event's when/until
+            "when": f"{e.starts:%Y-%m-%dT%H:%M}" if e.starts else e.start.isoformat(),
+            "until": f"{e.ends:%Y-%m-%dT%H:%M}" if e.ends else (e.end.isoformat() if e.end > e.start else None)} for e in items
+           if e.kind in READ_OUT and not e.from_minutes and e.id not in quiet and not (e.id or "").startswith("due-")]
+    after = [d for e in evs if e.get("meeting") for d in store.dates(e, date + dt.timedelta(days=1), date + dt.timedelta(days=60))]
+    return {"calendar": out, "next_meeting": min(after, default=date + dt.timedelta(days=7)).isoformat()}
 
 
 def celebrations(club, date: dt.date) -> list[str]:
@@ -256,7 +279,8 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
                 for g in d.get("guests", []) if g.get("name", "").strip()]
     m.guests = [g for g in m.guests if not archive.club.is_redacted(g["name"])]
     m.visitors = max(0, int(d.get("visitors") or 0))
-    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")))
+    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")),
+                           i.get("cal") if i.get("cal") in ("community", "planning") else None)
                       for i in d.get("sections", {}).get(s, []) if i.get("text", "").strip()]
                   for s in SECTIONS}
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser

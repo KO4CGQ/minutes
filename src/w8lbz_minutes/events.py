@@ -8,7 +8,8 @@ events.json in the data folder: {"events": [event, ...]}. An event:
                      the 1st and 3rd Tuesday; with it, "last" adds the last one)},
     skip: [dates taken out of a repeating event], changes: {date: {title, where, notes, start, end}} (one date changed),
     tz: the IANA time zone start/end are in (timed events), when not the club's (club.yaml timezone), e.g. "UTC",
-    uid: the .ics UID it was imported from, if any.
+    uid: the .ics UID it was imported from, if any,
+    quiet: left out of the leader console's "From the calendar" list (default: only the weekly meeting).
 """
 from __future__ import annotations
 
@@ -80,6 +81,11 @@ def ensure_meeting(club) -> None:
         e["meeting"] = True
         save(evs)
         marker.write_text(e["id"])
+
+
+def quiet(e: dict) -> bool:
+    """Left out of the console's read-out: ticked on the event, or the weekly meeting unless unticked."""
+    return e.get("quiet", bool(e.get("meeting")))
 
 
 def get(evs: list[dict], eid: str) -> dict:
@@ -241,7 +247,7 @@ def from_form(f: dict, club_tz: str = "") -> dict:
             repeat.update(weeks=weeks, last=last)
     return {"title": title, "where": " ".join((f.get("where") or "").split())[:200],
             "notes": (f.get("notes") or "").strip()[:2000], "start": start, "end": end, "repeat": repeat,
-            "tz": tz if t and tz != club_tz else None}
+            "tz": tz if t and tz != club_tz else None, "quiet": bool(f.get("quiet"))}
 
 
 def form_values(e: dict, d: str | None) -> dict:
@@ -254,7 +260,7 @@ def form_values(e: dict, d: str | None) -> dict:
     end = o.get("end") or ""
     return {"title": o["title"], "where": o.get("where", ""), "notes": o.get("notes", ""), "cal": e["cal"],
             "date": o["start"][:10], "time": o["start"][11:16], "end_date": end[:10] if end[:10] != o["start"][:10] else "",
-            "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or "", **weeks}
+            "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or "", "quiet": quiet(e), **weeks}
 
 
 def add(evs: list[dict], cal: str, v: dict, by: str) -> dict:
@@ -279,6 +285,7 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
         if same(v.get("repeat")) != same(e["repeat"]):
             raise ValueError("To change how it repeats, choose This and following dates or Every date.")
         e["changes"][d] = {k: v[k] for k in FIELDS}
+        e["quiet"] = v.get("quiet", quiet(e))  # the whole series: it's about the event, not one date
         return
     # every date (or following from the first date): the series moves by as much as this date moved
     was = _dt(occurrence(e, dt.date.fromisoformat(d))["start"])

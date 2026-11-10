@@ -32,7 +32,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 | New Business | New items. Motions appear as "<member> motioned, <member> seconded, passed." | Capture motions in a structured form: mover, seconder, result. |
 | The Winners | 50/50 drawing (winner and amount); weekly drawing (winner, whether registered, running pot "up to 62") | Structured fields. Carry the pot forward from week to week. |
 | Upcoming Chow Dates | "See attached list" (separate xlsx) | Generate this from the chow rotation (§4.7). |
-| Upcoming Events | Free text, sometimes with images or maps | Events can come from tracked items. Images can be attached (§4.5). |
+| Upcoming Events | Free text, sometimes with images or maps | Events can come from tracked items, and from the calendar (the console lists what's on until the next meeting). Images can be attached (§4.5). |
 
 **Modernized layout (keep the spirit, not the exact form):**
 - The header has the logo, the date and who led the meeting.

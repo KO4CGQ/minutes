@@ -166,15 +166,14 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
                        occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz))
             if x.end >= lo and x.start <= hi:
                 out.append(x)
-    if "events" in kinds:  # the minutes' dated Upcoming Events, unless the same event is already on the calendar
-        seen = {(x.start, x.title.lower()) for x in out}
-        for i in (archive.meetings[0].items("Upcoming Events") if archive.meetings else []):  # the newest list (a draft counts)
-            if i.when:
-                s, f, all_day = i.span()
-                o = {"title": i.text, "start": i.when, "end": i.until or (None if all_day else f.strftime("%Y-%m-%dT%H:%M"))}
-                x = _entry(o, "events", from_minutes=True)
-                if x.end >= lo and x.start <= hi and (x.start, x.title.lower()) not in seen:
-                    out.append(x)
+    minutes = []  # the minutes' dated Upcoming Events, on the calendar the leader picked (Club events by default)
+    for i in (archive.meetings[0].items("Upcoming Events") if archive.meetings else []):  # the newest list (a draft counts)
+        if i.when and (i.cal or "events") in kinds:
+            s, f, all_day = i.span()
+            o = {"title": i.text, "start": i.when, "end": i.until or (None if all_day else f.strftime("%Y-%m-%dT%H:%M"))}
+            x = _entry(o, i.cal or "events", from_minutes=True)
+            if x.end >= lo and x.start <= hi:
+                minutes.append(x)
     if "planning" in kinds and not public:
         out += due_dates(club, lo, hi)
     if "holiday" in public_kinds(club) or not public:
@@ -192,6 +191,8 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
                 out.append(Entry(day, day, f"Chow: {club.name(x['member']) if x.get('member') else 'open'}", "chow", _clock(at),
                                  starts=t, ends=t + dt.timedelta(hours=2)))
         out += _birthdays(club, viewer, lo, hi)
+    # unless the same event is already there (added from the console's calendar list: "Fox hunt, the park" for "Fox hunt")
+    out += [x for x in minutes if not any(y.start == x.start and x.title.lower().startswith(y.title.lower()) for y in out)]
     out.sort(key=_order)
     return out, None
 

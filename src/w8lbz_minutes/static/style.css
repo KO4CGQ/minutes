@@ -492,3 +492,7 @@ dialog.modal.wide { width: min(40rem, calc(100vw - 2rem)); } dialog.modal h3 { f
 dialog.modal .dacts { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 .2rem; } dialog.modal .dacts form { margin: 0; }
 details.hist { margin-top: 1rem; } details.hist summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
 button.cardopen .card-text { display: block; }
+
+/* Safari fills an empty date or time box with today's date in grey, which reads as a value: blank until it's in use.
+   Only in Safari (.safari, set in base.html): Chrome and Edge keep their mm/dd/yyyy and --:-- -- hints */
+.safari input:is([type=date], [type=time]):is([value=""], :not([value])):not(:focus)::-webkit-datetime-edit { color: transparent; }

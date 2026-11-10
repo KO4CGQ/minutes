@@ -25,6 +25,8 @@
   <p class="muted small">"Until" is optional; leave it empty to keep repeating.</p></fieldset>
 <label>Where <input name="where" value="{{ f.where }}" maxlength="200"></label>
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
+<label class="check"><input type="checkbox" name="quiet" value="1" {{ 'checked' if f.quiet }}> Leave out of the leader console's Upcoming Events</label>
+<p class="muted small">The console lists what's on the calendar until the next meeting, for the leader to read out. Tick this for something that needn't be announced (the weekly meeting is left out unless you untick it there).</p>
 <p class="row"><button class="btn">Save</button> <a class="btn ghost" href="/calendar{% if f.date %}?start={{ f.date }}{% endif %}">Cancel</a>
 {% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate data-confirm="Delete this event from the calendar?">Delete</button>{% endif %}</p>
 </form>

@@ -10,7 +10,7 @@
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",
     "New Business": "Each item you add here is tracked: next week it's in Old Business, and it stays there until it's marked done.",
-    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the club calendar. Add an end for a time range or an event over several days.",
+    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the calendar picked beside it. Add an end for a time range or an event over several days.",
     "Winners": "e.g. “50/50 drawing – Amy A $7.50” and “Weekly drawing – Bob B, not registered (up to $62)”.",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
@@ -297,8 +297,9 @@
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
   function eventsSection() {
     const sec = "Upcoming Events";
-    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null, until: e.until || null }));
+    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null, until: e.until || null, cal: e.cal || null }));
     const wrap = h("div", {});
+    const cals = h("div", {});  // the calendar list below, refreshed with the events (one removed shows there again)
     const draw = () => {
       wrap.replaceChildren(...evs.map((e, i) => {
         const [d, t] = (e.when || "").split("T"), [ed, et] = (e.until || "").split("T");
@@ -317,19 +318,49 @@
         [date, time, endDate, endTime].forEach((x) => x.onchange = setWhen);
         const nodate = h("span", { class: "hint" }, "no date: not on the calendar");
         nodate.hidden = !!e.when;
+        const cal = h("select", { "aria-label": "Calendar", title: "Which calendar it goes on", onchange: (ev) => { e.cal = ev.target.value === "events" ? null : ev.target.value; save(); } },
+          [["events", "Club events"], ["community", "Community"], ["planning", "Planning"]].map(([v, t]) => h("option", { value: v, selected: v === (e.cal || "events") }, t)));
         const ta = h("textarea", { rows: 1, placeholder: "What, and where", "aria-label": "Event",
           oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
         ta.value = e.text;
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
             h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, emo("✖️", "x"))),
-          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, nodate),
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, cal, nodate),
           h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")));
       }), h("button", { class: "btn small ghost", onclick: () => { evs.push({ text: "", member: null, when: null }); draw();
         wrap.querySelectorAll("textarea")[evs.length - 1].focus(); } }, "+ Add event"));
       setTimeout(() => wrap.querySelectorAll("textarea").forEach(grow), 0);
+      cals.replaceChildren(calendarCard(evs, draw));
     };
     draw();
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap);
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap, cals);
+  }
+
+  // What's on the calendar (console.calendar_ahead), to read out; added to the minutes only on a tap.
+  let ahead = "next";
+  function calendarCard(evs, redraw) {
+    const card = h("div", { class: "card" });
+    const day = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const plus = (n) => { const d = new Date(M.date + "T12:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const ends = { next: D.next_meeting, "14": plus(14), "31": plus(31), "92": plus(92) };
+    const pick = h("select", { "aria-label": "How far ahead", onchange: (e) => { ahead = e.target.value; fill(); } },
+      [["next", "until the next meeting"], ["14", "the next 2 weeks"], ["31", "the next month"], ["92", "the next 3 months"]]
+        .map(([v, t]) => h("option", { value: v, selected: v === ahead }, t)));
+    const fill = () => {
+      // already in the minutes: same day, and the text starts with its title ("Fox hunt, the park")
+      const have = (c) => evs.some((e) => (e.when || "").slice(0, 10) === c.start && e.text.trim().toLowerCase().startsWith(c.title.toLowerCase()));
+      const list = (D.calendar || []).filter((c) => c.start <= ends[ahead] && !have(c));
+      card.replaceChildren(h("p", { class: "row" }, h("strong", {}, "From the calendar"), pick),
+        list.length ? h("ul", {}, list.map((c) => h("li", {},
+          h("strong", {}, day(c.start), c.time ? " " + c.time : "", c.end !== c.start ? " – " + day(c.end) : ""), " ",
+          c.title, c.where ? ` (${c.where})` : "", " ", h("span", { class: "muted small" }, c.kind), " ",
+          h("button", { class: "btn small ghost", title: "Add to tonight's Upcoming Events", onclick: () => {
+            evs.push({ text: c.title + (c.where ? `, ${c.where}` : ""), member: null, when: c.when, until: c.until, cal: c.cal === "events" ? null : c.cal }); redraw(); save(); } }, "+ Add"))))
+          : h("p", { class: "hint" }, "Nothing on the calendar for then."),
+        h("p", { class: "hint" }, "Club events, community events, Planning, holidays and shared birthdays, to read out. + Add puts one in the minutes (it stays on the calendar once, not twice). An event can be left out from its page on the calendar."));
+    };
+    fill();
+    return card;
   }
 
   // ---------- business: tracked items (business.py); every change is saved on the server at once ----------
