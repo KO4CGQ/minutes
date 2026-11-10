@@ -340,7 +340,8 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
     writer = recorder or leader  # replies (corrections) go to whoever took the minutes
     date = m.date.strftime("%B %-d, %Y")
     body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
-            f"{f', led by {leader.name}' if leader else ''}{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
+            f"{f', led and recorded by {leader.name}' if leader and m.recorder == m.leader else f', led by {leader.name}' if leader else ''}"
+            f"{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
             f"Replies go to {writer.first if writer and writer.email else 'the club'}.\n\n"
             f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.info.get('callsign', '')}")

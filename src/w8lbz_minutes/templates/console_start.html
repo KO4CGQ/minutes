@@ -9,6 +9,6 @@
   <label>Led by <select name="leader">{% for id in leaders %}<option value="{{ id }}" {{ 'selected' if me and id == me.id }}>{{ club.name(id) }}</option>{% endfor %}</select></label>
   <button class="btn" type="submit">Start meeting</button>
 </form>
-<p class="muted">Pick who chairs the meeting under Led by; you're recorded as taking the minutes, and when that's someone else the minutes say "Recorded by" you too.</p>
+<p class="muted">Pick who chairs the meeting under Led by; you're recorded as taking the minutes. The minutes say "Led &amp; Recorded by" when that's you, or "Led by" them and "Recorded by" you.</p>
 <p class="muted">Old Business and Upcoming Events are copied from the previous meeting, so you only remove what's finished and add what's new.</p>
 {% endblock %}

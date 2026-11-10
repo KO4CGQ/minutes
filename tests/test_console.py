@@ -182,7 +182,9 @@ def test_recorded_by_shows_only_when_someone_else_led(tmp_path, monkeypatch):
     html = lambda: templates.get_template("_minutes.html").render(m=m, pdf=False, club=club, SECTIONS=SECTIONS)
     assert "Led by Jane Doe · Recorded by Sam Kim" in html()
     m.recorder = "doe"
-    assert "Recorded by" not in html() and "Led by Jane Doe" in html()
+    assert "Led &amp; Recorded by Jane Doe" in html()  # one person did both
+    m.recorder = None
+    assert "Recorded by" not in html() and "Led by Jane Doe" in html()  # older minutes: no recorder saved
 
     a = mail_archive(tmp_path / "mail", monkeypatch, only_to=None)
     a.by_slug["2026-11-12"].recorder = "kim"

@@ -51,7 +51,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 | Role | Who | Can |
 |---|---|---|
 | Member | Anyone on the roster who is logged in | Read the live transcript, the draft and the archive. **Flag** a paragraph ("this is wrong" plus an optional note) but not edit text. |
-| Leader / editor | The officers, and members ticked **`minutes_editor`** on the roster, or someone a leader picks for one meeting. The minutes say "Led by" whoever chairs (picked when the meeting starts, changeable in the console), and "Recorded by" whoever took them in the console when that's someone else. | **Lead** a meeting: run the console, handle flags, edit directly, submit. |
+| Leader / editor | The officers, and members ticked **`minutes_editor`** on the roster, or someone a leader picks for one meeting. The minutes say "Led by" whoever chairs (picked when the meeting starts, changeable in the console), and "Recorded by" whoever took them in the console when that's someone else; "Led & Recorded by" when one person did both. | **Lead** a meeting: run the console, handle flags, edit directly, submit. |
 | Admin | Club IT: the callsigns under `admins:` in the server's `club.yaml` | Admin mode: roster sync, settings, app updates, viewing the app as a member. Separate from leading: an admin leads only if they're also an officer or editor. |
 
 ## 4. Functional requirements
