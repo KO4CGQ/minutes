@@ -1026,16 +1026,18 @@ def admin_updates_run(request: Request, target: str = Form(""), notes_done: int 
 
 
 @app.post("/admin/updates/auto")
-def admin_updates_auto(request: Request, on: int = Form(0), mid: str = Depends(real_me)):
+def admin_updates_auto(request: Request, on: int = Form(0), hour: str = Form(""), mid: str = Depends(real_me)):
     _admin(mid)
     if not admin_mode(request):
         raise HTTPException(403, "Turn on admin mode first.")
     if on and len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) < 12:
         return RedirectResponse("/admin/updates?error=" + quote("Set up backups first (a passphrase): every automatic "
                                                                "update starts with one."), status_code=303)
-    updates.set_auto(bool(on))
+    updates.set_auto(bool(on), num(hour))
     _admin_log(request, auto_update=bool(on))
-    return RedirectResponse("/admin/updates?note=" + quote("Automatic updates are " + ("on." if on else "off.")), status_code=303)
+    st = updates.auto_settings()
+    return RedirectResponse("/admin/updates?note=" + quote(f"Automatic updates are on, nightly at {st['hour']}:30." if on
+                                                           else "Automatic updates are off."), status_code=303)
 
 
 @app.post("/admin/updates/cancel")

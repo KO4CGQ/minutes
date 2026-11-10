@@ -142,6 +142,9 @@ def test_backup_before_update(env, tmp_path, monkeypatch):
     assert "no backup before the update" in c.get("/admin/updates").text
 
 
+TWO = __import__("datetime").datetime(2026, 11, 10, 2, 30)
+
+
 def test_nightly_auto_update(env, tmp_path, monkeypatch):
     """Off by default; on, a newer release without deploy notes is installed after a backup, admins are told the
     outcome; deploy notes or a failed backup stop it (told once), and a release that failed isn't retried."""
@@ -156,7 +159,7 @@ def test_nightly_auto_update(env, tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "run", lambda c, url="": ran.append(1) or {"ok": True, "name": "b.tar.gz.enc"})
     rel = {"version": "0.7.0", "notes": "", "url": "u", "deploy_notes": ""}
     monkeypatch.setattr(updates, "latest", lambda *a, **k: rel)
-    assert updates.auto(club, "https://x") == "automatic updates are off" and not ran
+    assert updates.auto(club, "https://x", now=TWO) == "automatic updates are off" and not ran
     updates.set_auto(True)
 
     def updater(*a):  # what the root updater does with the request: run it, record the outcome
@@ -167,28 +170,36 @@ def test_nightly_auto_update(env, tmp_path, monkeypatch):
             (tmp_path / "update-status.json").write_text(json.dumps({**r, "ok": outcome["ok"], "output": "log"}))
     outcome = {"ok": True}
     monkeypatch.setattr(updates.time, "sleep", updater)
-    assert updates.auto(club, "https://x", wait=5, poll=0) == "updated to 0.7.0"
+    assert updates.auto(club, "https://x", now=TWO, wait=5, poll=0) == "updated to 0.7.0"
     assert ran == [1] and json.loads((tmp_path / "update-status.json").read_text())["by"] == "automatic"
     assert sent == ["updated to 0.7.0"]
 
     rel = {**rel, "version": "0.8.0"}
     monkeypatch.setattr(updates, "latest", lambda *a, **k: rel)
     outcome["ok"] = False
-    assert updates.auto(club, "https://x", wait=5, poll=0) == "failed: 0.8.0" and sent[-1] == "the update to 0.8.0 failed"
-    assert updates.auto(club, "https://x", wait=5, poll=0).startswith("0.8.0 failed before") and len(ran) == 2  # not again
+    assert updates.auto(club, "https://x", now=TWO, wait=5, poll=0) == "failed: 0.8.0" and sent[-1] == "the update to 0.8.0 failed"
+    assert updates.auto(club, "https://x", now=TWO, wait=5, poll=0).startswith("0.8.0 failed before") and len(ran) == 2  # not again
+    assert updates.auto(club, "https://x", now=TWO.replace(hour=14)).startswith("not now")  # only at the hour set
+    rel = {**rel, "version": "0.8.1"}  # a fix for what broke 0.8.0: tried
+    monkeypatch.setattr(updates, "latest", lambda *a, **k: rel)
+    outcome["ok"] = True
+    assert updates.auto(club, "https://x", now=TWO, wait=5, poll=0) == "updated to 0.8.1" and len(ran) == 3
+    updates.set_auto(True, 4)
+    assert updates.auto(club, "https://x", now=TWO).startswith("not now") and updates.auto_settings()["hour"] == 4
+    updates.set_auto(True, 2)
 
     rel = {**rel, "version": "0.9.0", "deploy_notes": "Add x to club.yaml"}
     monkeypatch.setattr(updates, "latest", lambda *a, **k: rel)
-    assert updates.auto(club, "https://x") == "0.9.0 needs steps by hand" and sent[-1] == "version 0.9.0 needs you"
-    updates.auto(club, "https://x")
-    assert sent.count("version 0.9.0 needs you") == 1 and len(ran) == 2  # told once, nothing installed
+    assert updates.auto(club, "https://x", now=TWO) == "0.9.0 needs steps by hand" and sent[-1] == "version 0.9.0 needs you"
+    updates.auto(club, "https://x", now=TWO)
+    assert sent.count("version 0.9.0 needs you") == 1 and len(ran) == 3  # told once, nothing installed
 
     rel = {**rel, "version": "1.0.0", "deploy_notes": ""}
     monkeypatch.setattr(updates, "latest", lambda *a, **k: rel)
     monkeypatch.setattr(backup, "run", lambda c, url="": {"ok": False, "error": "disk full"})
-    assert updates.auto(club, "https://x") == "backup failed" and not (tmp_path / "update-request.json").exists()
+    assert updates.auto(club, "https://x", now=TWO) == "backup failed" and not (tmp_path / "update-request.json").exists()
     monkeypatch.setattr(updates, "PREVIEW", "branch")
-    assert updates.auto(club, "https://x") == "automatic updates are off"  # previews never update themselves
+    assert updates.auto(club, "https://x", now=TWO) == "automatic updates are off"  # previews never update themselves
 
 
 def test_auto_update_switch(env, tmp_path, monkeypatch):
@@ -215,9 +226,28 @@ def test_auto_update_switch(env, tmp_path, monkeypatch):
     monkeypatch.delenv("W8LBZ_BACKUP_PASSPHRASE", raising=False)
     assert "Set up backups first" in c.post("/admin/updates/auto", data={"on": 1}).text and not updates.auto_settings()["on"]
     monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "a long test passphrase")
-    assert "Automatic updates are on." in c.post("/admin/updates/auto", data={"on": 1}).text and updates.auto_settings()["on"]
+    assert "on, nightly at 3:30" in c.post("/admin/updates/auto", data={"on": 1, "hour": "3"}).text and updates.auto_settings()["on"]
+    c.post("/admin/updates/auto", data={"on": 1, "hour": "²"})  # junk keeps the hour
+    assert updates.auto_settings()["hour"] == 3
     assert "Turn off" in c.get("/admin/updates").text
     c.post("/admin/updates/auto", data={"on": 0})
     assert not updates.auto_settings()["on"]
     c.cookies.set(web.COOKIE, a.new_session("bob"))
     assert c.post("/admin/updates/auto", data={"on": 1}).status_code == 403  # not for members
+
+
+def test_several_releases_waiting(env):
+    """Going straight to the newest must not skip steps by hand in a release in between."""
+    def fetch():
+        return [{"tag_name": "v0.8.1", "body": "- **Fix:** the start-up crash"},
+                {"tag_name": "v0.8.0", "body": NOTES},
+                {"tag_name": "v0.7.0", "body": "- **Something**"},
+                {"tag_name": "v0.6.0", "body": "- **Old** (running)"},
+                {"tag_name": "v0.9.0-rc1", "body": "", "prerelease": True}]
+    rel = updates.latest(fetch, force=True)
+    assert rel["version"] == "0.8.1"                                        # the newest, not the pre-release
+    assert "0.8.0:** before updating" in rel["deploy_notes"] and "cp business.json" in rel["deploy_notes"]
+    assert "### 0.8.1" in rel["notes"] and "### 0.7.0" in rel["notes"] and "Old" not in rel["notes"]
+    assert updates.latest()["deploy_notes"] == rel["deploy_notes"]          # the same from the cache
+    (env / "update-check.json").write_text(json.dumps({"at": 9e12, "release": {"version": "0.7.0", "notes": "", "url": "u", "deploy_notes": ""}}))
+    assert updates.latest()["version"] == "0.7.0"                           # a cache from before this change still reads

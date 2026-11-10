@@ -19,9 +19,9 @@ main() {
     for t in "$APP"/deploy/w8lbz-minutes*.timer "$APP"/deploy/w8lbz-minutes*.path; do systemctl enable -q --now "$(basename "$t")"; done
     systemctl restart w8lbz-minutes
   }
-  healthy() {  # the sign-in page answers within a minute
+  healthy() {  # the sign-in page answers within 5 minutes (startup takes seconds; the margin is for a slow, busy server)
     local i
-    for i in $(seq 30); do
+    for i in $(seq 100); do
       "$APP/.venv/bin/python" -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/login', timeout=3)" 2>/dev/null && return 0
       sleep 2
     done

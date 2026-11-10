@@ -42,10 +42,12 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
 </article>{% endif %}
 
 <article class="card">
-  <div class="card-text"><b>Automatic updates</b>: {{ 'on' if auto.on else 'off' }}</div>
-  <p class="muted">When on, the server checks every night at 2:30 for a newer release. One that needs no steps by hand is installed after a full backup (no backup, no update); if the app doesn't come back up, it goes back to the version it had and doesn't try that release again. Admins get an email either way, and one for a release that needs steps by hand.</p>
-  <form method="post" action="/admin/updates/auto" class="inline"><input type="hidden" name="on" value="{{ 0 if auto.on else 1 }}">
-    <button class="btn small{{ ' ghost' if auto.on }}"{% if not auto.on and not backup_ready %} disabled title="Set up backups first"{% endif %}>{{ 'Turn off' if auto.on else 'Turn on' }}</button></form>
+  <div class="card-text"><b>Automatic updates</b>: {{ 'on, nightly at ' ~ auto.hour ~ ':30' if auto.on else 'off' }}</div>
+  <p class="muted">When on, the server checks every night at the hour below for a newer release. The newest is installed, after a full backup, if no release since this one needs steps by hand (no backup, no update); if the app doesn't come back up, it goes back to the version it had and doesn't try that release again. Admins get an email either way, and one for a release that needs steps by hand.</p>
+  <form method="post" action="/admin/updates/auto" class="inline">
+    <label>At <select name="hour" aria-label="Hour">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if h == auto.hour }}>{{ '%d:30' % h }}</option>{% endfor %}</select></label>
+    {% if auto.on %}<button class="btn small" name="on" value="1">Save the time</button> <button class="btn small ghost" name="on" value="0">Turn off</button>
+    {% else %}<button class="btn small" name="on" value="1"{% if not backup_ready %} disabled title="Set up backups first"{% endif %}>Turn on</button>{% endif %}</form>
   {% if not backup_ready and not auto.on %}<p class="hint">Needs backups set up first (a passphrase): admin mode → Security → Backups.</p>{% endif %}
 </article>
 

@@ -56,29 +56,45 @@ def deploy_notes(notes: str) -> str:
 
 
 def latest(fetch=None, force: bool = False) -> dict | None:
-    """The latest GitHub release: {version, notes, url, deploy_notes}; cached in update-check.json."""
+    """The latest GitHub release: {version, notes, url, deploy_notes}; the releases are cached in update-check.json.
+    With several releases newer than the running one, notes and deploy_notes cover them all (newest first), so
+    steps by hand in a release in between aren't skipped by going straight to the newest."""
     cache = DATA / "update-check.json"
+    rels = None
     if not force and cache.exists():
         c = json.loads(cache.read_text())
         if time.time() - c.get("at", 0) < CHECK_EVERY:
-            return c.get("release")
-    try:
-        if fetch is None:
-            import requests
-            r = requests.get(f"https://api.github.com/repos/{REPO}/releases/latest", timeout=10,
-                             headers={"Accept": "application/vnd.github+json"})
-            r.raise_for_status()
-            data = r.json()
-        else:
-            data = fetch()
-        notes = data.get("body") or ""
-        rel = {"version": data["tag_name"].lstrip("v"), "notes": notes, "url": data.get("html_url"),
-               "deploy_notes": deploy_notes(notes)}
-    except Exception as e:
-        log.warning("update check failed: %s", e)
-        return json.loads(cache.read_text()).get("release") if cache.exists() else None
-    cache.write_text(json.dumps({"at": int(time.time()), "release": rel}))
-    return rel
+            rels = c.get("releases") or ([c["release"]] if c.get("release") else [])
+    if rels is None:
+        try:
+            if fetch is None:
+                import requests
+                r = requests.get(f"https://api.github.com/repos/{REPO}/releases", params={"per_page": 30}, timeout=10,
+                                 headers={"Accept": "application/vnd.github+json"})
+                r.raise_for_status()
+                data = r.json()
+            else:
+                data = fetch()
+            data = [data] if isinstance(data, dict) else data
+            rels = [{"version": d["tag_name"].lstrip("v"), "notes": d.get("body") or "", "url": d.get("html_url"),
+                     "deploy_notes": deploy_notes(d.get("body") or "")}
+                    for d in data if not d.get("draft") and not d.get("prerelease") and re.fullmatch(r"v?\d+\.\d+\.\d+", d.get("tag_name", ""))]
+            cache.write_text(json.dumps({"at": int(time.time()), "releases": rels}))
+        except Exception as e:
+            log.warning("update check failed: %s", e)
+            if not cache.exists():
+                return None
+            c = json.loads(cache.read_text())
+            rels = c.get("releases") or ([c["release"]] if c.get("release") else [])
+    if not rels:
+        return None
+    rels = sorted(rels, key=lambda r: _v(r["version"]), reverse=True)
+    ahead = [r for r in rels if newer(r["version"], running())]
+    if len(ahead) < 2:
+        return dict(rels[0])
+    both = lambda key: "\n\n".join(f"**{r['version']}:** {r[key]}" if key == "deploy_notes" else f"### {r['version']}\n\n{r[key]}"
+                                    for r in ahead if r[key])  # noqa: E731
+    return {**rels[0], "notes": both("notes"), "deploy_notes": both("deploy_notes")}
 
 
 def available(fetch=None) -> dict | None:
@@ -129,12 +145,14 @@ def request(by: str, target: str, notes_confirmed: bool) -> None:
     tmp.replace(p)  # the path unit fires on the file appearing
 
 
-# ---------------- automatic updates (nightly, w8lbz-minutes-autoupdate.timer) ----------------
+# ---------------- automatic updates (w8lbz-minutes-autoupdate.timer: hourly; runs at the hour set on the Updates page) ----------------
+
+AUTO_HOUR = 2  # the default: the small hours, away from Thursday meetings
 
 def auto_settings() -> dict:
-    """{"on": bool, "told": [versions the admins were already emailed about]} (update-settings.json)."""
+    """{"on": bool, "hour": 0-23 (local), "told": [versions the admins were already emailed about]} (update-settings.json)."""
     p = DATA / "update-settings.json"
-    return {"on": False, "told": [], **(json.loads(p.read_text()) if p.exists() else {})}
+    return {"on": False, "hour": AUTO_HOUR, "told": [], **(json.loads(p.read_text()) if p.exists() else {})}
 
 
 def _save_auto(s: dict) -> None:
@@ -144,8 +162,9 @@ def _save_auto(s: dict) -> None:
     tmp.replace(p)
 
 
-def set_auto(on: bool) -> None:
-    _save_auto({**auto_settings(), "on": bool(on)})
+def set_auto(on: bool, hour: int | None = None) -> None:
+    s = auto_settings()
+    _save_auto({**s, "on": bool(on), "hour": hour if hour in range(24) else s["hour"]})
 
 
 def _tell_admins(club, subject: str, body: str) -> None:
@@ -158,12 +177,15 @@ def _tell_admins(club, subject: str, body: str) -> None:
             log.exception("couldn't email the admins about an automatic update")
 
 
-def auto(club, url: str, wait: float = 900, poll: float = 10) -> str:
+def auto(club, url: str, wait: float = 900, poll: float = 10, now=None) -> str:
     """The nightly run: if automatic updates are on and a newer release needs no steps by hand, back up, ask the
     updater for exactly that release, wait for the outcome and email the admins. Returns what it did."""
     s = auto_settings()
     if PREVIEW or not s["on"]:
         return "automatic updates are off"
+    import datetime as dt
+    if (now or dt.datetime.now()).hour != s["hour"]:
+        return f"not now: automatic updates run at {s['hour']}:30"
     rel = latest(force=True)
     if not rel or not newer(rel["version"], running()):
         return "up to date"

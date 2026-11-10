@@ -1,8 +1,8 @@
 [Unit]
-Description=Nightly check for a W8LBZ minutes release to install (does nothing unless turned on on the Updates page)
+Description=Hourly: install a newer W8LBZ minutes release at the hour set on the Updates page (does nothing unless turned on there)
 
 [Timer]
-OnCalendar=*-*-* 02:30
+OnCalendar=*-*-* *:30
 Persistent=false
 
 [Install]
