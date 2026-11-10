@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Plans:** site name, logo and favicon set in the app; the menu set from the Links page; a Donate button.
 - **Upcoming Events in the leader console: from the calendar.** The step lists what's on the calendar until the next meeting (a menu shows 2 weeks, a month or 3 months), for the leader to read out: club and community events, Planning, holidays and shared birthdays. **+ Add** puts one in the minutes with its date and time; the calendar still shows it once. Any event can be left out (a tick on its calendar form); the weekly meeting is, unless unticked.
 - **Upcoming Events pick their calendar:** each dated event in the minutes has a Club events / Community / Planning menu (Club events by default), and shows on that calendar.
 - **Fix: empty date and time boxes in Safari** (Mac) showed today's date and time in grey, which read like a value. In Safari they're now blank until clicked; other browsers keep their mm/dd/yyyy hint.
