@@ -206,6 +206,9 @@ def officer(request: Request) -> str:
     return request.state.member
 
 
+PK_OFFER = "pk_offer"  # set by an emailed-link sign-in; base.html offers a passkey while it's there
+
+
 def page(request: Request, name: str, **ctx) -> HTMLResponse:
     mid = getattr(request.state, "member", None)
     return templates.TemplateResponse(request, name, {
@@ -221,6 +224,7 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         "update_available": _update_badge(request),
+        "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
 
 
@@ -314,10 +318,10 @@ def login_link(request: Request, t: str = ""):
         authn.event("bad_link", client_ip(request))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
-    # Offer a passkey right away to members who don't have one (only possible over HTTPS on the passkey host).
-    if not authn.passkeys(member) and request.url.hostname == authn.rp_id:
-        next_url = f"/account?welcome=1&next={quote(next_url)}"
-    return start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
+    response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
+    if request.url.hostname == authn.rp_id:  # passkeys only work there: offer one (base.html, if this device can make one)
+        response.set_cookie(PK_OFFER, "1", samesite="lax", secure=True)  # until the browser closes, Not now, or one is added
+    return response
 
 
 @app.post("/logout")
@@ -329,9 +333,9 @@ def logout(request: Request):
 
 
 @app.get("/account", response_class=HTMLResponse)
-def account(request: Request, welcome: int = 0, next: str = "/", mid: str = Depends(me)):
+def account(request: Request, mid: str = Depends(me)):
     return page(request, "account.html", passkeys=authn.passkeys(mid), sessions=authn.sessions(mid),
-                welcome=welcome, next=_safe_next(next), passkey_host=request.url.hostname == authn.rp_id)
+                passkey_host=request.url.hostname == authn.rp_id)
 
 
 # ---------------- tracked business items ----------------

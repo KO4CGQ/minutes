@@ -204,3 +204,24 @@ def test_security_page_tabs(tmp_path, monkeypatch):
     assert web.admin_action({"on": True, "until": 1794143748, "confirmed_by": "passkey"}).startswith("Turned on admin mode until ")
     assert web.admin_action({"on": False, "until": None}) == "Turned off admin mode"
     assert web.admin_action({"signed_out": "kd8adm"}) == "Signed out a device of Ann Admin"
+
+
+def test_an_emailed_link_sign_in_offers_a_passkey_until_dismissed(tmp_path, monkeypatch):
+    """The offer (base.html) shows after an emailed-link sign-in on the passkey host; the page's script checks the
+    device and clears the cookie on Add or Not now, so the next emailed-link sign-in offers again."""
+    from fastapi.testclient import TestClient
+    from test_calview import signed_in
+    from w8lbz_minutes import web
+    _, club, a = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    monkeypatch.setattr(a, "rp_id", "minutes.example")  # the passkey host
+    t = TestClient(web.app, base_url="https://minutes.example")
+    r = t.get("/login/link?t=" + a.create_link("kd8aaa").split("t=")[1], follow_redirects=False)
+    assert r.headers["location"] == "/" and t.cookies.get(web.PK_OFFER) == "1"
+    home = t.get("/").text
+    assert 'id="pkoffer"' in home and home.count("/static/auth.js") == 1
+    assert t.get("/account").text.count("/static/auth.js") == 1  # loaded once, not twice
+    t.cookies.delete(web.PK_OFFER)  # what Not now does in the browser
+    assert 'id="pkoffer"' not in t.get("/").text
+    other = TestClient(web.app)  # not the passkey host: no offer
+    other.get("/login/link?t=" + a.create_link("kd8aaa").split("t=")[1], follow_redirects=False)
+    assert other.cookies.get(web.PK_OFFER) is None

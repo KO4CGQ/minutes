@@ -7,6 +7,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 ## Unreleased
 - **No more Google for the roster or calendars:** the roster is only ever the app's own (`roster-sheet.json`), so the Google Sheets code, `roster --import` and the `roster: source: app` setting are gone (it can come out of club.yaml), and so is the optional copy to Google Calendar (`calendars:` in club.yaml is ignored). Google Drive backups are unchanged.
 - **Docs:** the roadmap lists the Google code left unused now that the roster and calendars live in the app (removal is next); REQUIREMENTS records the roster move.
+- **Passkey offer after an emailed link:** signing in with an emailed link now offers a passkey in a small banner on the page you were going to, if your device can make one (fingerprint, face or device PIN), even if you already have a passkey on another device. "Not now" hides it until the next emailed-link sign-in. It replaces the stop at the account page, which only members with no passkey at all saw, whether or not their device could make one.
 
 ## 0.14.0 (2026-11-09)
 - **Search finds other spellings:** a member's name also matches the other spellings the roster lists for them (so a name spelled one way in old minutes is found by the other), and if the minutes still turn up nothing, close spellings of the words are tried.
