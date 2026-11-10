@@ -70,3 +70,20 @@ def test_text_typed_into_the_minutes_or_console_cannot_run_as_script(tmp_path, m
     monkeypatch.setattr(web, "archive", Archive(root, club))
     console = m.get(f"/console/{dt.date.today()}").text
     assert "\\u003c/script>\\u003cscript>alert(1)" in console and "</script><script>alert(1)" not in console
+
+
+def test_other_spellings_of_a_name_and_close_spellings(tmp_path, monkeypatch):
+    from w8lbz_minutes.meeting import Item
+    from w8lbz_minutes.store import spellings
+    root = tmp_path / "meetings"
+    Meeting(date=dt.date(2026, 10, 1), status="published",
+            sections={"Community Reports": [Item("Bobby Bakker passed his Extra exam")]}).save(root)
+    m, club, _ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    club.members["kd8bbb"].aliases = ["Bobby", "Bakker"]  # as the minutes spelled him
+    names = spellings(club)
+    assert {"bob", "bobby"} <= names["bob"] and "bakker" in names["baker"] and "bakker" not in names["bob"]
+    monkeypatch.setattr(web, "archive", Archive(root, club))
+    assert "passed his" in m.get("/search?q=Bob+Baker+Extra&kind=minutes").text  # the roster's other spellings
+    assert "/members/kd8bbb" in m.get("/search?q=bakker").text  # and the other way round
+    assert "passed his" in m.get("/search?q=Extre+exam&kind=minutes").text  # a typo: close spellings, when nothing else is found
+    assert "No minutes found." in m.get("/search?q=Zebra+exam&kind=minutes").text

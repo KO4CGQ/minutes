@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import difflib
 import html
 import re
 import sqlite3
@@ -14,6 +15,23 @@ from .meeting import Meeting
 
 def _norm(s: str) -> str:
     return re.sub(r"[^a-z]", "", s.lower())
+
+
+def spellings(club: Club) -> dict[str, set[str]]:
+    """Each member's first and last name with their other spellings from the roster (aliases), lowercase:
+    word -> every spelling of that name. An alias goes with whichever of first or last it's closer to."""
+    out: dict[str, set[str]] = {}
+    sim = lambda a, b: difflib.SequenceMatcher(None, a, b).ratio()
+    for m in club.members.values():
+        first, last = m.first.lower(), m.last.lower()
+        groups = ({first}, {last})
+        for a in (w.lower() for al in m.aliases for w in re.findall(r"\w+", al)):
+            groups[sim(a, first) < sim(a, last)].add(a)
+        for g in groups:
+            for w in g:
+                if w:
+                    out.setdefault(w, {w}).update(g)
+    return out
 
 
 class Archive:
@@ -35,6 +53,7 @@ class Archive:
         rows += [(m.slug, "Guests", "", f"{g['name']} {g.get('callsign', '')} {g.get('notes', '')}")
                  for m in self.meetings for g in m.guests]
         self.db.executemany("insert into docs values (?,?,?,?)", rows)
+        self.db.execute("create virtual table vocab using fts5vocab(docs, 'row')")
 
     def _canonicalize(self, m: Meeting) -> Meeting:
         """Map ids stored under a member's old callsign to their current one."""
@@ -48,10 +67,22 @@ class Archive:
         return m
 
     def search(self, q: str, limit: int = 100) -> list[dict]:
-        terms = re.findall(r"\w+", q)
+        """Every word (or another spelling of a member's name from the roster); if that finds nothing, close
+        spellings of the words in the minutes (a typo, or a spelling nobody has added to the roster)."""
+        terms = [t.lower() for t in re.findall(r"\w+", q)]
         if not terms:
             return []
-        fts = " ".join(f'"{t}"*' for t in terms)
+        names = spellings(self.club)
+        found = self._match([names.get(t, {t}) for t in terms], limit)
+        if not found:
+            vocab = [w for (w,) in self.db.execute("select term from vocab")]
+            found = self._match([names.get(t, {t}) | set(difflib.get_close_matches(t, vocab, n=3, cutoff=0.8))
+                                 for t in terms], limit)
+        return found
+
+    def _match(self, alts: list[set[str]], limit: int) -> list[dict]:
+        """Rows with, for each set, at least one of its words (as a prefix)."""
+        fts = " AND ".join("(" + " OR ".join(f'"{w}"*' for w in sorted(a)) + ")" for a in alts)
         cur = self.db.execute(
             "select slug, section, member, snippet(docs, 3, char(1), char(2), ' … ', 24) "
             "from docs where docs match ? order by slug desc limit ?", (fts, limit))
