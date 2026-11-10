@@ -6,7 +6,7 @@ For whoever runs the server: install, configure, back up and secure the app. Bac
 As root on the container:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh | bash   # first time
-/opt/w8lbz-minutes/deploy/update.sh                                                    # after each merge to main
+/opt/w8lbz-minutes/deploy/update.sh                                                    # by hand: the latest main (TAG=v0.15.0 for a release)
 ```
 Then put `club.yaml` in `/etc/w8lbz-minutes/` (and `google-service-account.json`, only for backups to Google Drive), and data in `/var/lib/w8lbz-minutes/`.
 The app runs as the `minutes` user on port 8000. The roster cache (`roster.json`) is rebuilt daily at 04:00 from the roster the app keeps (`roster-sheet.json`); backups run on the schedule set on the Backups page.

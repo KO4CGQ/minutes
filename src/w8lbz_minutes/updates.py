@@ -127,3 +127,78 @@ def request(by: str, target: str, notes_confirmed: bool) -> None:
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps({"at": int(time.time()), "by": by, "from": running(), "to": target}))
     tmp.replace(p)  # the path unit fires on the file appearing
+
+
+# ---------------- automatic updates (nightly, w8lbz-minutes-autoupdate.timer) ----------------
+
+def auto_settings() -> dict:
+    """{"on": bool, "told": [versions the admins were already emailed about]} (update-settings.json)."""
+    p = DATA / "update-settings.json"
+    return {"on": False, "told": [], **(json.loads(p.read_text()) if p.exists() else {})}
+
+
+def _save_auto(s: dict) -> None:
+    p = DATA / "update-settings.json"
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(s))
+    tmp.replace(p)
+
+
+def set_auto(on: bool) -> None:
+    _save_auto({**auto_settings(), "on": bool(on)})
+
+
+def _tell_admins(club, subject: str, body: str) -> None:
+    from . import auth
+    to = [m.email for mid, m in club.members.items() if mid in club.admins and m.email]
+    if to:
+        try:
+            auth.send_email(to, f"{club.info.get('callsign', 'W8LBZ')} Minutes: {subject}", body + f"\n\n73,\n{club.info.get('callsign', 'W8LBZ')} Minutes")
+        except Exception:
+            log.exception("couldn't email the admins about an automatic update")
+
+
+def auto(club, url: str, wait: float = 900, poll: float = 10) -> str:
+    """The nightly run: if automatic updates are on and a newer release needs no steps by hand, back up, ask the
+    updater for exactly that release, wait for the outcome and email the admins. Returns what it did."""
+    s = auto_settings()
+    if PREVIEW or not s["on"]:
+        return "automatic updates are off"
+    rel = latest(force=True)
+    if not rel or not newer(rel["version"], running()):
+        return "up to date"
+    v, page = rel["version"], f"{url}/admin/updates"
+    last = status().get("last") or {}
+    if last.get("to") == v and not last.get("ok"):
+        return f"{v} failed before; waiting for an admin"  # never retried night after night
+    if rel.get("deploy_notes"):
+        if v not in s["told"]:
+            _tell_admins(club, f"version {v} needs you", f"Version {v} is out, but it needs steps by hand on the server "
+                         f"first, so it wasn't installed automatically:\n\n{rel['deploy_notes']}\n\nThen update from {page}")
+            _save_auto({**s, "told": [*s["told"], v][-20:]})
+        return f"{v} needs steps by hand"
+    st = status()
+    if "requested" in st or "running" in st:
+        return "an update is already waiting or running"
+    from . import backup
+    b = backup.run(club, url)
+    if not b.get("ok"):
+        _tell_admins(club, f"version {v} not installed", f"Version {v} wasn't installed automatically because the "
+                     f"backup before it failed:\n\n  {b.get('error')}\n\nSee {url}/admin/security/backups")
+        return "backup failed"
+    request("automatic", v, notes_confirmed=False)
+    end = time.time() + wait
+    while time.time() < end:
+        done = status().get("last") or {}
+        if done.get("to") == v and "requested" not in status() and "running" not in status():
+            ok = done.get("ok")
+            _tell_admins(club, f"updated to {v}" if ok else f"the update to {v} failed",
+                         (f"The app updated itself to {v} overnight, after a backup ({b.get('name')})."
+                          if ok else f"The automatic update to {v} failed, and the app went back to the version it had "
+                                     f"(if it couldn't, it says so below). It won't try {v} again by itself.\n\n"
+                                     f"{done.get('output', '')[-1500:]}") + f"\n\n{page}")
+            return f"{'updated to' if ok else 'failed:'} {v}"
+        time.sleep(poll)
+    _tell_admins(club, f"the update to {v} hasn't finished", f"The automatic update to {v} was asked for but hadn't "
+                 f"finished after {int(wait // 60)} minutes. Have a look: {page}")
+    return "still waiting"

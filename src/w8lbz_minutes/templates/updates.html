@@ -37,9 +37,17 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
     {% if backup_ready %}<label class="check"><input type="checkbox" name="backup_first" value="1" checked> Back up first (recommended): a full backup, kept on the server and sent off it as usual. If it fails, the update doesn't start.</label>
     {% else %}<p class="hint">Backups aren't set up (no passphrase), so there's no backup before the update. Admin mode → Security → Backups.</p>{% endif %}
     <div class="formrow"><button class="btn" data-confirm="Update the app to {{ newer.version }} now? It restarts, so anyone using it is interrupted for a moment.">Update now</button></div>
-    <p class="hint">Runs the same update as <code>update.sh</code> on the server: the latest main from GitHub, then a restart. Avoid doing it during a meeting.</p>
+    <p class="hint">Installs exactly this release (its tag on GitHub), then restarts; if the app doesn't come back up, it goes back to the version it had. Avoid doing it during a meeting.</p>
   </form>
 </article>{% endif %}
+
+<article class="card">
+  <div class="card-text"><b>Automatic updates</b>: {{ 'on' if auto.on else 'off' }}</div>
+  <p class="muted">When on, the server checks every night at 2:30 for a newer release. One that needs no steps by hand is installed after a full backup (no backup, no update); if the app doesn't come back up, it goes back to the version it had and doesn't try that release again. Admins get an email either way, and one for a release that needs steps by hand.</p>
+  <form method="post" action="/admin/updates/auto" class="inline"><input type="hidden" name="on" value="{{ 0 if auto.on else 1 }}">
+    <button class="btn small{{ ' ghost' if auto.on }}"{% if not auto.on and not backup_ready %} disabled title="Set up backups first"{% endif %}>{{ 'Turn off' if auto.on else 'Turn on' }}</button></form>
+  {% if not backup_ready and not auto.on %}<p class="hint">Needs backups set up first (a passphrase): admin mode → Security → Backups.</p>{% endif %}
+</article>
 
 {% if st.last %}<article class="card{{ '' if st.last.ok else ' overdue' }}">
   <div class="card-text">{{ emoji('✅', 'check') if st.last.ok else emoji('❌', 'xcircle') }} Last update{% if st.last.to %} to {{ st.last.to }}{% endif %}: {{ 'finished' if st.last.ok else 'failed' }} {{ st.last.finished|tsfull }}{% if st.last.by %}, asked for by {{ club.short(st.last.by) }}{% endif %}.</div>

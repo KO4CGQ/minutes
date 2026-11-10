@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly check for a W8LBZ minutes release to install (does nothing unless turned on on the Updates page)
+
+[Timer]
+OnCalendar=*-*-* 02:30
+Persistent=false
+
+[Install]
+WantedBy=timers.target
