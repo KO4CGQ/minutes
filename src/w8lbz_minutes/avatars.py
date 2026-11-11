@@ -42,8 +42,9 @@ def save(mid: str, data: bytes) -> None:
             raise ValueError("Use a JPEG, PNG or WebP picture.")
         if img.width * img.height > 60_000_000:
             raise ValueError("That picture is too big.")
+        img.load()  # decode it all now: a damaged or cut-off file fails here, with a message, not later
         img = ImageOps.exif_transpose(img)
-    except UnidentifiedImageError:
+    except (UnidentifiedImageError, OSError):  # not a picture, or a damaged one
         raise ValueError("That file isn't a picture we can read. Use a JPEG, PNG or WebP.")
     clear = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
     img = ImageOps.fit(img.convert("RGBA" if clear else "RGB"), (SIZE, SIZE), Image.LANCZOS, centering=(0.5, 0.4))

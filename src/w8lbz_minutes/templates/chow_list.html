@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="static/minutes.css"></head>
 <body class="pdf"><article class="minutes">
   <header class="mh">
-    <img src="static/logo.png" alt="{{ club.info.callsign }} logo">
+    <img src="{{ brand(pdf=True) }}" alt="{{ club.info.callsign }} logo">
     <div>
       <div class="club">{{ club.info.callsign }} · {{ club.info.name }}</div>
       <h1>Chow List</h1>

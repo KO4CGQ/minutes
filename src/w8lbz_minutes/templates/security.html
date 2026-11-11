@@ -1,7 +1,7 @@
-{% extends "base.html" %}{% block title %}Security{% endblock %}{% block body %}
-<h1>Security</h1>
-<p class="muted">Admins only, in admin mode. Times are the server's (club time). "Internet" addresses come in through Tailscale Funnel; you're on {{ my_ip }} ({{ my_ip|where }}).</p>
-<nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/security/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}{% if t == 'bans' and bans %} ({{ bans|length }}){% elif t == 'failed' and failed_today %} ({{ failed_today }} today){% elif t == 'devices' %} ({{ sessions|length }}){% endif %}</a>{% endfor %}</nav>
+{% extends "base.html" %}{% block title %}{{ 'Backups' if tab == 'backups' else 'Security' }}{% endblock %}{% block body %}
+<h1>{{ 'Backups' if tab == 'backups' else 'Security' }}</h1>
+{% if tab != 'backups' %}<p class="muted">Admins only, in admin mode. Times are the server's (club time). "Internet" addresses come in through Tailscale Funnel; you're on {{ my_ip }} ({{ my_ip|where }}).</p>
+<nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/security/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}{% if t == 'bans' and bans %} ({{ bans|length }}){% elif t == 'failed' and failed_today %} ({{ failed_today }} today){% elif t == 'devices' %} ({{ sessions|length }}){% endif %}</a>{% endfor %}</nav>{% endif %}
 
 {% if tab == 'signins' %}
 {% if signins %}<table class="list"><thead><tr><th>When</th><th>Member</th><th>How</th><th>From</th><th class="opt">Device</th></tr></thead><tbody>
@@ -68,8 +68,8 @@
 <li>The data now: {{ (data_size / 1048576)|round(1) }} MB before compression{% if backup_status.size %}; the last backup came to {{ (backup_status.size / 1048576)|round(1) }} MB compressed{% endif %}.</li>
 <li>Last backup: {% if not backup_status %}none yet{% elif backup_status.ok %}{{ backup_status.at|tsfull }}, {{ backup_status.files }} files, {{ (backup_status.size / 1048576)|round(1) }} MB{% if backup_status.sent_to %}, sent to {{ backup_status.sent_to|join(' and ') }}{% else %}, on the server only{% endif %}{% else %}<b>failed</b> {{ backup_status.at|tsfull }}: {{ backup_status.error }}{% endif %}</li>
 </ul>
-<div class="formrow"><form method="post" action="/admin/security/backup" class="inline"><button class="btn small">Back up now</button></form>
-<form method="post" action="/admin/security/backups/download" class="inline"><button class="btn small ghost">Download a backup now</button></form></div>
+<div class="formrow"><form method="post" action="/admin/backups/now" class="inline"><button class="btn small">Back up now</button></form>
+<form method="post" action="/admin/backups/download" class="inline"><button class="btn small ghost">Download a backup now</button></form></div>
 <p class="hint">Back up now runs the usual backup (kept here and sent off); reload the page to see it. Download makes a fresh one and saves it on your computer: a compressed archive, encrypted with the passphrase, so it's safe on a laptop or USB stick. To open it: <code>w8lbz-minutes restore FILE FOLDER</code>.</p>
 
 <h2 id="passphrase">The passphrase</h2>
@@ -78,7 +78,7 @@
   <p><code class="cs">{{ suggestion }}</code></p>
   <p class="hint">Random, made just now and not kept anywhere: copy it before leaving the page. Capital letters and digits without look-alikes (no 0/O, 1/I/L), in groups of four, so it's easy to read off paper and type; about 119 bits, far beyond guessing. A password manager's generator works too: 20+ random letters and digits, or 7+ random words. Symbols aren't needed: length matters more.</p>
 </details>
-<form method="post" action="/admin/security/backups/check" class="modern">
+<form method="post" action="/admin/backups/check" class="modern">
   <div class="formrow"><label>Check a passphrase<input type="password" name="passphrase" required autocomplete="off"></label>
   <button class="btn small ghost">Check</button></div>
   <p class="hint">Says whether it matches the server's, how strong it is, and whether it's in Have I Been Pwned's leaked passwords (only the first 5 characters of its hash are sent). It isn't stored or logged.</p>
@@ -87,7 +87,7 @@
 <h2>Schedule and how many to keep</h2>
 <p class="hint"><b>Recommended:</b> daily at {{ rec.hour }}:00, keep {{ rec.keep_local }} on the server, {{ rec.drive_keep }} on Google Drive, and {{ rec.s3_days }} days on S3 (the bucket's lifecycle rule). At this size{% if backup_status.size %} (about {{ (backup_status.size / 1048576)|round(1) }} MB each){% endif %}, a year of daily backups is a few GB at most: pennies on B2, well within a Shared Drive. Daily means at most a day of changes could be lost; the server copies cover a mistake noticed within the week, the off-server copies a lost server or one noticed later.</p>
 
-<form method="post" action="/admin/security/backups/settings" class="modern card">
+<form method="post" action="/admin/backups/settings" class="modern card">
   <div class="formrow">
     <label>Back up<select name="every">{% for v, label in (('daily', 'Every day'), ('weekly', 'Every week'), ('off', 'Only when I click Back up now')) %}<option value="{{ v }}" {{ 'selected' if bs.schedule.every == v }}>{{ label }}</option>{% endfor %}</select></label>
     <label>At<select name="hour">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if bs.schedule.hour == h }}>{{ '%d:00'|format(h) }}</option>{% endfor %}</select></label>
@@ -121,7 +121,7 @@
 
 <h2>On the server</h2>
 <p class="hint">Download one to keep on your own computer. It's encrypted: it opens only with the passphrase.</p>
-<ul class="plain">{% for name, size in local_backups %}<li><a href="/admin/security/backups/{{ name }}">{{ name }}</a> <span class="muted small">{{ (size / 1048576)|round(1) }} MB</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}</ul>
+<ul class="plain">{% for name, size in local_backups %}<li><a href="/admin/backups/{{ name }}">{{ name }}</a> <span class="muted small">{{ (size / 1048576)|round(1) }} MB</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}</ul>
 {% endif %}
 {% if tab == 'server' %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}

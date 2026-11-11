@@ -16,7 +16,7 @@ club:
 
 auth:
   rp_id: minutes.example-tailnet.ts.net   # passkeys only work on this exact HTTPS hostname
-  rp_name: W8LBZ Minutes
+  # rp_name: Example Club Minutes   # the name phones show for a passkey; default: the app's name (admin → Site)
   session_days: 180                      # "remember this device"
 
 admins: [KD8XYZ]   # callsigns that may turn on admin mode (name menu) for an hour at a time

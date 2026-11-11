@@ -240,3 +240,28 @@ def test_motions_are_records(env, monkeypatch):
     who["id"] = "amy"
     assert "Record a past motion" not in c.get("/business?tab=motions").text
     assert c.post(f"/business/{old['id']}/motion", data=form).status_code == 403
+
+
+def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "sec"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    a.reload()
+    iid = console.business_state(a)["items"][0]["id"]
+    c.post(f"/business/{iid}/edit", data={"owner": "amy"})
+    who["id"] = "amy"
+    home = c.get("/").text
+    assert f'data-item="d{iid}"' in home and f'id="d{iid}"' in home and 'name="back" value="/"' in home  # the dialog is on Home
+    r = c.post(f"/business/{iid}/comment", data={"text": "Ordered them", "back": "/"}, follow_redirects=False)
+    assert r.headers["location"] == f"/#i{iid}"                                    # back to Home, that item open
+    assert c.post(f"/business/{iid}/comment", data={"text": "x", "back": "https://evil.example/"},
+                  follow_redirects=False).headers["location"] == f"/business#i{iid}"  # anything else: the Business page
+    who["id"] = "bob"                                                              # not his: refused, and Home says so
+    assert "Only an officer or the item&#39;s owner" in c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}).text
+    who["id"] = "amy"
+    r = c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}, follow_redirects=False)
+    assert r.headers["location"] == "/" and business.get(business.load(), iid)["status"] == "done"

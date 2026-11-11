@@ -21,7 +21,7 @@ import secrets
 import time
 from pathlib import Path
 
-from . import auth
+from . import branding, auth
 from .club import DATA, Club
 
 log = logging.getLogger("w8lbz.chow")
@@ -447,9 +447,9 @@ def list_changed(s: dict, today: dt.date | None = None) -> bool:
 def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: str, url: str, link_to: list[str] = ()) -> int:
     """Send the chow list (the PDF to `to`, a link to `link_to`, as each chose on their Email tab) and remember what was
     sent, so the Chow page can tell when it has changed."""
-    callsign = club.info.get("callsign", "W8LBZ")
+    callsign = club.info.get("callsign") or "Club"
     rest = (f"Can't make your night? Ask someone to swap on the chow page: {url}/chow\n\nTo change or stop getting the "
-            f"chow list: {url}/profile/email\n\n73,\n{callsign} Minutes")
+            f"chow list: {url}/profile/email\n\n73,\n{branding.name(club)}")
     sent = auth.send_email(to, f"{callsign} chow list", f"The chow list as of {dt.date.today():%B %-d, %Y} is attached: "
                            f"who brings chow on each meeting night still to come.\n\n{rest}",
                            attachments=[(pdf[0], pdf[1], "application/pdf")], only_to=club.email_only_to()) if to else 0
@@ -475,7 +475,7 @@ def _tell(club: Club, members: list[str | None], subject: str, text: str, url: s
     if not to:
         return
     try:
-        auth.send_email(to, subject, f"{text}\n\nThe chow schedule: {url}/chow\n\n73,\nW8LBZ Minutes",
+        auth.send_email(to, subject, f"{text}\n\nThe chow schedule: {url}/chow\n\n73,\n{branding.name(club)}",
                         only_to=club.email_only_to())
     except Exception:
         log.exception("couldn't send %r (chow change %s)", subject, e["id"])

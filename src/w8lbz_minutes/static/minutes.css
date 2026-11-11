@@ -1,6 +1,6 @@
 .minutes { max-width: 50rem; margin: 0 auto; font: 15px/1.5 "Helvetica Neue", Arial, sans-serif; color: var(--text, #111); }
 .minutes .mh { display: flex; gap: 1.2rem; align-items: center; margin-bottom: 1rem; }
-.minutes .mh img { width: 96px; height: auto; background: #fff; border-radius: 50%; }
+.minutes .mh img { width: 96px; height: auto; }
 .minutes .club { font-size: .85rem; letter-spacing: .03em; color: var(--muted, #445); }
 .minutes h1 { margin: .1rem 0; font-size: 1.7rem; }
 .minutes .date { font-size: 1.15rem; }

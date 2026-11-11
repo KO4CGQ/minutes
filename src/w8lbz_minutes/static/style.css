@@ -113,7 +113,7 @@ nav.top { position: sticky; top: 0; z-index: 30; display: flex; gap: .25rem; ali
 nav.top a { color: var(--nav-text); text-decoration: none; padding: .35rem .62rem; border-radius: .5rem; font-size: .95rem; transition: background .15s; }
 nav.top a:hover { background: var(--nav-hover); } nav.top a.on { background: var(--nav-on); box-shadow: inset 0 -2px 0 var(--accent); }
 nav.top .brand { font-weight: 700; display: flex; align-items: center; gap: .5rem; margin-right: .8rem; padding-left: 0; font-size: 1.02rem; }
-nav.top .brand:hover { background: none; } nav.top .brand img { width: 30px; background: #fff; border-radius: 50%; }
+nav.top .brand:hover { background: none; } nav.top .brand img { width: 30px; }
 nav.top input[type=search] { padding: .38rem .8rem; border-radius: 2rem; border: 1px solid transparent; width: 13rem;
   background: rgba(255, 255, 255, .92); color: #1b1f17; }
 nav.top .menu { position: relative; margin-left: .4rem; }
@@ -185,7 +185,7 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 /* sign in */
 .login { max-width: 25rem; margin: 3rem auto; padding: 2rem 1.8rem; text-align: center; background: var(--surface);
   border: 1px solid var(--border); border-radius: 1rem; box-shadow: var(--shadow); }
-.login .loginlogo { width: 96px; background: #fff; border-radius: 50%; }
+.login .loginlogo { width: 96px; }
 .login h1 { font-size: 1.55rem; margin: .7rem 0 1.4rem; }
 .login form { display: flex; flex-direction: column; align-items: stretch; gap: .5rem; }
 .login label { font-weight: 600; } .login input[type=email] { text-align: center; width: 100%; padding: .65rem .75rem; }
@@ -415,8 +415,19 @@ form.linkedit .rowbtns { white-space: nowrap; } form.linkedit .rowbtns .btn { pa
 .iconpick .grid button:hover { background: var(--accent-soft); border-color: var(--accent); }
 .iconpick .grid button small { font-size: .72rem; color: var(--muted); } .iconpick .grid .auto { font-weight: 600; justify-content: center; }
 ul.checklist { list-style: none; padding: 0; margin: .3rem 0; } ul.checklist li { position: relative; padding: .35rem 0 .35rem 1.7rem; line-height: 1.4; }
-ul.checklist li::before { content: ""; position: absolute; left: 0; top: .55rem; width: 1rem; height: 1rem; border: 2px solid var(--border-strong); border-radius: .25rem; }
+ul.checklist li::before { content: ""; position: absolute; left: 0; top: .55rem; width: calc(1rem + 4px); height: calc(1rem + 4px); box-sizing: border-box; border: 2px solid var(--border-strong); border-radius: .25rem; }
 ul.checklist li.late::before { border-color: var(--danger); }
+/* Home's business items: each opens the item on the Business page. Pointing at one shows a faint tick in its box
+   (what you can do there); a phone has no pointing, so the › says it opens */
+ul.checklist.open li a { color: inherit; text-decoration: none; display: block; }
+ul.checklist.open li a::after { content: " ›"; color: var(--muted); }
+/* the tick is a drawing laid over the box (same place and size), not a "✓" in some font: every browser centres it */
+ul.checklist.open li::after { content: ""; position: absolute; left: 0; top: .55rem; width: calc(1rem + 4px); height: calc(1rem + 4px);
+  background: var(--accent-text); opacity: 0; transition: opacity .15s; pointer-events: none;
+  --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  -webkit-mask: var(--tick) center / 75% no-repeat; mask: var(--tick) center / 75% no-repeat; }
+ul.checklist.open li:hover::after, ul.checklist.open li:focus-within::after { opacity: .5; }
+ul.checklist.open li a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }  /* the keyboard still shows where it is */
 form.linkedit table.list { overflow: visible; }
 /* calendar page */
 .callegend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .85rem; color: var(--muted); }
@@ -501,3 +512,36 @@ button.cardopen .card-text { display: block; }
 /* a possible duplicate (calview.mark_duplicates, console.js similar()): highlighted, never hidden */
 .duphint { color: var(--warn-text); font-size: .85rem; }
 li.dup .caltitle, li.dup > strong { background: var(--warn-soft); border-radius: .2rem; }
+/* Site page: one row per picture (what it looks like now, where it's used, Upload and Reset) */
+.sitename input { flex: 1; max-width: 22rem; }
+.sitepics { display: grid; gap: .6rem; }
+.sitepic { display: grid; grid-template-columns: 6.5rem 1fr auto; gap: 1rem; align-items: center; padding: .8rem 1rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.sitepic .thumb { width: 6.5rem; height: 5rem; display: grid; place-items: center; border-radius: var(--radius-sm);
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 12px 12px; }  /* see-through shows */
+.sitepic .thumb img { max-width: 6rem; max-height: 4.5rem; }
+.sitepic .thumbs { display: grid; gap: .3rem; } .sitepic .thumbs .thumb { height: 3.6rem; background: #fff; border: 1px solid var(--border); }
+.sitepic .thumbs .thumb.ondark { background: #1b1f17; } .sitepic .thumbs img { max-height: 3.1rem; max-width: 5.5rem; }
+.sitepic form.backing { margin: .35rem 0 0; } .sitepic form.backing select { margin-left: .3rem; max-width: 100%; }
+.sitepic .about { min-width: 0; }  /* lets the text and the menu wrap instead of widening the page */
+.sitepic .thumb.favicon img { width: 32px; height: 32px; } .sitepic .thumb.icon img { width: 60px; height: 60px; border-radius: 13px; }
+.sitepic .acts { display: flex; gap: .4rem; align-items: center; } .sitepic .acts form { margin: 0; }
+@media (max-width: 560px) { .sitepic { grid-template-columns: 5rem 1fr; } .sitepic .thumb { width: 5rem; } .sitepic .acts { grid-column: 1 / -1; }
+  .sitepic form.backing label { display: block; } .sitepic form.backing select { margin: .25rem 0 0; width: 100%; } }
+/* the file box sits invisibly in its Upload… button: still reachable with the keyboard (Tab, then Space) */
+.sitepic label.btn { position: relative; } .sitepic label.btn input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.sitepic label.btn:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* what's behind the club's logo (Site): dark ink on a see-through background still shows in dark mode */
+img.logo.bg-circle { background: #fff; border-radius: 50%; }
+img.logo.bg-square { background: #fff; border-radius: 14%; padding: 6%; box-sizing: border-box; }
+/* Site: Save and Cancel appear once something is chosen; the card is marked until it's saved */
+.sitepic form .pend { display: none; } .sitepic form.pending .pend { display: inline-flex; gap: .4rem; }
+.sitepic form.pending .pick { display: none; }
+.sitepic:has(form.pending) { border-color: var(--warn-edge); background: var(--warn-soft); }
+.sitepic .unsaved { color: var(--warn-text); font-size: .8rem; font-weight: 600; margin-left: .3rem; }
+/* Admin page: one card per tool */
+.admintools { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .7rem; }
+.admintools a.card { display: flex; flex-direction: column; gap: .3rem; text-decoration: none; color: inherit; padding: .9rem 1rem; }
+.admintools a.card:hover { border-color: var(--accent); } .admintools a.card b { font-size: 1.05rem; }
+/* ‹ Admin, above each admin tool's page */
+nav.crumb { margin: -.6rem 0 .6rem; font-size: .9rem; } nav.crumb a { text-decoration: none; }

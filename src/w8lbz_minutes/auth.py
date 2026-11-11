@@ -23,6 +23,7 @@ from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
                                       ResidentKeyRequirement, UserVerificationRequirement)
 
+from . import branding
 from .club import DATA, PREVIEW, STAGE, Club, one_line, valid_email
 
 ACTOR = contextvars.ContextVar("actor", default=None)  # the signed-in person's email, for stage mode (set per request)
@@ -91,7 +92,7 @@ class Auth:
         self.club = club
         cfg = club.auth
         self.rp_id: str | None = cfg.get("rp_id")
-        self.rp_name: str = cfg.get("rp_name", "W8LBZ Minutes")
+        self._rp_name: str | None = cfg.get("rp_name")  # club.yaml's, else the app's name (Site)
         self.origins: list[str] = cfg.get("origins") or ([f"https://{self.rp_id}"] if self.rp_id else [])
         self.session_days: int = int(cfg.get("session_days", 180))
         self.base_url: str | None = cfg.get("base_url") or (self.origins[0] if self.origins else None)
@@ -252,10 +253,10 @@ class Auth:
             self.event("link_limit", ip, member)
             return
         url = self.create_link(member, next_url, base_url)
-        send_email(self.club.members[member].email, "Your W8LBZ Minutes sign-in link", only_to=self.club.email_only_to(), to_self=True,
+        send_email(self.club.members[member].email, f"Your {branding.name(self.club)} sign-in link", only_to=self.club.email_only_to(), to_self=True,
                    body=f"Hi {self.club.members[member].first},\n\n"
-                   f"Use this link to sign in to W8LBZ Minutes. It works once, for {LINK_MINUTES} minutes:\n\n"
-                   f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n73,\nW8LBZ")
+                   f"Use this link to sign in to {branding.name(self.club)}. It works once, for {LINK_MINUTES} minutes:\n\n"
+                   f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n73,\n{branding.name(self.club)}")
 
     def create_link(self, member: str, next_url: str = "/", base_url: str | None = None) -> str:
         now = int(time.time())
@@ -290,10 +291,10 @@ class Auth:
         self.db.execute("insert into email_changes values (?,?,?,?,?)",
                         (_hash(token), member, email, now + LINK_MINUTES * 60, now))
         url = f"{(base_url or self.base_url or '').rstrip('/')}/profile/email?t={token}"
-        send_email(email, "Confirm your new W8LBZ Minutes email", only_to=self.club.email_only_to(), to_self=True,
-                   body=f"Hi {self.club.members[member].first},\n\nTo use this address for W8LBZ Minutes and the club "
+        send_email(email, f"Confirm your new {branding.name(self.club)} email", only_to=self.club.email_only_to(), to_self=True,
+                   body=f"Hi {self.club.members[member].first},\n\nTo use this address for {branding.name(self.club)} and the club "
                    f"roster, open this link within {LINK_MINUTES} minutes:\n\n{url}\n\n"
-                   f"If you didn't ask for this, ignore this email and nothing changes.\n\n73,\nW8LBZ")
+                   f"If you didn't ask for this, ignore this email and nothing changes.\n\n73,\n{branding.name(self.club)}")
         return None
 
     def confirm_email_change(self, token: str) -> tuple[str, str] | None:
@@ -326,7 +327,7 @@ class Auth:
         existing = [PublicKeyCredentialDescriptor(id=base64url_to_bytes(r["id"]))
                     for r in self.db.execute("select id from passkeys where member=?", (member,))]
         opts = generate_registration_options(
-            rp_id=self.rp_id, rp_name=self.rp_name,
+            rp_id=self.rp_id, rp_name=self._rp_name or branding.name(self.club),
             user_id=member.encode(), user_name=m.callsign or m.email or m.name, user_display_name=m.name,
             exclude_credentials=existing,
             authenticator_selection=AuthenticatorSelectionCriteria(

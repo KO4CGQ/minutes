@@ -51,6 +51,7 @@ find "$DIR/data" -mindepth 1 -maxdepth 1 ! -name auth.sqlite -exec rm -rf {} +
 # Everything in data/ (meetings, roster cache, chow schedule, ...) except the live login database.
 find "$REPO/data" -mindepth 1 -maxdepth 1 ! -name 'auth.sqlite*' ! -name 'preview-*' -exec cp -r {} "$DIR/data/" \;
 [ -f "$REPO/private/bylaws.md" ] && cp "$REPO/private/bylaws.md" "$DIR/data/"
+[ -d "$REPO/private/branding" ] && cp -r "$REPO/private/branding" "$DIR/data/"  # the club's logo (admin → Site), kept out of the repo
 cp "$REPO/club.yaml" "$DIR/club.yaml"
 # Made-up contact details for everyone (see the script for which members to test sharing with).
 [ -f "$DIR/data/roster.json" ] && python3 "$REPO/deploy/preview-fake.py" "$DIR/data"

@@ -142,11 +142,11 @@ def test_schedule_and_page(data, tmp_path, monkeypatch):
     monkeypatch.setattr(web.authn, "member_for", lambda token: "kd8adm")
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     c = TestClient(web.app)
-    page = c.get("/admin/security/backups").text
+    page = c.get("/admin/backups").text
     assert "Recommended:" in page and "The data now:" in page and "Only when I click" in page
-    r = c.post("/admin/security/backups/download")
+    r = c.post("/admin/backups/download")
     assert r.status_code == 200 and r.content.startswith(backup.MAGIC) and "attachment" in r.headers["content-disposition"]
-    c.post("/admin/security/backups/settings", data={"every": "daily", "hour": "2", "keep_local": "7", "drive_on": "1", "drive_folder": "bad folder!"})
+    c.post("/admin/backups/settings", data={"every": "daily", "hour": "2", "keep_local": "7", "drive_on": "1", "drive_folder": "bad folder!"})
     assert backup.settings()["schedule"]["every"] == "off"  # refused: nothing saved
 
 

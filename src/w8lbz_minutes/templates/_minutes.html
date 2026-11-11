@@ -1,7 +1,7 @@
 {# The minutes document itself; shared by the web view and the PDF. #}
 <article class="minutes">
   <header class="mh">
-    <img src="{{ '' if pdf else '/' }}static/logo.png" alt="W8LBZ logo">
+    <img src="{{ brand(pdf=pdf) }}" alt="{{ club.info.callsign or 'Club' }} logo" class="{{ logo_class() }}">
     <div>
       <div class="club">{{ club.info.callsign }} · {{ club.info.name }}</div>
       <h1>Meeting Minutes</h1>

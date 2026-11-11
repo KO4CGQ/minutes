@@ -35,7 +35,7 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
       <label class="wk"><input type="checkbox" name="notes_done" value="1" required> I've done these steps</label></div>{% endif %}
     <details open><summary class="muted">What's in it</summary><div class="relnotes changelog">{{ newer.notes|md }}</div></details>
     {% if backup_ready %}<label class="check"><input type="checkbox" name="backup_first" value="1" checked> Back up first (recommended): a full backup, kept on the server and sent off it as usual. If it fails, the update doesn't start.</label>
-    {% else %}<p class="hint">Backups aren't set up (no passphrase), so there's no backup before the update. Admin mode → Security → Backups.</p>{% endif %}
+    {% else %}<p class="hint">Backups aren't set up (no passphrase), so there's no backup before the update. Admin mode → Admin → Backups.</p>{% endif %}
     <div class="formrow"><button class="btn" data-confirm="Update the app to {{ newer.version }} now? It restarts, so anyone using it is interrupted for a moment.">Update now</button></div>
     <p class="hint">Installs exactly this release (its tag on GitHub), then restarts; if the app doesn't come back up, it goes back to the version it had. Avoid doing it during a meeting.</p>
   </form>
@@ -48,7 +48,7 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
     <label>At <select name="hour" aria-label="Hour">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if h == auto.hour }}>{{ '%d:30' % h }}</option>{% endfor %}</select></label>
     {% if auto.on %}<button class="btn small" name="on" value="1">Save the time</button> <button class="btn small ghost" name="on" value="0">Turn off</button>
     {% else %}<button class="btn small" name="on" value="1"{% if not backup_ready %} disabled title="Set up backups first"{% endif %}>Turn on</button>{% endif %}</form>
-  {% if not backup_ready and not auto.on %}<p class="hint">Needs backups set up first (a passphrase): admin mode → Security → Backups.</p>{% endif %}
+  {% if not backup_ready and not auto.on %}<p class="hint">Needs backups set up first (a passphrase): admin mode → Admin → Backups.</p>{% endif %}
 </article>
 
 {% if st.last %}<article class="card{{ '' if st.last.ok else ' overdue' }}">

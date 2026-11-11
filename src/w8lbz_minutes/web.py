@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from markupsafe import Markup, escape
 
-from . import ai, avatars, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
+from . import ai, avatars, branding, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
@@ -35,7 +35,7 @@ from .meeting import SECTIONS
 from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
-app = FastAPI(title="W8LBZ Minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
+app = FastAPI(title="Club minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 archive = Archive()
@@ -52,7 +52,7 @@ if not _log.handlers:
 
 COOKIE = "w8lbz_session"
 CHALLENGE_COOKIE = "w8lbz_pk"
-PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico",
+PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
                 "/api/roster")  # its own token, and only from the server itself
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
@@ -112,7 +112,12 @@ def _assets_stamp() -> str:
 
 
 templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("w8lbz-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
-                             ASSETS=_assets_stamp())
+                             ASSETS=_assets_stamp(),
+                             app_name=lambda: branding.name(archive.club),  # Site's name, else "<callsign> Minutes"
+                             # the logo: for a page, its address (new after each upload); for a PDF, the file itself
+                             brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
+                             f"/brand/{branding.FILES[kind]}?v={branding.stamp()}",
+                             logo_class=lambda: f"logo bg-{branding.backing()}")  # what's behind it (Site)
 
 
 # ---------------- login gate ----------------
@@ -311,7 +316,17 @@ def get_meeting(slug: str):
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    return RedirectResponse("/static/favicon.png", status_code=301)  # browsers ask for it regardless of <link rel=icon>
+    return RedirectResponse("/brand/favicon.png", status_code=302)  # browsers ask for it regardless of <link rel=icon>
+
+
+@app.get("/brand/{name}", include_in_schema=False)
+def brand_picture(name: str):
+    """The club's logo and icons (uploaded on Site), or the plain ones that come with the app. Public: the sign-in
+    page shows the logo."""
+    kind = {v: k for k, v in branding.FILES.items()}.get(name)
+    if not kind:
+        raise HTTPException(404)
+    return FileResponse(branding.path(kind), media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -379,6 +394,11 @@ def business_change(request: Request, fn, meeting: str = "", back: str = "/busin
     if request.headers.get("accept", "").startswith("application/json"):
         return JSONResponse(console.business_items(archive, meeting, s) if meeting else {"ok": True})
     return RedirectResponse(_safe_next(back), status_code=303)
+
+
+def _back(back: str, iid: str, default: str) -> str:
+    """Where a business change returns to: Home, when it came from Home's item dialog ("/"), else the Business page."""
+    return f"/#i{iid}" if back == "/" else default
 
 
 def owner_id(value: str | None) -> str | None:
@@ -531,19 +551,20 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
         if "owner" in fields:
             fields["owner"] = owner_id(fields["owner"])
         business.edit(s, iid, mid, meeting=form.get("meeting") or None, **fields)
-    return await run_in_threadpool(business_change, request, run, form.get("meeting", ""))
+    return await run_in_threadpool(business_change, request, run, form.get("meeting", ""),
+                                   _back(str(form.get("back", "")), iid, "/business"))
 
 
 @app.post("/business/{iid}/comment")
-def business_comment(request: Request, iid: str, text: str = Form(...), mid: str = Depends(me)):
+def business_comment(request: Request, iid: str, text: str = Form(...), back: str = Form(""), mid: str = Depends(me)):
     """Any member can comment on an item: an update, a question, "I can help with this"."""
-    return business_change(request, lambda s: business.comment(s, iid, mid, text), back=f"/business#i{iid}")
+    return business_change(request, lambda s: business.comment(s, iid, mid, text), back=_back(back, iid, f"/business#i{iid}"))
 
 
 @app.post("/business/{iid}/comments/{cid}/delete")
-def business_comment_delete(request: Request, iid: str, cid: str, mid: str = Depends(me)):
+def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), mid: str = Depends(me)):
     return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, privileged(request)),
-                           back=f"/business#i{iid}")
+                           back=_back(back, iid, f"/business#i{iid}"))
 
 
 def upcoming_meetings(n: int = 4) -> list[dt.date]:
@@ -567,11 +588,13 @@ def business_note_status(request: Request, nid: str, status: str, meeting: str =
 
 
 @app.post("/business/{iid}/done")
-def business_done(request: Request, iid: str, done: int = Form(1), meeting: str = Form(""), mid: str = Depends(me)):
+def business_done(request: Request, iid: str, done: int = Form(1), meeting: str = Form(""), back: str = Form(""),
+                  mid: str = Depends(me)):
     def run(s):
         _may_edit_item(request, s, iid, meeting)
         business.close(s, iid, mid, meeting or None) if done else business.reopen(s, iid, mid)
-    return business_change(request, run, meeting, back="/business?tab=done" if done else f"/business#i{iid}")
+    home = "/" if back == "/" else None  # from Home: back there (the item has left the list)
+    return business_change(request, run, meeting, back=home or ("/business?tab=done" if done else f"/business#i{iid}"))
 
 
 @app.post("/business/{iid}/delete")
@@ -982,8 +1005,8 @@ def admin_confirm_email(request: Request, next: str = Form("/"), mid: str = Depe
         return RedirectResponse(url, status_code=303)
     # Only ever to the admin themself, so test mode (email.only_to) doesn't apply.
     authmod.send_email(m.email, "Turn on admin mode", f"Hi {m.first},\n\nSomeone signed in as you asked to turn on admin mode "
-               f"in W8LBZ Minutes. If that was you, open this link in the same browser within 5 minutes:\n\n{url}\n\n"
-               f"If it wasn't you, don't open it, and sign out your other sessions on your profile page.\n\n73,\nW8LBZ")
+               f"in {branding.name(archive.club)}. If that was you, open this link in the same browser within 5 minutes:\n\n{url}\n\n"
+               f"If it wasn't you, don't open it, and sign out your other sessions on your profile page.\n\n73,\n{branding.name(archive.club)}")
     _admin_log(request, step_up_email=True)
     return RedirectResponse("/admin/confirm?sent=1&next=" + quote(_safe_next(next)), status_code=303)
 
@@ -1383,9 +1406,9 @@ def by_period(period: str) -> tuple[list, str, str]:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, mid: str = Depends(me)):
+def home(request: Request, error: str = "", mid: str = Depends(me)):
     """What's next for this member: the next meeting, their chow night, their business items, the latest minutes."""
-    if request.url.query:  # old bookmarks of the archive (/?period=...)
+    if request.url.query and set(request.query_params) - {"error"}:  # old bookmarks of the archive (/?period=...)
         return RedirectResponse(f"/minutes?{request.url.query}", status_code=301)
     club, today = archive.club, dt.date.today()
     nights = chow.meeting_nights(club, today, today + dt.timedelta(days=7))
@@ -1404,7 +1427,7 @@ def home(request: Request, mid: str = Depends(me)):
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
                 today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
-                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
+                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"), error=error)
 
 
 @app.get("/minutes", response_class=HTMLResponse)
@@ -1746,7 +1769,9 @@ def _security_admin(request: Request) -> str:
 
 
 SECURITY_TABS = (("signins", "Sign-ins"), ("members", "Members"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
-                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("backups", "Backups"), ("server", "Server"))
+                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
+# Backups has its own card on the Admin page and its own page; it keeps this address (emails link to it)
+SECURITY_PAGES = dict(SECURITY_TABS) | {"backups": "Backups"}
 
 
 def admin_action(e: dict) -> str:
@@ -1762,7 +1787,8 @@ def admin_action(e: dict) -> str:
              "update_cancelled": lambda v: "Cancelled the update",
              "auto_update": lambda v: f"Turned automatic updates {'on' if v else 'off'}", "unban": lambda v: f"Lifted the ban on {v}",
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
-             "links": lambda v: f"Saved the club links ({len(v)})"}
+             "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
+             "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
 
@@ -1770,13 +1796,36 @@ def admin_action(e: dict) -> str:
 templates.env.filters["admin_action"] = admin_action
 
 
-@app.get("/admin")
-@app.get("/admin/")
-def admin_home(mid: str = Depends(real_me)):
-    """/admin on its own: the Security page (for anyone else, not found, like every admin page)."""
+@app.get("/admin", response_class=HTMLResponse)
+@app.get("/admin/", response_class=HTMLResponse)
+def admin_home(request: Request, mid: str = Depends(real_me)):
+    """The admin tools in one place, each with a line of how things stand (not found for anyone else, like every
+    admin page). The name menu links here instead of listing every tool."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
-    return RedirectResponse("/admin/security", status_code=303)
+    if not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/admin", status_code=303)
+    day = time.time() - 86400
+    failed = sum(e["at"] > day for e in authn.events(200))
+    p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
+    week = time.time() - 7 * 86400
+    mail = [json.loads(x) for x in p.read_text().splitlines()[-500:] if x.strip()] if p.exists() else []
+    held = sum(1 for m in mail if m.get("at", 0) >= week and m.get("withheld"))  # someone it wasn't sent to
+    sp = DATA / "stage-sync-status.json"
+    try:
+        upd = None if STAGE else updates.available()
+    except Exception:  # GitHub not reachable: just don't say
+        upd = None
+    return page(request, "admin.html", failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
+                passphrase_set=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12, upd=upd,
+                stage_last=json.loads(sp.read_text()) if STAGE and sp.exists() else None)
+
+
+@app.get("/admin/backups", response_class=HTMLResponse)
+def backups_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):
+    """Backups: its own page on the Admin page (it used to be a tab under Security, at /admin/security/backups,
+    which still forwards here: backup emails sent before link to it)."""
+    return security_page(request, "backups", "", error, note, mid)
 
 
 @app.get("/admin/security", response_class=HTMLResponse)
@@ -1786,10 +1835,13 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
-    if tab not in dict(SECURITY_TABS):  # before the redirect, so only a known tab goes into its address
+    if tab not in SECURITY_PAGES:  # before the redirect, so only a known tab goes into its address
         raise HTTPException(404)
+    if tab == "backups" and request.url.path.startswith("/admin/security"):  # its old address
+        return RedirectResponse("/admin/backups" + (f"?{request.url.query}" if request.url.query else ""), status_code=301)
+    here = "/admin/backups" if tab == "backups" else f"/admin/security/{tab}"
     if not admin_mode(request):
-        return RedirectResponse(f"/admin/confirm?next=/admin/security/{tab}", status_code=303)
+        return RedirectResponse(f"/admin/confirm?next={here}", status_code=303)
     p = DATA / "admin-log.jsonl"
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
     roster = DATA / "roster.json"
@@ -1835,49 +1887,49 @@ def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), re
     return RedirectResponse("/admin/security/bans", status_code=303)
 
 
-@app.post("/admin/security/backups/settings")
+@app.post("/admin/backups/settings")
 async def security_backup_settings(request: Request):
     _security_admin(request)
     form = dict(await request.form())
     try:
         s = await run_in_threadpool(backup.save_settings, form)
     except backup.BackupError as e:
-        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_settings=", ".join(k for k in ("s3", "drive") if s[k]["on"]) or "server only")
-    return RedirectResponse("/admin/security/backups?note=" + quote("Saved. Back up now to try it."), status_code=303)
+    return RedirectResponse("/admin/backups?note=" + quote("Saved. Back up now to try it."), status_code=303)
 
 
-@app.post("/admin/security/backups/check")
+@app.post("/admin/backups/check")
 def security_backup_check(request: Request, passphrase: str = Form("")):
     """Is this the server's passphrase, is it strong, has it leaked? The passphrase itself is never stored or logged."""
     _security_admin(request)
     ok, msg = backup.check(passphrase)
     _admin_log(request, backup="checked a passphrase")
-    return RedirectResponse("/admin/security/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
+    return RedirectResponse("/admin/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
 
 
-@app.post("/admin/security/backups/download")
+@app.post("/admin/backups/download")
 def security_backup_download_now(request: Request):
     """A fresh backup straight to the admin's computer: compressed and encrypted, like the others."""
     _security_admin(request)
     try:
         name, blob, _ = backup.make()
     except backup.BackupError as e:
-        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_downloaded=name)
     return Response(blob, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
-@app.post("/admin/security/backup")
+@app.post("/admin/backups/now")
 def security_backup_now(request: Request, background: BackgroundTasks):
     """Run tonight's backup now (in the background; the page shows the result when it's done)."""
     _security_admin(request)
     _admin_log(request, backup="started")
     background.add_task(backup.run, archive.club, base_url(request))
-    return RedirectResponse("/admin/security/backups", status_code=303)
+    return RedirectResponse("/admin/backups", status_code=303)
 
 
-@app.get("/admin/security/backups/{name}")
+@app.get("/admin/backups/{name}")
 def security_backup_download(request: Request, name: str):
     """A local copy, still encrypted: safe to keep on your own computer."""
     _security_admin(request)
@@ -1906,6 +1958,72 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 
 # ---------------- staging server (admins, in admin mode): prod's data, pulled one way (deploy/stage-sync.sh) ----------------
+
+# ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
+
+@app.get("/admin/site", response_class=HTMLResponse)
+def site_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):
+    if not archive.club.is_admin(mid):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/admin/site", status_code=303)
+    return page(request, "site.html", error=error, note=note, pictures=SITE_PICTURES, source=branding.source,
+                backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
+                default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb())
+
+
+def _site_admin(request: Request) -> str:
+    mid = getattr(request.state, "real_member", None)
+    if not (archive.club.is_admin(mid) and admin_mode(request)):
+        raise HTTPException(404)
+    return mid
+
+
+@app.post("/admin/site/name")
+def site_name(request: Request, name: str = Form("")):
+    mid = _site_admin(request)
+    branding.set_name(name, mid)
+    _admin_log(request, site_name=branding.name(archive.club))
+    return RedirectResponse("/admin/site?note=" + quote("Saved: the app is now called " + branding.name(archive.club) + "."), status_code=303)
+
+
+SITE_PICTURES = {"logo": "Logo", "favicon": "Browser tab icon", "icon": "Phone home-screen icon"}
+
+
+@app.post("/admin/site/picture/{kind}")
+async def site_picture(request: Request, kind: str):
+    """Upload one of the pictures (the logo also makes the icons that weren't uploaded on their own)."""
+    _site_admin(request)
+    if kind not in SITE_PICTURES:
+        raise HTTPException(404)
+    form = await request.form()
+    f = form.get("file")
+    data = await f.read(limits.max_upload() + 1) if f is not None and hasattr(f, "read") else b""
+    try:
+        await run_in_threadpool(branding.save, kind, data)
+    except ValueError as e:
+        return RedirectResponse("/admin/site?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, site_picture=f"{SITE_PICTURES[kind]}: uploaded")
+    return RedirectResponse("/admin/site?note=" + quote(f"{SITE_PICTURES[kind]} saved."), status_code=303)
+
+
+@app.post("/admin/site/backing")
+def site_backing(request: Request, backing: str = Form("auto")):
+    _site_admin(request)
+    branding.set_backing(backing)
+    _admin_log(request, site_backing=branding.BACKINGS.get(backing, "Automatic"))
+    return RedirectResponse("/admin/site?note=" + quote("Saved: behind the logo, " + branding.BACKINGS.get(backing, "Automatic").lower() + "."), status_code=303)
+
+
+@app.post("/admin/site/picture/{kind}/reset")
+def site_picture_reset(request: Request, kind: str):
+    _site_admin(request)
+    if kind not in SITE_PICTURES:
+        raise HTTPException(404)
+    branding.reset(kind)
+    _admin_log(request, site_picture=f"{SITE_PICTURES[kind]}: reset")
+    return RedirectResponse("/admin/site?note=" + quote(f"{SITE_PICTURES[kind]}: back to the default."), status_code=303)
+
 
 @app.get("/admin/stage", response_class=HTMLResponse)
 def stage_page(request: Request, mid: str = Depends(real_me)):
@@ -2115,7 +2233,11 @@ def calendar_edit(request: Request, id: str = "", d: str = "", date: str = "", c
     """Add an event (no id), or change one (on date d, for a repeating event)."""
     _calendar_editor(request)
     if not id:
-        return _event_form(request, {"cal": cal if cal in events.CALS else "events", "date": date or dt.date.today().isoformat()})
+        try:
+            day = dt.date.fromisoformat(date).isoformat()
+        except ValueError:  # none given (or not a date): today
+            day = dt.date.today().isoformat()
+        return _event_form(request, {"cal": cal if cal in events.CALS else "events", "date": day})
     try:
         e = events.get(events.load(), id)
     except KeyError:
