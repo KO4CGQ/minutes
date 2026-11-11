@@ -35,6 +35,7 @@ The rename (0.20.0's work) becomes 1.0.0: from then on the settings, folders, se
 - **The repo stays `KO4CGQ/minutes`** (decided 2026-11-11: renaming it would add work for little gain). Jim does the force-push himself, or allows it for that moment.
 
 ## Leader console
+- **Upcoming Events → From the calendar: one line per repeating event.** A weekly event (the nets) fills the list with its next several dates. A tick beside "the next __" (on by default?) shows only each repeating event's next date, so one-off events aren't pushed off the list. Also: "the next __" sits out of line with the "From the calendar" heading; line them up.
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
 
 ## Look and feel: ideas to consider
