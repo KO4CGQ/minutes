@@ -61,6 +61,36 @@ def source(kind: str) -> str:
     return "own" if kind == "logo" or _settings().get("own", {}).get(kind) else "logo"
 
 
+BACKINGS = {"auto": "Automatic", "circle": "A white circle", "square": "A white rounded square", "none": "Nothing"}
+
+
+def backing() -> str:
+    """What goes behind the logo on pages, so dark ink on a see-through background still shows in dark mode:
+    Site's choice, or by itself: a see-through logo about as wide as tall gets a white circle (a round emblem), another
+    see-through one a white rounded square, and one with its own background nothing."""
+    chosen = _settings().get("backing")
+    return chosen if chosen in ("circle", "square", "none") else auto_backing()
+
+
+def auto_backing() -> str:
+    """Automatic's pick, from the logo's shape and whether its corners are see-through."""
+    from PIL import Image
+    img = Image.open(path("logo")).convert("RGBA")
+    w, h = img.size
+    corners = [img.getpixel(p)[3] for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
+    if min(corners) == 255:
+        return "none"
+    return "circle" if 0.85 <= w / h <= 1.18 else "square"
+
+
+def set_backing(value: str) -> None:
+    s = _settings()
+    s["backing"] = value if value in BACKINGS else "auto"
+    tmp = DATA / "branding.json.tmp"
+    tmp.write_text(json.dumps(s))
+    tmp.replace(DATA / "branding.json")
+
+
 def custom() -> bool:
     return (_dir() / FILES["logo"]).exists()
 

@@ -101,3 +101,15 @@ def test_site_page_is_for_admins_in_admin_mode_and_the_pictures_are_public(data,
     assert anon.get("/brand/..%2Fclub.yaml").status_code == 404 and anon.get("/brand/secret.png").status_code == 404
     assert "a picture we can read" in amy.post("/admin/site/picture/icon", files={"file": ("x.png", b"not an image", "image/png")}).text
     assert bob.post("/admin/site/picture/logo/reset").status_code == 404 and branding.custom()   # members can't
+
+
+def test_behind_the_logo_is_picked_from_its_shape_unless_chosen(data):
+    assert branding.backing() == "circle"                                # the plain logo: round, see-through corners
+    branding.save("logo", png((400, 100), (0, 0, 0, 0)))                 # wide and see-through
+    assert branding.backing() == "square"
+    branding.save("logo", png((300, 300), (20, 60, 20, 255)))            # its own background: nothing behind it
+    assert branding.backing() == "none"
+    branding.set_backing("circle")
+    assert branding.backing() == "circle" and branding.auto_backing() == "none"
+    branding.set_backing("<script>")
+    assert branding.backing() == "none"                                  # anything else is Automatic

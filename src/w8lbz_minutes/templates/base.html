@@ -25,7 +25,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
 <nav class="top">
   {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
-  <a class="brand" href="/"><img src="{{ brand() }}" alt=""><span>{{ app_name() }}</span></a>
+  <a class="brand" href="/"><img src="{{ brand() }}" alt="" class="{{ logo_class() }}"><span>{{ app_name() }}</span></a>
   {% if me %}
   <span class="spacer"></span>
   {% if live %}<a class="start live" href="/meetings/{{ live.slug }}">{{ emoji('🔴', 'live') }} Live meeting</a>

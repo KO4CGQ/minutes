@@ -19,8 +19,13 @@
 <div class="sitepics">
 {% for kind, label in pictures.items() %}{% set src = source(kind) %}
 <div class="sitepic">
-  <div class="thumb {{ kind }}"><img src="{{ brand(kind) }}" alt="{{ label }}, now"></div>
-  <div class="about"><b>{{ label }}</b><br><span class="muted small">{{ USE[kind] }}</span><br><span class="small">Now: {{ FROM[src] }}</span></div>
+  {% if kind == "logo" %}<div class="thumbs"><div class="thumb onlight"><img src="{{ brand() }}" alt="The logo on a light page" class="{{ logo_class() }}"></div>
+    <div class="thumb ondark"><img src="{{ brand() }}" alt="The logo in dark mode" class="{{ logo_class() }}"></div></div>
+  {% else %}<div class="thumb {{ kind }}"><img src="{{ brand(kind) }}" alt="{{ label }}, now"></div>{% endif %}
+  <div class="about"><b>{{ label }}</b><br><span class="muted small">{{ USE[kind] }}</span><br><span class="small">Now: {{ FROM[src] }}</span>
+  {% if kind == "logo" %}<form method="post" action="/admin/site/backing" class="backing"><label class="small">Behind it, so it shows in dark mode:
+    <select name="backing" data-autosubmit>{% for v, t in backings.items() %}<option value="{{ v }}" {{ 'selected' if v == backing_choice }}>{{ t }}{% if v == 'auto' %} ({{ backings[backing_auto]|lower }}){% endif %}</option>{% endfor %}</select></label>
+    <noscript><button class="btn small">Save</button></noscript></form>{% endif %}</div>
   <div class="acts">
     <form method="post" action="/admin/site/picture/{{ kind }}" enctype="multipart/form-data">
       <label class="btn small">Upload…<input type="file" name="file" accept="image/png,image/jpeg,image/webp" data-autosubmit aria-label="Upload a new {{ label }}"></label>

@@ -116,7 +116,8 @@ templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=versi
                              app_name=lambda: branding.name(archive.club),  # Site's name, else "<callsign> Minutes"
                              # the logo: for a page, its address (new after each upload); for a PDF, the file itself
                              brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
-                             f"/brand/{branding.FILES[kind]}?v={branding.stamp()}")
+                             f"/brand/{branding.FILES[kind]}?v={branding.stamp()}",
+                             logo_class=lambda: f"logo bg-{branding.backing()}")  # what's behind it (Site)
 
 
 # ---------------- login gate ----------------
@@ -1777,7 +1778,7 @@ def admin_action(e: dict) -> str:
              "auto_update": lambda v: f"Turned automatic updates {'on' if v else 'off'}", "unban": lambda v: f"Lifted the ban on {v}",
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
              "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
-             "site_picture": lambda v: f"Site picture, {v}"}
+             "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
 
@@ -1931,6 +1932,7 @@ def site_page(request: Request, error: str = "", note: str = "", mid: str = Depe
     if not admin_mode(request):
         return RedirectResponse("/admin/confirm?next=/admin/site", status_code=303)
     return page(request, "site.html", error=error, note=note, pictures=SITE_PICTURES, source=branding.source,
+                backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb())
 
 
@@ -1967,6 +1969,14 @@ async def site_picture(request: Request, kind: str):
         return RedirectResponse("/admin/site?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_picture=f"{SITE_PICTURES[kind]}: uploaded")
     return RedirectResponse("/admin/site?note=" + quote(f"{SITE_PICTURES[kind]} saved."), status_code=303)
+
+
+@app.post("/admin/site/backing")
+def site_backing(request: Request, backing: str = Form("auto")):
+    _site_admin(request)
+    branding.set_backing(backing)
+    _admin_log(request, site_backing=branding.BACKINGS.get(backing, "Automatic"))
+    return RedirectResponse("/admin/site?note=" + quote("Saved: behind the logo, " + branding.BACKINGS.get(backing, "Automatic").lower() + "."), status_code=303)
 
 
 @app.post("/admin/site/picture/{kind}/reset")
