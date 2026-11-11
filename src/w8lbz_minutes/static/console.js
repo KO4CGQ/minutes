@@ -74,6 +74,13 @@
   const post = (what, extra = {}) => fetch(`/api/meetings/${M.slug}/${what}`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tab: TAB, ...extra }) });
   const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  // a dialog that has to be answered, for news that stops this console (the bar keeps saying it after)
+  function notice(title, text, button) {
+    const d = h("dialog", { class: "modal", "aria-labelledby": "notice-title" }, h("div", { class: "body" },
+      h("h2", { id: "notice-title" }, title), h("p", {}, text),
+      h("p", { class: "row" }, button, h("button", { class: "btn small ghost", onclick: () => d.close() }, "Stay on this page"))));
+    document.body.append(d); d.showModal();
+  }
   function lock(who, lost) {  // someone else is taking the minutes: read-only, with Take over
     readOnly = true;
     for (const id of ["panel", "steps", "pager", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
@@ -88,6 +95,8 @@
         const r = await post("hold", { take: true });
         if (r.ok) location.reload(); else checkIn(); } }, take));
     holdbar.hidden = false;
+    if (lost) notice(`${who.holder} took over`, `${who.holder} is taking these minutes now, so this page is read-only. ` +
+      "Anything typed here in the last few seconds wasn't saved: copy it if you need it.", h("a", { class: "btn small", href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view"));
   }
   function closed(how) {  // discarded or submitted in another console: nothing more to do here
     readOnly = true; closedHow = how;
@@ -96,6 +105,10 @@
     holdbar.replaceChildren(how === "submitted" ? "These minutes were submitted from another console. " : "These minutes were discarded from another console. ",
       how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
     holdbar.hidden = false;
+    notice(how === "submitted" ? "Minutes submitted" : "Minutes discarded",
+      how === "submitted" ? "Someone submitted these minutes from another console, so they're finished and this page is read-only."
+        : "Someone discarded these minutes from another console, so they're gone and this page is read-only.",
+      how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
   }
   let closedHow = null;
   async function checkIn() {
@@ -109,7 +122,7 @@
     }
   }
   checkIn();
-  setInterval(checkIn, 15000);
+  setInterval(checkIn, 5000);
   // leaving lets go at once; coming back (Back/Forward restores the page without rerunning it, or the tab comes to
   // the front) checks in at once, rather than at the next tick, so two consoles are never both editable for long
   window.addEventListener("pagehide", () => { if (!readOnly) navigator.sendBeacon(`/api/meetings/${M.slug}/release`, new Blob([JSON.stringify({ tab: TAB })], { type: "application/json" })); });
