@@ -4,7 +4,7 @@
 #            /etc/w8lbz-minutes/       club.yaml, google-service-account.json, env (secrets; not in git)
 #            /var/lib/w8lbz-minutes/   data: meetings archive, roster cache
 set -euo pipefail
-REPO=${REPO:-https://github.com/W8LBZ/minutes.git}
+REPO=${REPO:-https://github.com/KO4CGQ/minutes.git}
 APP=/opt/w8lbz-minutes CONF=/etc/w8lbz-minutes DATA=/var/lib/w8lbz-minutes
 TZ_NAME=${TZ_NAME:-America/New_York}  # the club's local time: "today" in the console depends on it
 
