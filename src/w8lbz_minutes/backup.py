@@ -29,6 +29,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from . import branding
 from .club import DATA, ROOT, Club
 
 KEY_FILE = Path(os.environ.get("W8LBZ_GOOGLE_KEY", ROOT / "private" / "google-service-account.json"))  # Drive backups only
@@ -89,7 +90,7 @@ def pwned(pw: str) -> int | None:
     h = hashlib.sha1(pw.encode(), usedforsecurity=False).hexdigest().upper()  # HIBP's API is keyed by SHA-1
     try:
         r = httpx.get(f"https://api.pwnedpasswords.com/range/{h[:5]}", timeout=10,
-                      headers={"Add-Padding": "true", "User-Agent": "W8LBZ-Minutes-backup-check"})
+                      headers={"Add-Padding": "true", "User-Agent": "Minutes-backup-check"})
         r.raise_for_status()
     except httpx.HTTPError:
         return None
@@ -130,7 +131,7 @@ def decrypt(blob: bytes, pw: str) -> bytes:
     from cryptography.exceptions import InvalidTag
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     if not blob.startswith(MAGIC):
-        raise BackupError("That isn't a W8LBZ Minutes backup.")
+        raise BackupError("That isn't a backup from this app.")
     b = blob[len(MAGIC):]
     try:
         return AESGCM(_key(pw, b[:16])).decrypt(b[16:28], b[28:], MAGIC)
@@ -413,9 +414,9 @@ def _tell_admins(club: Club, st: dict, url: str) -> None:
     if not to:
         return
     try:
-        auth.send_email(to, f"{club.info.get('callsign', 'W8LBZ')} Minutes: the backup failed",
+        auth.send_email(to, f"{branding.name(club)}: the backup failed",
                         f"Tonight's backup didn't finish:\n\n  {st['error']}\n\nThe last good one is listed on the "
-                        f"Backups page: {url}/admin/security/backups\n\n73,\n{club.info.get('callsign', 'W8LBZ')} Minutes",
+                        f"Backups page: {url}/admin/security/backups\n\n73,\n{branding.name(club)}",
                         only_to=club.email_only_to())
     except Exception:
         log.exception("couldn't email the admins about the failed backup")

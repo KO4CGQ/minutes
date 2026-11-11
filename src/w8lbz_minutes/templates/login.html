@@ -1,7 +1,7 @@
-{% extends "base.html" %}{% block title %}Sign in · W8LBZ Minutes{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}Sign in · {{ app_name() }}{% endblock %}{% block body %}
 <div class="login">
-  <img src="/static/logo.png" alt="" class="loginlogo">
-  <h1>Sign in to W8LBZ Minutes</h1>
+  <img src="{{ brand() }}" alt="" class="loginlogo">
+  <h1>Sign in to {{ app_name() }}</h1>
 
   <div id="pkbox" hidden>
     <button id="pkbtn" class="btn big" type="button">Sign in with a passkey</button>

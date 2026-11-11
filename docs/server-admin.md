@@ -46,6 +46,8 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 - **AI** (optional) needs `W8LBZ_OPENROUTER_KEY` in `/etc/w8lbz-minutes/env` and `ai: {model: ...}` in club.yaml. Each call is logged to `ai-log.jsonl` in the data folder (time, model, size, cost; never the text).
 - **Recovery:** an admin on the server can print a one-time link for a member: `w8lbz-minutes login-link KD8XYZ`
 
+Admin mode → name menu → **Site**: the app's name (default "<callsign> Minutes", or `app_name:` in club.yaml) and the club's logo. The upload is redrawn as three PNGs in `branding/` in the data folder (logo, browser tab icon, phone home-screen icon); the name is in `branding.json`. Both are in the backups.
+
 Admin mode → Security → **Members** lists every member on the roster: their last sign-in, how many passkeys they've set up (and when one was last used), and how many devices are signed in now, so you can see who hasn't signed in or still uses emailed links. `/admin` goes to the Security page.
 
 Officers and members ticked `minutes_editor` on the roster can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.

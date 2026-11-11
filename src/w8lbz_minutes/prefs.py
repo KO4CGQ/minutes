@@ -10,7 +10,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from . import business, calview, chow
+from . import branding, business, calview, chow
 from .club import DATA, Club, num
 
 # kind: (heading, {choice: what it means}, default), in the order the Email tab shows them. "roster" is for the Secretaries.
@@ -98,7 +98,7 @@ def emailable(club: Club) -> list:
 
 
 def _sign(club: Club) -> str:
-    return f"73,\n{club.info.get('callsign', 'W8LBZ')} Minutes"
+    return f"73,\n{branding.name(club)}"
 
 
 def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:
@@ -147,7 +147,7 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
             lines.append("Coming up this week:\n" + "\n".join(f"  - {e}" for e in events) + f"\n  The calendar: {url}/calendar")
         if latest:
             lines.append(f"Last meeting's minutes ({latest.date.strftime('%B %-d')}): {url}/meetings/{latest.slug}")
-        out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign', 'W8LBZ')} meeting tonight",
+        out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign') or 'Club'} meeting tonight",
                     f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nTo stop this email, or choose which others you get: {url}/profile/email\n\n{_sign(club)}"))
     return out
 

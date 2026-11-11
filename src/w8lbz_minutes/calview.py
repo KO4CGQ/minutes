@@ -274,7 +274,7 @@ def ics(items: list[Entry], name: str, tz: str) -> str:
     """An iCalendar file of these entries, for Apple Calendar, Outlook, Google and phones to subscribe to."""
     import hashlib
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//W8LBZ Minutes//Club calendar//EN", "CALSCALE:GREGORIAN",
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Minutes//Club calendar//EN", "CALSCALE:GREGORIAN",
              f"X-WR-CALNAME:{_ics_text(name)}", f"X-WR-TIMEZONE:{tz}", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H"]
     for e in items:
         uid = hashlib.sha1(f"{e.kind}|{e.id or e.title}|{e.start}".encode()).hexdigest()

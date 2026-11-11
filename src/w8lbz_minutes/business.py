@@ -21,6 +21,7 @@ import os
 import secrets
 import time
 
+from . import branding
 from .club import DATA, Club
 
 MAX_TEXT = 600
@@ -409,11 +410,11 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
         return f"due {due.strftime('%A, %B %-d')}" + (" (today)" if days == 0 else " (tomorrow)" if days == 1 else "")
     late = any(k == "overdue" for _, k in items)
     lines = "\n".join(f"- {x['text']}\n  {when(x, k)}" for x, k in items)
-    subject = f"{club.info.get('callsign', 'W8LBZ')} club business: " + ("past due" if late else "coming due")
+    subject = f"{club.info.get('callsign') or 'Club'} club business: " + ("past due" if late else "coming due")
     body = (f"Hi {m.first},\n\nA reminder about club business you're looking after:\n\n{lines}\n\n"
             f"If it's finished, mark it done (or change the date) here: {url}/business\n"
             f"Or just bring it up at the next meeting.\n\n"
-            f"To stop these reminders, or choose which emails you get: {url}/profile/email\n\n73,\n{club.info.get('callsign', 'W8LBZ')} Minutes")
+            f"To stop these reminders, or choose which emails you get: {url}/profile/email\n\n73,\n{branding.name(club)}")
     return subject, body
 
 

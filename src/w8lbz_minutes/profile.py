@@ -12,7 +12,7 @@ import os
 import secrets
 import time
 
-from . import auth, prefs
+from . import branding, auth, prefs
 from .club import DATA, ROSTER_CACHE, Club, one_line, roster_locked
 from .roster import COLUMNS, EDITABLE, FLAGS, Sheet, _truthy
 
@@ -133,15 +133,15 @@ def _notify(club: Club, e: dict, url: str) -> None:
     _send(club, secretaries, f"Roster update: {who}",
           f"{action}. The roster sheet has been updated.\n\n{what}\n\n"
           f"If this looks wrong, any officer can undo it here: {url}/roster/changes\n\n"
-          f"You get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\nW8LBZ Minutes", e)
+          f"You get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\n{branding.name(club)}", e)
 
     m = club.members[e["member"]]
     member_to = [a for a in dict.fromkeys([m.email, e["old"].get("email")]) if a]  # both, after an email change
     you = "You" if e["by"] == e["member"] else by
-    _send(club, member_to, "Your W8LBZ roster details were updated",
+    _send(club, member_to, f"Your {club.info.get('callsign') or 'club'} roster details were updated",
           f"Hi {m.first},\n\n{you} updated your details on the club roster:\n\n{what}\n\n"
           f"You can see and change them on your profile: {url}/profile\n"
-          f"If you didn't expect this, reply to this email or tell an officer.\n\n73,\nW8LBZ Minutes", e)
+          f"If you didn't expect this, reply to this email or tell an officer.\n\n73,\n{branding.name(club)}", e)
 
 
 def _send(club: Club, to: list[str], subject: str, body: str, e: dict) -> None:

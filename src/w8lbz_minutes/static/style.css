@@ -501,3 +501,5 @@ button.cardopen .card-text { display: block; }
 /* a possible duplicate (calview.mark_duplicates, console.js similar()): highlighted, never hidden */
 .duphint { color: var(--warn-text); font-size: .85rem; }
 li.dup .caltitle, li.dup > strong { background: var(--warn-soft); border-radius: .2rem; }
+/* Site page: the logo and its icons as they are now */
+.sitelogo { max-height: 96px; max-width: 200px; } .siteicon { border-radius: 12px; border: 1px solid var(--border); }

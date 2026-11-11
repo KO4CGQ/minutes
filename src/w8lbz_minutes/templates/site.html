@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block title %}Site{% endblock %}{% block body %}
+<h1>Site</h1>
+<p class="muted">What the app calls itself and the club's logo, for every page, email and PDF. Each change is in the admin log.</p>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+<div class="cards">
+<article class="card">
+  <h2>Name</h2>
+  <form method="post" action="/admin/site/name" class="profile">
+    <label>The app's name <input name="name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}"></label>
+    <p class="muted small">In the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name phones show for a passkey. Leave it empty for "{{ default_name }}".</p>
+    <button class="btn">Save</button>
+  </form>
+</article>
+<article class="card">
+  <h2>Logo</h2>
+  <p class="row"><img src="{{ brand() }}" alt="The logo now" class="sitelogo"> <img src="{{ brand('favicon') }}" alt="The browser tab's icon" width="32" height="32"> <img src="{{ brand('icon') }}" alt="A phone's home-screen icon" width="60" height="60" class="siteicon"></p>
+  <p class="muted small">{{ "The club's logo" if own_logo else "The plain logo that comes with the app" }}, with the browser tab's icon and a phone's home-screen icon made from it.</p>
+  <form method="post" action="/admin/site/logo" enctype="multipart/form-data" class="profile">
+    <label>Upload a logo <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required></label>
+    <p class="muted small">A PNG with a see-through background looks best; JPEG and WebP work too ({{ upload_mb }} MB at most). Square or round is best for the icons: a wide logo is shrunk to fit. It's redrawn as a fresh picture, so nothing else in the file is kept.</p>
+    <button class="btn">Upload</button>
+  </form>
+  {% if own_logo %}<form method="post" action="/admin/site/logo/remove" data-confirm="Remove the club's logo and go back to the plain one?"><button class="btn small ghost">Remove the logo</button></form>{% endif %}
+</article>
+</div>
+{% endblock %}

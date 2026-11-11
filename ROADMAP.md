@@ -8,7 +8,7 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
 
 ## Look and feel: ideas to consider
-- **Site name, logo and favicon set in the app** (admin): today "W8LBZ Minutes" and the logo are built in, so another club running the app has to change the code.
+- **Club rules still in the code** (only matter once another club runs the app): Ohio's election days on the Community calendar (a setting, or off by default); bylaws section numbers in help text and emails ("bylaws VII.B", "IV.C", "VII.F"); the "bond" / Certificate of Indebtedness wording on the Treasurer pages (the amounts are already settings); chow night and its missed-chow fee (a W8LBZ custom: a setting to turn it off).
 - **Menu (nav panel) set from the Links page:** move pages and links up and down, add dividers, and choose which roles see each one (members, leaders, officers, admins), instead of the fixed list.
 - **24-hour clock:** a setting on Your profile → Settings to show times as 19:30 instead of 7:30 PM, across the app (and its emails, if wanted).
 - **Donate button:** a link in the app to a donation page the admin sets (the app handles no payments). Open question: also a "Support the app" link to the developer's sponsor page.

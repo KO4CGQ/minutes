@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}Home · W8LBZ Minutes{% endblock %}{% block body %}
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}Home · {{ app_name() }}{% endblock %}{% block body %}
 <h1>Hi {{ me.first }}</h1>
 {% for r in swaps %}
 <div class="msg ok swapreq"><b>{{ club.name(r.requester) }}</b> asks to swap chow: you'd bring it on <b>{{ fmt(r.mine) }}</b> instead of {{ fmt(r.theirs) }}.

@@ -11,7 +11,7 @@ import json
 import logging
 import re
 
-from . import auth, chow, prefs, profile
+from . import branding, auth, chow, prefs, profile
 from .club import ROSTER_CACHE, Club, one_line, valid_email, roster_locked
 from .roster import Sheet, SheetError
 
@@ -103,7 +103,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
             auth.send_email(to, f"New member: {name}",
                             f"{club.name(by)} added {name}{f' ({f['callsign']})' if f['callsign'] else ''} to the roster, "
                             f"joined {f['joined']}. The roster sheet and its Membership Log have a new row.\n\n"
-                            f"{url}/members/{mid}\n\nYou get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\nW8LBZ Minutes", only_to=club.email_only_to())
+                            f"{url}/members/{mid}\n\nYou get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())
         except Exception:
             log.exception("couldn't email the Secretary about new member %s", mid)
     return mid

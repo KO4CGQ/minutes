@@ -16,6 +16,7 @@ import re
 import time
 from importlib.metadata import version as installed_version
 
+from . import branding
 from .club import DATA, PREVIEW, STAGE
 
 log = logging.getLogger("w8lbz.updates")
@@ -172,7 +173,7 @@ def _tell_admins(club, subject: str, body: str) -> None:
     to = [m.email for mid, m in club.members.items() if mid in club.admins and m.email]
     if to:
         try:
-            auth.send_email(to, f"{club.info.get('callsign', 'W8LBZ')} Minutes: {subject}", body + f"\n\n73,\n{club.info.get('callsign', 'W8LBZ')} Minutes")
+            auth.send_email(to, f"{branding.name(club)}: {subject}", body + f"\n\n73,\n{branding.name(club)}")
         except Exception:
             log.exception("couldn't email the admins about an automatic update")
 

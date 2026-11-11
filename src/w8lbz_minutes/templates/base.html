@@ -1,6 +1,6 @@
 {% from "_avatar.html" import avatar %}{% from "_icons.html" import icon, emoji %}<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}W8LBZ Minutes{% endblock %}</title>
+<title>{% block title %}{{ app_name() }}{% endblock %}</title>
 <script nonce="{{ csp_nonce }}">/* theme before first paint: "light", "dark", or follow the device */
 try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
 /* Safari (Mac): an empty date or time box shows today in grey (style.css blanks it); other browsers keep their mm/dd/yyyy hint */
@@ -17,7 +17,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   const svg = document.querySelector(`#emoji-icons [data-i="${name}"] svg`); if (svg) b.append(svg.cloneNode(true));
   w.className = "emoji-wrap"; w.append(a, b); return w; };</script>
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="/static/favicon.png"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="icon" href="{{ brand('favicon') }}"><link rel="apple-touch-icon" href="{{ brand('icon') }}">
 <link rel="stylesheet" href="/static/style.css?v={{ ASSETS }}"><link rel="stylesheet" href="/static/minutes.css?v={{ ASSETS }}"></head>
 <body><div id="emoji-icons" hidden>{% for n in ('check', 'x', 'xcircle', 'star') %}<span data-i="{{ n }}">{{ icon(n) }}</span>{% endfor %}</div>
 {% set PAGES = (('/', 'Home'), ('/minutes', 'Minutes'), ('/calendar', 'Calendar'), ('/chow', 'Chow'), ('/business', 'Business'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/guests', 'Guests'), ('/links', 'Links')) %}
@@ -25,7 +25,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
 <nav class="top">
   {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
-  <a class="brand" href="/"><img src="/static/logo.png" alt=""><span>W8LBZ Minutes</span></a>
+  <a class="brand" href="/"><img src="{{ brand() }}" alt=""><span>{{ app_name() }}</span></a>
   {% if me %}
   <span class="spacer"></span>
   {% if live %}<a class="start live" href="/meetings/{{ live.slug }}">{{ emoji('🔴', 'live') }} Live meeting</a>
@@ -34,7 +34,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   <span class="clock" title="Club time"></span>
   <form action="/search" class="barsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business, chow and calendar"></form>
   <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}<span class="name">{{ me.short or me.first }}</span>{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
-    <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">{{ emoji('⬆️', 'arrowup') }} Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/security">Security</a><a href="/admin/email">Email log</a>{% if STAGE %}<a href="/admin/stage">Stage sync</a>{% endif %}<a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
+    <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">{{ emoji('⬆️', 'arrowup') }} Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/security">Security</a><a href="/admin/site">Site</a><a href="/admin/email">Email log</a>{% if STAGE %}<a href="/admin/stage">Stage sync</a>{% endif %}<a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
     {% if is_admin %}<form method="post" action="/admin/mode"><input type="hidden" name="on" value="{{ 0 if admin_until else 1 }}"><input type="hidden" name="next" value="{{ request.url.path }}">
       <button type="submit"><span class="ico">{{ emoji("🛡️", "shield") }}</span>{{ 'Turn off admin mode' if admin_until else 'Turn on admin mode' }}</button></form>{% endif %}
     <div class="sep"></div>

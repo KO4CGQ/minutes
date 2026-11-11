@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from markupsafe import Markup, escape
 
-from . import ai, avatars, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
+from . import ai, avatars, branding, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
@@ -35,7 +35,7 @@ from .meeting import SECTIONS
 from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
-app = FastAPI(title="W8LBZ Minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
+app = FastAPI(title="Club minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 archive = Archive()
@@ -52,7 +52,7 @@ if not _log.handlers:
 
 COOKIE = "w8lbz_session"
 CHALLENGE_COOKIE = "w8lbz_pk"
-PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/favicon.ico",
+PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
                 "/api/roster")  # its own token, and only from the server itself
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
@@ -112,7 +112,11 @@ def _assets_stamp() -> str:
 
 
 templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("w8lbz-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
-                             ASSETS=_assets_stamp())
+                             ASSETS=_assets_stamp(),
+                             app_name=lambda: branding.name(archive.club),  # Site's name, else "<callsign> Minutes"
+                             # the logo: for a page, its address (new after each upload); for a PDF, the file itself
+                             brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
+                             f"/brand/{branding.FILES[kind]}?v={branding.stamp()}")
 
 
 # ---------------- login gate ----------------
@@ -311,7 +315,17 @@ def get_meeting(slug: str):
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    return RedirectResponse("/static/favicon.png", status_code=301)  # browsers ask for it regardless of <link rel=icon>
+    return RedirectResponse("/brand/favicon.png", status_code=302)  # browsers ask for it regardless of <link rel=icon>
+
+
+@app.get("/brand/{name}", include_in_schema=False)
+def brand_picture(name: str):
+    """The club's logo and icons (uploaded on Site), or the plain ones that come with the app. Public: the sign-in
+    page shows the logo."""
+    kind = {v: k for k, v in branding.FILES.items()}.get(name)
+    if not kind:
+        raise HTTPException(404)
+    return FileResponse(branding.path(kind), media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -982,8 +996,8 @@ def admin_confirm_email(request: Request, next: str = Form("/"), mid: str = Depe
         return RedirectResponse(url, status_code=303)
     # Only ever to the admin themself, so test mode (email.only_to) doesn't apply.
     authmod.send_email(m.email, "Turn on admin mode", f"Hi {m.first},\n\nSomeone signed in as you asked to turn on admin mode "
-               f"in W8LBZ Minutes. If that was you, open this link in the same browser within 5 minutes:\n\n{url}\n\n"
-               f"If it wasn't you, don't open it, and sign out your other sessions on your profile page.\n\n73,\nW8LBZ")
+               f"in {branding.name(archive.club)}. If that was you, open this link in the same browser within 5 minutes:\n\n{url}\n\n"
+               f"If it wasn't you, don't open it, and sign out your other sessions on your profile page.\n\n73,\n{branding.name(archive.club)}")
     _admin_log(request, step_up_email=True)
     return RedirectResponse("/admin/confirm?sent=1&next=" + quote(_safe_next(next)), status_code=303)
 
@@ -1762,7 +1776,8 @@ def admin_action(e: dict) -> str:
              "update_cancelled": lambda v: "Cancelled the update",
              "auto_update": lambda v: f"Turned automatic updates {'on' if v else 'off'}", "unban": lambda v: f"Lifted the ban on {v}",
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
-             "links": lambda v: f"Saved the club links ({len(v)})"}
+             "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
+             "site_logo": lambda v: "Uploaded a new logo" if v == "uploaded" else "Removed the logo (the plain one is back)"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
 
@@ -1906,6 +1921,55 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 
 # ---------------- staging server (admins, in admin mode): prod's data, pulled one way (deploy/stage-sync.sh) ----------------
+
+# ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
+
+@app.get("/admin/site", response_class=HTMLResponse)
+def site_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):
+    if not archive.club.is_admin(mid):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/admin/site", status_code=303)
+    return page(request, "site.html", error=error, note=note, own_logo=branding.custom(),
+                default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb())
+
+
+def _site_admin(request: Request) -> str:
+    mid = getattr(request.state, "real_member", None)
+    if not (archive.club.is_admin(mid) and admin_mode(request)):
+        raise HTTPException(404)
+    return mid
+
+
+@app.post("/admin/site/name")
+def site_name(request: Request, name: str = Form("")):
+    mid = _site_admin(request)
+    branding.set_name(name, mid)
+    _admin_log(request, site_name=branding.name(archive.club))
+    return RedirectResponse("/admin/site?note=" + quote("Saved: the app is now called " + branding.name(archive.club) + "."), status_code=303)
+
+
+@app.post("/admin/site/logo")
+async def site_logo(request: Request):
+    _site_admin(request)
+    form = await request.form()
+    f = form.get("logo")
+    data = await f.read(limits.max_upload() + 1) if f is not None and hasattr(f, "read") else b""
+    try:
+        await run_in_threadpool(branding.save_logo, data)
+    except ValueError as e:
+        return RedirectResponse("/admin/site?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, site_logo="uploaded")
+    return RedirectResponse("/admin/site?note=" + quote("New logo saved. Reload other pages to see it."), status_code=303)
+
+
+@app.post("/admin/site/logo/remove")
+def site_logo_remove(request: Request):
+    _site_admin(request)
+    branding.remove_logo()
+    _admin_log(request, site_logo="removed")
+    return RedirectResponse("/admin/site?note=" + quote("Logo removed: the plain one is back."), status_code=303)
+
 
 @app.get("/admin/stage", response_class=HTMLResponse)
 def stage_page(request: Request, mid: str = Depends(real_me)):
@@ -2115,7 +2179,11 @@ def calendar_edit(request: Request, id: str = "", d: str = "", date: str = "", c
     """Add an event (no id), or change one (on date d, for a repeating event)."""
     _calendar_editor(request)
     if not id:
-        return _event_form(request, {"cal": cal if cal in events.CALS else "events", "date": date or dt.date.today().isoformat()})
+        try:
+            day = dt.date.fromisoformat(date).isoformat()
+        except ValueError:  # none given (or not a date): today
+            day = dt.date.today().isoformat()
+        return _event_form(request, {"cal": cal if cal in events.CALS else "events", "date": day})
     try:
         e = events.get(events.load(), id)
     except KeyError:

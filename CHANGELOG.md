@@ -4,6 +4,12 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
+## Unreleased
+- **The app's name and logo are set in the app** (admin mode → name menu → **Site**): the name in the top bar, page titles, the sign-in page, emails and a passkey's name on phones ("<callsign> Minutes" unless changed), and the club's logo, uploaded once, for pages, PDFs, the browser tab's icon and a phone's home-screen icon (each upload is redrawn as a fresh PNG). The app now comes with a plain logo instead of W8LBZ's, so another club starts with its own name and no one else's emblem.
+- **Fix:** opening "Add an event" with a date that isn't a date gave a server error; it starts on today.
+- **Deploy notes:** after updating:
+  1. Admin mode → name menu → **Site** → **Upload a logo**: the club's logo (W8LBZ's is in the developer's `private/branding/logo.png`; any copy of it works). Until then the plain logo shows.
+
 ## 0.18.0 (2026-11-10)
 - **One console takes the minutes:** while someone has the leader console open, anyone else who opens it sees it read-only ("Chris is taking these minutes"; the steps still move, to look around), with a link to the live view and **Take over** (their console then turns read-only, and whoever took over is recorded as taking the minutes). Before, two open consoles silently overwrote each other. The hold lets go about 2 minutes after the console is closed or loses its connection; Discard and Submit wait for it too.
 - **One meeting open at a time:** Start meeting with one still in progress (say, last week's never submitted) shows it with **Continue** and **Discard**, instead of starting a second; two leaders clicking Start together get one meeting. While one from another day is open, the top bar's Start meeting reads **Continue minutes (Nov 6)** for leaders (no red dot: that's for a meeting happening today).
