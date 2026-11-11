@@ -1,4 +1,4 @@
-# W8LBZ Minutes
+# Club Minutes
 
 Meeting minutes, attendance, the calendar and club records for an amateur radio club. Built for W8LBZ; the name and logo are set in the app (Site). See [REQUIREMENTS.md](REQUIREMENTS.md).
 
