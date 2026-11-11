@@ -29,7 +29,7 @@ def _key(s: str) -> str:
 _starting = threading.Lock()  # two leaders clicking Start at once still get one meeting
 
 # Who is taking an open meeting's minutes: one console (browser tab) at a time, kept while it's open (it checks in every
-# 30 s) and let go HOLD_SECONDS after it closes or loses its connection. Anyone else's console is read-only, with
+# 15 s, and on coming back to the front) and let go HOLD_SECONDS after it closes or loses its connection. Anyone else's console is read-only, with
 # Take over. Kept in memory: the app runs as one process, so a restart lets go of every hold (the next save takes it).
 HOLD_SECONDS = 120
 _holds: dict[str, dict] = {}

@@ -99,8 +99,12 @@
     }
   }
   checkIn();
-  setInterval(checkIn, 30000);
+  setInterval(checkIn, 15000);
+  // leaving lets go at once; coming back (Back/Forward restores the page without rerunning it, or the tab comes to
+  // the front) checks in at once, rather than at the next tick, so two consoles are never both editable for long
   window.addEventListener("pagehide", () => { if (!readOnly) navigator.sendBeacon(`/api/meetings/${M.slug}/release`, new Blob([JSON.stringify({ tab: TAB })], { type: "application/json" })); });
+  window.addEventListener("pageshow", (e) => { if (e.persisted) checkIn(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkIn(); });
 
   // ---------- saving ----------
   let timer = null;
