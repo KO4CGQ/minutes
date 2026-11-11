@@ -33,6 +33,7 @@ _starting = threading.Lock()  # two leaders clicking Start at once still get one
 # Take over. Kept in memory: the app runs as one process, so a restart lets go of every hold (the next save takes it).
 HOLD_SECONDS = 120
 _holds: dict[str, dict] = {}
+closed_by: dict[str, str] = {}  # who submitted or discarded a meeting's minutes, for consoles still open on them
 _holding = threading.Lock()
 
 
@@ -341,7 +342,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     return archive.by_slug[slug]
 
 
-def submit(archive: Archive, slug: str) -> Meeting:
+def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
     m = archive.by_slug[slug]
     # Upcoming Chow comes from the chow schedule as it stands now: tonight's chow, tonight's changes, what's next.
     m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
@@ -349,17 +350,21 @@ def submit(archive: Archive, slug: str) -> Meeting:
     m.status = "published"
     m.save(archive.root)
     _holds.pop(slug, None)  # finished: nobody holds them now
+    if by:
+        closed_by[slug] = by
     archive.reload()
     return archive.by_slug[slug]
 
 
-def discard(archive: Archive, slug: str) -> None:
+def discard(archive: Archive, slug: str, by: str | None = None) -> None:
     """Delete a draft (e.g. a practice run). Submitted minutes can't be discarded."""
     m = archive.by_slug[slug]
     if m.status != "draft":
         raise ValueError("Only drafts can be discarded")
     shutil.rmtree(archive.root / slug)
     _holds.pop(slug, None)
+    if by:
+        closed_by[slug] = by
     s = business.load()
     business.forget_meeting(s, slug)
     business.save(s)

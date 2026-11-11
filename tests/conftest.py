@@ -49,3 +49,4 @@ def no_console_holds(monkeypatch):
     """Who holds an open meeting's console is kept in memory: each test starts with nobody."""
     from w8lbz_minutes import console
     monkeypatch.setattr(console, "_holds", {})
+    monkeypatch.setattr(console, "closed_by", {})

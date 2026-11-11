@@ -99,17 +99,18 @@
     if (lost) notice(`${who.holder} took over`, `${who.holder} is taking these minutes now, so this page is read-only. ` +
       "Anything typed here in the last few seconds wasn't saved: copy it if you need it.", h("a", { class: "btn small", href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view"));
   }
-  function closed(how) {  // discarded or submitted in another console: nothing more to do here
+  function closed(how, by) {  // discarded or submitted in another console: nothing more to do here
     readOnly = true; closedHow = how;
     // still readable: the steps and Back/Next move around (as they were when this page was opened); nothing changes
     for (const id of ["panel", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
     saved.textContent = how === "submitted" ? "Submitted" : "Discarded"; saved.className = "saved dirty";
-    holdbar.replaceChildren(how === "submitted" ? "These minutes were submitted from another console. " : "These minutes were discarded from another console. ",
+    const who = by || "Someone";
+    holdbar.replaceChildren(`${who} ${how} these minutes from another console. `,
       how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
     holdbar.hidden = false;
-    notice(how === "submitted" ? "Minutes submitted" : "Minutes discarded",
-      how === "submitted" ? "Someone submitted these minutes from another console, so they're finished. This page is read-only now; the finished minutes have everything."
-        : "Someone discarded these minutes from another console, so they're gone. This page still shows them as they were when you opened it (read-only): copy anything you need before leaving.",
+    notice(how === "submitted" ? `Minutes submitted${by ? " by " + by : ""}` : `Minutes discarded${by ? " by " + by : ""}`,
+      how === "submitted" ? `${who} submitted these minutes from another console, so they're finished. This page is read-only now; the finished minutes have everything.`
+        : `${who} discarded these minutes from another console, so they're gone. This page still shows them as they were when you opened it (read-only): copy anything you need before leaving.`,
       how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
   }
   let closedHow = null;
@@ -117,7 +118,7 @@
     if (closedHow) return;
     const r = await post("hold", readOnly ? { peek: true } : {}).catch(() => null);
     if (!r) return;
-    if (r.status === 409) { const j = await r.json(); if (j.closed) closed(j.closed); else if (j.holder) lock(j, held && !readOnly); return; }
+    if (r.status === 409) { const j = await r.json(); if (j.closed) closed(j.closed, j.by); else if (j.holder) lock(j, held && !readOnly); return; }
     if (!readOnly && r.ok) held = true;
     if (readOnly && r.ok) {  // they've closed it: carry on (a reload brings their last changes)
       holdbar.replaceChildren("They've closed the console. ", h("button", { class: "btn small", onclick: () => location.reload() }, "Continue the minutes"));

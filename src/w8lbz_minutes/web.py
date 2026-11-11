@@ -2329,7 +2329,8 @@ async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
     d = await _json(request)
     m = archive.by_slug.get(slug)
     if not m or m.status != "draft":  # discarded or submitted from another console: it says so and stops
-        return JSONResponse({"closed": "submitted" if m else "discarded"}, 409)
+        by = console.closed_by.get(slug)  # not known after a restart: the console then says "Someone"
+        return JSONResponse({"closed": "submitted" if m else "discarded", "by": archive.club.name(by) if by else None}, 409)
     tab = str(d.get("tab") or "")[:40]
     if not tab:
         raise HTTPException(400, "No console given.")
@@ -2369,7 +2370,7 @@ def email_minutes(slug: str, url: str) -> None:
 def console_submit(request: Request, background: BackgroundTasks, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     _held_by_other(slug, None, mid)
-    console.submit(archive, slug)
+    console.submit(archive, slug, by=mid)
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)
@@ -2383,7 +2384,7 @@ def console_discard(slug: str, mid: str = Depends(leader)):
     except HTTPException as e:
         return RedirectResponse("/console?error=" + quote(e.detail), status_code=303)
     try:
-        console.discard(archive, slug)
+        console.discard(archive, slug, by=mid)
     except ValueError as e:
         raise HTTPException(409, str(e))
     return RedirectResponse("/console", status_code=303)
