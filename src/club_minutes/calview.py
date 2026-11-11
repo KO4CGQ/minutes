@@ -250,7 +250,7 @@ def member_for_feed(token: str) -> str | None:
     import hmac
     p = DATA / "calendar-feeds.json"
     tokens = json.loads(p.read_text()) if p.exists() else {}
-    return next((m for m, t in tokens.items() if hmac.compare_digest(t, token)), None)
+    return next((m for m, t in tokens.items() if hmac.compare_digest(t.encode(), token.encode())), None)
 
 
 def _ics_text(v: str) -> str:

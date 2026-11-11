@@ -302,6 +302,7 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     assert anon.get("/calendar/public", follow_redirects=False).status_code == 404  # nothing public yet
     tok = calview.feed_token("kd8bbb")
     body = anon.get(f"/calendar/feed/{tok}.ics").text
+    assert anon.get("/calendar/feed/%E0%A3%8E.ics").status_code == 404  # not ASCII: no one's, not a server error
     assert "SUMMARY:Fox hunt\; bring a radio\\, and snacks" in body and "LOCATION:City park" in body
     assert "DTSTART;TZID=America/New_York:" in body and "SUMMARY:Chow: Amy Able" in body
     assert f"DTEND;VALUE=DATE:{(today + dt.timedelta(days=6)):%Y%m%d}" in body  # Board dinner: two days, end is the day after
