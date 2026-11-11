@@ -19,7 +19,7 @@ from importlib.metadata import version as installed_version
 from .club import DATA, PREVIEW
 
 log = logging.getLogger("w8lbz.updates")
-REPO = "W8LBZ/minutes"
+REPO = "KO4CGQ/minutes"
 STUCK_AFTER = 600  # seconds a request may wait before the page says the updater didn't pick it up
 CHECK_EVERY = 3600  # GitHub allows 60 unauthenticated checks an hour; one is plenty
 
