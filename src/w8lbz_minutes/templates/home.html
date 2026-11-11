@@ -28,7 +28,7 @@
 </section>{% endif %}
 <section class="card">
   <h2>Your business items</h2>
-  {% if items %}<ul class="checklist">{% for x in items %}<li class="{{ 'late' if x.overdue }}">{{ x.text }}{% if x.due %} <span class="chip{{ ' late' if x.overdue }}">due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}</li>{% endfor %}</ul>
+  {% if items %}<ul class="checklist open">{% for x in items %}<li class="{{ 'late' if x.overdue }}"><a href="/business#i{{ x.id }}" title="Open it on the Business page (mark it done there)">{{ x.text }}{% if x.due %} <span class="chip{{ ' late' if x.overdue }}">due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}</a></li>{% endfor %}</ul>
   <p><a href="/business">Update them on the Business page</a></p>
   {% else %}<p class="muted">Nothing assigned to you. <a href="/business">All open business</a>.</p>{% endif %}
 </section>

@@ -4,7 +4,7 @@
 <div class="admintools">
 <a class="card" href="/admin/security"><b>Security</b><span class="muted small">Sign-ins, members' passkeys and devices, failed attempts, bans, the admin log, the server.</span>
   <span class="small">{{ failed }} failed sign-in{{ 's' if failed != 1 }} in the last day{% if bans %} · {{ bans }} address{{ 'es' if bans != 1 }} banned{% endif %}</span></a>
-<a class="card" href="/admin/security/backups"><b>Backups</b><span class="muted small">Schedule, where they go, Back up now, Download.</span>
+<a class="card" href="/admin/backups"><b>Backups</b><span class="muted small">Schedule, where they go, Back up now, Download.</span>
   <span class="small">{% if not passphrase_set %}Not set up (no passphrase){% elif backup_st.at %}Last: {{ 'done' if backup_st.ok else 'failed' }}, {{ backup_st.at|ts }}{% else %}None yet{% endif %}</span></a>
 <a class="card" href="/admin/updates"><b>Updates</b><span class="muted small">Install a new version, and automatic updates.</span>
   <span class="small">Running {{ VERSION }}{% if upd %} · <b>{{ upd.version }} is available</b>{% endif %}</span></a>

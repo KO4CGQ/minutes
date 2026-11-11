@@ -416,7 +416,7 @@ def _tell_admins(club: Club, st: dict, url: str) -> None:
     try:
         auth.send_email(to, f"{branding.name(club)}: the backup failed",
                         f"Tonight's backup didn't finish:\n\n  {st['error']}\n\nThe last good one is listed on the "
-                        f"Backups page: {url}/admin/security/backups\n\n73,\n{branding.name(club)}",
+                        f"Backups page: {url}/admin/backups\n\n73,\n{branding.name(club)}",
                         only_to=club.email_only_to())
     except Exception:
         log.exception("couldn't email the admins about the failed backup")

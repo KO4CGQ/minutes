@@ -1813,6 +1813,13 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
                 stage_last=json.loads(sp.read_text()) if STAGE and sp.exists() else None)
 
 
+@app.get("/admin/backups", response_class=HTMLResponse)
+def backups_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):
+    """Backups: its own page on the Admin page (it used to be a tab under Security, at /admin/security/backups,
+    which still forwards here: backup emails sent before link to it)."""
+    return security_page(request, "backups", "", error, note, mid)
+
+
 @app.get("/admin/security", response_class=HTMLResponse)
 @app.get("/admin/security/{tab}", response_class=HTMLResponse)
 def security_page(request: Request, tab: str = "signins", member: str = "", error: str = "", note: str = "",
@@ -1822,8 +1829,11 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
         raise HTTPException(404)
     if tab not in SECURITY_PAGES:  # before the redirect, so only a known tab goes into its address
         raise HTTPException(404)
+    if tab == "backups" and request.url.path.startswith("/admin/security"):  # its old address
+        return RedirectResponse("/admin/backups" + (f"?{request.url.query}" if request.url.query else ""), status_code=301)
+    here = "/admin/backups" if tab == "backups" else f"/admin/security/{tab}"
     if not admin_mode(request):
-        return RedirectResponse(f"/admin/confirm?next=/admin/security/{tab}", status_code=303)
+        return RedirectResponse(f"/admin/confirm?next={here}", status_code=303)
     p = DATA / "admin-log.jsonl"
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
     roster = DATA / "roster.json"
@@ -1869,49 +1879,49 @@ def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), re
     return RedirectResponse("/admin/security/bans", status_code=303)
 
 
-@app.post("/admin/security/backups/settings")
+@app.post("/admin/backups/settings")
 async def security_backup_settings(request: Request):
     _security_admin(request)
     form = dict(await request.form())
     try:
         s = await run_in_threadpool(backup.save_settings, form)
     except backup.BackupError as e:
-        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_settings=", ".join(k for k in ("s3", "drive") if s[k]["on"]) or "server only")
-    return RedirectResponse("/admin/security/backups?note=" + quote("Saved. Back up now to try it."), status_code=303)
+    return RedirectResponse("/admin/backups?note=" + quote("Saved. Back up now to try it."), status_code=303)
 
 
-@app.post("/admin/security/backups/check")
+@app.post("/admin/backups/check")
 def security_backup_check(request: Request, passphrase: str = Form("")):
     """Is this the server's passphrase, is it strong, has it leaked? The passphrase itself is never stored or logged."""
     _security_admin(request)
     ok, msg = backup.check(passphrase)
     _admin_log(request, backup="checked a passphrase")
-    return RedirectResponse("/admin/security/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
+    return RedirectResponse("/admin/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
 
 
-@app.post("/admin/security/backups/download")
+@app.post("/admin/backups/download")
 def security_backup_download_now(request: Request):
     """A fresh backup straight to the admin's computer: compressed and encrypted, like the others."""
     _security_admin(request)
     try:
         name, blob, _ = backup.make()
     except backup.BackupError as e:
-        return RedirectResponse("/admin/security/backups?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_downloaded=name)
     return Response(blob, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
-@app.post("/admin/security/backup")
+@app.post("/admin/backups/now")
 def security_backup_now(request: Request, background: BackgroundTasks):
     """Run tonight's backup now (in the background; the page shows the result when it's done)."""
     _security_admin(request)
     _admin_log(request, backup="started")
     background.add_task(backup.run, archive.club, base_url(request))
-    return RedirectResponse("/admin/security/backups", status_code=303)
+    return RedirectResponse("/admin/backups", status_code=303)
 
 
-@app.get("/admin/security/backups/{name}")
+@app.get("/admin/backups/{name}")
 def security_backup_download(request: Request, name: str):
     """A local copy, still encrypted: safe to keep on your own computer."""
     _security_admin(request)

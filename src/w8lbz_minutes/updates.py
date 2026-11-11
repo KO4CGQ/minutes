@@ -207,7 +207,7 @@ def auto(club, url: str, wait: float = 900, poll: float = 10, now=None) -> str:
     b = backup.run(club, url)
     if not b.get("ok"):
         _tell_admins(club, f"version {v} not installed", f"Version {v} wasn't installed automatically because the "
-                     f"backup before it failed:\n\n  {b.get('error')}\n\nSee {url}/admin/security/backups")
+                     f"backup before it failed:\n\n  {b.get('error')}\n\nSee {url}/admin/backups")
         return "backup failed"
     request("automatic", v, notes_confirmed=False)
     end = time.time() + wait

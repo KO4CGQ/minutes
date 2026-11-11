@@ -192,6 +192,9 @@ def test_admin_address_members_tab_and_a_page_for_not_found(app, monkeypatch):
     web.archive.club.admins = {"kd8off"}
     admin, member = app("kd8off"), app("kd8bbb")
     assert admin.get("/admin/", follow_redirects=False).headers["location"].startswith("/admin/confirm")  # admin mode first
+    old = admin.get("/admin/security/backups?note=hi", follow_redirects=False)  # Backups' old address, in older emails
+    assert old.status_code == 301 and old.headers["location"] == "/admin/backups?note=hi"
+    assert member.get("/admin/security/backups").status_code == 404
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     hub = admin.get("/admin").text
     assert all(f'href="/admin/{t}"' in hub for t in ("security", "updates", "site", "email")) and "failed sign-in" in hub
