@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_business_item.html" import open_item, item_script with context %}{% block title %}Home · {{ app_name() }}{% endblock %}{% block body %}
 <h1>Hi {{ me.first }}</h1>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 {% for r in swaps %}
 <div class="msg ok swapreq"><b>{{ club.name(r.requester) }}</b> asks to swap chow: you'd bring it on <b>{{ fmt(r.mine) }}</b> instead of {{ fmt(r.theirs) }}.
   <form method="post" action="/chow/requests/{{ r.id }}/answer"><input type="hidden" name="approve" value="1"><button class="btn small">Approve</button></form>

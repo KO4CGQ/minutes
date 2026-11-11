@@ -1406,9 +1406,9 @@ def by_period(period: str) -> tuple[list, str, str]:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, mid: str = Depends(me)):
+def home(request: Request, error: str = "", mid: str = Depends(me)):
     """What's next for this member: the next meeting, their chow night, their business items, the latest minutes."""
-    if request.url.query:  # old bookmarks of the archive (/?period=...)
+    if request.url.query and set(request.query_params) - {"error"}:  # old bookmarks of the archive (/?period=...)
         return RedirectResponse(f"/minutes?{request.url.query}", status_code=301)
     club, today = archive.club, dt.date.today()
     nights = chow.meeting_nights(club, today, today + dt.timedelta(days=7))
@@ -1427,7 +1427,7 @@ def home(request: Request, mid: str = Depends(me)):
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
                 today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
-                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
+                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"), error=error)
 
 
 @app.get("/minutes", response_class=HTMLResponse)

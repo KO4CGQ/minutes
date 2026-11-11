@@ -260,5 +260,8 @@ def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch
     assert r.headers["location"] == f"/#i{iid}"                                    # back to Home, that item open
     assert c.post(f"/business/{iid}/comment", data={"text": "x", "back": "https://evil.example/"},
                   follow_redirects=False).headers["location"] == f"/business#i{iid}"  # anything else: the Business page
+    who["id"] = "bob"                                                              # not his: refused, and Home says so
+    assert "Only an officer or the item&#39;s owner" in c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}).text
+    who["id"] = "amy"
     r = c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}, follow_redirects=False)
     assert r.headers["location"] == "/" and business.get(business.load(), iid)["status"] == "done"
