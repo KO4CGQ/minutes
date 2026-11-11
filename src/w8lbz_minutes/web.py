@@ -24,7 +24,7 @@ from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, PREVIEW, num, one_line, valid_email
+from .club import DATA, PREVIEW, STAGE, num, one_line, valid_email
 from .backup import KEY_FILE
 from .roster import COLUMNS, SHAREABLE, SheetError
 
@@ -109,7 +109,7 @@ def _assets_stamp() -> str:
     return h.hexdigest()[:10]
 
 
-templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("w8lbz-minutes"), PREVIEW=PREVIEW,
+templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("w8lbz-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp())
 
 
@@ -129,6 +129,7 @@ async def require_login(request: Request, call_next):
     va = authn.view_as(token) if request.state.admin_until else None
     request.state.viewing_as = va if va in archive.club.members and va != real else None
     request.state.member = request.state.viewing_as or real
+    authmod.ACTOR.set(getattr(archive.club.members.get(real or ""), "email", None) or None)  # stage: their email only
     path = request.url.path
     if request.state.viewing_as:
         request.state.admin_until = None  # their permissions, not the admin's
@@ -238,8 +239,8 @@ def _money_nav(request: Request, mid: str | None) -> dict:
 
 def _update_badge(request: Request) -> str | None:
     """For admins (in admin mode or not): the newer version, if there is one (cached check, see updates.py)."""
-    if not archive.club.is_admin(getattr(request.state, "real_member", None)):
-        return None
+    if STAGE or not archive.club.is_admin(getattr(request.state, "real_member", None)):
+        return None  # stage is updated by hand (deploy/stage-push.sh)
     try:
         rel = updates.available()
     except Exception:
@@ -1877,6 +1878,32 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
     for sid in session:
         _admin_log(request, signed_out=authn.end_session_id(sid))
     return RedirectResponse("/admin/security/devices" + (f"?member={quote(member)}" if member else ""), status_code=303)
+
+
+# ---------------- staging server (admins, in admin mode): prod's data, pulled one way (deploy/stage-sync.sh) ----------------
+
+@app.get("/admin/stage", response_class=HTMLResponse)
+def stage_page(request: Request, mid: str = Depends(real_me)):
+    if not (STAGE and archive.club.is_admin(mid)):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/admin/stage", status_code=303)
+    p = DATA / "stage-sync-status.json"
+    return page(request, "stage.html", last=json.loads(p.read_text()) if p.exists() else None,
+                paused=(DATA / "stage-sync-paused").exists(), waiting=(DATA / "stage-sync-request").exists())
+
+
+@app.post("/admin/stage")
+def stage_action(request: Request, action: str = Form(""), mid: str = Depends(real_me)):
+    if not (STAGE and archive.club.is_admin(mid) and admin_mode(request)):
+        raise HTTPException(404)
+    if action == "sync":
+        (DATA / "stage-sync-request").write_text(mid)  # w8lbz-stage-sync.path starts the sync
+    elif action in ("pause", "resume"):
+        f = DATA / "stage-sync-paused"
+        f.write_text(mid) if action == "pause" else f.unlink(missing_ok=True)
+    _admin_log(request, stage=action)
+    return RedirectResponse("/admin/stage", status_code=303)
 
 
 @app.get("/preview/outbox")

@@ -130,6 +130,7 @@ nav.top .drop .themes button { width: auto; flex: 1; text-align: center; padding
 nav.top .drop .themes button.on { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
 .preview { background: var(--warn-soft); color: var(--warn-text); border-bottom: 1px solid var(--warn-edge); padding: .45rem 1rem; font-size: .9rem; text-align: center; }
 .preview a { color: inherit; }
+.preview.stage { background: #0b4f6c; color: #fff; border-color: #0b4f6c; }  /* staging server: not to be mistaken for the live app */
 .adminbar { background: #8b1d1d; color: #fff; padding: .45rem 1rem; font-size: .9rem; text-align: center; }
 .adminbar.viewas { background: #4b2a7a; } .adminbar a.updlink { color: #fff; font-weight: 600; margin-left: .6rem; }
 .adminbar form { display: inline; margin-left: .6rem; }

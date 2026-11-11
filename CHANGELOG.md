@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Staging server** (optional; server admin guide → Staging server): a second container that pulls the live data one way each night (or Sync now; the nightly run can be paused), shows a STAGING banner, and sends email only to whoever clicked ("[STAGE]" in the subject; the rest is held on the Email log page). Developers install a branch there with `deploy/stage-push.sh` before a release.
 - **Recorded by:** when the president chairs and someone else takes the minutes, pick the president under Led by; the minutes, PDF and email then say "Led by" them and "Recorded by" whoever started the console, and replies to the email go to the recorder. On a usual night (one person) the minutes still say just "Led by".
 - **Meeting page during a meeting:** "Open in the leader console" is a link at the end of the "Meeting in progress" badge instead of a big button above it, and only people who can lead see it.
 - **Plans:** suggested edits during a live meeting are dropped (an editor fixes things after the meeting, before Submit); the bylaws link item is done by the Bylaws page.

@@ -5,6 +5,7 @@ session and link tokens are stored, so a copy of the database can't be used to l
 """
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import json
 import logging
@@ -22,7 +23,9 @@ from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
                                       ResidentKeyRequirement, UserVerificationRequirement)
 
-from .club import DATA, PREVIEW, Club, one_line, valid_email
+from .club import DATA, PREVIEW, STAGE, Club, one_line, valid_email
+
+ACTOR = contextvars.ContextVar("actor", default=None)  # the signed-in person's email, for stage mode (set per request)
 
 log = logging.getLogger("w8lbz.auth")
 
@@ -239,7 +242,7 @@ class Auth:
             self.event("link_limit", ip, member)
             return
         url = self.create_link(member, next_url, base_url)
-        send_email(self.club.members[member].email, "Your W8LBZ Minutes sign-in link", only_to=self.club.email_only_to(),
+        send_email(self.club.members[member].email, "Your W8LBZ Minutes sign-in link", only_to=self.club.email_only_to(), to_self=True,
                    body=f"Hi {self.club.members[member].first},\n\n"
                    f"Use this link to sign in to W8LBZ Minutes. It works once, for {LINK_MINUTES} minutes:\n\n"
                    f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n73,\nW8LBZ")
@@ -277,7 +280,7 @@ class Auth:
         self.db.execute("insert into email_changes values (?,?,?,?,?)",
                         (_hash(token), member, email, now + LINK_MINUTES * 60, now))
         url = f"{(base_url or self.base_url or '').rstrip('/')}/profile/email?t={token}"
-        send_email(email, "Confirm your new W8LBZ Minutes email", only_to=self.club.email_only_to(),
+        send_email(email, "Confirm your new W8LBZ Minutes email", only_to=self.club.email_only_to(), to_self=True,
                    body=f"Hi {self.club.members[member].first},\n\nTo use this address for W8LBZ Minutes and the club "
                    f"roster, open this link within {LINK_MINUTES} minutes:\n\n{url}\n\n"
                    f"If you didn't ask for this, ignore this email and nothing changes.\n\n73,\nW8LBZ")
@@ -421,20 +424,28 @@ def _email_log(entry: dict) -> None:
 
 
 def send_email(to: str | list[str], subject: str, body: str, attachments: list[tuple[str, bytes, str]] = (),
-               only_to: set[str] | None = None, reply_to: str | None = None) -> int:
+               only_to: set[str] | None = None, reply_to: str | None = None, to_self: bool = False) -> int:
     """Send through SMTP (Gmail by default) using W8LBZ_SMTP_* environment variables.
 
     `to` is one address or a list; each recipient gets their own copy. `only_to` is the
     test-mode allowlist (club.yaml email.only_to): anyone else is withheld. Without SMTP
     credentials, messages are logged instead. Returns how many messages were sent.
+    `to_self`: the email goes to the person asking for it (a sign-in link, confirming a new address).
+    On stage, an email reaches only the person clicking: one copy to them, or to `to` if `to_self`;
+    with nobody signed in (reminders, timers), it's held, and either way listed in the Email log.
     """
     recipients = [to] if isinstance(to, str) else list(to)
     if PREVIEW:
         return _preview_outbox(recipients, subject, body, attachments, only_to, reply_to)
     withheld = []
+    if STAGE:
+        allowed = recipients if to_self else [ACTOR.get()] if ACTOR.get() else []
+        withheld = [r for r in recipients if r not in allowed]
+        recipients, subject = allowed, "[STAGE] " + subject
+        body = "(From the STAGING server: a test copy of the app, not the live one.)\n\n" + body
     if only_to is not None:
         allowed = [r for r in recipients if r.strip().lower() in only_to]
-        withheld = [r for r in recipients if r not in allowed]
+        withheld += [r for r in recipients if r not in allowed]
         if withheld:
             log.warning("email test mode: withheld %r from %d recipient(s) not in email.only_to",
                         one_line(subject), len(withheld))
@@ -442,7 +453,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
     entry = {"to": recipients, "withheld": withheld, "subject": subject, "body": body, "reply_to": reply_to,
              "attachments": [a[0] for a in attachments]}
     if not recipients:
-        _email_log({**entry, "status": "held back (test mode)"})
+        _email_log({**entry, "status": "held back (stage: only the person clicking gets email)" if STAGE else "held back (test mode)"})
         return 0
     user = os.environ.get("W8LBZ_SMTP_USER")
     password = (os.environ.get("W8LBZ_SMTP_PASSWORD") or "").replace(" ", "")  # Google shows app passwords in groups
