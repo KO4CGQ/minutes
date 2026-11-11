@@ -427,7 +427,7 @@ ul.checklist.open li::after { content: ""; position: absolute; left: 0; top: .55
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   -webkit-mask: var(--tick) center / 75% no-repeat; mask: var(--tick) center / 75% no-repeat; }
 ul.checklist.open li:hover::after, ul.checklist.open li:focus-within::after { opacity: .5; }
-ul.checklist.open li:hover a, ul.checklist.open li a:focus-visible { text-decoration: underline; }
+ul.checklist.open li a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }  /* the keyboard still shows where it is */
 form.linkedit table.list { overflow: visible; }
 /* calendar page */
 .callegend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .85rem; color: var(--muted); }
