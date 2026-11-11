@@ -205,3 +205,47 @@ def test_one_meeting_open_at_a_time(tmp_path):
     m = console.start(a, dt.date(2026, 11, 19), "doe")  # after a discard
     console.submit(a, m.slug)
     assert console.start(a, dt.date(2026, 11, 26), "doe").status == "draft"  # and after a submit
+
+
+def test_one_console_takes_the_minutes_and_another_can_take_over(tmp_path):
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")
+    assert console.hold(a, m.slug, "kim", "tab1") is None                  # Sam's console holds them
+    assert console.hold(a, m.slug, "kim", "tab1") is None                  # checking in keeps them
+    assert console.hold(a, m.slug, "doe", "tab2")["member"] == "kim"       # Jane's is read-only
+    assert console.holder(m.slug, "tab1") is None and console.holder(m.slug, "tab2")["member"] == "kim"
+    assert console.hold(a, m.slug, "doe", "tab2", take=True) is None       # Jane takes over: she's recording now
+    assert a.by_slug[m.slug].recorder == "doe" and console.hold(a, m.slug, "kim", "tab1")["member"] == "doe"
+    console.release(m.slug, "tab1")                                        # Sam's (read-only) tab closing changes nothing
+    assert console.holder(m.slug)["member"] == "doe"
+    console.release(m.slug, "tab2")                                        # Jane closes hers: free at once
+    assert console.holder(m.slug) is None and console.hold(a, m.slug, "kim", "tab1") is None
+    console._holds[m.slug]["at"] -= console.HOLD_SECONDS                  # a console that lost its connection
+    assert console.hold(a, m.slug, "doe", "tab3") is None and a.by_slug[m.slug].recorder == "doe"  # carries on; no take over
+
+
+def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = archive_with_prev(tmp_path)
+    a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True}, {"id": "kim", "first": "Sam", "last": "Kim", "minutes_editor": True}])
+    monkeypatch.setattr(web, "archive", a)
+    auth = Auth(a.club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", auth)
+    def as_(who):
+        t = TestClient(web.app)
+        t.cookies.set(web.COOKIE, auth.new_session(who))
+        return t
+    sam, jane = as_("kim"), as_("doe")
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")
+    assert sam.post(f"/api/meetings/{m.slug}/hold", json={"tab": "s"}).json() == {"held": True}
+    r = jane.post(f"/api/meetings/{m.slug}/hold", json={"tab": "j"})
+    assert r.status_code == 409 and r.json()["holder"] == "Sam Kim"
+    body = {"meeting": {"sections": {}}, "state": {}, "tab": "j"}
+    assert jane.put(f"/api/meetings/{m.slug}", json=body).status_code == 409   # would overwrite Sam's work
+    assert "is taking these minutes" in jane.post(f"/console/{m.slug}/discard").text  # back on the start page, with why
+    assert m.slug in a.by_slug                                                 # still there
+    assert jane.post(f"/api/meetings/{m.slug}/hold", json={"tab": "j", "take": True}).json() == {"held": True}
+    assert sam.put(f"/api/meetings/{m.slug}", json={**body, "tab": "s"}).status_code == 409  # Sam's console is read-only now

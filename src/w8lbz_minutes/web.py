@@ -2312,11 +2312,45 @@ def console_page(request: Request, slug: str, mid: str = Depends(leader)):
                 leaders=sorted(archive.club.leaders, key=archive.club.name))
 
 
+def _held_by_other(slug: str, tab: str | None, mid: str) -> None:
+    """Refuse a change while someone else's console is taking these minutes (it would undo their work)."""
+    h = console.holder(slug, tab)
+    if h and (tab or h["member"] != mid):
+        raise HTTPException(409, f"{archive.club.name(h['member'])} is taking these minutes. Take over in the console, "
+                                 "or wait until they close it.")
+
+
+@app.post("/api/meetings/{slug}/hold")
+async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
+    """The console checks in every 30 s: keeps this tab's hold on the minutes, or says who has them.
+    {"take": true} takes over; {"peek": true} only asks (a read-only console waiting for them to be free)."""
+    m, d = get_meeting(slug), await _json(request)
+    tab = str(d.get("tab") or "")[:40]
+    if m.status != "draft" or not tab:
+        raise HTTPException(409, "These minutes aren't open.")
+    h = console.holder(slug, tab) if d.get("peek") else console.hold(archive, slug, mid, tab, bool(d.get("take")))
+    if h:
+        return JSONResponse({"holder": archive.club.name(h["member"]), "you": h["member"] == mid, "since": int(h["since"])}, 409)
+    return {"held": not d.get("peek")}
+
+
+@app.post("/api/meetings/{slug}/release")
+async def console_release(request: Request, slug: str, mid: str = Depends(leader)):
+    """The console closing (sent as the page goes away), so someone else can carry on at once."""
+    console.release(slug, str((await _json(request)).get("tab") or ""))
+    return {"ok": True}
+
+
 @app.put("/api/meetings/{slug}")
 async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
+    data = await _json(request)
+    tab = str(data.get("tab") or "")[:40] if isinstance(data, dict) else ""
+    _held_by_other(slug, tab or None, mid)
+    if tab:
+        console.hold(archive, slug, mid, tab)  # a save is a check-in too
     try:
-        console.apply(archive, slug, await _json(request))
+        console.apply(archive, slug, data)
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}
@@ -2329,6 +2363,7 @@ def email_minutes(slug: str, url: str) -> None:
 @app.post("/console/{slug}/submit")
 def console_submit(request: Request, background: BackgroundTasks, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
+    _held_by_other(slug, None, mid)
     console.submit(archive, slug)
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
@@ -2338,6 +2373,10 @@ def console_submit(request: Request, background: BackgroundTasks, slug: str, mid
 @app.post("/console/{slug}/discard")
 def console_discard(slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
+    try:
+        _held_by_other(slug, None, mid)
+    except HTTPException as e:
+        return RedirectResponse("/console?error=" + quote(e.detail), status_code=303)
     try:
         console.discard(archive, slug)
     except ValueError as e:

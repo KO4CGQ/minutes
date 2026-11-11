@@ -13,7 +13,7 @@ The goal is a self-hosted system that:
 2. transcribes it live and tells speakers apart,
 3. helps the meeting's leader run it: who reports next and what to follow up on,
 4. drafts the minutes live in the club's existing format,
-5. lets the leader review the draft, edit it and submit it, **on the night of the meeting**. One meeting is open at a time: another starts once it is submitted or discarded. Submitting publishes the minutes to a members-only archive, emails a PDF to everyone on the roster and, later, posts to Discord.
+5. lets the leader review the draft, edit it and submit it, **on the night of the meeting**. One meeting is open at a time: another starts once it is submitted or discarded. One console at a time takes its minutes; anyone else's is read-only until they take over. Submitting publishes the minutes to a members-only archive, emails a PDF to everyone on the roster and, later, posts to Discord.
 
 ## 2. What the archive tells us (51 sets of minutes, Oct 2025 to Nov 2026)
 

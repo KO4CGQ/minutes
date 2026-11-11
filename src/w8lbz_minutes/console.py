@@ -28,6 +28,43 @@ def _key(s: str) -> str:
 
 _starting = threading.Lock()  # two leaders clicking Start at once still get one meeting
 
+# Who is taking an open meeting's minutes: one console (browser tab) at a time, kept while it's open (it checks in every
+# 30 s) and let go HOLD_SECONDS after it closes or loses its connection. Anyone else's console is read-only, with
+# Take over. Kept in memory: the app runs as one process, so a restart lets go of every hold (the next save takes it).
+HOLD_SECONDS = 120
+_holds: dict[str, dict] = {}
+_holding = threading.Lock()
+
+
+def holder(slug: str, tab: str | None = None) -> dict | None:
+    """Whoever else is taking these minutes right now ({member, tab, since}), or None."""
+    with _holding:
+        h = _holds.get(slug)
+        return dict(h) if h and h["tab"] != tab and time.time() - h["at"] < HOLD_SECONDS else None
+
+
+def hold(archive: Archive, slug: str, member: str, tab: str, take: bool = False) -> dict | None:
+    """Keep (or, with take, take over) the minutes for this tab. Returns whoever else holds them (nothing changes), or
+    None when this tab now does. Taking over makes the new person the recorder: they take the minutes from here."""
+    with _holding:
+        h = _holds.get(slug)
+        now = time.time()
+        other = h and h["tab"] != tab and now - h["at"] < HOLD_SECONDS
+        if other and not take:
+            return dict(h)
+        _holds[slug] = {"member": member, "tab": tab, "at": now, "since": h["since"] if h and h["tab"] == tab else now}
+    if other and member != archive.by_slug[slug].recorder:
+        m = archive.by_slug[slug]
+        m.recorder = member
+        m.save(archive.root)
+    return None
+
+
+def release(slug: str, tab: str) -> None:
+    with _holding:
+        if _holds.get(slug, {}).get("tab") == tab:
+            del _holds[slug]
+
 
 def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None = None) -> Meeting:
     """Start the minutes of a meeting, or open them if that date's are already there. Only one meeting is open at a

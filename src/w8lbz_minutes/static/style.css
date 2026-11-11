@@ -102,6 +102,7 @@ button.linkbtn:hover { color: var(--danger); } button.linkbtn.more { color: var(
 .msg { padding: .7rem .9rem; border-radius: var(--radius-sm); text-align: left; border: 1px solid transparent; }
 .msg.ok { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
 .msg.err { background: var(--danger-soft); color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
+.msg.warn { background: var(--warn-soft); color: var(--warn-text); border-color: var(--warn-edge); }
 .note { margin: 1rem 0 0; padding: .75rem 1rem; border-radius: var(--radius-sm); font-size: .95rem; line-height: 1.4; }
 .note.ok { background: var(--accent-soft); } .note.err { background: var(--danger-soft); color: var(--danger-text); }
 .missed { color: var(--danger); }

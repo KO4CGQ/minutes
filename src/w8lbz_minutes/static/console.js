@@ -66,10 +66,47 @@
     ];
   }
 
+  // ---------- one console at a time (console.hold): this tab keeps the minutes, or watches read-only ----------
+  const TAB = sessionStorage.getItem("console-tab") || (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
+  sessionStorage.setItem("console-tab", TAB);  // the same tab after a reload keeps its hold
+  let readOnly = false, held = false;  // held: this tab has had the minutes (so a take-over can cost it unsaved typing)
+  const holdbar = document.getElementById("holdbar");
+  const post = (what, extra = {}) => fetch(`/api/meetings/${M.slug}/${what}`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tab: TAB, ...extra }) });
+  const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  function lock(who, lost) {  // someone else is taking the minutes: read-only, with Take over
+    readOnly = true;
+    for (const id of ["panel", "steps", "pager", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    saved.textContent = "Read-only"; saved.className = "saved dirty";
+    const take = who.you ? "Take over here" : "Take over";
+    holdbar.replaceChildren(who.you ? `You're taking these minutes in another window or device (since ${clock(who.since)}).`
+        : `${who.holder} is taking these minutes (since ${clock(who.since)}). This page is read-only, so nothing gets overwritten.`,
+      lost ? " Changes made here after the last save weren't saved." : "", " ",
+      h("a", { href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view ↗"), " ",
+      h("button", { class: "btn small", onclick: async () => {
+        if (!who.you && !confirm(`Take over from ${who.holder}? Their console becomes read-only, and you're recorded as taking the minutes from here.`)) return;
+        const r = await post("hold", { take: true });
+        if (r.ok) location.reload(); } }, take));
+    holdbar.hidden = false;
+  }
+  async function checkIn() {
+    const r = await post("hold", readOnly ? { peek: true } : {}).catch(() => null);
+    if (!r) return;
+    if (r.status === 409) { const j = await r.json(); if (j.holder) lock(j, held && !readOnly); return; }
+    if (!readOnly && r.ok) held = true;
+    if (readOnly && r.ok) {  // they've closed it: carry on (a reload brings their last changes)
+      holdbar.replaceChildren("They've closed the console. ", h("button", { class: "btn small", onclick: () => location.reload() }, "Continue the minutes"));
+    }
+  }
+  checkIn();
+  setInterval(checkIn, 30000);
+  window.addEventListener("pagehide", () => { if (!readOnly) navigator.sendBeacon(`/api/meetings/${M.slug}/release`, new Blob([JSON.stringify({ tab: TAB })], { type: "application/json" })); });
+
   // ---------- saving ----------
   let timer = null;
   const waiters = []; // every caller of save() is resolved when the next actual save finishes
   function save(now = false) {
+    if (readOnly) return Promise.resolve();
     saved.textContent = "Saving…"; saved.className = "saved dirty";
     clearTimeout(timer);
     const done = new Promise((resolve) => waiters.push(resolve));
@@ -78,8 +115,9 @@
       try {
         const r = await fetch(`/api/meetings/${M.slug}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ meeting: M, state: S }),
+          body: JSON.stringify({ meeting: M, state: S, tab: TAB }),
         });
+        if (r.status === 409) { await checkIn(); if (readOnly) return; }
         if (!r.ok) throw new Error(await r.text());
         saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved";
       } catch (e) { saved.textContent = "Not saved: " + e.message; saved.className = "saved err"; }
