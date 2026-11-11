@@ -75,16 +75,18 @@
     body: JSON.stringify({ tab: TAB, ...extra }) });
   const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   // a dialog that has to be answered, for news that stops this console (the bar keeps saying it after)
+  const exit = () => h("a", { class: "btn small ghost", href: "/" }, "Exit");
   function notice(title, text, button) {
     const d = h("dialog", { class: "modal", "aria-labelledby": "notice-title" }, h("div", { class: "body" },
       h("h2", { id: "notice-title" }, title), h("p", {}, text),
-      h("p", { class: "row" }, button, h("button", { class: "btn small ghost", onclick: () => d.close() }, "Keep reading here"))));
+      h("p", { class: "row" }, button, h("button", { class: "btn small ghost", onclick: () => d.close() }, "Keep reading here"), exit())));
     document.body.append(d); d.showModal();
   }
   function lock(who, lost) {  // someone else is taking the minutes: read-only, with Take over
     readOnly = true;
     // the steps and Back/Next still move around (to look); nothing in a step can be changed
-    for (const id of ["panel", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    for (const id of ["panel", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    document.getElementById("endforms").hidden = true;  // Submit and Discard are for whoever holds the minutes
     saved.textContent = "Read-only"; saved.className = "saved dirty";
     const take = who.you ? "Take over here" : "Take over";
     holdbar.replaceChildren(who.you ? `You're taking these minutes in another window or device (since ${clock(who.since)}).`
@@ -94,7 +96,7 @@
       h("button", { class: "btn small", onclick: async () => {
         if (!who.you && !confirm(`Take over from ${who.holder}? Their console becomes read-only, and you're recorded as taking the minutes from here.`)) return;
         const r = await post("hold", { take: true });
-        if (r.ok) location.reload(); else checkIn(); } }, take));
+        if (r.ok) location.reload(); else checkIn(); } }, take), " ", exit());
     holdbar.hidden = false;
     if (lost) notice(`${who.holder} took over`, `${who.holder} is taking these minutes now, so this page is read-only. ` +
       "Anything typed here in the last few seconds wasn't saved: copy it if you need it.", h("a", { class: "btn small", href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view"));
@@ -102,11 +104,13 @@
   function closed(how, by) {  // discarded or submitted in another console: nothing more to do here
     readOnly = true; closedHow = how;
     // still readable: the steps and Back/Next move around (as they were when this page was opened); nothing changes
-    for (const id of ["panel", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    for (const id of ["panel", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    document.getElementById("endforms").hidden = true;  // Submit and Discard are for whoever holds the minutes
     saved.textContent = how === "submitted" ? "Submitted" : "Discarded"; saved.className = "saved dirty";
     const who = by || "Someone";
     holdbar.replaceChildren(`${who} ${how} these minutes from another console. `,
-      how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
+      how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"),
+      " ", exit());
     holdbar.hidden = false;
     notice(how === "submitted" ? `Minutes submitted${by ? " by " + by : ""}` : `Minutes discarded${by ? " by " + by : ""}`,
       how === "submitted" ? `${who} submitted these minutes from another console, so they're finished. This page is read-only now; the finished minutes have everything.`
