@@ -84,3 +84,20 @@ def test_stage_page_sync_now_and_pause(monkeypatch, tmp_path):
     assert not (tmp_path / "stage-sync-paused").exists()
     (tmp_path / "stage-sync-status.json").write_text(json.dumps({"ok": False, "finished": 1, "by": "kd8adm", "output": "rsync: connection refused"}))
     assert "failed" in (p := c.get("/admin/stage").text) and "connection refused" in p and "Amy Able" in p
+
+
+def test_stage_sync_never_follows_a_link_planted_in_the_data_folder(tmp_path):
+    """The sync runs as root in a folder the app's user can write: links planted there for the status or the request
+    must not make it read, overwrite (or, as root, hand over) the file they point at."""
+    stage, secret, target = tmp_path / "stage", tmp_path / "secret", tmp_path / "system-file"
+    stage.mkdir()
+    secret.write_text("TOP SECRET")
+    target.write_text("system contents")
+    (stage / "stage-sync-status.json").symlink_to(target)
+    (stage / "stage-sync-request").symlink_to(secret)
+    env = {**os.environ, "W8LBZ_DATA": str(stage), "STAGE_SYNC_FROM": f"{tmp_path}/nowhere/", "STAGE_OWNER": "", "STAGE_RESTART": "true"}
+    subprocess.run([str(Path(__file__).parents[1] / "deploy" / "stage-sync.sh")], env=env, capture_output=True)
+    assert target.read_text() == "system contents" and secret.read_text() == "TOP SECRET"   # neither touched
+    st = stage / "stage-sync-status.json"
+    assert not st.is_symlink() and "TOP SECRET" not in st.read_text() and json.loads(st.read_text())["ok"] is False
+    assert not (stage / "stage-sync-request").exists() and not list(stage.glob(".stage-sync-status.*"))

@@ -44,16 +44,19 @@ def holder(slug: str, tab: str | None = None) -> dict | None:
         return dict(h) if h and h["tab"] != tab and time.time() - h["at"] < HOLD_SECONDS else None
 
 
-def hold(archive: Archive, slug: str, member: str, tab: str, take: bool = False) -> dict | None:
+def hold(archive: Archive, slug: str, member: str, tab: str, take: bool = False, prev: str | None = None) -> dict | None:
     """Keep (or, with take, take over) the minutes for this tab. Returns whoever else holds them (nothing changes), or
-    None when this tab now does. Taking over makes the new person the recorder: they take the minutes from here."""
+    None when this tab now does. Taking over makes the new person the recorder: they take the minutes from here.
+    prev: this browser tab's id before a reload (each page load gets a new id, so a duplicated tab never shares one);
+    a reloaded console carries on from it without asking."""
     with _holding:
         h = _holds.get(slug)
         now = time.time()
-        other = h and h["tab"] != tab and now - h["at"] < HOLD_SECONDS
+        mine = h and (h["tab"] == tab or (prev and h["tab"] == prev and h["member"] == member))
+        other = h and not mine and now - h["at"] < HOLD_SECONDS
         if other and not take:
             return dict(h)
-        _holds[slug] = {"member": member, "tab": tab, "at": now, "since": h["since"] if h and h["tab"] == tab else now}
+        _holds[slug] = {"member": member, "tab": tab, "at": now, "since": h["since"] if mine else now}
     if other and member != archive.by_slug[slug].recorder:
         m = archive.by_slug[slug]
         m.recorder = member

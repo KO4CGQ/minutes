@@ -2298,7 +2298,11 @@ def console_home(request: Request, error: str = "", mid: str = Depends(leader)):
 @app.post("/console/start")
 def console_start(date: str = Form(...), leader_id: str = Form("", alias="leader"), mid: str = Depends(leader)):
     try:
-        m = console.start(archive, dt.date.fromisoformat(date), leader_id or mid, recorder=mid)
+        day = dt.date.fromisoformat(date)
+    except ValueError:
+        return RedirectResponse("/console?error=" + quote("Pick the meeting's date."), status_code=303)
+    try:
+        m = console.start(archive, day, leader_id or mid, recorder=mid)
     except ValueError as e:  # another meeting is still open (only one at a time)
         return RedirectResponse("/console?error=" + quote(str(e)), status_code=303)
     return RedirectResponse(f"/console/{m.slug}", status_code=303)
@@ -2324,9 +2328,11 @@ def _held_by_other(slug: str, tab: str | None, mid: str) -> None:
 
 @app.post("/api/meetings/{slug}/hold")
 async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
-    """The console checks in every 30 s: keeps this tab's hold on the minutes, or says who has them.
+    """The console checks in every 5 s: keeps this tab's hold on the minutes, or says who has them.
     {"take": true} takes over; {"peek": true} only asks (a read-only console waiting for them to be free)."""
     d = await _json(request)
+    if not isinstance(d, dict):
+        raise HTTPException(400, "That request wasn't readable.")
     m = archive.by_slug.get(slug)
     if not m or m.status != "draft":  # discarded or submitted from another console: it says so and stops
         by = console.closed_by.get(slug)  # not known after a restart: the console then says "Someone"
@@ -2334,7 +2340,8 @@ async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
     tab = str(d.get("tab") or "")[:40]
     if not tab:
         raise HTTPException(400, "No console given.")
-    h = console.holder(slug, tab) if d.get("peek") else console.hold(archive, slug, mid, tab, bool(d.get("take")))
+    prev = str(d.get("prev") or "")[:40] or None
+    h = console.holder(slug, tab) if d.get("peek") else console.hold(archive, slug, mid, tab, bool(d.get("take")), prev)
     if h:
         return JSONResponse({"holder": archive.club.name(h["member"]), "you": h["member"] == mid, "since": int(h["since"])}, 409)
     return {"held": not d.get("peek")}
@@ -2343,7 +2350,8 @@ async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
 @app.post("/api/meetings/{slug}/release")
 async def console_release(request: Request, slug: str, mid: str = Depends(leader)):
     """The console closing (sent as the page goes away), so someone else can carry on at once."""
-    console.release(slug, str((await _json(request)).get("tab") or ""))
+    d = await _json(request)
+    console.release(slug, str(d.get("tab") or "") if isinstance(d, dict) else "")
     return {"ok": True}
 
 
@@ -2351,10 +2359,15 @@ async def console_release(request: Request, slug: str, mid: str = Depends(leader
 async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     data = await _json(request)
-    tab = str(data.get("tab") or "")[:40] if isinstance(data, dict) else ""
-    _held_by_other(slug, tab or None, mid)
-    if tab:
-        console.hold(archive, slug, mid, tab)  # a save is a check-in too
+    if not isinstance(data, dict) or not isinstance(data.get("meeting"), dict):
+        raise HTTPException(400, "That request wasn't readable.")
+    tab = str(data.get("tab") or "")[:40]
+    if tab:  # a save is a check-in too: checking and claiming in one step, so two consoles can't both pass
+        if h := console.hold(archive, slug, mid, tab):
+            raise HTTPException(409, f"{archive.club.name(h['member'])} is taking these minutes. Take over in the console, "
+                                     "or wait until they close it.")
+    else:
+        _held_by_other(slug, None, mid)  # a console from before this version (no tab): only someone else's hold stops it
     try:
         console.apply(archive, slug, data)
     except ValueError as e:

@@ -67,8 +67,11 @@
   }
 
   // ---------- one console at a time (console.hold): this tab keeps the minutes, or watches read-only ----------
-  const TAB = sessionStorage.getItem("console-tab") || (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
-  sessionStorage.setItem("console-tab", TAB);  // the same tab after a reload keeps its hold
+  // A new id each time the page loads, so a duplicated tab (which copies sessionStorage) never shares one; the id
+  // before a reload goes with the first check-in, so a reloaded console keeps its hold (console.hold's prev).
+  let PREV = sessionStorage.getItem("console-tab");
+  const TAB = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + String(Math.random()).slice(2);
+  sessionStorage.setItem("console-tab", TAB);
   let readOnly = false, held = false;  // held: this tab has had the minutes (so a take-over can cost it unsaved typing)
   const holdbar = document.getElementById("holdbar");
   const post = (what, extra = {}) => fetch(`/api/meetings/${M.slug}/${what}`, { method: "POST", headers: { "Content-Type": "application/json" },
@@ -120,8 +123,9 @@
   let closedHow = null;
   async function checkIn() {
     if (closedHow) return;
-    const r = await post("hold", readOnly ? { peek: true } : {}).catch(() => null);
+    const r = await post("hold", readOnly ? { peek: true } : PREV ? { prev: PREV } : {}).catch(() => null);
     if (!r) return;
+    PREV = null;  // only the first check-in carries on from before a reload
     if (r.status === 409) { const j = await r.json(); if (j.closed) closed(j.closed, j.by); else if (j.holder) lock(j, held && !readOnly); return; }
     if (!readOnly && r.ok) held = true;
     if (readOnly && r.ok) {  // they've closed it: carry on (a reload brings their last changes)

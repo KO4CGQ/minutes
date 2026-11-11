@@ -272,3 +272,12 @@ def test_top_bar_says_continue_minutes_for_an_open_meeting_from_another_day(tmp_
     console.start(a, dt.date(2026, 11, 12), "doe")  # not today: no red dot for anyone
     assert "Continue minutes (Nov 12)" in page_as("doe") and "start live" not in page_as("doe")
     assert "Continue minutes" not in page_as("kim") and "start live" not in page_as("kim")
+
+
+def test_a_reloaded_console_keeps_the_minutes_and_a_duplicated_tab_never_shares_them(tmp_path):
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe")
+    assert console.hold(a, m.slug, "doe", "load1") is None
+    assert console.hold(a, m.slug, "doe", "load2", prev="load1") is None      # reloaded: carries on, no take over
+    assert console.hold(a, m.slug, "doe", "load1")["tab"] == "load2"          # the old page's id no longer holds them
+    assert console.hold(a, m.slug, "kim", "x", prev="load2")["member"] == "doe"  # someone else can't borrow the id

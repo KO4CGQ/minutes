@@ -4,11 +4,16 @@
 # or at once by the Stage page's Sync now (it writes stage-sync-request in the data folder). The key in
 # /etc/w8lbz-minutes/stage-sync-key is read-only on prod (rrsync -ro), so nothing here can change prod.
 # Stage keeps its own: sign-ins and passkeys, email log, backups, update settings and these sync files.
+# This runs as root in a folder the app's user can write: it never follows a link there (a planted one could
+# otherwise make root read, overwrite or hand over a system file). It reads the request with O_NOFOLLOW and writes
+# the status as a new file that's moved into place (a move replaces a link rather than writing through it).
 main() {
   set -uo pipefail
   local DATA=${W8LBZ_DATA:-/var/lib/w8lbz-minutes} FROM=${STAGE_SYNC_FROM:?set STAGE_SYNC_FROM (root@prod-host:./) in /etc/w8lbz-minutes/env}
   local REQ=$DATA/stage-sync-request OUT=$DATA/stage-sync-status.json by=""
-  if [ -f "$REQ" ]; then by=$(head -c 40 "$REQ"); rm -f "$REQ"
+  if [ -e "$REQ" ] || [ -L "$REQ" ]; then
+    by=$(python3 -c 'import os, sys; print(os.read(os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), 40).decode(errors="replace").strip())' "$REQ" 2>/dev/null)
+    rm -f "$REQ"
   elif [ -f "$DATA/stage-sync-paused" ]; then echo "Nightly sync paused on the Stage page."; return 0; fi
   local LOG; LOG=$(mktemp); local start; start=$(date +%s); local ok=false
   local owner=${STAGE_OWNER-minutes:minutes}  # empty in tests (chown needs root)
@@ -19,13 +24,15 @@ main() {
        "$FROM" "$DATA/" >"$LOG" 2>&1 && ${STAGE_RESTART:-systemctl restart w8lbz-minutes} >>"$LOG" 2>&1; then
     ok=true; echo "Synced from the live app." >>"$LOG"
   fi
-  python3 - "$OUT" "$LOG" "$ok" "$start" "$by" <<'PY'
+  local TMP; TMP=$(mktemp "$DATA/.stage-sync-status.XXXXXX")  # a new file, made by root
+  python3 - "$TMP" "$LOG" "$ok" "$start" "$by" <<'PY'
 import json, sys, time
 out, logf, ok, start, by = sys.argv[1:]
 json.dump({"ok": ok == "true", "started": int(start), "finished": int(time.time()), "by": by,
            "output": open(logf, errors="replace").read()[-4000:]}, open(out, "w"))
 PY
-  [ -n "$owner" ] && chown "$owner" "$OUT"
+  chmod 644 "$TMP"; [ -n "$owner" ] && chown "$owner" "$TMP"
+  mv -f "$TMP" "$OUT"
   rm -f "$LOG"
   $ok
 }
