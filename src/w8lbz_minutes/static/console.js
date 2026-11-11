@@ -78,7 +78,7 @@
   function notice(title, text, button) {
     const d = h("dialog", { class: "modal", "aria-labelledby": "notice-title" }, h("div", { class: "body" },
       h("h2", { id: "notice-title" }, title), h("p", {}, text),
-      h("p", { class: "row" }, button, h("button", { class: "btn small ghost", onclick: () => d.close() }, "Stay on this page"))));
+      h("p", { class: "row" }, button, h("button", { class: "btn small ghost", onclick: () => d.close() }, "Keep reading here"))));
     document.body.append(d); d.showModal();
   }
   function lock(who, lost) {  // someone else is taking the minutes: read-only, with Take over
@@ -101,14 +101,15 @@
   }
   function closed(how) {  // discarded or submitted in another console: nothing more to do here
     readOnly = true; closedHow = how;
-    for (const id of ["panel", "steps", "pager", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    // still readable: the steps and Back/Next move around (as they were when this page was opened); nothing changes
+    for (const id of ["panel", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
     saved.textContent = how === "submitted" ? "Submitted" : "Discarded"; saved.className = "saved dirty";
     holdbar.replaceChildren(how === "submitted" ? "These minutes were submitted from another console. " : "These minutes were discarded from another console. ",
       how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
     holdbar.hidden = false;
     notice(how === "submitted" ? "Minutes submitted" : "Minutes discarded",
-      how === "submitted" ? "Someone submitted these minutes from another console, so they're finished and this page is read-only."
-        : "Someone discarded these minutes from another console, so they're gone and this page is read-only.",
+      how === "submitted" ? "Someone submitted these minutes from another console, so they're finished. This page is read-only now; the finished minutes have everything."
+        : "Someone discarded these minutes from another console, so they're gone. This page still shows them as they were when you opened it (read-only): copy anything you need before leaving.",
       how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
   }
   let closedHow = null;
