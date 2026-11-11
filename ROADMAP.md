@@ -4,12 +4,40 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
+## 1.0.0: Club Minutes for any club
+The rename (0.20.0's work) becomes 1.0.0: from then on the settings, folders, services and command names stay put (a change to them is a 2.0). Built on the `rename` branch, released once, then the history is squashed in place. In order:
+
+### Club rules out of the code
+- **Election days: off by default, any region.** The Community calendar's Ohio election days become one region among others: a `calendar.elections` setting (none by default; `us-oh` is the first one written), each region a small set of rules (dates, poll hours, a link) in its own file so another state or country is one file to add. US federal holidays the same way (`calendar.holidays: us`), so a club elsewhere can pick its own or none.
+- **Bylaws references configurable.** Help text and emails cite sections ("bylaws VII.B", "IV.C", "VII.F"): each becomes a named reference in club.yaml (`bylaws_refs: {dues: VII.B, report: IV.C, ...}`), shown only when set; without one the sentence reads without it.
+- **Bond wording configurable.** The Treasurer's bond / Certificate of Indebtedness: the name in club.yaml (`treasurer.certificate_name`), and the whole certificate feature off unless the club has one (the amounts are already settings).
+- **Chow night: an optional module** (`modules: {chow: false}` by default). Off, it leaves no trace: the menu, Home, the chow pages and list email, the chow calendar, the member's Email tab choice, the missed-chow fee on the Treasurer pages, search, and the console's chow step. Built so other modules (below) follow the same switch.
+- **The meeting's steps.** The console's steps and their hints (Winners and the 50/50 drawing, the Financial Report) are W8LBZ's agenda: make the step list a setting with today's as the example, and the drawing step part of an optional module like chow.
+- **Other defaults to check while there:** the meeting day (Thursday) and time zone (America/New_York) defaults, Teams as the meeting link in the example config, US date formats, and the PDF importer for old minutes (a W8LBZ archive format: keep as an optional tool, documented as such, or drop).
+
+### Look
+- **Theme:** the club's colours on Site (the top bar, buttons and links: a few colour pickers setting the CSS variables `style.css` already uses, checked for readable contrast in light and dark), so another club's app looks like theirs. Custom CSS beyond that, if ever, admins only: the security policy already stops a stylesheet loading anything from elsewhere.
+
+### A new club can start
+- **First run on an empty server:** today data comes from W8LBZ's backups and archive. Needed: an empty start (no roster-sheet.json, no meetings) that works, the first admin from club.yaml signing in by emailed link, then adding members on the Roster page; a short "Getting started" in the server admin guide.
+- **A demo club:** invented data (Example Radio Club, W0XYZ, Amy Able, Bob Baker...) as a fixture: for the screenshots, for previews without the club's data, and for anyone trying the app.
+
+### Docs and repo
+- **README made presentable:** what it is in a paragraph, screenshots (taken from the demo club, never real data: phone and desktop, light and dark), the feature list, install in three lines, links to the guides.
+- **Drop REQUIREMENTS.md and ROADMAP.md** from the repo; fix every link to them (README, CHANGELOG, docs). Planned work moves to GitHub Issues (and W8LBZ's own items stay in the club's notes).
+- **CHANGELOG starts at 1.0.0:** one section describing what the app does, instead of the 0.x history.
+- The guides (members, officers, server admin, developers) reread for W8LBZ assumptions; `club.example.yaml` covers every new setting.
+
+### Release and the clean start
+- **Scan the tree first:** the squash keeps today's files, so they must hold no club data (names, callsigns, emails, phones, addresses), checked file by file (tests, fixtures, docs, examples) besides gitleaks.
+- **Squash in place:** one commit with the 1.0.0 tree, force-pushed to main (needs force-push allowed on main for that moment). Delete the v0.x tags and GitHub Releases, then tag v1.0.0 (the Release workflow publishes it). Old PRs keep their pages but their commit links stop working; Dependabot and code scanning start over. Clones elsewhere (the dev box, CT103) fetch the new main; CT103's updater resets to tags, so it follows.
+- **Install on CT103:** a snapshot, then the move script (the developer's private copy) with v1.0.0; it also points CT103's checkout at the new history.
+- **Open questions:** rename the repo to `club-minutes` too (GitHub keeps redirects; CT103's origin URL changes)? Does `KO4CGQ/minutes` keep its Pages/About text?
+
 ## Leader console
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
 
 ## Look and feel: ideas to consider
-- **Theme:** the club's colours on Site (the top bar, buttons and links: a few colour pickers that set the CSS variables `style.css` already uses, checked for readable contrast in light and dark), so another club's app looks like theirs. Custom CSS beyond that, if ever, admins only: the security policy already stops a stylesheet loading anything from elsewhere.
-- **Club rules still in the code** (only matter once another club runs the app): Ohio's election days on the Community calendar (a setting, or off by default); bylaws section numbers in help text and emails ("bylaws VII.B", "IV.C", "VII.F"); the "bond" / Certificate of Indebtedness wording on the Treasurer pages (the amounts are already settings); chow night and its missed-chow fee (a setting to turn it off).
 - **Menu (nav panel) set from the Links page:** move pages and links up and down, add dividers, and choose which roles see each one (members, leaders, officers, admins), instead of the fixed list.
 - **24-hour clock:** a setting on Your profile → Settings to show times as 19:30 instead of 7:30 PM, across the app (and its emails, if wanted).
 - **Donate button:** a link in the app to a donation page the admin sets (the app handles no payments). Open question: also a "Support the app" link to the developer's sponsor page.
