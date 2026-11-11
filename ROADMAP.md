@@ -24,7 +24,7 @@ The rename (0.20.0's work) becomes 1.0.0: from then on the settings, folders, se
 
 ### Docs and repo
 - **README made presentable:** what it is in a paragraph, screenshots (taken from the demo club, never real data: phone and desktop, light and dark), the feature list, install in three lines, links to the guides.
-- **Drop REQUIREMENTS.md and ROADMAP.md** from the repo; fix every link to them (README, CHANGELOG, docs). Planned work moves to GitHub Issues (and W8LBZ's own items stay in the club's notes).
+- **Drop REQUIREMENTS.md and ROADMAP.md** from the repo; fix every link to them (README, CHANGELOG, docs). Both are copied to the maintainer's private notes first, kept until whatever is still wanted is opened as GitHub Issues.
 - **CHANGELOG starts at 1.0.0:** one section describing what the app does, instead of the 0.x history.
 - The guides (members, officers, server admin, developers) reread for W8LBZ assumptions; `club.example.yaml` covers every new setting.
 
