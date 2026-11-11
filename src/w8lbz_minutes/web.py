@@ -1777,7 +1777,7 @@ def admin_action(e: dict) -> str:
              "auto_update": lambda v: f"Turned automatic updates {'on' if v else 'off'}", "unban": lambda v: f"Lifted the ban on {v}",
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
              "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
-             "site_logo": lambda v: "Uploaded a new logo" if v == "uploaded" else "Removed the logo (the plain one is back)"}
+             "site_picture": lambda v: f"Site picture, {v}"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
 
@@ -1930,7 +1930,7 @@ def site_page(request: Request, error: str = "", note: str = "", mid: str = Depe
         raise HTTPException(404)
     if not admin_mode(request):
         return RedirectResponse("/admin/confirm?next=/admin/site", status_code=303)
-    return page(request, "site.html", error=error, note=note, own_logo=branding.custom(),
+    return page(request, "site.html", error=error, note=note, pictures=SITE_PICTURES, source=branding.source,
                 default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb())
 
 
@@ -1949,26 +1949,34 @@ def site_name(request: Request, name: str = Form("")):
     return RedirectResponse("/admin/site?note=" + quote("Saved: the app is now called " + branding.name(archive.club) + "."), status_code=303)
 
 
-@app.post("/admin/site/logo")
-async def site_logo(request: Request):
+SITE_PICTURES = {"logo": "Logo", "favicon": "Browser tab icon", "icon": "Phone home-screen icon"}
+
+
+@app.post("/admin/site/picture/{kind}")
+async def site_picture(request: Request, kind: str):
+    """Upload one of the pictures (the logo also makes the icons that weren't uploaded on their own)."""
     _site_admin(request)
+    if kind not in SITE_PICTURES:
+        raise HTTPException(404)
     form = await request.form()
-    f = form.get("logo")
+    f = form.get("file")
     data = await f.read(limits.max_upload() + 1) if f is not None and hasattr(f, "read") else b""
     try:
-        await run_in_threadpool(branding.save_logo, data)
+        await run_in_threadpool(branding.save, kind, data)
     except ValueError as e:
         return RedirectResponse("/admin/site?error=" + quote(str(e)), status_code=303)
-    _admin_log(request, site_logo="uploaded")
-    return RedirectResponse("/admin/site?note=" + quote("New logo saved. Reload other pages to see it."), status_code=303)
+    _admin_log(request, site_picture=f"{SITE_PICTURES[kind]}: uploaded")
+    return RedirectResponse("/admin/site?note=" + quote(f"{SITE_PICTURES[kind]} saved."), status_code=303)
 
 
-@app.post("/admin/site/logo/remove")
-def site_logo_remove(request: Request):
+@app.post("/admin/site/picture/{kind}/reset")
+def site_picture_reset(request: Request, kind: str):
     _site_admin(request)
-    branding.remove_logo()
-    _admin_log(request, site_logo="removed")
-    return RedirectResponse("/admin/site?note=" + quote("Logo removed: the plain one is back."), status_code=303)
+    if kind not in SITE_PICTURES:
+        raise HTTPException(404)
+    branding.reset(kind)
+    _admin_log(request, site_picture=f"{SITE_PICTURES[kind]}: reset")
+    return RedirectResponse("/admin/site?note=" + quote(f"{SITE_PICTURES[kind]}: back to the default."), status_code=303)
 
 
 @app.get("/admin/stage", response_class=HTMLResponse)

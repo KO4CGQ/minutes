@@ -501,5 +501,17 @@ button.cardopen .card-text { display: block; }
 /* a possible duplicate (calview.mark_duplicates, console.js similar()): highlighted, never hidden */
 .duphint { color: var(--warn-text); font-size: .85rem; }
 li.dup .caltitle, li.dup > strong { background: var(--warn-soft); border-radius: .2rem; }
-/* Site page: the logo and its icons as they are now */
-.sitelogo { max-height: 96px; max-width: 200px; } .siteicon { border-radius: 12px; border: 1px solid var(--border); }
+/* Site page: one row per picture (what it looks like now, where it's used, Upload and Reset) */
+.sitename input { flex: 1; max-width: 22rem; }
+.sitepics { display: grid; gap: .6rem; }
+.sitepic { display: grid; grid-template-columns: 6.5rem 1fr auto; gap: 1rem; align-items: center; padding: .8rem 1rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.sitepic .thumb { width: 6.5rem; height: 5rem; display: grid; place-items: center; border-radius: var(--radius-sm);
+  background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 0 0 / 12px 12px; }  /* see-through shows */
+.sitepic .thumb img { max-width: 6rem; max-height: 4.5rem; }
+.sitepic .thumb.favicon img { width: 32px; height: 32px; } .sitepic .thumb.icon img { width: 60px; height: 60px; border-radius: 13px; }
+.sitepic .acts { display: flex; gap: .4rem; align-items: center; } .sitepic .acts form { margin: 0; }
+@media (max-width: 560px) { .sitepic { grid-template-columns: 5rem 1fr; } .sitepic .thumb { width: 5rem; } .sitepic .acts { grid-column: 1 / -1; } }
+/* the file box sits invisibly in its Upload… button: still reachable with the keyboard (Tab, then Space) */
+.sitepic label.btn { position: relative; } .sitepic label.btn input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.sitepic label.btn:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }

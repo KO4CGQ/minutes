@@ -41,18 +41,36 @@ def test_the_name_comes_from_site_then_club_yaml_then_the_callsign(data):
 
 def test_an_uploaded_logo_becomes_three_fresh_pngs_and_odd_files_are_refused(data):
     assert not branding.custom() and branding.path("logo").parent.name == "static"  # the plain one
-    branding.save_logo(png())
+    branding.save("logo", png())
     sizes = {k: Image.open(branding.path(k)).size for k in branding.FILES}
     assert sizes == {"logo": (300, 200), "favicon": (64, 64), "icon": (180, 180)} and branding.custom()
     assert Image.open(branding.path("icon")).getpixel((0, 0))[3] == 255  # a phone icon has no see-through corners
     with pytest.raises(ValueError, match="isn't a picture"):
-        branding.save_logo(b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')
+        branding.save("logo", b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')
     with pytest.raises(ValueError, match="Use a PNG"):
-        b = io.BytesIO(); Image.new("RGB", (10, 10)).save(b, "GIF"); branding.save_logo(b.getvalue())
-    branding.save_logo(png((2000, 2000)))
+        b = io.BytesIO(); Image.new("RGB", (10, 10)).save(b, "GIF"); branding.save("logo", b.getvalue())
+    branding.save("logo", png((2000, 2000)))
     assert max(Image.open(branding.path("logo")).size) == branding.LOGO_MAX  # only ever smaller
-    branding.remove_logo()
-    assert not branding.custom()
+    branding.reset("logo")
+    assert not branding.custom() and branding.source("favicon") == "plain"  # icons made from it go with it
+
+
+def test_each_picture_is_uploaded_and_reset_on_its_own(data):
+    blue, red = png(color=(0, 0, 255, 255)), png(color=(255, 0, 0, 255))
+    # the colour in the middle, rounded (resizing blends a shade or two)
+    pixel = lambda kind: tuple(round(c / 255) * 255 for c in Image.open(branding.path(kind)).convert("RGB").getpixel((32, 32)))  # noqa: E731
+    branding.save("logo", red)
+    assert [branding.source(k) for k in branding.FILES] == ["own", "logo", "logo"] and pixel("favicon") == (255, 0, 0)
+    branding.save("favicon", blue)                                     # the tab icon on its own
+    assert branding.source("favicon") == "own" and pixel("favicon") == (0, 0, 255)
+    branding.save("logo", png(color=(0, 255, 0, 255)))                 # a new logo leaves it alone, redoes the phone icon
+    assert pixel("favicon") == (0, 0, 255) and pixel("icon") == (0, 255, 0)
+    branding.reset("favicon")                                          # back to made from the logo
+    assert branding.source("favicon") == "logo" and pixel("favicon") == (0, 255, 0)
+    branding.save("icon", blue); branding.reset("logo")                # an own icon stays when the logo goes
+    assert [branding.source(k) for k in branding.FILES] == ["plain", "plain", "own"]
+    with pytest.raises(ValueError):
+        branding.save("../../etc/passwd", blue)
 
 
 def test_site_page_is_for_admins_in_admin_mode_and_the_pictures_are_public(data, tmp_path, monkeypatch):
@@ -74,10 +92,12 @@ def test_site_page_is_for_admins_in_admin_mode_and_the_pictures_are_public(data,
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     amy.post("/admin/site/name", data={"name": "Test Club Minutes"})
     assert "Test Club Minutes" in bob.get("/links").text  # every page's top bar
-    r = amy.post("/admin/site/logo", files={"logo": ("logo.png", png(), "image/png")})
-    assert "New logo saved" in r.text and branding.custom()
+    r = amy.post("/admin/site/picture/logo", files={"file": ("logo.png", png(), "image/png")})
+    assert "Logo saved" in r.text and branding.custom() and "Made from the logo" in amy.get("/admin/site").text
+    assert amy.post("/admin/site/picture/other", files={"file": ("x.png", png(), "image/png")}).status_code == 404
     anon = TestClient(web.app)
     pic = anon.get("/brand/logo.png")
     assert pic.status_code == 200 and pic.headers["content-type"] == "image/png" and Image.open(io.BytesIO(pic.content)).size == (300, 200)
     assert anon.get("/brand/..%2Fclub.yaml").status_code == 404 and anon.get("/brand/secret.png").status_code == 404
-    assert "a picture we can read" in amy.post("/admin/site/logo", files={"logo": ("x.png", b"not an image", "image/png")}).text
+    assert "a picture we can read" in amy.post("/admin/site/picture/icon", files={"file": ("x.png", b"not an image", "image/png")}).text
+    assert bob.post("/admin/site/picture/logo/reset").status_code == 404 and branding.custom()   # members can't

@@ -49,9 +49,16 @@ def set_name(text: str, by: str) -> None:
 
 
 def path(kind: str) -> Path:
-    """The club's picture if uploaded, else the plain one that comes with the app."""
+    """The club's picture if there is one (uploaded, or for an icon, made from the logo), else the plain one."""
     own = _dir() / FILES[kind]
     return own if own.exists() else HERE / "static" / FILES[kind]
+
+
+def source(kind: str) -> str:
+    """Where a picture comes from: "own" (uploaded for this use), "logo" (an icon made from the logo) or "plain"."""
+    if not (_dir() / FILES[kind]).exists():
+        return "plain"
+    return "own" if kind == "logo" or _settings().get("own", {}).get(kind) else "logo"
 
 
 def custom() -> bool:
@@ -60,12 +67,12 @@ def custom() -> bool:
 
 def stamp() -> str:
     """Changes with each upload, for the pictures' addresses (?v=), so browsers fetch the new one."""
-    p = _dir() / FILES["logo"]
-    return str(int(p.stat().st_mtime)) if p.exists() else "0"
+    files = [_dir() / f for f in FILES.values() if (_dir() / f).exists()]
+    return str(max(int(f.stat().st_mtime_ns // 1_000_000) for f in files)) if files else "0"
 
 
-def save_logo(data: bytes) -> None:
-    """Check an uploaded logo and make the three pictures from it. Raises ValueError with a message for the admin."""
+def _open(data: bytes):
+    """An uploaded picture, checked, the right way up, with see-through kept. Raises ValueError for the admin."""
     from PIL import Image, ImageOps, UnidentifiedImageError
     if not data:
         raise ValueError("Pick a picture first.")
@@ -77,28 +84,72 @@ def save_logo(data: bytes) -> None:
             raise ValueError("Use a PNG (best: it can have a see-through background), JPEG or WebP picture.")
         if img.width * img.height > 60_000_000:
             raise ValueError("That picture is too big.")
-        img = ImageOps.exif_transpose(img).convert("RGBA")
+        return ImageOps.exif_transpose(img).convert("RGBA")
     except UnidentifiedImageError:
         raise ValueError("That file isn't a picture we can read. Use a PNG, JPEG or WebP.")
-    logo = img.copy()
-    logo.thumbnail((LOGO_MAX, LOGO_MAX), Image.LANCZOS)  # only ever smaller; keeps its shape
 
-    def square(size: int, background=None) -> Image.Image:  # the whole logo, centred on a square
-        side = max(img.size)
-        sq = Image.new("RGBA", (side, side), background or (0, 0, 0, 0))
-        sq.paste(img, ((side - img.width) // 2, (side - img.height) // 2), img)
-        return sq.resize((size, size), Image.LANCZOS)
-    out = {"logo": logo, "favicon": square(64), "icon": square(180, (255, 255, 255, 255))}  # phones want no see-through
+
+def _render(kind: str, img):
+    """The picture for one use: the logo keeps its shape (at most LOGO_MAX); an icon is the whole picture centred on
+    a square (a phone's on white: home screens show no see-through)."""
+    from PIL import Image
+    if kind == "logo":
+        out = img.copy()
+        out.thumbnail((LOGO_MAX, LOGO_MAX), Image.LANCZOS)  # only ever smaller
+        return out
+    size, background = (64, None) if kind == "favicon" else (180, (255, 255, 255, 255))
+    side = max(img.size)
+    sq = Image.new("RGBA", (side, side), background or (0, 0, 0, 0))
+    sq.paste(img, ((side - img.width) // 2, (side - img.height) // 2), img)
+    return sq.resize((size, size), Image.LANCZOS)
+
+
+def _write(kind: str, img) -> None:
     d = _dir()
     d.mkdir(parents=True, exist_ok=True)
-    for kind, im in out.items():
-        buf = io.BytesIO()
-        im.save(buf, "PNG", optimize=True)  # a fresh file: nothing from the original but the pixels
-        tmp = d / (FILES[kind] + ".tmp")
-        tmp.write_bytes(buf.getvalue())
-        tmp.replace(d / FILES[kind])
+    buf = io.BytesIO()
+    img.save(buf, "PNG", optimize=True)  # a fresh file: nothing from the original but the pixels
+    tmp = d / (FILES[kind] + ".tmp")
+    tmp.write_bytes(buf.getvalue())
+    tmp.replace(d / FILES[kind])
 
 
-def remove_logo() -> None:
-    for f in FILES.values():
-        (_dir() / f).unlink(missing_ok=True)
+def _set_own(kind: str, own: bool) -> None:
+    s = _settings()
+    s["own"] = {**s.get("own", {}), kind: own}
+    tmp = DATA / "branding.json.tmp"
+    tmp.write_text(json.dumps(s))
+    tmp.replace(DATA / "branding.json")
+
+
+def save(kind: str, data: bytes) -> None:
+    """Upload one picture. The logo also makes the icons that weren't uploaded on their own."""
+    if kind not in FILES:
+        raise ValueError("Pick which picture this is.")
+    img = _open(data)
+    _write(kind, _render(kind, img))
+    if kind == "logo":
+        for icon in ("favicon", "icon"):
+            if source(icon) != "own":
+                _write(icon, _render(icon, img))
+    else:
+        _set_own(kind, True)
+
+
+def reset(kind: str) -> None:
+    """Back to the default: for the logo, the plain one (and icons made from it go too); for an icon, made from the
+    club's logo if there is one, else the plain one."""
+    if kind not in FILES:
+        return
+    if kind == "logo":
+        (_dir() / FILES["logo"]).unlink(missing_ok=True)
+        for icon in ("favicon", "icon"):
+            if source(icon) == "logo":
+                (_dir() / FILES[icon]).unlink(missing_ok=True)
+        return
+    _set_own(kind, False)
+    (_dir() / FILES[kind]).unlink(missing_ok=True)
+    logo = _dir() / FILES["logo"]
+    if logo.exists():
+        from PIL import Image
+        _write(kind, _render(kind, Image.open(logo).convert("RGBA")))
