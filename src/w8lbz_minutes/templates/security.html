@@ -1,7 +1,7 @@
-{% extends "base.html" %}{% block title %}Security{% endblock %}{% block body %}
-<h1>Security</h1>
-<p class="muted">Admins only, in admin mode. Times are the server's (club time). "Internet" addresses come in through Tailscale Funnel; you're on {{ my_ip }} ({{ my_ip|where }}).</p>
-<nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/security/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}{% if t == 'bans' and bans %} ({{ bans|length }}){% elif t == 'failed' and failed_today %} ({{ failed_today }} today){% elif t == 'devices' %} ({{ sessions|length }}){% endif %}</a>{% endfor %}</nav>
+{% extends "base.html" %}{% block title %}{{ 'Backups' if tab == 'backups' else 'Security' }}{% endblock %}{% block body %}
+<h1>{{ 'Backups' if tab == 'backups' else 'Security' }}</h1>
+{% if tab != 'backups' %}<p class="muted">Admins only, in admin mode. Times are the server's (club time). "Internet" addresses come in through Tailscale Funnel; you're on {{ my_ip }} ({{ my_ip|where }}).</p>
+<nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/security/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}{% if t == 'bans' and bans %} ({{ bans|length }}){% elif t == 'failed' and failed_today %} ({{ failed_today }} today){% elif t == 'devices' %} ({{ sessions|length }}){% endif %}</a>{% endfor %}</nav>{% endif %}
 
 {% if tab == 'signins' %}
 {% if signins %}<table class="list"><thead><tr><th>When</th><th>Member</th><th>How</th><th>From</th><th class="opt">Device</th></tr></thead><tbody>

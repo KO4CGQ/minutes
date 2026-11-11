@@ -1761,7 +1761,9 @@ def _security_admin(request: Request) -> str:
 
 
 SECURITY_TABS = (("signins", "Sign-ins"), ("members", "Members"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
-                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("backups", "Backups"), ("server", "Server"))
+                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
+# Backups has its own card on the Admin page and its own page; it keeps this address (emails link to it)
+SECURITY_PAGES = dict(SECURITY_TABS) | {"backups": "Backups"}
 
 
 def admin_action(e: dict) -> str:
@@ -1818,7 +1820,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
     """Sign-ins, signed-in devices, failed attempts, banned addresses, admin actions and server health."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
-    if tab not in dict(SECURITY_TABS):  # before the redirect, so only a known tab goes into its address
+    if tab not in SECURITY_PAGES:  # before the redirect, so only a known tab goes into its address
         raise HTTPException(404)
     if not admin_mode(request):
         return RedirectResponse(f"/admin/confirm?next=/admin/security/{tab}", status_code=303)
