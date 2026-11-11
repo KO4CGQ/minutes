@@ -11,8 +11,8 @@ TZ_NAME=${TZ_NAME:-America/New_York}  # the club's local time: "today" in the co
 timedatectl set-timezone "$TZ_NAME" 2>/dev/null || ln -sf "/usr/share/zoneinfo/$TZ_NAME" /etc/localtime
 
 apt-get update -qq
-# git/curl: deploy; pango + fonts: PDF rendering (WeasyPrint)
-apt-get install -y -qq git curl ca-certificates libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core fonts-liberation >/dev/null
+# git/curl: deploy; sudo: update.sh runs git and uv as the app's user; pango + fonts: PDF rendering (WeasyPrint)
+apt-get install -y -qq git curl sudo ca-certificates libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core fonts-liberation >/dev/null
 
 id minutes >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/club-minutes-home --shell /usr/sbin/nologin minutes
 install -d -o minutes -g minutes -m 750 "$DATA"
