@@ -523,3 +523,12 @@ li.dup .caltitle, li.dup > strong { background: var(--warn-soft); border-radius:
 /* what's behind the club's logo (Site): dark ink on a see-through background still shows in dark mode */
 img.logo.bg-circle { background: #fff; border-radius: 50%; }
 img.logo.bg-square { background: #fff; border-radius: 14%; padding: 6%; box-sizing: border-box; }
+/* Site: Save and Cancel appear once something is chosen; the card is marked until it's saved */
+.sitepic form .pend { display: none; } .sitepic form.pending .pend { display: inline-flex; gap: .4rem; }
+.sitepic form.pending .pick { display: none; }
+.sitepic:has(form.pending) { border-color: var(--warn-edge); background: var(--warn-soft); }
+.sitepic .unsaved { color: var(--warn-text); font-size: .8rem; font-weight: 600; margin-left: .3rem; }
+/* Admin page: one card per tool */
+.admintools { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .7rem; }
+.admintools a.card { display: flex; flex-direction: column; gap: .3rem; text-decoration: none; color: inherit; padding: .9rem 1rem; }
+.admintools a.card:hover { border-color: var(--accent); } .admintools a.card b { font-size: 1.05rem; }

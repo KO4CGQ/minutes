@@ -186,12 +186,15 @@ def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, m
 
 
 
-def test_admin_address_members_tab_and_a_page_for_not_found(app):
+def test_admin_address_members_tab_and_a_page_for_not_found(app, monkeypatch):
     """/admin goes to Security for an admin and is not found for a member; a browser gets a page, scripts get JSON."""
     import time as _t
     web.archive.club.admins = {"kd8off"}
     admin, member = app("kd8off"), app("kd8bbb")
-    assert admin.get("/admin/", follow_redirects=False).headers["location"] == "/admin/security"
+    assert admin.get("/admin/", follow_redirects=False).headers["location"].startswith("/admin/confirm")  # admin mode first
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    hub = admin.get("/admin").text
+    assert all(f'href="/admin/{t}"' in hub for t in ("security", "updates", "site", "email")) and "failed sign-in" in hub
     assert member.get("/admin").status_code == 404
     page_ = member.get("/no-such-page", headers={"Accept": "text/html"})
     assert page_.status_code == 404 and "Page not found" in page_.text

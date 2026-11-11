@@ -6,6 +6,8 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 - **The app's name and logo are set in the app** (admin mode → name menu → **Site**): the name in the top bar, page titles, the sign-in page, emails and a passkey's name on phones ("<callsign> Minutes" unless changed), and three pictures, each uploaded and reset on its own: the logo (pages, minutes, PDFs), the browser tab's icon and a phone's home-screen icon. The icons are made from the logo unless one is uploaded of its own; each upload is redrawn as a fresh PNG. **Behind the logo** (white circle, white rounded square or nothing; Automatic picks from its shape) keeps dark line art visible in dark mode; it used to be a white circle for every logo, which cut a wide one into an oval. The app now comes with a plain logo instead of W8LBZ's, so another club starts with its own name and no one else's emblem.
+- **Site works preview-then-Save:** a chosen picture, or a new "behind it", shows in its card first (marked "Not saved yet"), with Save and Cancel; nothing on the site changes until Save.
+- **Admin page:** in admin mode, the name menu has one **Admin** link instead of every tool; `/admin` lists Security, Backups, Updates, Site, the Email log (and Stage sync on a staging server), each with a line of how things stand.
 - **Fix:** opening "Add an event" with a date that isn't a date gave a server error; it starts on today.
 - **Deploy notes:** after updating:
   1. Admin mode → name menu → **Site** → Logo → **Upload…**: the club's logo (W8LBZ's is in the developer's `private/branding/logo.png`; any copy of it works). Until then the plain logo shows.

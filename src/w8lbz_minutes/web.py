@@ -1786,13 +1786,29 @@ def admin_action(e: dict) -> str:
 templates.env.filters["admin_action"] = admin_action
 
 
-@app.get("/admin")
-@app.get("/admin/")
-def admin_home(mid: str = Depends(real_me)):
-    """/admin on its own: the Security page (for anyone else, not found, like every admin page)."""
+@app.get("/admin", response_class=HTMLResponse)
+@app.get("/admin/", response_class=HTMLResponse)
+def admin_home(request: Request, mid: str = Depends(real_me)):
+    """The admin tools in one place, each with a line of how things stand (not found for anyone else, like every
+    admin page). The name menu links here instead of listing every tool."""
     if not archive.club.is_admin(mid):
         raise HTTPException(404)
-    return RedirectResponse("/admin/security", status_code=303)
+    if not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/admin", status_code=303)
+    day = time.time() - 86400
+    failed = sum(e["at"] > day for e in authn.events(200))
+    p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
+    week = time.time() - 7 * 86400
+    mail = [json.loads(x) for x in p.read_text().splitlines()[-500:] if x.strip()] if p.exists() else []
+    held = sum(1 for m in mail if m.get("at", 0) >= week and m.get("withheld"))  # someone it wasn't sent to
+    sp = DATA / "stage-sync-status.json"
+    try:
+        upd = None if STAGE else updates.available()
+    except Exception:  # GitHub not reachable: just don't say
+        upd = None
+    return page(request, "admin.html", failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
+                passphrase_set=len(os.environ.get("W8LBZ_BACKUP_PASSPHRASE", "")) >= 12, upd=upd,
+                stage_last=json.loads(sp.read_text()) if STAGE and sp.exists() else None)
 
 
 @app.get("/admin/security", response_class=HTMLResponse)

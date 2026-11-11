@@ -46,9 +46,11 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 - **AI** (optional) needs `W8LBZ_OPENROUTER_KEY` in `/etc/w8lbz-minutes/env` and `ai: {model: ...}` in club.yaml. Each call is logged to `ai-log.jsonl` in the data folder (time, model, size, cost; never the text).
 - **Recovery:** an admin on the server can print a one-time link for a member: `w8lbz-minutes login-link KD8XYZ`
 
-Admin mode → name menu → **Site**: the app's name (default "<callsign> Minutes", or `app_name:` in club.yaml) and three pictures, each with its own **Upload…** and **Reset**: the logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon. The icons are made from the logo until one is uploaded of its own. **Behind it** sets what's under the logo on pages, so a logo of dark lines on a see-through background still shows in dark mode; the Logo card shows it on a light and a dark page. Uploads are redrawn as fresh PNGs in `branding/` in the data folder; the name (and which icons are the club's own) is in `branding.json`. Both are in the backups.
+In admin mode, the name menu's **Admin** (`/admin`) lists the admin tools, each with a line of how things stand: Security (failed sign-ins today, bans), Backups (the last one), Updates (what's running, what's available), Site, the Email log (anything held back this week) and, on a staging server, Stage sync.
 
-Admin mode → Security → **Members** lists every member on the roster: their last sign-in, how many passkeys they've set up (and when one was last used), and how many devices are signed in now, so you can see who hasn't signed in or still uses emailed links. `/admin` goes to the Security page.
+Admin mode → Admin → **Site**: the app's name (default "<callsign> Minutes", or `app_name:` in club.yaml) and three pictures, each with its own **Upload…** and **Reset**: the logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon. The icons are made from the logo until one is uploaded of its own. **Behind it** sets what's under the logo on pages, so a logo of dark lines on a see-through background still shows in dark mode; the Logo card shows it on a light and a dark page. Uploads are redrawn as fresh PNGs in `branding/` in the data folder; the name (and which icons are the club's own) is in `branding.json`. Both are in the backups.
+
+Admin mode → Security → **Members** lists every member on the roster: their last sign-in, how many passkeys they've set up (and when one was last used), and how many devices are signed in now, so you can see who hasn't signed in or still uses emailed links. 
 
 Officers and members ticked `minutes_editor` on the roster can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
 
