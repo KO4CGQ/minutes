@@ -249,3 +249,23 @@ def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(
     assert m.slug in a.by_slug                                                 # still there
     assert jane.post(f"/api/meetings/{m.slug}/hold", json={"tab": "j", "take": True}).json() == {"held": True}
     assert sam.put(f"/api/meetings/{m.slug}", json={**body, "tab": "s"}).status_code == 409  # Sam's console is read-only now
+
+
+def test_top_bar_says_continue_minutes_for_an_open_meeting_from_another_day(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = archive_with_prev(tmp_path)
+    a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True}, {"id": "kim", "first": "Sam", "last": "Kim"}])
+    monkeypatch.setattr(web, "archive", a)
+    auth = Auth(a.club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", auth)
+    def page_as(who):
+        t = TestClient(web.app)
+        t.cookies.set(web.COOKIE, auth.new_session(who))
+        return t.get("/links").text  # not About: it shows the changelog, which names the button
+    assert "Start meeting" in page_as("doe")
+    console.start(a, dt.date(2026, 11, 12), "doe")  # not today: no red dot for anyone
+    assert "Continue minutes (Nov 12)" in page_as("doe") and "start live" not in page_as("doe")
+    assert "Continue minutes" not in page_as("kim") and "start live" not in page_as("kim")

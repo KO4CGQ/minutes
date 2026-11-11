@@ -237,6 +237,8 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         **_money_nav(request, mid),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
+        # an open meeting from another day (say, last week's never submitted): leaders get "Continue minutes"
+        "open_draft": next((m for m in archive.meetings if m.status == "draft"), None),
         "update_available": _update_badge(request),
         "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
