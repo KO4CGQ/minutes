@@ -5,7 +5,7 @@ For whoever runs the server: install, configure, back up and secure the app. Bac
 ## Deploy (Debian container)
 As root on the container:
 ```sh
-curl -fsSL https://raw.githubusercontent.com/W8LBZ/minutes/main/deploy/setup.sh | bash   # first time
+curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh | bash   # first time
 /opt/w8lbz-minutes/deploy/update.sh                                                    # by hand: the latest main (TAG=v0.15.0 for a release)
 ```
 Then put `club.yaml` in `/etc/w8lbz-minutes/` (and `google-service-account.json`, only for backups to Google Drive), and data in `/var/lib/w8lbz-minutes/`.

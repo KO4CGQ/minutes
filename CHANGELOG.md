@@ -18,6 +18,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Recorded by:** when the president chairs and someone else takes the minutes, pick the president under Led by; the minutes, PDF and email then say "Led by" them and "Recorded by" whoever started the console, and replies to the email go to the recorder. On a usual night, one person, they say "Led & Recorded by" (older minutes, from before this, keep "Led by").
 - **Meeting page during a meeting:** "Open in the leader console" is a link at the end of the "Meeting in progress" badge instead of a big button above it, and only people who can lead see it.
 - **Plans:** suggested edits during a live meeting are dropped (an editor fixes things after the meeting, before Submit); the bylaws link item is done by the Bylaws page.
+- **New home: github.com/KO4CGQ/minutes.** The update check, `setup.sh`, the About page and the server admin guide use the new address (the old one forwards there).
 
 ## 0.17.1 (2026-11-10)
 - **Fix: updates failed when a tag had moved on GitHub** (0.17.0 overnight, silently): the updater now takes GitHub's tags as they are, says which step failed, and the failure email no longer claims the app went back to its old version when nothing was installed.
