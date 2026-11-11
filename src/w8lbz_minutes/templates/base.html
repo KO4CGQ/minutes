@@ -90,7 +90,7 @@ document.addEventListener("submit", (e) => {
   };
 })();
 </script>{% endif %}
-<main>{% block body %}{% endblock %}</main>
+<main>{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% endif %}{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
 <script nonce="{{ csp_nonce }}">  // what inline on…= handlers did, as data- attributes: the security policy runs no inline handlers
 document.addEventListener("submit", (e) => {

@@ -532,3 +532,5 @@ img.logo.bg-square { background: #fff; border-radius: 14%; padding: 6%; box-sizi
 .admintools { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .7rem; }
 .admintools a.card { display: flex; flex-direction: column; gap: .3rem; text-decoration: none; color: inherit; padding: .9rem 1rem; }
 .admintools a.card:hover { border-color: var(--accent); } .admintools a.card b { font-size: 1.05rem; }
+/* ‹ Admin, above each admin tool's page */
+nav.crumb { margin: -.6rem 0 .6rem; font-size: .9rem; } nav.crumb a { text-decoration: none; }

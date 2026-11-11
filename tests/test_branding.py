@@ -113,3 +113,16 @@ def test_behind_the_logo_is_picked_from_its_shape_unless_chosen(data):
     assert branding.backing() == "circle" and branding.auto_backing() == "none"
     branding.set_backing("<script>")
     assert branding.backing() == "none"                                  # anything else is Automatic
+
+
+def test_a_tab_icon_made_from_the_logo_gets_the_logos_white_behind_it(data):
+    branding.save("logo", png((300, 300), (0, 0, 0, 0)))                # line art: see-through, round-ish
+    fav = lambda: Image.open(branding.path("favicon")).convert("RGBA")  # noqa: E731
+    assert branding.backing() == "circle" and fav().getpixel((32, 32)) == (255, 255, 255, 255) and fav().getpixel((0, 0))[3] == 0
+    branding.set_backing("none")                                         # changing "behind it" redraws it
+    assert fav().getpixel((32, 32))[3] == 0
+    branding.set_backing("square")
+    assert fav().getpixel((2, 32))[3] == 255
+    branding.save("favicon", png((64, 64), (0, 0, 255, 255)))            # one of its own is left alone
+    branding.set_backing("circle")
+    assert fav().getpixel((0, 0)) == (0, 0, 255, 255)

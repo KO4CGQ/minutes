@@ -89,6 +89,7 @@ def set_backing(value: str) -> None:
     tmp = DATA / "branding.json.tmp"
     tmp.write_text(json.dumps(s))
     tmp.replace(DATA / "branding.json")
+    _icons_from_logo()  # a tab icon made from the logo gets the same "behind it"
 
 
 def custom() -> bool:
@@ -119,10 +120,11 @@ def _open(data: bytes):
         raise ValueError("That file isn't a picture we can read. Use a PNG, JPEG or WebP.")
 
 
-def _render(kind: str, img):
+def _render(kind: str, img, behind: str = "none"):
     """The picture for one use: the logo keeps its shape (at most LOGO_MAX); an icon is the whole picture centred on
-    a square (a phone's on white: home screens show no see-through)."""
-    from PIL import Image
+    a square (a phone's on white: home screens show no see-through). behind: for a tab icon made from the logo, the
+    logo's "behind it" (a white circle or rounded square), so dark line art still shows on a dark browser tab."""
+    from PIL import Image, ImageDraw
     if kind == "logo":
         out = img.copy()
         out.thumbnail((LOGO_MAX, LOGO_MAX), Image.LANCZOS)  # only ever smaller
@@ -130,8 +132,24 @@ def _render(kind: str, img):
     size, background = (64, None) if kind == "favicon" else (180, (255, 255, 255, 255))
     side = max(img.size)
     sq = Image.new("RGBA", (side, side), background or (0, 0, 0, 0))
+    if kind == "favicon" and behind in ("circle", "square"):
+        d = ImageDraw.Draw(sq)
+        (d.ellipse if behind == "circle" else lambda box, **k: d.rounded_rectangle(box, radius=side // 7, **k))(
+            (0, 0, side - 1, side - 1), fill=(255, 255, 255, 255))
     sq.paste(img, ((side - img.width) // 2, (side - img.height) // 2), img)
     return sq.resize((size, size), Image.LANCZOS)
+
+
+def _icons_from_logo() -> None:
+    """Redo the icons that follow the logo (none uploaded of their own), with the logo's "behind it"."""
+    from PIL import Image
+    logo = _dir() / FILES["logo"]
+    if not logo.exists():
+        return
+    img = Image.open(logo).convert("RGBA")
+    for icon in ("favicon", "icon"):
+        if source(icon) != "own":
+            _write(icon, _render(icon, img, backing()))
 
 
 def _write(kind: str, img) -> None:
@@ -159,9 +177,7 @@ def save(kind: str, data: bytes) -> None:
     img = _open(data)
     _write(kind, _render(kind, img))
     if kind == "logo":
-        for icon in ("favicon", "icon"):
-            if source(icon) != "own":
-                _write(icon, _render(icon, img))
+        _icons_from_logo()
     else:
         _set_own(kind, True)
 
@@ -179,7 +195,4 @@ def reset(kind: str) -> None:
         return
     _set_own(kind, False)
     (_dir() / FILES[kind]).unlink(missing_ok=True)
-    logo = _dir() / FILES["logo"]
-    if logo.exists():
-        from PIL import Image
-        _write(kind, _render(kind, Image.open(logo).convert("RGBA")))
+    _icons_from_logo()
