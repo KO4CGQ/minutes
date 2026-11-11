@@ -83,11 +83,12 @@
   }
   function lock(who, lost) {  // someone else is taking the minutes: read-only, with Take over
     readOnly = true;
-    for (const id of ["panel", "steps", "pager", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    // the steps and Back/Next still move around (to look); nothing in a step can be changed
+    for (const id of ["panel", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
     saved.textContent = "Read-only"; saved.className = "saved dirty";
     const take = who.you ? "Take over here" : "Take over";
     holdbar.replaceChildren(who.you ? `You're taking these minutes in another window or device (since ${clock(who.since)}).`
-        : `${who.holder} is taking these minutes (since ${clock(who.since)}). This page is read-only, so nothing gets overwritten.`,
+        : `${who.holder} is taking these minutes (since ${clock(who.since)}). This page is read-only, so nothing gets overwritten; it shows the minutes as they were when you opened it.`,
       lost ? " Changes made here after the last save weren't saved." : "", " ",
       h("a", { href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view ↗"), " ",
       h("button", { class: "btn small", onclick: async () => {

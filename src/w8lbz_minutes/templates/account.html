@@ -19,7 +19,8 @@
 <p id="pkmsg" class="msg" hidden></p>
 <p id="pkno" class="muted" hidden>This browser doesn't support passkeys. Email sign-in keeps working.</p>
 {% else %}
-<p class="muted">Passkeys can only be added at <a href="https://{{ rp_id }}/account">https://{{ rp_id }}</a>.</p>
+{% if rp_id %}<p class="muted">Passkeys only work at this site's secure address: add one at <a href="https://{{ rp_id }}/account">https://{{ rp_id }}</a>.</p>
+{% else %}<p class="muted">Passkeys aren't set up for this site (they need a secure https address, which the server admin sets). You sign in with an emailed link.</p>{% endif %}
 {% endif %}
 
 <h2>Sign-ins</h2>
