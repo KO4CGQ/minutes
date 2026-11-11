@@ -73,6 +73,7 @@ class Meeting:
     status: str = "draft"  # draft | imported | published
     version: int = 1
     leader: str | None = None
+    recorder: str | None = None  # who took the minutes in the console; shown only when not the leader
     source: str | None = None  # original file name, if imported
     note: str | None = None  # e.g. import warnings for the reviewer
     in_person: list[str] = field(default_factory=list)
@@ -99,6 +100,7 @@ class Meeting:
             "status": self.status,
             "version": self.version,
             "leader": self.leader,
+            "recorder": self.recorder,
             "source": self.source,
             "note": self.note,
             "attendance": {"in_person": self.in_person, "remote": self.remote},
@@ -125,6 +127,7 @@ class Meeting:
             status=fm.get("status", "draft"),
             version=fm.get("version", 1),
             leader=fm.get("leader"),
+            recorder=fm.get("recorder"),
             source=fm.get("source"),
             note=fm.get("note"),
             in_person=att.get("in_person") or [],

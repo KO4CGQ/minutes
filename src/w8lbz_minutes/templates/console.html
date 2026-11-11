@@ -3,6 +3,7 @@
 <div class="ch">
   <div><h1>Meeting of {{ m.date|longdate }}</h1>
   Led by <select id="leader">{% for id in leaders %}<option value="{{ id }}" {{ 'selected' if id == m.leader }}>{{ club.name(id) }}</option>{% endfor %}</select>
+  {% if m.recorder %}<span class="muted">· recorded by {{ club.name(m.recorder) }}</span>{% endif %}
   <button type="button" class="share" id="share" data-path="/meetings/{{ m.slug }}"
     title="Members can follow along live at this link: the minutes on it update every few seconds as you take them. Paste it in the Teams chat. They sign in like they do for the archive. Click to copy.">{{ emoji('🔗', 'link') }} Share live view</button>
   <a class="muted small" href="/meetings/{{ m.slug }}" target="_blank" title="Open the live view in a new tab">open ↗️</a></div>

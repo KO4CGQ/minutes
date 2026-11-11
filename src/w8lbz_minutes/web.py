@@ -2245,7 +2245,7 @@ def console_home(request: Request, mid: str = Depends(leader)):
 
 @app.post("/console/start")
 def console_start(date: str = Form(...), leader_id: str = Form("", alias="leader"), mid: str = Depends(leader)):
-    m = console.start(archive, dt.date.fromisoformat(date), leader_id or mid)
+    m = console.start(archive, dt.date.fromisoformat(date), leader_id or mid, recorder=mid)
     return RedirectResponse(f"/console/{m.slug}", status_code=303)
 
 

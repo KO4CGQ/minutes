@@ -170,3 +170,22 @@ def test_celebrations_the_week_up_to_tonight_shared_birthdays_only():
     assert console.celebrations(c, dt.date(2026, 12, 3)) == ["Happy birthday, Cal Cole! (December)"]  # first meeting of the month
     assert console.celebrations(c, dt.date(2026, 12, 10)) == []
     assert console.celebrations(c, dt.date(2027, 1, 2)) == []  # the week crosses New Year
+
+
+def test_recorded_by_shows_only_when_someone_else_led(tmp_path, monkeypatch):
+    from w8lbz_minutes.web import templates
+    from w8lbz_minutes.console import SECTIONS
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")  # the president chairs, Sam takes the minutes
+    m = Archive(tmp_path, club).by_slug[m.slug]  # survives saving
+    assert (m.leader, m.recorder) == ("doe", "kim")
+    html = lambda: templates.get_template("_minutes.html").render(m=m, pdf=False, club=club, SECTIONS=SECTIONS)
+    assert "Led by Jane Doe · Recorded by Sam Kim" in html()
+    m.recorder = "doe"
+    assert "Recorded by" not in html() and "Led by Jane Doe" in html()
+
+    a = mail_archive(tmp_path / "mail", monkeypatch, only_to=None)
+    a.by_slug["2026-11-12"].recorder = "kim"
+    console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "u")
+    msg = FakeSMTP.outbox[0]
+    assert msg["Reply-To"] == "sam@example.org" and "led by Jane Doe, recorded by Sam Kim" in msg.get_body(("plain",)).get_content()

@@ -6,7 +6,7 @@
       <div class="club">{{ club.info.callsign }} · {{ club.info.name }}</div>
       <h1>Meeting Minutes</h1>
       <div class="date">{{ m.date|longdate }}</div>
-      {% if m.leader %}<div class="leader">Led by {{ club.name(m.leader) }}</div>{% endif %}
+      {% if m.leader %}<div class="leader">Led by {{ club.name(m.leader) }}{% if m.recorder and m.recorder != m.leader %} · Recorded by {{ club.name(m.recorder) }}{% endif %}</div>{% endif %}
     </div>
   </header>
 

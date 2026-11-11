@@ -25,10 +25,10 @@ def _key(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
-def start(archive: Archive, date: dt.date, leader: str | None) -> Meeting:
+def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None = None) -> Meeting:
     if date.isoformat() in archive.by_slug:
         return archive.by_slug[date.isoformat()]
-    m = Meeting(date=date, status="draft", leader=leader)
+    m = Meeting(date=date, status="draft", leader=leader, recorder=recorder)
     prev = previous(archive, date)
     for sec in SECTIONS:
         m.sections[sec] = []
@@ -312,13 +312,15 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
     club = archive.club
     to, links = recipients(archive, "pdf"), recipients(archive, "link")
     leader = club.members.get(m.leader or "")
+    recorder = club.members.get(m.recorder or "") if m.recorder != m.leader else None
+    writer = recorder or leader  # replies (corrections) go to whoever took the minutes
     date = m.date.strftime("%B %-d, %Y")
     body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
-            f"{f', led by {leader.name}' if leader else ''}. The PDF is attached.\n\n"
+            f"{f', led by {leader.name}' if leader else ''}{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
-            f"Replies go to {leader.first if leader and leader.email else 'the club'}.\n\n"
+            f"Replies go to {writer.first if writer and writer.email else 'the club'}.\n\n"
             f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.info.get('callsign', '')}")
-    subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", leader.email if leader and leader.email else None
+    subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", writer.email if writer and writer.email else None
     try:
         pdf = make_pdf() if to else None
         sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],
