@@ -1,5 +1,5 @@
 [Unit]
-Description=Staging server: pull the live W8LBZ minutes app's data (one way) and restart
+Description=Staging server: pull the live minutes app's data (one way) and restart
 
 [Service]
 Type=oneshot

@@ -1,6 +1,6 @@
 # Changelog
 
-What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](ROADMAP.md).
+What changed in each version of Club Minutes. Planned work is in [ROADMAP.md](ROADMAP.md).
 
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 

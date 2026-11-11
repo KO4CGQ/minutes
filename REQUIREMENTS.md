@@ -1,4 +1,4 @@
-# W8LBZ Meeting Minutes Assistant: Requirements
+# Club Minutes: Requirements
 
 _The target design. What's built so far is in [CHANGELOG.md](CHANGELOG.md), and what's next in [ROADMAP.md](ROADMAP.md). Items marked **[Q]** are open questions._
 
@@ -73,7 +73,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 
 - **FR-1 "Start meeting" in the console:**
   1. The leader pastes the Teams link, or the standing link is pre-filled.
-  2. The leader clicks **Deploy bot**. A bot named "W8LBZ Minutes (recording)" joins as a guest. The leader admits it from the lobby.
+  2. The leader clicks **Deploy bot**. A bot named after the app (Site's name), with "(recording)" added, joins as a guest. The leader admits it from the lobby.
   3. The browser asks for permission to use the mic. The leader picks the USB desk mic, and the console starts recording the **room track**.
 - **FR-2** **Bot track.** The bot captures the meeting audio and the **active-speaker events** Teams shows. Speech from remote members is attributed to their Teams display names automatically.
 - **FR-3** **Room track.** The browser records the same desk mic that Teams uses. Windows and macOS allow two apps to share a mic. The room track gets the in-person speech at full quality.

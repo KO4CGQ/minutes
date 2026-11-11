@@ -1,6 +1,6 @@
 # Club Minutes
 
-Meeting minutes, attendance, the calendar and club records for an amateur radio club. Built for W8LBZ; the name and logo are set in the app (Site). See [REQUIREMENTS.md](REQUIREMENTS.md).
+Meeting minutes, attendance, the calendar and club records for an amateur radio club. Each club sets its own name and logo in the app (Site). See [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## What it does
 Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROADMAP.md](ROADMAP.md).
