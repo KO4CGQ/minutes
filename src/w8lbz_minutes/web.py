@@ -2287,15 +2287,18 @@ def live_fragment(request: Request, slug: str):
 # ---------------- leader console (officers + minutes editors) ----------------
 
 @app.get("/console", response_class=HTMLResponse)
-def console_home(request: Request, mid: str = Depends(leader)):
+def console_home(request: Request, error: str = "", mid: str = Depends(leader)):
     drafts = [m for m in archive.meetings if m.status == "draft"]
     leaders = sorted(archive.club.leaders, key=archive.club.name)
-    return page(request, "console_start.html", drafts=drafts, leaders=leaders, today=dt.date.today())
+    return page(request, "console_start.html", drafts=drafts, leaders=leaders, today=dt.date.today(), error=error)
 
 
 @app.post("/console/start")
 def console_start(date: str = Form(...), leader_id: str = Form("", alias="leader"), mid: str = Depends(leader)):
-    m = console.start(archive, dt.date.fromisoformat(date), leader_id or mid, recorder=mid)
+    try:
+        m = console.start(archive, dt.date.fromisoformat(date), leader_id or mid, recorder=mid)
+    except ValueError as e:  # another meeting is still open (only one at a time)
+        return RedirectResponse("/console?error=" + quote(str(e)), status_code=303)
     return RedirectResponse(f"/console/{m.slug}", status_code=303)
 
 

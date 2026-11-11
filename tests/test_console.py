@@ -1,4 +1,6 @@
 import datetime as dt
+
+import pytest
 from pathlib import Path
 
 from w8lbz_minutes import console
@@ -191,3 +193,15 @@ def test_recorded_by_shows_only_when_someone_else_led(tmp_path, monkeypatch):
     console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "u")
     msg = FakeSMTP.outbox[0]
     assert msg["Reply-To"] == "sam@example.org" and "led by Jane Doe, recorded by Sam Kim" in msg.get_body(("plain",)).get_content()
+
+
+def test_one_meeting_open_at_a_time(tmp_path):
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe")
+    assert console.start(a, dt.date(2026, 11, 12), "kim").slug == m.slug  # the same date: opens it
+    with pytest.raises(ValueError, match="November 12 are still open"):
+        console.start(a, dt.date(2026, 11, 19), "doe")  # last week's never submitted
+    console.discard(a, m.slug)
+    m = console.start(a, dt.date(2026, 11, 19), "doe")  # after a discard
+    console.submit(a, m.slug)
+    assert console.start(a, dt.date(2026, 11, 26), "doe").status == "draft"  # and after a submit

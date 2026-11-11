@@ -10,6 +10,7 @@ import json
 import re
 import logging
 import shutil
+import threading
 import time
 
 from . import ai, auth, business, chow, prefs
@@ -25,9 +26,22 @@ def _key(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
+_starting = threading.Lock()  # two leaders clicking Start at once still get one meeting
+
+
 def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None = None) -> Meeting:
-    if date.isoformat() in archive.by_slug:
-        return archive.by_slug[date.isoformat()]
+    """Start the minutes of a meeting, or open them if that date's are already there. Only one meeting is open at a
+    time: with another still in progress (say, last week's never submitted), it has to be submitted or discarded first."""
+    with _starting:
+        if date.isoformat() in archive.by_slug:
+            return archive.by_slug[date.isoformat()]
+        if (open_ := [m for m in archive.meetings if m.status == "draft"]):
+            raise ValueError(f"The minutes of {open_[0].date:%B %-d} are still open: continue them, or discard them, "
+                             "before starting another meeting.")
+        return _start(archive, date, leader, recorder)
+
+
+def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None) -> Meeting:
     m = Meeting(date=date, status="draft", leader=leader, recorder=recorder)
     prev = previous(archive, date)
     for sec in SECTIONS:
