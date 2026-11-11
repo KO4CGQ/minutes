@@ -36,8 +36,9 @@ def _settings() -> dict:
 
 def name(club) -> str:
     """What the app calls itself: page titles, the top bar, emails, the passkey's name on phones."""
-    return (_settings().get("name") or str(club.info.get("app_name") or "").strip()
-            or f"{club.info.get('callsign') or 'Club'} Minutes")
+    # one line, always: it goes into email subjects
+    return " ".join(str(_settings().get("name") or club.info.get("app_name") or "").split())[:60] \
+        or f"{club.info.get('callsign') or 'Club'} Minutes"
 
 
 def set_name(text: str, by: str) -> None:
@@ -72,10 +73,29 @@ def backing() -> str:
     return chosen if chosen in ("circle", "square", "none") else auto_backing()
 
 
+_auto: dict[tuple, str] = {}  # Automatic's pick, kept until the logo changes (every page asks)
+
+
 def auto_backing() -> str:
-    """Automatic's pick, from the logo's shape and whether its corners are see-through."""
+    """Automatic's pick, from the logo's shape and whether its corners are see-through. A logo file that can't be
+    read (damaged on disk) gets nothing behind it rather than stopping every page."""
+    p = path("logo")
+    try:
+        key = (str(p), p.stat().st_mtime_ns)
+    except OSError:
+        return "none"
+    if key not in _auto:
+        _auto.clear()
+        try:
+            _auto[key] = _pick(p)
+        except Exception:
+            _auto[key] = "none"
+    return _auto[key]
+
+
+def _pick(p: Path) -> str:
     from PIL import Image
-    img = Image.open(path("logo")).convert("RGBA")
+    img = Image.open(p).convert("RGBA")
     w, h = img.size
     corners = [img.getpixel(p)[3] for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
     if min(corners) == 255:
@@ -115,8 +135,9 @@ def _open(data: bytes):
             raise ValueError("Use a PNG (best: it can have a see-through background), JPEG or WebP picture.")
         if img.width * img.height > 60_000_000:
             raise ValueError("That picture is too big.")
+        img.load()  # decode it all now: a damaged or cut-off file fails here, with a message, not later
         return ImageOps.exif_transpose(img).convert("RGBA")
-    except UnidentifiedImageError:
+    except (UnidentifiedImageError, OSError):  # not a picture, or a damaged one
         raise ValueError("That file isn't a picture we can read. Use a PNG, JPEG or WebP.")
 
 
@@ -144,9 +165,10 @@ def _icons_from_logo() -> None:
     """Redo the icons that follow the logo (none uploaded of their own), with the logo's "behind it"."""
     from PIL import Image
     logo = _dir() / FILES["logo"]
-    if not logo.exists():
+    try:
+        img = Image.open(logo).convert("RGBA")
+    except (FileNotFoundError, OSError):  # no logo, or a damaged one: leave the icons as they are
         return
-    img = Image.open(logo).convert("RGBA")
     for icon in ("favicon", "icon"):
         if source(icon) != "own":
             _write(icon, _render(icon, img, backing()))

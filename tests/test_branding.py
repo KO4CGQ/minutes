@@ -126,3 +126,19 @@ def test_a_tab_icon_made_from_the_logo_gets_the_logos_white_behind_it(data):
     branding.save("favicon", png((64, 64), (0, 0, 255, 255)))            # one of its own is left alone
     branding.set_backing("circle")
     assert fav().getpixel((0, 0)) == (0, 0, 255, 255)
+
+
+def test_damaged_pictures_are_refused_and_a_damaged_logo_on_disk_never_stops_a_page(data, monkeypatch):
+    with pytest.raises(ValueError, match="a picture we can read"):
+        branding.save("logo", png()[:200])                              # cut off part way
+    from w8lbz_minutes import avatars
+    monkeypatch.setattr(avatars, "DATA", data)
+    with pytest.raises(ValueError):
+        avatars.save("kd8aaa", png()[:200])                             # profile pictures too
+    branding.save("logo", png())
+    (data / "branding" / "logo.png").write_bytes(b"damaged")            # disk trouble, a bad restore
+    assert branding.backing() == "none"                                 # every page asks this
+    branding.set_backing("circle")                                      # and changing it still works
+    c = Club(FIX / "test-club.yaml", roster=[])
+    c.info["app_name"] = "Two\r\nLines"
+    assert branding.name(c) == "Two Lines"                              # never a line break in a subject
