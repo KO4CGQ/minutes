@@ -75,7 +75,7 @@ def test_stage_page_sync_now_and_pause(monkeypatch, tmp_path):
     monkeypatch.setattr(web, "STAGE", True)
     monkeypatch.setitem(web.templates.env.globals, "STAGE", True)
     page = c.get("/admin/stage").text
-    assert "STAGING" in page and "No sync yet" in page and "Sync now" in page and "Pause nightly sync" in page
+    assert "STAGING" in page and "prod's data" in page and "No sync yet" in page and "Sync now" in page and "Pause nightly sync" in page
     c.post("/admin/stage", data={"action": "sync"})
     assert (tmp_path / "stage-sync-request").read_text() == "kd8adm" and "starts within seconds" in c.get("/admin/stage").text
     c.post("/admin/stage", data={"action": "pause"})
@@ -101,3 +101,11 @@ def test_stage_sync_never_follows_a_link_planted_in_the_data_folder(tmp_path):
     st = stage / "stage-sync-status.json"
     assert not st.is_symlink() and "TOP SECRET" not in st.read_text() and json.loads(st.read_text())["ok"] is False
     assert not (stage / "stage-sync-request").exists() and not list(stage.glob(".stage-sync-status.*"))
+
+
+def test_stage_banner_says_little_to_the_public(monkeypatch):
+    from fastapi.testclient import TestClient
+    from club_minutes import web
+    monkeypatch.setitem(web.templates.env.globals, "STAGE", True)
+    page = TestClient(web.app).get("/login").text
+    assert "STAGING" in page and "prod's data" not in page and "email goes only" not in page  # signed out: just "a test copy"

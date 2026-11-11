@@ -6,6 +6,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 - **The app is called Club Minutes inside too:** the Python package is `club_minutes`, the admin command `club-minutes`, the services `club-minutes*` (staging: `club-stage-sync*`), the folders `/opt/club-minutes`, `/etc/club-minutes` and `/var/lib/club-minutes`, and the settings in the env file `CLUB_MINUTES_…` (were `W8LBZ_…`). Nothing members see changes; they stay signed in. Backups made before still restore, and old and new ones are kept and pruned by date. The ROADMAP keeps only work on the app.
+- **Staging banner:** signed out, it only says this is a staging server (a test copy of the app); what it holds and where email goes is shown once signed in.
 - **Fix:** `setup.sh` installs `sudo` too (a fresh Debian container doesn't have it, and updates need it).
 - **Fix:** a calendar feed address with a non-ASCII character in it gave a server error instead of "not found".
 - **Deploy notes:** the server's folders, services and settings move to the new names once, by hand (Update now can't do it, and this note keeps the nightly update from trying):
