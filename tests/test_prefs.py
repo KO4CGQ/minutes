@@ -1,10 +1,10 @@
 import datetime as dt
 from pathlib import Path
 
-from w8lbz_minutes import business, chow, console, events, prefs
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import business, chow, console, events, prefs
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 THU = dt.date(2026, 11, 12)
@@ -80,8 +80,8 @@ def test_meeting_day_email(tmp_path, monkeypatch):
 
 def test_email_tab(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     c = club()
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
@@ -97,8 +97,8 @@ def test_email_tab(tmp_path, monkeypatch):
 
 def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     assert prefs.settings("kd8aaa") == prefs.settings(None) == {"week_start": "sunday"}
     assert prefs.save_settings("kd8aaa", {"week_start": "friday", "evil": "x"}) == {"week_start": "sunday"}  # not a choice
     c = club()

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import membership, offices, profile, roster
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.roster import Sheet
+from club_minutes import membership, offices, profile, roster
+from club_minutes.club import Club
+from club_minutes.roster import Sheet
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "callsign": "KD8AAA", "email": "amy@example.org",
@@ -76,8 +76,8 @@ def test_change_refuses_mistakes(env):
 
 def test_past_term_and_page(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.store import Archive
     club, _, _ = env
     monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
     monkeypatch.setattr(web.authn, "member_for", lambda token: "kd8aaa")

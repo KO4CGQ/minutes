@@ -1,0 +1,139 @@
+{% extends "base.html" %}{% block title %}{{ 'Backups' if tab == 'backups' else 'Security' }}{% endblock %}{% block body %}
+<h1>{{ 'Backups' if tab == 'backups' else 'Security' }}</h1>
+{% if tab != 'backups' %}<p class="muted">Admins only, in admin mode. Times are the server's (club time). "Internet" addresses come in through Tailscale Funnel; you're on {{ my_ip }} ({{ my_ip|where }}).</p>
+<nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/security/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}{% if t == 'bans' and bans %} ({{ bans|length }}){% elif t == 'failed' and failed_today %} ({{ failed_today }} today){% elif t == 'devices' %} ({{ sessions|length }}){% endif %}</a>{% endfor %}</nav>{% endif %}
+
+{% if tab == 'signins' %}
+{% if signins %}<table class="list"><thead><tr><th>When</th><th>Member</th><th>How</th><th>From</th><th class="opt">Device</th></tr></thead><tbody>
+{% for r in signins %}<tr><td>{{ r.at|tsfull }}</td><td>{{ club.name(r.member) }}</td><td>{{ r.method }}</td><td><span class="ip">{{ r.ip }}</span> <span class="muted">{{ r.ip|where }}</span></td><td class="opt">{{ r.agent|device }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">None recorded yet (recording started with this version).</p>{% endif %}
+
+{% endif %}
+{% if tab == 'members' %}
+<p class="muted">Each member on the roster: when they last signed in, whether they've set up a passkey, and how many devices are signed in now. Sign-ins are recorded since 0.9; a member who signed in earlier and stayed signed in shows a device but no sign-in.</p>
+{% set people = club.members.values()|rejectattr('status', 'in', ['Inactive', 'Silent Key', 'inactive', 'silent key'])|sort(attribute='last') %}
+{% set with_pk = by_member.values()|selectattr('passkeys')|list|length %}
+<p>{{ by_member.values()|selectattr('last')|list|length }} have signed in; {{ with_pk }} have a passkey.</p>
+<table class="list"><thead><tr><th>Member</th><th>Last sign-in</th><th>Passkeys</th><th class="opt">Passkey last used</th><th>Devices now</th></tr></thead><tbody>
+{% for p in people %}{% set r = by_member.get(p.id, {}) %}<tr><td>{{ p.name }}</td><td>{{ r.last|tsfull if r.last else '' }}{% if not r.last %}<span class="muted">never</span>{% endif %}</td>
+<td>{{ r.passkeys or '' }}{% if not r.passkeys %}<span class="muted">none</span>{% endif %}</td><td class="opt">{{ r.pk_used|tsfull if r.pk_used else '' }}</td><td>{{ r.devices or '' }}</td></tr>{% endfor %}
+</tbody></table>
+
+{% endif %}
+{% if tab == 'devices' %}
+<p class="muted">Each stays signed in for {{ session_days }} days unless signed out. Sign out a lost phone, or someone who left the club.</p>
+{% set rows = sessions|selectattr('member', 'equalto', who)|list if who else sessions %}
+<form method="get" class="filter"><label>Member <select name="member" data-autosubmit><option value="">Everyone</option>
+{% for m in sessions|map(attribute='member')|unique|by_last_name %}<option value="{{ m }}" {{ 'selected' if m == who }}>{{ club.name(m) }}</option>{% endfor %}</select></label><noscript><button class="btn small">Show</button></noscript></form>
+<form method="post" action="/admin/security/signout" id="devices" data-confirm="Sign out the ticked devices?"><input type="hidden" name="member" value="{{ who }}">
+<table class="list"><thead><tr><th></th><th>Member</th><th>Since</th><th class="opt">Device</th><th>From</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><input type="checkbox" name="session" value="{{ r.rowid }}" aria-label="Select {{ club.name(r.member) }}, {{ r.agent|device }}"></td><td>{{ club.name(r.member) }}</td><td>{{ r.created|ts }}</td><td class="opt">{{ r.agent|device }}</td><td>{% if r.ip %}<span class="ip">{{ r.ip }}</span> <span class="muted">{{ r.ip|where }}</span>{% else %}<span class="muted">not recorded</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<div class="row"><button type="button" class="btn small ghost" data-tick="session">Tick all {{ rows|length }}</button>
+<button class="btn small">Sign out ticked</button></div></form>
+
+{% endif %}
+{% if tab == 'failed' %}
+<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned for {{ ban_hours }} hours. LAN and tailnet addresses are never banned automatically.</p>
+{% if events %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
+{% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td><span class="ip">{{ e.ip }}</span> <span class="muted">{{ e.ip|where }}</span></td>
+<td>{% if e.ip and e.ip != my_ip and e.ip not in bans|map(attribute='ip')|list %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">None.</p>{% endif %}
+
+{% endif %}
+{% if tab == 'bans' %}
+{% if bans %}<table class="list"><thead><tr><th>Address</th><th>Why</th><th class="opt">Since</th><th>Until</th><th></th></tr></thead><tbody>
+{% for b in bans %}<tr><td><span class="ip">{{ b.ip }}</span> <span class="muted">{{ b.ip|where }}</span></td><td>{{ b.reason }} <span class="muted">({{ 'automatic' if b.by == 'automatic' else club.name(b.by) }})</span></td><td class="opt">{{ b.at|tsfull }}</td><td>{{ b.until|tsfull if b.until else 'until lifted' }}</td>
+<td><form method="post" action="/admin/security/unban"><input type="hidden" name="ip" value="{{ b.ip }}"><button class="btn small">Unban</button></form></td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">No addresses are banned.</p>{% endif %}
+<form method="post" action="/admin/security/ban" class="inline"><label>Ban an address <input name="ip" required placeholder="203.0.113.7" size="18"></label>
+<label>for <select name="hours"><option value="24">24 hours</option><option value="168">a week</option><option value="0">until lifted</option></select></label>
+<input name="reason" placeholder="Why (optional)" size="24"> <button class="btn small">Ban</button></form>
+<p class="muted">SSH bans by fail2ban on the server aren't shown here; lift one on the server with <code>fail2ban-client set sshd unbanip ADDRESS</code>.</p>
+
+{% endif %}
+{% if tab == 'admin' %}
+{% if admin_log %}<table class="list"><thead><tr><th>When</th><th>Admin</th><th>What</th><th class="opt">From</th></tr></thead><tbody>
+{% for e in admin_log %}<tr><td>{{ e.at|tsfull }}</td><td>{{ club.name(e.member) if e.member else '' }}</td>
+<td>{{ e|admin_action }}</td><td class="opt"><span class="ip">{{ e.ip or '' }}</span></td></tr>{% endfor %}
+</tbody></table>{% else %}<p class="muted">None yet.</p>{% endif %}
+<p><a href="/admin/email">Email log</a> · <a href="/admin/updates">Updates</a></p>
+
+{% endif %}
+{% if tab == 'backups' %}
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+<p class="muted">On the schedule below the app puts the whole data folder (minutes, chow, business, calendars, settings, the roster cache and the sign-in database) into one compressed archive, encrypts it with the backup passphrase, checks it opens, keeps the newest here and sends it to the places ticked below. If it fails, the admins get an email. Restoring: the server admin guide → Backups.</p>
+<ul class="plain">
+<li>Passphrase: {% if passphrase_set %}set{% else %}<b>not set</b>: put <code>CLUB_MINUTES_BACKUP_PASSPHRASE=…</code> (12+ characters) in <code>/etc/club-minutes/env</code> and restart. Keep a copy off the server: without it no backup opens.{% endif %}</li>
+<li>The data now: {{ (data_size / 1048576)|round(1) }} MB before compression{% if backup_status.size %}; the last backup came to {{ (backup_status.size / 1048576)|round(1) }} MB compressed{% endif %}.</li>
+<li>Last backup: {% if not backup_status %}none yet{% elif backup_status.ok %}{{ backup_status.at|tsfull }}, {{ backup_status.files }} files, {{ (backup_status.size / 1048576)|round(1) }} MB{% if backup_status.sent_to %}, sent to {{ backup_status.sent_to|join(' and ') }}{% else %}, on the server only{% endif %}{% else %}<b>failed</b> {{ backup_status.at|tsfull }}: {{ backup_status.error }}{% endif %}</li>
+</ul>
+<div class="formrow"><form method="post" action="/admin/backups/now" class="inline"><button class="btn small">Back up now</button></form>
+<form method="post" action="/admin/backups/download" class="inline"><button class="btn small ghost">Download a backup now</button></form></div>
+<p class="hint">Back up now runs the usual backup (kept here and sent off); reload the page to see it. Download makes a fresh one and saves it on your computer: a compressed archive, encrypted with the passphrase, so it's safe on a laptop or USB stick. To open it: <code>club-minutes restore FILE FOLDER</code>.</p>
+
+<h2 id="passphrase">The passphrase</h2>
+<p class="hint">Set on the server only, in <code>/etc/club-minutes/env</code> (<code>CLUB_MINUTES_BACKUP_PASSPHRASE=…</code>, then restart the app), so a stolen admin sign-in can't change it. Keep it in your password manager, and a printed copy somewhere safe at the club: without it no backup opens. Changing it affects only new backups; keep the old one until the old backups have aged out.</p>
+<details><summary>Suggest a passphrase</summary>
+  <p><code class="cs">{{ suggestion }}</code></p>
+  <p class="hint">Random, made just now and not kept anywhere: copy it before leaving the page. Capital letters and digits without look-alikes (no 0/O, 1/I/L), in groups of four, so it's easy to read off paper and type; about 119 bits, far beyond guessing. A password manager's generator works too: 20+ random letters and digits, or 7+ random words. Symbols aren't needed: length matters more.</p>
+</details>
+<form method="post" action="/admin/backups/check" class="modern">
+  <div class="formrow"><label>Check a passphrase<input type="password" name="passphrase" required autocomplete="off"></label>
+  <button class="btn small ghost">Check</button></div>
+  <p class="hint">Says whether it matches the server's, how strong it is, and whether it's in Have I Been Pwned's leaked passwords (only the first 5 characters of its hash are sent). It isn't stored or logged.</p>
+</form>
+
+<h2>Schedule and how many to keep</h2>
+<p class="hint"><b>Recommended:</b> daily at {{ rec.hour }}:00, keep {{ rec.keep_local }} on the server, {{ rec.drive_keep }} on Google Drive, and {{ rec.s3_days }} days on S3 (the bucket's lifecycle rule). At this size{% if backup_status.size %} (about {{ (backup_status.size / 1048576)|round(1) }} MB each){% endif %}, a year of daily backups is a few GB at most: pennies on B2, well within a Shared Drive. Daily means at most a day of changes could be lost; the server copies cover a mistake noticed within the week, the off-server copies a lost server or one noticed later.</p>
+
+<form method="post" action="/admin/backups/settings" class="modern card">
+  <div class="formrow">
+    <label>Back up<select name="every">{% for v, label in (('daily', 'Every day'), ('weekly', 'Every week'), ('off', 'Only when I click Back up now')) %}<option value="{{ v }}" {{ 'selected' if bs.schedule.every == v }}>{{ label }}</option>{% endfor %}</select></label>
+    <label>At<select name="hour">{% for h in range(24) %}<option value="{{ h }}" {{ 'selected' if bs.schedule.hour == h }}>{{ '%d:00'|format(h) }}</option>{% endfor %}</select></label>
+    <label>Keep on the server<input name="keep_local" type="number" min="1" max="60" value="{{ bs.keep_local }}" size="4"></label>
+  </div>
+  <h3>Where backups go</h3>
+  <label class="check"><input type="checkbox" name="s3_on" value="1" {{ 'checked' if bs.s3.on }}> <b>S3-compatible storage</b> (Backblaze B2, AWS, Wasabi)</label>
+  <p class="hint">A private bucket, and a key limited to it with read and write. How long backups are kept there is the bucket's lifecycle rule (the server admin guide → Backups).</p>
+  <div class="formrow">
+    <label>Endpoint<input name="s3_endpoint" value="{{ bs.s3.endpoint or '' }}" placeholder="https://s3.us-west-004.backblazeb2.com"></label>
+    <label>Region<input name="s3_region" value="{{ bs.s3.region or '' }}" placeholder="us-west-004" size="12"></label>
+  </div>
+  <div class="formrow">
+    <label>Bucket<input name="s3_bucket" value="{{ bs.s3.bucket or '' }}"></label>
+    <label>Folder in the bucket<input name="s3_prefix" value="{{ bs.s3.prefix or 'minutes/' }}" size="12"></label>
+  </div>
+  <div class="formrow">
+    <label>Key ID<input name="s3_key_id" value="{{ bs.s3.key_id or '' }}" autocomplete="off"></label>
+    <label>Secret key<input name="s3_secret" type="password" autocomplete="new-password" placeholder="{{ '(saved; leave blank to keep it)' if bs.s3.secret else '' }}"></label>
+  </div>
+  {% if env_s3 %}<p class="hint">The key in <code>/etc/club-minutes/env</code> is used instead of these.</p>{% endif %}
+  <hr>
+  <label class="check"><input type="checkbox" name="drive_on" value="1" {{ 'checked' if bs.drive.on }}> <b>Google Drive</b>, with the app's service account</label>
+  <p class="hint">The folder must be in a <b>Shared Drive</b> (Google Workspace): Google gives service accounts no storage of their own, so a folder in someone's My Drive won't work. Add the service account to the Shared Drive as <b>Content manager</b> (so it can delete old backups).{% if not drive_key %} <b>The service-account key isn't on the server.</b>{% endif %}</p>
+  <div class="formrow">
+    <label>Folder link or ID<input name="drive_folder" value="{{ bs.drive.folder or '' }}" placeholder="https://drive.google.com/drive/folders/…"></label>
+    <label>Keep the last<input name="drive_keep" type="number" min="1" max="365" value="{{ bs.drive.keep or 30 }}" size="4"></label>
+  </div>
+  <div class="formrow"><button class="btn small">Save</button></div>
+</form>
+
+<h2>On the server</h2>
+<p class="hint">Download one to keep on your own computer. It's encrypted: it opens only with the passphrase.</p>
+<ul class="plain">{% for name, size in local_backups %}<li><a href="/admin/backups/{{ name }}">{{ name }}</a> <span class="muted small">{{ (size / 1048576)|round(1) }} MB</span></li>{% else %}<li class="muted">None yet.</li>{% endfor %}</ul>
+{% endif %}
+{% if tab == 'server' %}
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+<ul class="plain">
+<li>Version {{ VERSION }}</li>
+<li>Roster last synced: {{ roster_synced|tsfull if roster_synced else 'never' }}</li>
+<li>Email: {{ 'test mode (only the addresses in email.only_to get mail)' if test_mode else 'sent to members' }}</li>
+<li>Signed-in devices: {{ sessions|length }}</li>
+<li><form method="post" action="/admin/security/limits" class="modern"><div class="formrow">
+  <label>Largest upload (MB)<input type="number" name="upload_mb" min="{{ upload_range[0] }}" max="{{ upload_range[1] }}" value="{{ upload_mb }}" required></label>
+  <button class="btn small">Save</button></div>
+  <p class="hint">Profile pictures and calendar .ics files. Anything bigger is turned away before it's read. If a proxy sits in front of the app (Caddy, nginx, Traefik), its own limit has to be at least this.</p></form></li>
+</ul>
+{% endif %}
+{% endblock %}

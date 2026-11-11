@@ -50,7 +50,7 @@ offices:
   - {title: Trustee, officer: false, seats: 3}
 
 # AI assistance (suggested follow-ups from the minutes), through OpenRouter. Needs the API key in the
-# environment too: W8LBZ_OPENROUTER_KEY=... in /etc/w8lbz-minutes/env. Leave out to keep AI off.
+# environment too: CLUB_MINUTES_OPENROUTER_KEY=... in /etc/club-minutes/env. Leave out to keep AI off.
 # ai:
 #   model: provider/model-name   # any chat model id from openrouter.ai/models
 #   enabled: true

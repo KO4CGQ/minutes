@@ -1,9 +1,0 @@
-[Unit]
-Description=Staging server: pull the live minutes app's data (one way) and restart
-
-[Service]
-Type=oneshot
-# W8LBZ_STAGE=1 and STAGE_SYNC_FROM=root@<prod host>:./
-EnvironmentFile=-/etc/w8lbz-minutes/env
-ExecStart=/opt/w8lbz-minutes/deploy/stage-sync.sh
-TimeoutStartSec=20min

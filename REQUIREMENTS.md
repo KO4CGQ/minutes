@@ -210,7 +210,7 @@ Speech-to-text runs on a cloud provider and the LLM work goes through OpenRouter
   - The app's login (NFR-6) controls who gets in.
   - It also covers a remote leader.
 - **Later (moving off Funnel):**
-  - A custom domain such as `minutes.w8lbz.org`, once the club controls its DNS (see the backlog).
+  - A custom domain such as `minutes.example.org`, once the club controls its DNS (see the backlog).
   - Or a small VPS running Caddy, with a WireGuard tunnel back to the clubhouse.
   - Or Headscale.
 - Inside the clubhouse and on the tailnet, members can use the local address directly.
@@ -239,4 +239,4 @@ Not recommended as the foundation.
 | 1: MVP | Magic-link login and Tailscale Funnel. Start meeting with bot and room track. Live transcript. Leader console (attendance, report queue, sections). Live draft. Accurate pass. Review with the Sidebars panel. Submit: archive, PDF, email to the roster. |
 | 2: Archive and smarts | Import the 51 historical meetings. Search, per-member and per-item history. Follow-up prompts. Tracked Old Business items, motions and actions. Flags. Versioned corrections. |
 | 3: Outreach | Discord summary and reminders, chow automation, Google Sheet as the roster of record, Zyro page replaced with a link. |
-| 4: Hardware and on-site | Permanent Linux room PC, multiple mics, on-site speech-to-text and LLM if hardware allows, Jitsi bot, a permanent way to reach the app (VPS, Headscale, or a w8lbz.org subdomain). |
+| 4: Hardware and on-site | Permanent Linux room PC, multiple mics, on-site speech-to-text and LLM if hardware allows, Jitsi bot, a permanent way to reach the app (VPS, Headscale, or a subdomain of the club's website). |

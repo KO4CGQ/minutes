@@ -10,12 +10,12 @@ from test_console import FakeSMTP
 
 
 def stage_mail(monkeypatch, tmp_path):
-    from w8lbz_minutes import auth
+    from club_minutes import auth
     monkeypatch.setattr(auth, "STAGE", True)
     monkeypatch.setattr(auth, "DATA", tmp_path)
     monkeypatch.setattr(auth.smtplib, "SMTP", FakeSMTP)
-    monkeypatch.setenv("W8LBZ_SMTP_USER", "club@example.org")
-    monkeypatch.setenv("W8LBZ_SMTP_PASSWORD", "x")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "club@example.org")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "x")
     FakeSMTP.outbox = []
     return auth
 
@@ -45,7 +45,7 @@ def test_stage_sync_mirrors_prod_but_keeps_stages_own(tmp_path):
     for f, text in {"roster.json": "edited on stage", "auth.sqlite": "stage passkeys", "email-log.jsonl": "stage mail",
                     "stage-sync-paused": "x", "leftover.json": "made on stage"}.items():
         (stage / f).write_text(text)
-    env = {**os.environ, "W8LBZ_DATA": str(stage), "STAGE_SYNC_FROM": f"{prod}/", "STAGE_OWNER": "", "STAGE_RESTART": "true"}
+    env = {**os.environ, "CLUB_MINUTES_DATA": str(stage), "STAGE_SYNC_FROM": f"{prod}/", "STAGE_OWNER": "", "STAGE_RESTART": "true"}
     script = str(Path(__file__).parents[1] / "deploy" / "stage-sync.sh")
     assert subprocess.run([script], env=env).returncode == 0
     assert (stage / "roster.json").read_text() == "edited on stage"  # paused: the nightly run did nothing
@@ -62,8 +62,8 @@ def test_stage_sync_mirrors_prod_but_keeps_stages_own(tmp_path):
 
 def test_stage_page_sync_now_and_pause(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.club import Club
+    from club_minutes import web
+    from club_minutes.club import Club
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"}])
     club.admins = {"kd8adm"}
     monkeypatch.setattr(web.archive, "club", club)
@@ -95,7 +95,7 @@ def test_stage_sync_never_follows_a_link_planted_in_the_data_folder(tmp_path):
     target.write_text("system contents")
     (stage / "stage-sync-status.json").symlink_to(target)
     (stage / "stage-sync-request").symlink_to(secret)
-    env = {**os.environ, "W8LBZ_DATA": str(stage), "STAGE_SYNC_FROM": f"{tmp_path}/nowhere/", "STAGE_OWNER": "", "STAGE_RESTART": "true"}
+    env = {**os.environ, "CLUB_MINUTES_DATA": str(stage), "STAGE_SYNC_FROM": f"{tmp_path}/nowhere/", "STAGE_OWNER": "", "STAGE_RESTART": "true"}
     subprocess.run([str(Path(__file__).parents[1] / "deploy" / "stage-sync.sh")], env=env, capture_output=True)
     assert target.read_text() == "system contents" and secret.read_text() == "TOP SECRET"   # neither touched
     st = stage / "stage-sync-status.json"

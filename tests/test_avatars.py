@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from w8lbz_minutes import avatars
+from club_minutes import avatars
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -44,9 +44,9 @@ def test_save_squares_and_strips(env):
 
 def test_routes(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.club import Club
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[
         {"id": "amy", "first": "Amy", "last": "Able"}, {"id": "bob", "first": "Bob", "last": "Baker"},
         {"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True}])
@@ -71,9 +71,9 @@ def test_routes(env, tmp_path, monkeypatch):
 
 def test_roster_card_view_is_remembered(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.club import Club
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[{"id": "amy", "first": "Amy", "last": "Able", "role": "Secretary"}])
     monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
     monkeypatch.setattr(web.authn, "member_for", lambda token: "amy")

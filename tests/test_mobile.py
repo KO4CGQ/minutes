@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes.auth import Auth
-from w8lbz_minutes.club import Club
+from club_minutes.auth import Auth
+from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
@@ -27,10 +27,10 @@ def pages(app) -> list[str]:
 def test_every_page_fits_a_phone(tmp_path, monkeypatch):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True}])
     club.admins = {"kd8adm"}
-    from w8lbz_minutes import treasurer
+    from club_minutes import treasurer
     ts = treasurer.load()
     treasurer.set_general(ts, "kd8adm", "preview", "2026-01-01", 4, 2, True)  # so Who owes what has rows
     treasurer.set_fund(ts, "kd8adm", "Drinks fund", "Cash", ["kd8adm"])
@@ -92,7 +92,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
 def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True},
                                                {"id": "kd8bbb", "first": "Bob", "last": "Baker", "email": "bob@example.org"}])
     club.admins = {"kd8adm"}
@@ -131,7 +131,7 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
 def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_path, monkeypatch):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import business, web
+    from club_minutes import business, web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True}])
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)

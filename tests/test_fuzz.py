@@ -13,10 +13,10 @@ import pytest
 from fastapi.testclient import TestClient
 from test_calview import signed_in
 
-from w8lbz_minutes import roster, web
-from w8lbz_minutes.auth import _safe_next
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive, spellings
+from club_minutes import roster, web
+from club_minutes.auth import _safe_next
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive, spellings
 
 R = random.Random(20261109)
 NASTY = ['"', "'", "*", "^", ":", "(", ")", "-", "+", "\\", "/", "//", "/\\", "%", "%2F", "%00", "\x00", "\t", "\n", "\r",
@@ -112,7 +112,7 @@ def test_roster_file_keeps_every_value_exactly(tmp_path, monkeypatch):
 
 
 def test_roster_api_never_answers_without_its_token(monkeypatch):
-    monkeypatch.setenv("W8LBZ_ROSTER_API_TOKEN", "s3cret-token-value")
+    monkeypatch.setenv("CLUB_MINUTES_ROSTER_API_TOKEN", "s3cret-token-value")
     c = TestClient(web.app, client=("127.0.0.1", 5000))
     for _ in range(300):
         h = {"authorization": R.choice(["", "Bearer ", "bearer ", "Basic "]) + R.choice(["s3cret-token-valu", "s3cret-token-value ", ascii_junk(), ""])}
@@ -150,6 +150,6 @@ def test_no_page_answers_random_parameters_with_a_server_error(member):
 
 def test_numbers_from_the_query_string():
     """Found by the page sweep: str.isdigit() accepts "²" and "⁰", which int() can't read (a server error)."""
-    from w8lbz_minutes.club import num
+    from club_minutes.club import num
     assert [num(v) for v in ("12", " 7 ", "²", "⁰", "٣", "-1", "1e3", "", None, "9" * 5000)] == [12, 7, None, None, None, None, None, None, None, None]
     assert web.paginate(list(range(30)), "²", "⁰")["p"] == 1 and web.paginate(list(range(30)), "2", "10")["rows"] == list(range(10, 20))

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import ai, business
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
+from club_minutes import ai, business
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True},
@@ -27,7 +27,7 @@ class Reply:
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(ai, "DATA", tmp_path)
-    monkeypatch.setenv("W8LBZ_OPENROUTER_KEY", "test-key")
+    monkeypatch.setenv("CLUB_MINUTES_OPENROUTER_KEY", "test-key")
     club = Club(FIX / "test-club.yaml", roster=PEOPLE)
     club.ai = {"model": "test/model"}
     club.redact = ["secretname"]
@@ -68,7 +68,7 @@ def test_not_configured_or_failing(env, monkeypatch):
         ai.suggest_followups(club, m, [], post=lambda *a, **k: Reply("oops", 500))
     with pytest.raises(ai.AIError):
         ai.suggest_followups(club, m, [], post=lambda *a, **k: Reply("not json"))
-    monkeypatch.delenv("W8LBZ_OPENROUTER_KEY")
+    monkeypatch.delenv("CLUB_MINUTES_OPENROUTER_KEY")
     assert not ai.configured(club)
 
 
@@ -93,8 +93,8 @@ def test_suggestions_wait_for_a_person(tmp_path, monkeypatch):
 
 def test_business_page_suggestions_for_leaders_only(env, monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.store import Archive
     club, m, _ = env
     meetings = tmp_path / "meetings"
     m.save(meetings)
@@ -119,8 +119,8 @@ def test_business_page_suggestions_for_leaders_only(env, monkeypatch, tmp_path):
 
 
 def test_ask_about_prompts(env, monkeypatch, tmp_path):
-    from w8lbz_minutes import console
-    from w8lbz_minutes.store import Archive
+    from club_minutes import console
+    from club_minutes.store import Archive
     club, _, _ = env
     sent = {}
 

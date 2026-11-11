@@ -3,10 +3,10 @@ from pathlib import Path
 import datetime as dt
 import pytest
 
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.importer import file_date, parse
-from w8lbz_minutes.meeting import Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes.club import Club
+from club_minutes.importer import file_date, parse
+from club_minutes.meeting import Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 club = Club(FIX / "test-club.yaml")
@@ -53,7 +53,7 @@ def test_permissions_and_possessives():
 
 
 def test_former_callsign_maps_to_member(tmp_path, m):
-    from w8lbz_minutes.store import Archive
+    from club_minutes.store import Archive
     m.in_person = ["doe", "kd8old"]  # stored before Sam's callsign change
     m.save(tmp_path)
     a = Archive(tmp_path, club)
@@ -62,7 +62,7 @@ def test_former_callsign_maps_to_member(tmp_path, m):
 
 
 def test_membership_log():
-    from w8lbz_minutes.roster import attach_log, to_members
+    from club_minutes.roster import attach_log, to_members
     ms = to_members([{"full_name": "Sam Kim", "callsign": "KD8NEW", "is_officer": "True"},
                      {"full_name": "Old Timer", "status": "Silent Key"}])
     attach_log(ms, [{"callsign": "KD8NEW", "date": "46043", "event": "Joined"},
@@ -73,7 +73,7 @@ def test_membership_log():
 
 def test_roster_contact_details_follow_sharing(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     c = Club(FIX / "test-club.yaml", roster=[
         {"id": "kd8aaa", "first": "Jane", "last": "Doe", "callsign": "KD8AAA", "email": "jane@example.org",
          "phone": "419-555-0101", "address": "1 Elm St", "birthday": "07-04", "share": ["phone", "birthday"],
@@ -112,7 +112,7 @@ def client(tmp_path, monkeypatch):
     """A signed-in test client over a throwaway archive of weekly meetings, 30 in 2024 and 3 in 2025."""
     import datetime as dt
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     for i in range(30):
         Meeting(date=dt.date(2024, 1, 4) + dt.timedelta(weeks=i), status="published", in_person=["doe"]).save(tmp_path)
     for d in (dt.date(2025, 1, 2), dt.date(2025, 1, 9), dt.date.today()):
@@ -166,8 +166,8 @@ def test_stats_periods(client):
 def test_guests_page_moves_new_members_to_their_own_section(tmp_path, monkeypatch):
     import datetime as dt
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.store import Archive
     for d in (dt.date(2026, 10, 1), dt.date(2026, 10, 8)):
         Meeting(date=d, status="published", guests=[{"name": "Rick Roe"}, {"name": "Pat Guest"}]).save(tmp_path)
     Meeting(date=dt.date(2026, 10, 15), status="published", in_person=["roe"]).save(tmp_path)
@@ -181,7 +181,7 @@ def test_guests_page_moves_new_members_to_their_own_section(tmp_path, monkeypatc
 
 def test_bylaws_page(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     monkeypatch.setattr(web, "DATA", tmp_path)
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
     c = TestClient(web.app)
@@ -193,7 +193,7 @@ def test_bylaws_page(tmp_path, monkeypatch):
 
 def test_links_page_lists_club_links(monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     monkeypatch.setattr(web.archive.club, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.example/x"}])
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
     html = TestClient(web.app).get("/links").text
@@ -202,8 +202,8 @@ def test_links_page_lists_club_links(monkeypatch):
 
 def test_links_to_pages_of_the_app_stay_relative(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.club import Club
+    from club_minutes import web
+    from club_minutes.club import Club
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
     monkeypatch.setattr(web.authn, "rp_id", "minutes.example")
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
@@ -220,21 +220,21 @@ def test_links_to_pages_of_the_app_stay_relative(tmp_path, monkeypatch):
 
 
 def test_link_icons():
-    from w8lbz_minutes.web import link_icon
+    from club_minutes.web import link_icon
     assert link_icon("https://teams.live.com/meet/1?p=x") == "video"
     assert link_icon("https://discord.com/invite/abc") == "chat"
     assert link_icon("https://minutes.example.ts.net/bylaws") == "document"
-    assert link_icon("https://w8lbz.org") == "globe"
+    assert link_icon("https://example.org") == "globe"
     assert link_icon("https://example.org/some/page") == "link"
 
 
 def test_about_page(monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
     c = TestClient(web.app)
     html = c.get("/about").text
-    assert web.version("w8lbz-minutes") in html and "James Flattery, KO4CGQ" in html and "AGPL-3.0-or-later" in html
+    assert web.version("club-minutes") in html and "James Flattery, KO4CGQ" in html and "AGPL-3.0-or-later" in html
     assert ">fastapi<" in html.lower() and "What's new" in html
     folds = html.count("<details")  # one per release, only the newest open
     assert folds > 3 and html.count("<details open>") == 1 and html.split('class="changelog"')[1].split("<details")[1].startswith(" open>")
@@ -242,7 +242,7 @@ def test_about_page(monkeypatch):
 
 
 def test_top_bar_links_everyone_to_tonights_live_meeting(client, monkeypatch):
-    from w8lbz_minutes import web
+    from club_minutes import web
     assert "Live meeting" not in client.get("/").text
     tonight = next(m for m in web.archive.meetings if m.date == dt.date.today())
     monkeypatch.setattr(tonight, "status", "draft")
@@ -250,7 +250,7 @@ def test_top_bar_links_everyone_to_tonights_live_meeting(client, monkeypatch):
 
 
 def test_console_link_in_the_live_badge_for_leaders_only(client, monkeypatch):
-    from w8lbz_minutes import web
+    from club_minutes import web
     tonight = next(m for m in web.archive.meetings if m.date == dt.date.today())
     monkeypatch.setattr(tonight, "status", "draft")
     link = f'href="/console/{tonight.slug}"'
@@ -271,7 +271,7 @@ def test_roster_opens_as_cards_on_phones_until_a_view_is_picked(client):
 
 def test_every_icon_is_drawn():
     """ICONS (the Links editor's picker) and _icons.html stay in step: each name has its own drawing."""
-    from w8lbz_minutes import web
+    from club_minutes import web
     m = web.templates.env.get_template("_icons.html").module
     drawn = {name: str(m.icon(name)) for name in web.ICONS}
     assert len(set(drawn.values())) == len(web.ICONS)

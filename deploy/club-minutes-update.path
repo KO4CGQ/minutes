@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for an update request from the Club Minutes admin page
+
+[Path]
+PathExists=/var/lib/club-minutes/update-request.json
+Unit=club-minutes-update.service
+
+[Install]
+WantedBy=paths.target

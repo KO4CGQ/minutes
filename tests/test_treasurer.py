@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import treasurer
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import treasurer
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [
@@ -161,8 +161,8 @@ def test_arrears_alert_once_each_time_and_never_in_preview(club, monkeypatch):
 
 def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -193,8 +193,8 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
 
 def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -237,7 +237,7 @@ def test_categories_spending_by_month_and_the_console(club, tmp_path, monkeypatc
     nov = sp["months"][-1]
     assert nov["by"]["utilities"] == 9900 and nov["by"]["other"] == 1000 and nov["total"] == 10900
     assert sp["totals"]["insurance"] == 288400 and sp["total"] == 299300 and sp["top"] == 288400
-    from w8lbz_minutes import console
+    from club_minutes import console
     treasurer.save(s)
     Meeting(date=dt.date(2026, 11, 12), status="draft").save(tmp_path / "m")
     assert console.paid_since(Archive(tmp_path / "m", club), dt.date(2026, 11, 12)) == [
@@ -246,8 +246,8 @@ def test_categories_spending_by_month_and_the_console(club, tmp_path, monkeypatc
 
 def test_spending_page_members_once_on_officers_in_preview(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -304,8 +304,8 @@ def test_a_bond_bought_years_ago_is_on_file_and_moves_no_money(club):
 
 def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -358,8 +358,8 @@ def test_bills_from_older_minutes_only_when_asked(club, tmp_path):
 
 def test_bill_tabs_names_and_the_read_only_dialog(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -398,8 +398,8 @@ def test_amounts_and_dates_that_are_typos_or_tricks(club):
 
 def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -428,8 +428,8 @@ def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, 
 
 def test_text_from_the_minutes_and_members_is_never_run_as_html(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import business, web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import business, web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import profile, roster
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.roster import Sheet, SheetError, _col, _month_day
+from club_minutes import profile, roster
+from club_minutes.club import Club
+from club_minutes.roster import Sheet, SheetError, _col, _month_day
 
 FIX = Path(__file__).parent / "fixtures"
 HEADER = ["callsign", "full_name", "email", "Phone", "Address", "Title(s)", "Status", "birthday", "share"]
@@ -128,7 +128,7 @@ def test_can_see():
 
 
 def test_email_change_needs_confirmation(tmp_path, monkeypatch):
-    from w8lbz_minutes import auth as auth_mod
+    from club_minutes import auth as auth_mod
     sent = []
     monkeypatch.setattr(auth_mod, "send_email", lambda to, subject, body, **kw: sent.append((to, body)))
     club = Club(FIX / "test-club.yaml", roster=[
@@ -146,7 +146,7 @@ def test_email_change_needs_confirmation(tmp_path, monkeypatch):
 
 
 def test_monthday_filter():
-    from w8lbz_minutes.web import monthday
+    from club_minutes.web import monthday
     assert monthday("07-04") == "July 4" and monthday("") == "" and monthday(None) == ""
     assert monthday("1961-07-04") == "1961-07-04" and monthday("13-40") == "13-40"
     assert monthday("07") == "July" and monthday("13") == "13"
@@ -154,7 +154,7 @@ def test_monthday_filter():
 
 def test_club_reloads_roster_after_a_sync(tmp_path, monkeypatch):
     import os
-    from w8lbz_minutes import club as club_mod
+    from club_minutes import club as club_mod
     cache = tmp_path / "roster.json"
     cache.write_text(json.dumps([{"id": "kd8ccc", "first": "Bob", "last": "Member"}]))
     monkeypatch.setattr(club_mod, "ROSTER_CACHE", cache)
@@ -169,8 +169,8 @@ def test_club_reloads_roster_after_a_sync(tmp_path, monkeypatch):
 
 def test_multiline_addresses_keep_their_line_breaks(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.store import Archive
     club, sheet, fake, sent = env
     assert web.clean_address(" 100 Main St  #12 \r\n\r\nAnytown, OH 44000 ") == "100 Main St #12\nAnytown, OH 44000"
     fake.rows[2][4] = "100 Main St #12 \nAnytown, OH 44000"  # as typed in the sheet, trailing space included
@@ -197,12 +197,12 @@ def test_multiline_addresses_keep_their_line_breaks(env, monkeypatch):
 
 
 def test_preview_mode_never_sends_or_touches_the_real_sheet(tmp_path, monkeypatch):
-    from w8lbz_minutes import auth as auth_mod
+    from club_minutes import auth as auth_mod
     monkeypatch.setattr(auth_mod, "PREVIEW", "some-branch")
     monkeypatch.setattr(auth_mod, "DATA", tmp_path)
     monkeypatch.setattr(auth_mod.smtplib, "SMTP", lambda *a, **k: (_ for _ in ()).throw(AssertionError("SMTP used")))
-    monkeypatch.setenv("W8LBZ_SMTP_USER", "u")
-    monkeypatch.setenv("W8LBZ_SMTP_PASSWORD", "p")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "u")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "p")
     assert auth_mod.send_email(["a@x.org", "b@x.org"], "Hi", "body", only_to={"a@x.org"}) == 1
     e = json.loads((tmp_path / "preview-outbox.jsonl").read_text())
     assert e["to"] == ["a@x.org"] and e["withheld"] == ["b@x.org"] and e["subject"] == "Hi"
@@ -224,9 +224,9 @@ def test_email_change_alerts_old_and_new_address(env):
 
 def test_admin_mode(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[
         {"id": "kd8adm", "first": "Ann", "last": "Admin", "callsign": "KD8ADM", "email": "ann@example.org"},
         {"id": "kd8ccc", "first": "Bob", "last": "Member", "phone": "419-555-0199"}])
@@ -265,7 +265,7 @@ def test_admin_mode(tmp_path, monkeypatch):
 def turn_on_admin_mode(c, monkeypatch):
     """Admin mode asks the admin to confirm it's them first: here (no passkey, not the passkey host) by email."""
     from urllib.parse import urlparse
-    from w8lbz_minutes import web
+    from club_minutes import web
     sent = []
     monkeypatch.setattr(web.authmod, "send_email", lambda to, subject, body, **kw: sent.append((to, body)))
     r = c.post("/admin/mode", data={"on": 1, "next": "/links"}, follow_redirects=False)
@@ -282,9 +282,9 @@ def turn_on_admin_mode(c, monkeypatch):
 
 def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[
         {"id": "kd8adm", "first": "Ann", "last": "Admin", "callsign": "KD8ADM", "email": "ann@example.org"},
         {"id": "tess", "first": "Tess", "last": "Treasurer", "officer": True, "phone": "419-555-0142"},
@@ -318,7 +318,7 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
 
 
 def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
-    from w8lbz_minutes import auth as auth_mod
+    from club_minutes import auth as auth_mod
     monkeypatch.setattr(auth_mod, "PREVIEW", None)
     monkeypatch.setattr(auth_mod, "DATA", tmp_path)
     sent = []
@@ -331,8 +331,8 @@ def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
         def login(self, u, p): pass
         def send_message(self, m): sent.append(m["To"])
     monkeypatch.setattr(auth_mod.smtplib, "SMTP", FakeSMTP)
-    monkeypatch.setenv("W8LBZ_SMTP_USER", "club@example.org")
-    monkeypatch.setenv("W8LBZ_SMTP_PASSWORD", "pw")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "club@example.org")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "pw")
     assert auth_mod.send_email(["ann@example.org", "amy@example.org"], "Minutes", "body", only_to={"ann@example.org"}) == 1
     assert auth_mod.send_email("amy@example.org", "Reminder", "body", only_to={"ann@example.org"}) == 0
     log = [json.loads(x) for x in (tmp_path / "email-log.jsonl").read_text().splitlines()]
@@ -346,9 +346,9 @@ def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
 def test_admins_edit_club_links(tmp_path, monkeypatch):
     """Links come from club.yaml until an admin edits them; each shows on the Links page, the minutes, both or neither."""
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import club as clubmod, web
-    from w8lbz_minutes.auth import Auth
-    from w8lbz_minutes.store import Archive
+    from club_minutes import club as clubmod, web
+    from club_minutes.auth import Auth
+    from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])
     club.admins = {"kd8adm"}
     a = Auth(club, tmp_path / "auth.sqlite")

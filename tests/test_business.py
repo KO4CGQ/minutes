@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import business, chow, console
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import business, chow, console
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True},
@@ -76,7 +76,7 @@ def test_agenda_hold_and_deleted_meetings(env):
 
 def test_business_page_permissions(env, monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "amy"}
@@ -122,7 +122,7 @@ def test_reminders_once_each_and_only_owners(env):
 
 def test_comments_history_and_notes(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "bob"}
@@ -160,7 +160,7 @@ def test_comments_history_and_notes(env, monkeypatch):
 
 def test_owner_typed_by_name(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club, a = env
     monkeypatch.setattr(web, "archive", a)
     monkeypatch.setattr(web.authn, "member_for", lambda token: "sec")
@@ -177,7 +177,7 @@ def test_owner_typed_by_name(env, monkeypatch):
 
 def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club, a = env
     club.members["bob"].minutes_editor = True  # may lead a meeting, but isn't an officer
     monkeypatch.setattr(web, "archive", a)
@@ -198,7 +198,7 @@ def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch)
 def test_motions_are_records(env, monkeypatch):
     """A motion keeps its mover, seconder and result as data; its text is the minutes' line."""
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "amy"}
@@ -244,7 +244,7 @@ def test_motions_are_records(env, monkeypatch):
 
 def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "sec"}

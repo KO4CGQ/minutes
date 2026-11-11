@@ -4,4 +4,4 @@ useDefault = true
 
 [[allowlists]]
 description = "Simple Icons brand logos: long SVG path strings, public data (see README → Links page icons)"
-paths = ['''^src/w8lbz_minutes/simple_icons\.json$''']
+paths = ['''^src/club_minutes/simple_icons\.json$''']

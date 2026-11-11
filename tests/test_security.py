@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from w8lbz_minutes import business, chow, web
-from w8lbz_minutes.auth import Auth, _safe_next
-from w8lbz_minutes.club import Club
+from club_minutes import business, chow, web
+from club_minutes.auth import Auth, _safe_next
+from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "email": "amy@example.org"},
@@ -110,7 +110,7 @@ def test_a_slow_profile_save_doesnt_hold_up_everyone_else(app, monkeypatch):
     import asyncio
     import time
     import httpx
-    from w8lbz_minutes import profile
+    from club_minutes import profile
     monkeypatch.setattr(profile, "change", lambda *a, **k: time.sleep(2))  # the sheet, slow today
     cookie = {web.COOKIE: web.authn.new_session("kd8aaa")}
 
@@ -127,7 +127,7 @@ def test_a_slow_profile_save_doesnt_hold_up_everyone_else(app, monkeypatch):
 
 
 def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_path, monkeypatch):
-    from w8lbz_minutes import avatars, limits
+    from club_minutes import avatars, limits
     monkeypatch.setattr(limits, "DATA", tmp_path)
     assert limits.upload_mb() == limits.DEFAULT_MB
     with pytest.raises(ValueError):
@@ -148,7 +148,7 @@ def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_pat
 
 
 def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
-    from w8lbz_minutes import limits
+    from club_minutes import limits
     monkeypatch.setattr(limits, "DATA", tmp_path)
     club = Club(FIX / "test-club.yaml", roster=PEOPLE)
     club.admins = {"kd8off"}
@@ -166,18 +166,18 @@ def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
 
 
 def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, monkeypatch):
-    """The sync (`w8lbz-minutes roster`, its own process) and the web app take the same roster lock, so neither writes over
+    """The sync (`club-minutes roster`, its own process) and the web app take the same roster lock, so neither writes over
     the other's roster.json."""
     import os
     import subprocess
     import sys
     import time
-    from w8lbz_minutes import club as clubmod
+    from club_minutes import club as clubmod
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     holder = subprocess.Popen(
-        [sys.executable, "-c", "import time; from w8lbz_minutes.club import roster_locked\n"
+        [sys.executable, "-c", "import time; from club_minutes.club import roster_locked\n"
                                "roster_locked(lambda: (print('held', flush=True), time.sleep(1.5)))()"],
-        env={**os.environ, "W8LBZ_DATA": str(tmp_path)}, stdout=subprocess.PIPE, text=True)
+        env={**os.environ, "CLUB_MINUTES_DATA": str(tmp_path)}, stdout=subprocess.PIPE, text=True)
     assert holder.stdout.readline().strip() == "held"  # the "sync" has the lock
     t0 = time.monotonic()
     assert clubmod.roster_locked(lambda: clubmod.roster_locked(lambda: "nested ok")())() == "nested ok"  # waits; nesting is fine

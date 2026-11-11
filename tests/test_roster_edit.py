@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from w8lbz_minutes import membership, profile, roster, web
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.store import Archive
+from club_minutes import membership, profile, roster, web
+from club_minutes.club import Club
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "callsign": "KD8AAA", "email": "amy@example.org", "role": "Secretary",

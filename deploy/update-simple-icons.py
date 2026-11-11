@@ -4,7 +4,7 @@ so the app never loads icons from a CDN.
     python3 deploy/update-simple-icons.py [VERSION]     # default: the version below
 
 Reads the npm package's icons/*.svg straight from the downloaded archive (nothing is unpacked) and writes
-src/w8lbz_minutes/simple_icons.json: {slug: [title, svg path]}. Each path is checked to be only path data.
+src/club_minutes/simple_icons.json: {slug: [title, svg path]}. Each path is checked to be only path data.
 """
 import io
 import json
@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 VERSION = sys.argv[1] if len(sys.argv) > 1 else "16.37.0"
-OUT = Path(__file__).resolve().parent.parent / "src" / "w8lbz_minutes" / "simple_icons.json"
+OUT = Path(__file__).resolve().parent.parent / "src" / "club_minutes" / "simple_icons.json"
 SVG = re.compile(r'^<svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>(.+?)</title><path d="([^"]+)"/></svg>\s*$')
 PATH_DATA = re.compile(r"^[MmLlHhVvCcSsQqTtAaZz0-9.,\s-]+$")
 

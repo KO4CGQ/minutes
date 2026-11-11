@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Run as root by w8lbz-minutes-update.service when the app's admin page asks for an update
+# Run as root by club-minutes-update.service when the app's admin page asks for an update
 # (it writes update-request.json in the data folder). Runs update.sh for the release asked for (vX.Y.Z),
 # and leaves the outcome in update-status.json for the app to show. update.sh replaces this file while
 # it runs, so everything is inside main(), which bash reads in full before starting.
 main() {
   set -uo pipefail
-  local DATA=/var/lib/w8lbz-minutes APP=/opt/w8lbz-minutes
+  local DATA=/var/lib/club-minutes APP=/opt/club-minutes
   local REQ=$DATA/update-request.json RUN=$DATA/update-running.json OUT=$DATA/update-status.json
   [ -f "$REQ" ] || return 0
   mv "$REQ" "$RUN"

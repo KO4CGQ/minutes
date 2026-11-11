@@ -2,9 +2,9 @@ import datetime as dt
 
 from test_calview import isolated, signed_in  # noqa: F401  (isolated: the autouse fixture)
 
-from w8lbz_minutes import business, chow, web
-from w8lbz_minutes.meeting import Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import business, chow, web
+from club_minutes.meeting import Meeting
+from club_minutes.store import Archive
 
 
 def test_one_search_box_finds_members_guests_business_chow(tmp_path, monkeypatch):
@@ -33,7 +33,7 @@ def test_one_search_box_finds_members_guests_business_chow(tmp_path, monkeypatch
 
 
 def test_results_by_kind_a_page_at_a_time(tmp_path, monkeypatch):
-    from w8lbz_minutes import events
+    from club_minutes import events
     day = dt.date.today() + dt.timedelta(days=3)
     with events.locked():
         evs = []
@@ -55,7 +55,7 @@ def test_results_by_kind_a_page_at_a_time(tmp_path, monkeypatch):
 
 
 def test_text_typed_into_the_minutes_or_console_cannot_run_as_script(tmp_path, monkeypatch):
-    from w8lbz_minutes.meeting import Item
+    from club_minutes.meeting import Item
     root = tmp_path / "meetings"
     Meeting(date=dt.date(2026, 10, 1), status="published", sections={"New Business": [Item("Antenna <img src=x onerror=alert(1)>")]}).save(root)
     m, club, _ = signed_in(tmp_path, monkeypatch, "kd8aaa")
@@ -73,8 +73,8 @@ def test_text_typed_into_the_minutes_or_console_cannot_run_as_script(tmp_path, m
 
 
 def test_other_spellings_of_a_name_and_close_spellings(tmp_path, monkeypatch):
-    from w8lbz_minutes.meeting import Item
-    from w8lbz_minutes.store import spellings
+    from club_minutes.meeting import Item
+    from club_minutes.store import spellings
     root = tmp_path / "meetings"
     Meeting(date=dt.date(2026, 10, 1), status="published",
             sections={"Community Reports": [Item("Bobby Bakker passed his Extra exam")]}).save(root)
@@ -90,7 +90,7 @@ def test_other_spellings_of_a_name_and_close_spellings(tmp_path, monkeypatch):
 
 
 def _nick_env(tmp_path, monkeypatch, firsts: dict, reports: list[str]):
-    from w8lbz_minutes.meeting import Item
+    from club_minutes.meeting import Item
     root = tmp_path / "meetings"
     Meeting(date=dt.date(2026, 10, 1), status="published",
             sections={"Community Reports": [Item(t) for t in reports]}).save(root)
@@ -121,7 +121,7 @@ def test_no_nicknames_without_someone_of_that_name(tmp_path, monkeypatch):
 
 
 def test_nicknames_that_are_everyday_words_are_left_out(tmp_path, monkeypatch):
-    from w8lbz_minutes.store import spellings
+    from club_minutes.store import spellings
     m, club = _nick_env(tmp_path, monkeypatch, {"kd8bbb": "William"},
                         ["We will vote on the tower", "Paid the electric bill", "Billy ran the net"])
     assert "No minutes found." in _minutes(m, "William tower") and "No minutes found." in _minutes(m, "William electric")
@@ -140,7 +140,7 @@ def test_short_nicknames_match_whole_words_only(tmp_path, monkeypatch):
     page = _minutes(m, "Alan")
     assert "brought donuts" in page and "members also" not in page and "Almost" not in page
     club.members["kd8bbb"].last = "Kalamazoo"                     # the lists: "al" inside a word isn't a match
-    from w8lbz_minutes.web import _has
+    from club_minutes.web import _has
     assert _has("Alan", "Al Smith") and not _has("Alan", "Kalamazoo museum") and _has("Alan", "Alan Kalamazoo")
 
 
@@ -150,7 +150,7 @@ def test_a_nickname_in_several_groups(tmp_path, monkeypatch):
 
 
 def test_the_nickname_table():
-    from w8lbz_minutes.store import COMMON_WORDS, NICK_GROUPS
+    from club_minutes.store import COMMON_WORDS, NICK_GROUPS
     words = {w for g in NICK_GROUPS for w in g}
     assert all(len(g) >= 2 for g in NICK_GROUPS) and all(w.isalpha() and w.islower() for w in words)
     assert COMMON_WORDS <= words                                  # each one guards a real nickname

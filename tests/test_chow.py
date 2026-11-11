@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import chow, console
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import chow, console
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [
@@ -151,7 +151,7 @@ def test_import_matches_misspelled_names_and_fixes_dates(env, tmp_path):
 
 def test_chow_page_permissions(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     club, s, _ = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"}, "2099-01-08": {"member": "bob", "status": "scheduled"}}
     chow.save(s)
@@ -205,7 +205,7 @@ def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
     import datetime as dt
     from fastapi.testclient import TestClient
     from test_calview import signed_in
-    from w8lbz_minutes import calview, web
+    from club_minutes import calview, web
     monkeypatch.setattr(chow, "DATA", tmp_path)
     monkeypatch.setattr(calview, "DATA", tmp_path)
     m, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
@@ -225,7 +225,7 @@ def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
 def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
     """Anyone can print the list; officers email it, and the page tells them when it has changed since."""
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import prefs, web
+    from club_minutes import prefs, web
     club, s, sent = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"},
                    "2099-01-08": {"member": None, "status": "none", "note": "Snowed in"}}
@@ -267,7 +267,7 @@ def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
 
 
 def test_the_chow_list_goes_as_a_pdf_or_a_link_as_each_chose(monkeypatch):
-    from w8lbz_minutes import auth
+    from club_minutes import auth
     sent = []
     monkeypatch.setattr(auth, "send_email", lambda to, subject, body, attachments=(), **kw: sent.append((list(to), body, len(attachments))) or len(to))
     s = chow.load()

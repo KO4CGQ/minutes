@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import backup
-from w8lbz_minutes.club import Club
+from club_minutes import backup
+from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
 PW = "correct horse battery"
@@ -24,7 +24,7 @@ def data(tmp_path, monkeypatch):
     db.execute("insert into t values (42)")
     db.commit()
     monkeypatch.setattr(backup, "DATA", d)
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", PW)
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", PW)
     return d
 
 
@@ -41,6 +41,14 @@ def test_backup_round_trip(data, tmp_path):
     assert sqlite3.connect(out / "auth.sqlite").execute("select x from t").fetchone() == (42,)
     with pytest.raises(backup.BackupError, match="isn't empty"):
         backup.restore(blob, PW, out)
+
+
+def test_backup_from_before_the_rename_still_opens(monkeypatch):
+    monkeypatch.setattr(backup, "MAGIC", backup.OLD_MAGIC)  # made by 0.19.0 or earlier
+    old = backup.encrypt(b"data", PW)
+    monkeypatch.undo()
+    assert old.startswith(b"W8LBZ-BACKUP-1") and backup.decrypt(old, PW) == b"data"
+    assert backup.encrypt(b"data", PW).startswith(backup.MAGIC) and backup.MAGIC != backup.OLD_MAGIC
 
 
 class FakeDrive:
@@ -60,7 +68,7 @@ class FakeDrive:
         return self._r()
 
     def get(self, url, params, timeout):
-        return self._r(data={"files": sorted(self.files, key=lambda f: f["name"], reverse=True)})
+        return self._r(data={"files": sorted(self.files, key=lambda f: int(f["id"]), reverse=True)})  # createdTime desc
 
     def delete(self, url, params, timeout):
         self.files = [f for f in self.files if f["id"] != url.rsplit("/", 1)[1]]
@@ -85,26 +93,27 @@ def test_nightly_run_keeps_sends_and_reports(data, monkeypatch):
     monkeypatch.setattr("httpx.put", lambda url, content, headers, timeout: put.append((url, headers))
                         or type("R", (), {"status_code": 200, "text": ""})())
     monkeypatch.setattr(backup, "drive_session", lambda: drive)
-    names = iter(f"w8lbz-minutes-2026-11-{d:02d}-0230.tar.gz.enc" for d in range(1, 30))
+    # the first two named as before 0.20.0: still pruned oldest-first among the new names
+    names = iter(f"{'w8lbz' if d < 3 else 'club'}-minutes-2026-11-{d:02d}-0230.tar.gz.enc" for d in range(1, 30))
     real_make = backup.make
     monkeypatch.setattr(backup, "make", lambda: (next(names), *real_make()[1:]))
     for _ in range(backup.KEEP_LOCAL + 2):
         st = backup.run(club)
-    assert st["ok"] and st["sent_to"][0].startswith("club-backups/minutes/w8lbz-minutes-") and "Google Drive" in st["sent_to"][1]
-    assert len(backup.local_copies()) <= backup.KEEP_LOCAL and [f["name"][14:24] for f in drive.files] == [
+    assert st["ok"] and st["sent_to"][0].startswith("club-backups/minutes/club-minutes-") and "Google Drive" in st["sent_to"][1]
+    assert [p.name[:5] for p in backup.local_copies()] == ["club-"] * backup.KEEP_LOCAL and [f["name"].rsplit("minutes-", 1)[1][:10] for f in drive.files] == [
         "2026-11-07", "2026-11-08", "2026-11-09"]  # the newest 3 on Drive
     url, h = put[-1]
     assert url.startswith("https://s3.us-west-004.backblazeb2.com/club-backups/minutes/")
     assert h["authorization"].startswith("AWS4-HMAC-SHA256 Credential=keyid/") and "/us-west-004/s3/aws4_request" in h["authorization"]
     assert "backup-settings.json" not in backup.members(backup.local_copies()[0].read_bytes(), PW)  # the secret stays out
     sent = []
-    monkeypatch.setattr("w8lbz_minutes.auth.send_email", lambda to, subject, body, **kw: sent.append((to, subject)))
+    monkeypatch.setattr("club_minutes.auth.send_email", lambda to, subject, body, **kw: sent.append((to, subject)))
     drive.quota = True  # a My Drive folder: kept on the server and sent to S3, but reported
     st = backup.run(club)
     assert not st["ok"] and "Shared Drive" in st["error"] and st["sent_to"] and backup.local_copies()
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "short")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "short")
     st = backup.run(club)
-    assert not st["ok"] and "W8LBZ_BACKUP_PASSPHRASE" in st["error"] and backup.status()["ok"] is False
+    assert not st["ok"] and "CLUB_MINUTES_BACKUP_PASSPHRASE" in st["error"] and backup.status()["ok"] is False
     assert len(sent) == 2 and sent[0][0] == ["amy@example.org"] and "backup failed" in sent[0][1]
 
 
@@ -121,7 +130,7 @@ def test_sigv4_matches_botocore():
 def test_schedule_and_page(data, tmp_path, monkeypatch):
     import datetime as dt
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     assert backup.due(dt.datetime(2026, 11, 9, 3)) and not backup.due(dt.datetime(2026, 11, 9, 1))  # daily at 2 by default
     (data / "backup-status.json").write_text('{"at": %d, "ok": false}' % dt.datetime(2026, 11, 9, 2, 5).timestamp())
     assert not backup.due(dt.datetime(2026, 11, 9, 23)) and backup.due(dt.datetime(2026, 11, 10, 2))  # one try a day
@@ -130,9 +139,9 @@ def test_schedule_and_page(data, tmp_path, monkeypatch):
     backup.save_settings({"every": "off"})
     assert not backup.due(dt.datetime(2026, 12, 1, 12))
     backup.save_settings({"every": "daily", "hour": "2"})
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "")
     assert not backup.due(dt.datetime(2026, 12, 1, 12))  # no passphrase yet: the schedule waits, quietly
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "correct horse battery")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "correct horse battery")
     backup.save_settings({"every": "off"})
     assert backup.data_size() > 0
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"}])
@@ -166,7 +175,7 @@ def test_passphrase_suggest_strength_and_leaks(monkeypatch):
     monkeypatch.setattr("httpx.get", fake_get)
     assert backup.pwned("password1234") == 4321 and asked[0][0].endswith("/range/" + h[:5]) and asked[0][1]["Add-Padding"] == "true"
     assert backup.pwned(s) == 0
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", s)
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", s)
     ok, msg = backup.check(s)
     assert ok and "matches" in msg and "not found" in msg
     ok, msg = backup.check("password1234")

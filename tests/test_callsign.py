@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import backup, callsign, membership, profile, roster
-from w8lbz_minutes.club import Club
+from club_minutes import backup, callsign, membership, profile, roster
+from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "callsign": "KD8AAA", "email": "amy@example.org",
@@ -54,7 +54,7 @@ def env(tmp_path, monkeypatch):
     for mod in (roster, profile, callsign, backup):
         monkeypatch.setattr(mod, "DATA", d)
     monkeypatch.setattr(roster, "PREVIEW", "test")
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "a long test passphrase")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "a long test passphrase")
     return Club(FIX / "test-club.yaml", roster=json.loads(cache.read_text())), d
 
 
@@ -93,7 +93,7 @@ def test_callsign_change_refusals(env, monkeypatch):
     club.former_ids["k8xyz"] = "kd8bbb"  # Bob's old call
     with pytest.raises(ValueError, match="another member"):
         callsign.change(club, "kd8aaa", "K8XYZ", "2026-11-08", "kd8bbb")
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "")
     with pytest.raises(backup.BackupError):  # no backup, no rename
         callsign.change(club, "kd8aaa", "W8AMY", "2026-11-08", "kd8bbb")
     assert json.loads((d / "chow.json").read_text())["order"] == ["kd8bbb", "kd8aaa"]
@@ -101,8 +101,8 @@ def test_callsign_change_refusals(env, monkeypatch):
 
 def test_callsign_change_from_the_page(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.store import Archive
     club, d = env
     club.members["kd8bbb"].role = "Secretary"  # a roster keeper
     a = Archive(d / "meetings", club)

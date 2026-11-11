@@ -9,7 +9,7 @@ private/
 club.yaml
 *.json
 # except the brand logos (public data, from deploy/update-simple-icons.py)
-!src/w8lbz_minutes/simple_icons.json
+!src/club_minutes/simple_icons.json
 .env
 *.docx
 bylaws.md

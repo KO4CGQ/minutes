@@ -3,7 +3,7 @@ import stat
 
 import pytest
 
-from w8lbz_minutes import roster
+from club_minutes import roster
 
 ROSTER = [["callsign", "full_name", "email", "Title(s)", "is_officer", "Status"],
           ["KD8AAA", "Amy Able", "amy@example.org", "Secretary", True, "Active"],

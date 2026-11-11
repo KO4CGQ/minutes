@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import chow, membership, profile, roster
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.roster import Sheet
+from club_minutes import chow, membership, profile, roster
+from club_minutes.club import Club
+from club_minutes.roster import Sheet
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "kd8aaa", "first": "Jane", "last": "Doe", "callsign": "KD8AAA", "email": "jane@example.org",
@@ -77,8 +77,8 @@ def test_ready_guests_and_names():
 
 def test_only_roster_keepers_can_add(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.store import Archive
     club, tmp, _ = env
     monkeypatch.setattr(web, "archive", Archive(tmp, club))
     who = {"id": "kd8ccc"}

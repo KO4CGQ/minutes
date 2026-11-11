@@ -3,10 +3,10 @@ import datetime as dt
 import pytest
 from pathlib import Path
 
-from w8lbz_minutes import console
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import console
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml")
 
@@ -95,10 +95,10 @@ class FakeSMTP:
 
 
 def mail_archive(tmp_path, monkeypatch, only_to):
-    from w8lbz_minutes import auth
+    from club_minutes import auth
     monkeypatch.setattr(auth.smtplib, "SMTP", FakeSMTP)
-    monkeypatch.setenv("W8LBZ_SMTP_USER", "club@example.org")
-    monkeypatch.setenv("W8LBZ_SMTP_PASSWORD", "abcd efgh")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "club@example.org")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "abcd efgh")
     FakeSMTP.outbox = []
     c = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
         {"id": "doe", "first": "Jane", "last": "Doe", "email": "jane@example.org", "minutes_editor": True},
@@ -143,7 +143,7 @@ def test_email_minutes_records_failure_and_retries(tmp_path, monkeypatch):
 
 
 def test_email_minutes_as_pdf_or_link_per_member(tmp_path, monkeypatch):
-    from w8lbz_minutes import prefs
+    from club_minutes import prefs
     a = mail_archive(tmp_path, monkeypatch, only_to=None)
     prefs.save("kim", {"minutes": "link"})
     st = console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "http://x/meetings/2026-11-12")
@@ -175,8 +175,8 @@ def test_celebrations_the_week_up_to_tonight_shared_birthdays_only():
 
 
 def test_recorded_by_shows_only_when_someone_else_led(tmp_path, monkeypatch):
-    from w8lbz_minutes.web import templates
-    from w8lbz_minutes.console import SECTIONS
+    from club_minutes.web import templates
+    from club_minutes.console import SECTIONS
     a = archive_with_prev(tmp_path)
     m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")  # the president chairs, Sam takes the minutes
     m = Archive(tmp_path, club).by_slug[m.slug]  # survives saving
@@ -226,8 +226,8 @@ def test_one_console_takes_the_minutes_and_another_can_take_over(tmp_path):
 
 def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = archive_with_prev(tmp_path)
     a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
         {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True}, {"id": "kim", "first": "Sam", "last": "Kim", "minutes_editor": True}])
@@ -256,8 +256,8 @@ def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(
 
 def test_top_bar_says_continue_minutes_for_an_open_meeting_from_another_day(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = archive_with_prev(tmp_path)
     a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
         {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True}, {"id": "kim", "first": "Sam", "last": "Kim"}])

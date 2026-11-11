@@ -3,9 +3,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from w8lbz_minutes import web
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.store import Archive
+from club_minutes import web
+from club_minutes.club import Club
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "callsign": "KD8AAA", "email": "amy@example.org", "officer": True,
@@ -18,9 +18,9 @@ def test_roster_api(tmp_path, monkeypatch):
     monkeypatch.setattr(web, "DATA", tmp_path)
     local = TestClient(web.app, client=("127.0.0.1", 50000))
     auth = {"Authorization": "Bearer s3cret"}
-    monkeypatch.delenv("W8LBZ_ROSTER_API_TOKEN", raising=False)
+    monkeypatch.delenv("CLUB_MINUTES_ROSTER_API_TOKEN", raising=False)
     assert local.get("/api/roster", headers=auth).status_code == 404  # off without a token on the server
-    monkeypatch.setenv("W8LBZ_ROSTER_API_TOKEN", "s3cret")
+    monkeypatch.setenv("CLUB_MINUTES_ROSTER_API_TOKEN", "s3cret")
     r = local.get("/api/roster", headers=auth)
     assert r.json() == [{"callsign": "KD8AAA", "name": "Amy Able", "email": "amy@example.org", "officer": True, "former": ["KD8OLD"]}]
     assert local.get("/api/roster", headers={"Authorization": "Bearer wrong"}).status_code == 403
@@ -31,11 +31,11 @@ def test_roster_api(tmp_path, monkeypatch):
 
 
 def test_roster_api_allowlist(tmp_path, monkeypatch):
-    """The Discord bot's own container, listed in W8LBZ_ROSTER_API_ALLOW, may call it; other LAN addresses may not."""
+    """The Discord bot's own container, listed in CLUB_MINUTES_ROSTER_API_ALLOW, may call it; other LAN addresses may not."""
     monkeypatch.setattr(web, "archive", Archive(tmp_path, Club(FIX / "test-club.yaml", roster=PEOPLE)))
     monkeypatch.setattr(web, "DATA", tmp_path)
-    monkeypatch.setenv("W8LBZ_ROSTER_API_TOKEN", "s3cret")
-    monkeypatch.setenv("W8LBZ_ROSTER_API_ALLOW", "192.168.1.50, 192.168.1.51")
+    monkeypatch.setenv("CLUB_MINUTES_ROSTER_API_TOKEN", "s3cret")
+    monkeypatch.setenv("CLUB_MINUTES_ROSTER_API_ALLOW", "192.168.1.50, 192.168.1.51")
     auth = {"Authorization": "Bearer s3cret"}
     bot = TestClient(web.app, client=("192.168.1.51", 50000))
     assert bot.get("/api/roster", headers=auth).status_code == 200

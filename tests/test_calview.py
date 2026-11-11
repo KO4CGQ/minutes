@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import calview, chow, events
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import calview, chow, events
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 NOV = (dt.date(2026, 11, 1), dt.date(2026, 11, 30))
@@ -235,8 +235,8 @@ def test_import_ics():
 
 def signed_in(tmp_path, monkeypatch, who):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+    from club_minutes import web
+    from club_minutes.auth import Auth
     c = club()
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
@@ -279,13 +279,13 @@ def test_leaders_add_change_delete_and_import_on_the_page(tmp_path, monkeypatch)
 
 
 def web_cookie():
-    from w8lbz_minutes import web
+    from club_minutes import web
     return web.COOKIE
 
 
 def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+    from club_minutes import web
     today = dt.date.today()
     s = chow.load()
     s["nights"] = {(today + dt.timedelta(days=2)).isoformat(): {"member": "kd8aaa"}}
@@ -379,7 +379,7 @@ def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
 
 
 def test_search_finds_calendar_events_and_the_agenda_can_show_more_weeks(tmp_path, monkeypatch):
-    from w8lbz_minutes import web
+    from club_minutes import web
     today = dt.date.today()
     with events.locked():
         evs = []
@@ -397,7 +397,7 @@ def test_search_finds_calendar_events_and_the_agenda_can_show_more_weeks(tmp_pat
 
 
 def test_imported_minutes_offer_the_original_and_new_ones_the_pdf(tmp_path, monkeypatch):
-    from w8lbz_minutes import web
+    from club_minutes import web
     root = tmp_path / "meetings"
     old = Meeting(date=dt.date(2025, 3, 6), status="published", source="6-mar-25-minutes.pdf")
     fixed = Meeting(date=dt.date(2025, 3, 13), status="published", source="13-mar-25-minutes-CORRECTED.txt")  # no original PDF
@@ -468,7 +468,7 @@ def test_daily_and_several_weeks_of_the_month():
 
 
 def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
-    from w8lbz_minutes import business, web
+    from club_minutes import business, web
     c = club()
     got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
     hol = [(e.start.isoformat(), e.title) for e in got if e.kind == "holiday"]
@@ -508,7 +508,7 @@ def test_ohio_election_days_on_community():
 
 
 def test_console_reads_out_the_calendar_until_the_next_meeting(tmp_path):
-    from w8lbz_minutes import console
+    from club_minutes import console
     with events.locked():
         evs, meet = net(title="W0TST meeting", date="2026-11-12", time="19:30", end_time="21:30")
         meet["meeting"] = True  # the weekly meeting, as ensure_meeting makes it: left out unless unticked

@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly: install a newer Club Minutes release at the hour set on the Updates page (does nothing unless turned on there)
+
+[Timer]
+OnCalendar=*-*-* *:30
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -8,18 +8,18 @@ main() {
   set -Eeuo pipefail
   # set -e stops silently, and the git commands are quiet: say what failed, for the Updates page and the email
   trap 'echo "Stopped: \"$BASH_COMMAND\" failed (exit $?)." >&2' ERR
-  local APP=/opt/w8lbz-minutes BRANCH=${BRANCH:-main} TAG=${TAG:-}
+  local APP=/opt/club-minutes BRANCH=${BRANCH:-main} TAG=${TAG:-}
   cd "$APP"
   install_and_restart() {
-    sudo -u minutes env UV_CACHE_DIR=/var/lib/w8lbz-minutes-home/.cache/uv uv sync -q --frozen --no-dev
+    sudo -u minutes env UV_CACHE_DIR=/var/lib/club-minutes-home/.cache/uv uv sync -q --frozen --no-dev
     # Install the app's systemd units (new ones arrive with updates) and turn on its timers and watchers.
-    install -m 644 "$APP"/deploy/w8lbz-minutes*.service "$APP"/deploy/w8lbz-minutes*.timer "$APP"/deploy/w8lbz-minutes*.path \
+    install -m 644 "$APP"/deploy/club-minutes*.service "$APP"/deploy/club-minutes*.timer "$APP"/deploy/club-minutes*.path \
       /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable -q w8lbz-minutes
+    systemctl enable -q club-minutes
     local t
-    for t in "$APP"/deploy/w8lbz-minutes*.timer "$APP"/deploy/w8lbz-minutes*.path; do systemctl enable -q --now "$(basename "$t")"; done
-    systemctl restart w8lbz-minutes
+    for t in "$APP"/deploy/club-minutes*.timer "$APP"/deploy/club-minutes*.path; do systemctl enable -q --now "$(basename "$t")"; done
+    systemctl restart club-minutes
   }
   healthy() {  # the sign-in page answers within 5 minutes (startup takes seconds; the margin is for a slow, busy server)
     local i
@@ -45,7 +45,7 @@ main() {
     sudo -u minutes git reset -q --hard "$before"
     install_and_restart
     if healthy; then echo "Rolled back: the app is running the version it had before." >&2
-    else echo "Still not answering after rolling back: see journalctl -u w8lbz-minutes" >&2; fi
+    else echo "Still not answering after rolling back: see journalctl -u club-minutes" >&2; fi
     exit 1
   fi
   echo "Now at $(sudo -u minutes git log --oneline -1)"

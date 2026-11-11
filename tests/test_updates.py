@@ -3,13 +3,13 @@ import json
 
 import pytest
 
-from w8lbz_minutes import updates
+from club_minutes import updates
 
 NOTES = """- **Business items are tracked** ...
 - **Deploy notes:** before updating:
   1. Copy the business list into the data folder:
 
-          cp business.json /var/lib/w8lbz-minutes/
+          cp business.json /var/lib/club-minutes/
 
   2. Add `admins:` to club.yaml.
 - **Reminders** ..."""
@@ -69,10 +69,10 @@ def test_admin_page(env, tmp_path, monkeypatch):
 
     from fastapi.testclient import TestClient
 
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
-    from w8lbz_minutes.club import Club
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml",
                 roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "callsign": "KD8ADM"}, {"id": "bob", "first": "Bob", "last": "B"}])
     club.admins = {"kd8adm"}
@@ -112,10 +112,10 @@ def test_backup_before_update(env, tmp_path, monkeypatch):
 
     from fastapi.testclient import TestClient
 
-    from w8lbz_minutes import backup, web
-    from w8lbz_minutes.auth import Auth
-    from w8lbz_minutes.club import Club
-    from w8lbz_minutes.store import Archive
+    from club_minutes import backup, web
+    from club_minutes.auth import Auth
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin"}])
     club.admins = {"kd8adm"}
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -128,7 +128,7 @@ def test_backup_before_update(env, tmp_path, monkeypatch):
     token = a.new_session("kd8adm")
     a.set_admin(token, 60)
     c.cookies.set(web.COOKIE, token)
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "a long test passphrase")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "a long test passphrase")
     assert 'name="backup_first" value="1" checked' in c.get("/admin/updates").text
     monkeypatch.setattr(backup, "run", lambda club, url="": {"ok": False, "error": "S3: no network"})
     assert "failed, so the update" in c.post("/admin/updates/run", data={"target": "0.7.0", "backup_first": 1}).text
@@ -137,7 +137,7 @@ def test_backup_before_update(env, tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "run", lambda club, url="": ran.append(1) or {"ok": True})
     c.post("/admin/updates/run", data={"target": "0.7.0", "backup_first": 1})
     assert ran and (tmp_path / "update-request.json").exists()
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "")
     updates.cancel()
     assert "no backup before the update" in c.get("/admin/updates").text
 
@@ -150,8 +150,8 @@ def test_nightly_auto_update(env, tmp_path, monkeypatch):
     outcome; deploy notes or a failed backup stop it (told once), and a release that failed isn't retried."""
     from pathlib import Path
 
-    from w8lbz_minutes import backup
-    from w8lbz_minutes.club import Club
+    from club_minutes import backup
+    from club_minutes.club import Club
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])
     club.admins = {"kd8adm"}
     sent, ran = [], []
@@ -207,10 +207,10 @@ def test_auto_update_switch(env, tmp_path, monkeypatch):
 
     from fastapi.testclient import TestClient
 
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
-    from w8lbz_minutes.club import Club
-    from w8lbz_minutes.store import Archive
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin"}, {"id": "bob", "first": "Bob", "last": "B"}])
     club.admins = {"kd8adm"}
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -223,9 +223,9 @@ def test_auto_update_switch(env, tmp_path, monkeypatch):
     c.cookies.set(web.COOKIE, token)
     assert c.post("/admin/updates/auto", data={"on": 1}).status_code == 403  # admin mode first
     a.set_admin(token, 60)
-    monkeypatch.delenv("W8LBZ_BACKUP_PASSPHRASE", raising=False)
+    monkeypatch.delenv("CLUB_MINUTES_BACKUP_PASSPHRASE", raising=False)
     assert "Set up backups first" in c.post("/admin/updates/auto", data={"on": 1}).text and not updates.auto_settings()["on"]
-    monkeypatch.setenv("W8LBZ_BACKUP_PASSPHRASE", "a long test passphrase")
+    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "a long test passphrase")
     assert "on, nightly at 3:30" in c.post("/admin/updates/auto", data={"on": 1, "hour": "3"}).text and updates.auto_settings()["on"]
     c.post("/admin/updates/auto", data={"on": 1, "hour": "²"})  # junk keeps the hour
     assert updates.auto_settings()["hour"] == 3

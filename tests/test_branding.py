@@ -6,9 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from w8lbz_minutes import branding, limits, web
-from w8lbz_minutes.auth import Auth
-from w8lbz_minutes.club import Club
+from club_minutes import branding, limits, web
+from club_minutes.auth import Auth
+from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -131,7 +131,7 @@ def test_a_tab_icon_made_from_the_logo_gets_the_logos_white_behind_it(data):
 def test_damaged_pictures_are_refused_and_a_damaged_logo_on_disk_never_stops_a_page(data, monkeypatch):
     with pytest.raises(ValueError, match="a picture we can read"):
         branding.save("logo", png()[:200])                              # cut off part way
-    from w8lbz_minutes import avatars
+    from club_minutes import avatars
     monkeypatch.setattr(avatars, "DATA", data)
     with pytest.raises(ValueError):
         avatars.save("kd8aaa", png()[:200])                             # profile pictures too
