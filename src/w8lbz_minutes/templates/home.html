@@ -29,7 +29,6 @@
 <section class="card">
   <h2>Your business items</h2>
   {% if items %}<ul class="checklist open">{% for x in items %}<li class="{{ 'late' if x.overdue }}"><a href="/business#i{{ x.id }}" data-item="d{{ x.id }}" aria-haspopup="dialog" title="Open it: update it, comment, or mark it done">{{ x.text }}{% if x.due %} <span class="chip{{ ' late' if x.overdue }}">due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}</a></li>{% endfor %}</ul>
-  {% for x in items %}{{ open_item(x, False, back="/") }}{% endfor %}{{ item_script() }}
   <p><a href="/business">All open business</a></p>
   {% else %}<p class="muted">Nothing assigned to you. <a href="/business">All open business</a>.</p>{% endif %}
 </section>
@@ -49,4 +48,6 @@
   <p><a href="/calendar">The calendar</a></p>
 </section>
 </div>
+{# the items' dialogs, outside the cards (so they don't take the cards' heading style) #}
+{% for x in items %}{{ open_item(x, False, back="/") }}{% endfor %}{{ item_script() }}
 {% endblock %}
