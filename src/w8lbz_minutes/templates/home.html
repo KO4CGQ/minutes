@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}Home · {{ app_name() }}{% endblock %}{% block body %}
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_business_item.html" import open_item, item_script with context %}{% block title %}Home · {{ app_name() }}{% endblock %}{% block body %}
 <h1>Hi {{ me.first }}</h1>
 {% for r in swaps %}
 <div class="msg ok swapreq"><b>{{ club.name(r.requester) }}</b> asks to swap chow: you'd bring it on <b>{{ fmt(r.mine) }}</b> instead of {{ fmt(r.theirs) }}.
@@ -28,8 +28,9 @@
 </section>{% endif %}
 <section class="card">
   <h2>Your business items</h2>
-  {% if items %}<ul class="checklist open">{% for x in items %}<li class="{{ 'late' if x.overdue }}"><a href="/business#i{{ x.id }}" title="Open it on the Business page (mark it done there)">{{ x.text }}{% if x.due %} <span class="chip{{ ' late' if x.overdue }}">due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}</a></li>{% endfor %}</ul>
-  <p><a href="/business">Update them on the Business page</a></p>
+  {% if items %}<ul class="checklist open">{% for x in items %}<li class="{{ 'late' if x.overdue }}"><a href="/business#i{{ x.id }}" data-item="d{{ x.id }}" aria-haspopup="dialog" title="Open it: update it, comment, or mark it done">{{ x.text }}{% if x.due %} <span class="chip{{ ' late' if x.overdue }}">due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}</a></li>{% endfor %}</ul>
+  {% for x in items %}{{ open_item(x, False, back="/") }}{% endfor %}{{ item_script() }}
+  <p><a href="/business">All open business</a></p>
   {% else %}<p class="muted">Nothing assigned to you. <a href="/business">All open business</a>.</p>{% endif %}
 </section>
 {% if latest %}<section class="card">

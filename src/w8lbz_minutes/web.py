@@ -396,6 +396,11 @@ def business_change(request: Request, fn, meeting: str = "", back: str = "/busin
     return RedirectResponse(_safe_next(back), status_code=303)
 
 
+def _back(back: str, iid: str, default: str) -> str:
+    """Where a business change returns to: Home, when it came from Home's item dialog ("/"), else the Business page."""
+    return f"/#i{iid}" if back == "/" else default
+
+
 def owner_id(value: str | None) -> str | None:
     """The owner box takes a name typed or picked from the list (or a member id, or a callsign)."""
     v = " ".join((value or "").split())
@@ -546,19 +551,20 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
         if "owner" in fields:
             fields["owner"] = owner_id(fields["owner"])
         business.edit(s, iid, mid, meeting=form.get("meeting") or None, **fields)
-    return await run_in_threadpool(business_change, request, run, form.get("meeting", ""))
+    return await run_in_threadpool(business_change, request, run, form.get("meeting", ""),
+                                   _back(str(form.get("back", "")), iid, "/business"))
 
 
 @app.post("/business/{iid}/comment")
-def business_comment(request: Request, iid: str, text: str = Form(...), mid: str = Depends(me)):
+def business_comment(request: Request, iid: str, text: str = Form(...), back: str = Form(""), mid: str = Depends(me)):
     """Any member can comment on an item: an update, a question, "I can help with this"."""
-    return business_change(request, lambda s: business.comment(s, iid, mid, text), back=f"/business#i{iid}")
+    return business_change(request, lambda s: business.comment(s, iid, mid, text), back=_back(back, iid, f"/business#i{iid}"))
 
 
 @app.post("/business/{iid}/comments/{cid}/delete")
-def business_comment_delete(request: Request, iid: str, cid: str, mid: str = Depends(me)):
+def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), mid: str = Depends(me)):
     return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, privileged(request)),
-                           back=f"/business#i{iid}")
+                           back=_back(back, iid, f"/business#i{iid}"))
 
 
 def upcoming_meetings(n: int = 4) -> list[dt.date]:
@@ -582,11 +588,13 @@ def business_note_status(request: Request, nid: str, status: str, meeting: str =
 
 
 @app.post("/business/{iid}/done")
-def business_done(request: Request, iid: str, done: int = Form(1), meeting: str = Form(""), mid: str = Depends(me)):
+def business_done(request: Request, iid: str, done: int = Form(1), meeting: str = Form(""), back: str = Form(""),
+                  mid: str = Depends(me)):
     def run(s):
         _may_edit_item(request, s, iid, meeting)
         business.close(s, iid, mid, meeting or None) if done else business.reopen(s, iid, mid)
-    return business_change(request, run, meeting, back="/business?tab=done" if done else f"/business#i{iid}")
+    home = "/" if back == "/" else None  # from Home: back there (the item has left the list)
+    return business_change(request, run, meeting, back=home or ("/business?tab=done" if done else f"/business#i{iid}"))
 
 
 @app.post("/business/{iid}/delete")
