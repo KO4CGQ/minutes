@@ -10,6 +10,7 @@ import json
 import re
 import logging
 import shutil
+import threading
 import time
 
 from . import ai, auth, business, chow, prefs
@@ -25,16 +26,70 @@ def _key(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
-def start(archive: Archive, date: dt.date, leader: str | None) -> Meeting:
-    if date.isoformat() in archive.by_slug:
-        return archive.by_slug[date.isoformat()]
-    m = Meeting(date=date, status="draft", leader=leader)
+_starting = threading.Lock()  # two leaders clicking Start at once still get one meeting
+
+# Who is taking an open meeting's minutes: one console (browser tab) at a time, kept while it's open (it checks in every
+# 5 s, and on coming back to the front) and let go HOLD_SECONDS after it closes or loses its connection. Anyone else's console is read-only, with
+# Take over. Kept in memory: the app runs as one process, so a restart lets go of every hold (the next save takes it).
+HOLD_SECONDS = 120
+_holds: dict[str, dict] = {}
+closed_by: dict[str, str] = {}  # who submitted or discarded a meeting's minutes, for consoles still open on them
+_holding = threading.Lock()
+
+
+def holder(slug: str, tab: str | None = None) -> dict | None:
+    """Whoever else is taking these minutes right now ({member, tab, since}), or None."""
+    with _holding:
+        h = _holds.get(slug)
+        return dict(h) if h and h["tab"] != tab and time.time() - h["at"] < HOLD_SECONDS else None
+
+
+def hold(archive: Archive, slug: str, member: str, tab: str, take: bool = False, prev: str | None = None) -> dict | None:
+    """Keep (or, with take, take over) the minutes for this tab. Returns whoever else holds them (nothing changes), or
+    None when this tab now does. Taking over makes the new person the recorder: they take the minutes from here.
+    prev: this browser tab's id before a reload (each page load gets a new id, so a duplicated tab never shares one);
+    a reloaded console carries on from it without asking."""
+    with _holding:
+        h = _holds.get(slug)
+        now = time.time()
+        mine = h and (h["tab"] == tab or (prev and h["tab"] == prev and h["member"] == member))
+        other = h and not mine and now - h["at"] < HOLD_SECONDS
+        if other and not take:
+            return dict(h)
+        _holds[slug] = {"member": member, "tab": tab, "at": now, "since": h["since"] if mine else now}
+    if other and member != archive.by_slug[slug].recorder:
+        m = archive.by_slug[slug]
+        m.recorder = member
+        m.save(archive.root)
+    return None
+
+
+def release(slug: str, tab: str) -> None:
+    with _holding:
+        if _holds.get(slug, {}).get("tab") == tab:
+            del _holds[slug]
+
+
+def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None = None) -> Meeting:
+    """Start the minutes of a meeting, or open them if that date's are already there. Only one meeting is open at a
+    time: with another still in progress (say, last week's never submitted), it has to be submitted or discarded first."""
+    with _starting:
+        if date.isoformat() in archive.by_slug:
+            return archive.by_slug[date.isoformat()]
+        if (open_ := [m for m in archive.meetings if m.status == "draft"]):
+            raise ValueError(f"The minutes of {open_[0].date:%B %-d} are still open: continue them, or discard them, "
+                             "before starting another meeting.")
+        return _start(archive, date, leader, recorder)
+
+
+def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None) -> Meeting:
+    m = Meeting(date=date, status="draft", leader=leader, recorder=recorder)
     prev = previous(archive, date)
     for sec in SECTIONS:
         m.sections[sec] = []
     if prev:
         # events already past drop off; undated ones stay until a leader removes them
-        m.sections["Upcoming Events"] = [Item(i.text, when=i.when, until=i.until) for i in prev.items("Upcoming Events")
+        m.sections["Upcoming Events"] = [Item(i.text, when=i.when, until=i.until, cal=i.cal) for i in prev.items("Upcoming Events")
                                          if not i.when or (i.until or i.when)[:10] >= date.isoformat()]
     # Old Business: every tracked item still open (business.py).
     m.sections.update(business_sections(archive, m.slug))
@@ -164,7 +219,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
             "in_person": m.in_person, "remote": m.remote, "guests": m.guests, "visitors": m.visitors,
-            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until} for i in m.items(s)] for s in SECTIONS},
+            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until, "cal": i.cal} for i in m.items(s)] for s in SECTIONS},
         },
         "state": load_state(archive, m.slug),
         "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
@@ -181,6 +236,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "ask_about": ask_about_for(history),
         "celebrations": celebrations(club, m.date),
         "paid_since": paid_since(archive, m.date),
+        **calendar_ahead(archive, m.date),
     }
 
 
@@ -200,6 +256,28 @@ def _on(year: int, mmdd: str) -> dt.date:
     """MM-DD (or MM, meaning the 1st) in a given year; Feb 29 falls on the 28th in other years."""
     month, day = int(mmdd[:2]), int(mmdd[3:5]) if len(mmdd) > 2 else 1
     return dt.date(year, month, 28 if (month, day) == (2, 29) and year % 4 else day)
+
+
+READ_OUT = ("events", "community", "planning", "holiday", "birthday")  # chow has its own step
+
+
+def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
+    """What's on the calendar from the meeting's day on, for the leader to read out under Upcoming Events: club and
+    community events, Planning, holidays and birthdays shared with everyone. Left out: events ticked to leave out (the
+    weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events. next_meeting: the meeting
+    event's next date, else a week on."""
+    from . import calview, events as store
+    evs = store.load()
+    quiet = {e["id"] for e in evs if store.quiet(e)}
+    items, _ = calview.entries(archive.club, archive, "", date, date + dt.timedelta(days=days))  # "": no private birthdays
+    out = [{"start": e.start.isoformat(), "end": e.end.isoformat(), "time": e.time, "title": e.title, "where": e.where,
+            "kind": calview.KINDS[e.kind], "cal": e.kind if e.kind in store.CALS else "events",
+            # for "Add to the minutes": the same form as an Upcoming Event's when/until
+            "when": f"{e.starts:%Y-%m-%dT%H:%M}" if e.starts else e.start.isoformat(),
+            "until": f"{e.ends:%Y-%m-%dT%H:%M}" if e.ends else (e.end.isoformat() if e.end > e.start else None)} for e in items
+           if e.kind in READ_OUT and not e.from_minutes and e.id not in quiet and not (e.id or "").startswith("due-")]
+    after = [d for e in evs if e.get("meeting") for d in store.dates(e, date + dt.timedelta(days=1), date + dt.timedelta(days=60))]
+    return {"calendar": out, "next_meeting": min(after, default=date + dt.timedelta(days=7)).isoformat()}
 
 
 def celebrations(club, date: dt.date) -> list[str]:
@@ -256,7 +334,8 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
                 for g in d.get("guests", []) if g.get("name", "").strip()]
     m.guests = [g for g in m.guests if not archive.club.is_redacted(g["name"])]
     m.visitors = max(0, int(d.get("visitors") or 0))
-    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")))
+    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")),
+                           i.get("cal") if i.get("cal") in ("community", "planning") else None)
                       for i in d.get("sections", {}).get(s, []) if i.get("text", "").strip()]
                   for s in SECTIONS}
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser
@@ -266,23 +345,29 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     return archive.by_slug[slug]
 
 
-def submit(archive: Archive, slug: str) -> Meeting:
+def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
     m = archive.by_slug[slug]
     # Upcoming Chow comes from the chow schedule as it stands now: tonight's chow, tonight's changes, what's next.
     m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
     m.sections.update(business_sections(archive, slug))
     m.status = "published"
     m.save(archive.root)
+    _holds.pop(slug, None)  # finished: nobody holds them now
+    if by:
+        closed_by[slug] = by
     archive.reload()
     return archive.by_slug[slug]
 
 
-def discard(archive: Archive, slug: str) -> None:
+def discard(archive: Archive, slug: str, by: str | None = None) -> None:
     """Delete a draft (e.g. a practice run). Submitted minutes can't be discarded."""
     m = archive.by_slug[slug]
     if m.status != "draft":
         raise ValueError("Only drafts can be discarded")
     shutil.rmtree(archive.root / slug)
+    _holds.pop(slug, None)
+    if by:
+        closed_by[slug] = by
     s = business.load()
     business.forget_meeting(s, slug)
     business.save(s)
@@ -312,13 +397,16 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
     club = archive.club
     to, links = recipients(archive, "pdf"), recipients(archive, "link")
     leader = club.members.get(m.leader or "")
+    recorder = club.members.get(m.recorder or "") if m.recorder != m.leader else None
+    writer = recorder or leader  # replies (corrections) go to whoever took the minutes
     date = m.date.strftime("%B %-d, %Y")
     body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
-            f"{f', led by {leader.name}' if leader else ''}. The PDF is attached.\n\n"
+            f"{f', led and recorded by {leader.name}' if leader and m.recorder == m.leader else f', led by {leader.name}' if leader else ''}"
+            f"{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
-            f"Replies go to {leader.first if leader and leader.email else 'the club'}.\n\n"
+            f"Replies go to {writer.first if writer and writer.email else 'the club'}.\n\n"
             f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.info.get('callsign', '')}")
-    subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", leader.email if leader and leader.email else None
+    subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", writer.email if writer and writer.email else None
     try:
         pdf = make_pdf() if to else None
         sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],

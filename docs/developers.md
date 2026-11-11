@@ -20,6 +20,7 @@ PDF generation needs the system Pango library: `sudo apt install libpango-1.0-0 
 `deploy/preview.sh BRANCH` runs a branch on a development machine (ports from 8100) so it can be tried before merging, without touching the live server. It uses the local branch when there is one, so work can be previewed before it's pushed; otherwise the branch on GitHub. It prints the address and a one-time sign-in link (passkeys don't work on a bare IP address).
 - **Preview mode:** a banner on every page; email is recorded on the **Email log** page (name menu → Email log, in admin mode) instead of being sent; roster edits go to a copy of the roster (`preview-sheet.json`), never the real one.
 - Each preview has its own checkout and a fresh copy of `data/` (meetings, roster cache, bylaws) on every update; its sign-ins are kept.
+- **Staging server** (server admin guide → Staging server): `deploy/stage-push.sh [BRANCH] [SSH-HOST]` installs a local branch there over ssh (default: the current branch on `minutes-stage`), without pushing it to GitHub; `update.sh` installs it with the usual rollback. Its data is the live app's, synced nightly.
 - `deploy/preview.sh --list` shows running previews; `deploy/preview.sh --stop BRANCH` stops one and deletes its copy.
 - They run as user services (`systemctl --user`), so they stop if this user logs out entirely, unless lingering is enabled (`loginctl enable-linger`).
 

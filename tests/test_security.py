@@ -183,3 +183,20 @@ def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, m
     assert clubmod.roster_locked(lambda: clubmod.roster_locked(lambda: "nested ok")())() == "nested ok"  # waits; nesting is fine
     assert time.monotonic() - t0 > 1.0
     holder.wait(5)
+
+
+
+def test_admin_address_members_tab_and_a_page_for_not_found(app):
+    """/admin goes to Security for an admin and is not found for a member; a browser gets a page, scripts get JSON."""
+    import time as _t
+    web.archive.club.admins = {"kd8off"}
+    admin, member = app("kd8off"), app("kd8bbb")
+    assert admin.get("/admin/", follow_redirects=False).headers["location"] == "/admin/security"
+    assert member.get("/admin").status_code == 404
+    page_ = member.get("/no-such-page", headers={"Accept": "text/html"})
+    assert page_.status_code == 404 and "Page not found" in page_.text
+    assert member.get("/no-such-page", headers={"Accept": "application/json"}).json() == {"detail": "Not Found"}
+    web.authn.db.execute("insert into passkeys (id, member, public_key, sign_count, label, created) values ('pk1', 'kd8bbb', x'00', 0, 'phone', ?)",
+                         (int(_t.time()),))
+    got = web.authn.by_member()
+    assert got["kd8bbb"]["passkeys"] == 1 and got["kd8bbb"]["devices"] == 1 and "last" not in got["kd8bbb"]

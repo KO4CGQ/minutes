@@ -3,17 +3,19 @@
 <div class="ch">
   <div><h1>Meeting of {{ m.date|longdate }}</h1>
   Led by <select id="leader">{% for id in leaders %}<option value="{{ id }}" {{ 'selected' if id == m.leader }}>{{ club.name(id) }}</option>{% endfor %}</select>
+  {% if m.recorder %}<span class="muted">· recorded by {{ club.name(m.recorder) }}</span>{% endif %}
   <button type="button" class="share" id="share" data-path="/meetings/{{ m.slug }}"
     title="Members can follow along live at this link: the minutes on it update every few seconds as you take them. Paste it in the Teams chat. They sign in like they do for the archive. Click to copy.">{{ emoji('🔗', 'link') }} Share live view</button>
   <a class="muted small" href="/meetings/{{ m.slug }}" target="_blank" title="Open the live view in a new tab">open ↗️</a></div>
   <div id="saved" class="saved">Saved</div>
 </div>
+<p id="holdbar" class="msg warn" hidden></p>
 <nav id="steps" class="steps"></nav>
 <section id="panel"></section>
-<div class="pager"><button id="prev" class="btn ghost">◀ Back</button><button id="next" class="btn">Next ▶</button></div>
-<form id="submitform" method="post" action="/console/{{ m.slug }}/submit"></form>
+<div class="pager" id="pager"><button id="prev" class="btn ghost">◀ Back</button><button id="next" class="btn">Next ▶</button></div>
+<div id="endforms"><form id="submitform" method="post" action="/console/{{ m.slug }}/submit"></form>
 <form method="post" action="/console/{{ m.slug }}/discard" data-confirm="Discard this draft completely? This cannot be undone." style="text-align:right">
-  <button class="btn small ghost" type="submit">Discard draft</button></form>
+  <button class="btn small ghost" type="submit">Discard draft</button></form></div>
 <script nonce="{{ csp_nonce }}">window.CONSOLE = {{ data|safe }};</script>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
 <script src="/static/console.js?v={{ ASSETS }}"></script>

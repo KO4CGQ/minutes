@@ -16,7 +16,7 @@ import re
 import time
 from importlib.metadata import version as installed_version
 
-from .club import DATA, PREVIEW
+from .club import DATA, PREVIEW, STAGE
 
 log = logging.getLogger("w8lbz.updates")
 REPO = "KO4CGQ/minutes"
@@ -131,8 +131,8 @@ def cancel() -> bool:
 
 def request(by: str, target: str, notes_confirmed: bool) -> None:
     """Ask the root-owned updater to run. Raises ValueError if it can't be asked now."""
-    if PREVIEW:
-        raise ValueError("Previews don't update themselves; use deploy/preview.sh.")
+    if PREVIEW or STAGE:
+        raise ValueError("Previews and the staging server don't update themselves (deploy/preview.sh, deploy/stage-push.sh).")
     st = status()
     if "requested" in st or "running" in st:
         raise ValueError("An update is already waiting or running.")
@@ -181,7 +181,7 @@ def auto(club, url: str, wait: float = 900, poll: float = 10, now=None) -> str:
     """The nightly run: if automatic updates are on and a newer release needs no steps by hand, back up, ask the
     updater for exactly that release, wait for the outcome and email the admins. Returns what it did."""
     s = auto_settings()
-    if PREVIEW or not s["on"]:
+    if PREVIEW or STAGE or not s["on"]:
         return "automatic updates are off"
     import datetime as dt
     if (now or dt.datetime.now()).hour != s["hour"]:

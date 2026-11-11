@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% block title %}Stage sync{% endblock %}{% block body %}
+<h1>Stage sync</h1>
+<p class="muted">This staging server copies the live app's data each night (one way: nothing here reaches the live app).
+Each sync replaces what was changed here, except sign-ins and passkeys, the email log and update settings.</p>
+<div class="cards">
+<article class="card">
+  <div class="card-text">{% if last %}Last sync: <b>{{ 'done' if last.ok else 'failed' }}</b> {{ last.finished|ts }}{% if last.by %}, asked for by {{ club.name(last.by) if last.by in club.members else last.by }}{% endif %}{% else %}No sync yet.{% endif %}</div>
+  {% if last and not last.ok %}<details open><summary class="muted">Output</summary><pre class="relnotes">{{ last.output or '(nothing: see journalctl -u w8lbz-stage-sync)' }}</pre></details>{% endif %}
+  <form method="post" action="/admin/stage" class="inline">
+    {% if waiting %}<p class="muted">A sync was asked for and starts within seconds; reload to see it.</p>
+    {% else %}<button class="btn" name="action" value="sync">Sync now</button>{% endif %}
+  </form>
+</article>
+<article class="card">
+  <div class="card-text"><b>Nightly sync</b>: {{ 'paused' if paused else 'on (around 3:00)' }}</div>
+  <p class="muted">Pause it while testing something that should survive the night; Sync now still works.</p>
+  <form method="post" action="/admin/stage" class="inline"><button class="btn small{{ '' if paused else ' ghost' }}" name="action" value="{{ 'resume' if paused else 'pause' }}">{{ 'Resume' if paused else 'Pause' }} nightly sync</button></form>
+</article>
+</div>
+{% endblock %}

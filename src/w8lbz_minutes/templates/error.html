@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}{{ 'Not allowed' if code == 403 else 'Not found' }}{% endblock %}{% block body %}
+<h1>{{ 'Not allowed' if code == 403 else 'Page not found' }}</h1>
+<p>{{ detail or "There's no page at this address. It may have moved, or the link was mistyped." }}</p>
+<p><a class="btn" href="/">Home</a></p>
+{% endblock %}

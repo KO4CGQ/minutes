@@ -1,13 +1,17 @@
 {% extends "base.html" %}{% block title %}Lead a meeting{% endblock %}{% block body %}
 <h1>Lead a meeting</h1>
-{% if drafts %}<h2>Meetings in progress</h2>
-<ul class="results">{% for d in drafts %}<li><a class="btn" href="/console/{{ d.slug }}">Continue {{ d.date|listdate }}</a>
-{% if d.leader %} <span class="muted">led by {{ club.name(d.leader) }}</span>{% endif %}</li>{% endfor %}</ul>{% endif %}
-<h2>Start a new meeting</h2>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+{% if drafts %}<h2>Meeting in progress</h2>
+<p class="muted">One meeting is open at a time. Continue it, or if it was a mistake or a practice run, discard it to start a new one. Once submitted, its minutes are finished and a new meeting can start.</p>
+<ul class="results">{% for d in drafts %}<li class="row"><a class="btn" href="/console/{{ d.slug }}">Continue {{ d.date|listdate }}</a>
+{% if d.leader %} <span class="muted">led by {{ club.name(d.leader) }}</span>{% endif %}
+<form method="post" action="/console/{{ d.slug }}/discard" data-confirm="Discard the minutes of {{ d.date|listdate }}? Everything typed in them is deleted. This can't be undone."><button class="btn small ghost">Discard</button></form></li>{% endfor %}</ul>
+{% else %}<h2>Start a new meeting</h2>
 <form method="post" action="/console/start" class="startform">
   <label>Date <input type="date" name="date" value="{{ today.isoformat() }}" required></label>
   <label>Led by <select name="leader">{% for id in leaders %}<option value="{{ id }}" {{ 'selected' if me and id == me.id }}>{{ club.name(id) }}</option>{% endfor %}</select></label>
   <button class="btn" type="submit">Start meeting</button>
 </form>
-<p class="muted">Old Business and Upcoming Events are copied from the previous meeting, so you only remove what's finished and add what's new.</p>
+<p class="muted">Pick who chairs the meeting under Led by; you're recorded as taking the minutes. The minutes say "Led &amp; Recorded by" when that's you, or "Led by" them and "Recorded by" you.</p>
+<p class="muted">Old Business and Upcoming Events are copied from the previous meeting, so you only remove what's finished and add what's new.</p>{% endif %}
 {% endblock %}

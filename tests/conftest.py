@@ -42,3 +42,11 @@ def no_update_check(monkeypatch):
     """Pages for admins in admin mode check GitHub for a new release; never from the tests."""
     from w8lbz_minutes import updates
     monkeypatch.setattr(updates, "latest", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
+def no_console_holds(monkeypatch):
+    """Who holds an open meeting's console is kept in memory: each test starts with nobody."""
+    from w8lbz_minutes import console
+    monkeypatch.setattr(console, "_holds", {})
+    monkeypatch.setattr(console, "closed_by", {})

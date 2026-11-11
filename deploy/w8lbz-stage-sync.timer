@@ -1,0 +1,8 @@
+[Unit]
+Description=Staging server: nightly pull of the live app's data (unless paused on the Stage page)
+
+[Timer]
+OnCalendar=*-*-* 03:00
+
+[Install]
+WantedBy=timers.target

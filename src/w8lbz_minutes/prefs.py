@@ -19,7 +19,8 @@ KINDS = {
                                     "off": "Don't email them"}, "pdf"),
     "digest": ("Meeting-day reminder", {"on": "Send it", "off": "Don't send it"}, "on"),
     "business": ("Club business you're looking after", {"now": "Remind me", "off": "Don't remind me"}, "now"),
-    "chowlist": ("The chow list", {"pdf": "Email it with the PDF attached", "off": "Don't email it"}, "pdf"),
+    "chowlist": ("The chow list", {"pdf": "Email it with the PDF attached", "link": "Email a link to it online",
+                                   "off": "Don't email it"}, "pdf"),
     "roster": ("Roster updates", {"now": "Email me", "off": "Don't email me"}, "now"),
 }
 HELP = {

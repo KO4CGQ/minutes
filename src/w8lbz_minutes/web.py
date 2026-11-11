@@ -16,7 +16,9 @@ from urllib.parse import quote
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from markupsafe import Markup, escape
 
 from . import ai, avatars, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
@@ -24,7 +26,7 @@ from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, PREVIEW, num, one_line, valid_email
+from .club import DATA, PREVIEW, STAGE, num, one_line, valid_email
 from .backup import KEY_FILE
 from .roster import COLUMNS, SHAREABLE, SheetError
 
@@ -109,7 +111,7 @@ def _assets_stamp() -> str:
     return h.hexdigest()[:10]
 
 
-templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("w8lbz-minutes"), PREVIEW=PREVIEW,
+templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("w8lbz-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp())
 
 
@@ -129,6 +131,7 @@ async def require_login(request: Request, call_next):
     va = authn.view_as(token) if request.state.admin_until else None
     request.state.viewing_as = va if va in archive.club.members and va != real else None
     request.state.member = request.state.viewing_as or real
+    authmod.ACTOR.set(getattr(archive.club.members.get(real or ""), "email", None) or None)  # stage: their email only
     path = request.url.path
     if request.state.viewing_as:
         request.state.admin_until = None  # their permissions, not the admin's
@@ -209,6 +212,17 @@ def officer(request: Request) -> str:
 PK_OFFER = "pk_offer"  # set by an emailed-link sign-in; base.html offers a passkey while it's there
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request: Request, exc: StarletteHTTPException):
+    """A page, not a line of JSON, when a browser opens an address that isn't there (or isn't allowed); the
+    app's own scripts ask for JSON and still get it."""
+    if request.method == "GET" and "text/html" in request.headers.get("accept", "") and exc.status_code in (403, 404):
+        r = page(request, "error.html", code=exc.status_code, detail=exc.detail if exc.status_code == 403 else "")
+        r.status_code = exc.status_code
+        return r
+    return await http_exception_handler(request, exc)
+
+
 def page(request: Request, name: str, **ctx) -> HTMLResponse:
     mid = getattr(request.state, "member", None)
     return templates.TemplateResponse(request, name, {
@@ -223,6 +237,8 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         **_money_nav(request, mid),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
+        # an open meeting from another day (say, last week's never submitted): leaders get "Continue minutes"
+        "open_draft": next((m for m in archive.meetings if m.status == "draft"), None),
         "update_available": _update_badge(request),
         "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
@@ -238,8 +254,8 @@ def _money_nav(request: Request, mid: str | None) -> dict:
 
 def _update_badge(request: Request) -> str | None:
     """For admins (in admin mode or not): the newer version, if there is one (cached check, see updates.py)."""
-    if not archive.club.is_admin(getattr(request.state, "real_member", None)):
-        return None
+    if STAGE or not archive.club.is_admin(getattr(request.state, "real_member", None)):
+        return None  # stage is updated by hand (deploy/stage-push.sh)
     try:
         rel = updates.available()
     except Exception:
@@ -613,9 +629,9 @@ def chow_pdf(mid: str = Depends(me)):
 @app.post("/chow/email")
 def chow_email(request: Request, mid: str = Depends(chow_leader)):
     """Send the chow list to every member who wants it (Email tab), e.g. after filling or changing the schedule."""
-    to = sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == "pdf"}, key=str.lower)
+    how = lambda k: sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == k}, key=str.lower)  # noqa: E731
     pdf = chow_list_pdf()
-    return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, to, mid, base_url(request)))
+    return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, how("pdf"), mid, base_url(request), how("link")))
 
 
 @app.get("/chow", response_class=HTMLResponse)
@@ -1729,7 +1745,7 @@ def _security_admin(request: Request) -> str:
     return mid
 
 
-SECURITY_TABS = (("signins", "Sign-ins"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
+SECURITY_TABS = (("signins", "Sign-ins"), ("members", "Members"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
                  ("bans", "Banned addresses"), ("admin", "Admin actions"), ("backups", "Backups"), ("server", "Server"))
 
 
@@ -1752,6 +1768,15 @@ def admin_action(e: dict) -> str:
 
 
 templates.env.filters["admin_action"] = admin_action
+
+
+@app.get("/admin")
+@app.get("/admin/")
+def admin_home(mid: str = Depends(real_me)):
+    """/admin on its own: the Security page (for anyone else, not found, like every admin page)."""
+    if not archive.club.is_admin(mid):
+        raise HTTPException(404)
+    return RedirectResponse("/admin/security", status_code=303)
 
 
 @app.get("/admin/security", response_class=HTMLResponse)
@@ -1777,6 +1802,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 data_size=backup.data_size() if tab == "backups" else 0, rec=backup.RECOMMENDED,
                 suggestion=backup.suggest() if tab == "backups" else "",
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
+                by_member=authn.by_member() if tab == "members" else {},
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
                 test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
@@ -1877,6 +1903,32 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
     for sid in session:
         _admin_log(request, signed_out=authn.end_session_id(sid))
     return RedirectResponse("/admin/security/devices" + (f"?member={quote(member)}" if member else ""), status_code=303)
+
+
+# ---------------- staging server (admins, in admin mode): prod's data, pulled one way (deploy/stage-sync.sh) ----------------
+
+@app.get("/admin/stage", response_class=HTMLResponse)
+def stage_page(request: Request, mid: str = Depends(real_me)):
+    if not (STAGE and archive.club.is_admin(mid)):
+        raise HTTPException(404)
+    if not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/admin/stage", status_code=303)
+    p = DATA / "stage-sync-status.json"
+    return page(request, "stage.html", last=json.loads(p.read_text()) if p.exists() else None,
+                paused=(DATA / "stage-sync-paused").exists(), waiting=(DATA / "stage-sync-request").exists())
+
+
+@app.post("/admin/stage")
+def stage_action(request: Request, action: str = Form(""), mid: str = Depends(real_me)):
+    if not (STAGE and archive.club.is_admin(mid) and admin_mode(request)):
+        raise HTTPException(404)
+    if action == "sync":
+        (DATA / "stage-sync-request").write_text(mid)  # w8lbz-stage-sync.path starts the sync
+    elif action in ("pause", "resume"):
+        f = DATA / "stage-sync-paused"
+        f.write_text(mid) if action == "pause" else f.unlink(missing_ok=True)
+    _admin_log(request, stage=action)
+    return RedirectResponse("/admin/stage", status_code=303)
 
 
 @app.get("/preview/outbox")
@@ -2237,15 +2289,22 @@ def live_fragment(request: Request, slug: str):
 # ---------------- leader console (officers + minutes editors) ----------------
 
 @app.get("/console", response_class=HTMLResponse)
-def console_home(request: Request, mid: str = Depends(leader)):
+def console_home(request: Request, error: str = "", mid: str = Depends(leader)):
     drafts = [m for m in archive.meetings if m.status == "draft"]
     leaders = sorted(archive.club.leaders, key=archive.club.name)
-    return page(request, "console_start.html", drafts=drafts, leaders=leaders, today=dt.date.today())
+    return page(request, "console_start.html", drafts=drafts, leaders=leaders, today=dt.date.today(), error=error)
 
 
 @app.post("/console/start")
 def console_start(date: str = Form(...), leader_id: str = Form("", alias="leader"), mid: str = Depends(leader)):
-    m = console.start(archive, dt.date.fromisoformat(date), leader_id or mid)
+    try:
+        day = dt.date.fromisoformat(date)
+    except ValueError:
+        return RedirectResponse("/console?error=" + quote("Pick the meeting's date."), status_code=303)
+    try:
+        m = console.start(archive, day, leader_id or mid, recorder=mid)
+    except ValueError as e:  # another meeting is still open (only one at a time)
+        return RedirectResponse("/console?error=" + quote(str(e)), status_code=303)
     return RedirectResponse(f"/console/{m.slug}", status_code=303)
 
 
@@ -2259,11 +2318,58 @@ def console_page(request: Request, slug: str, mid: str = Depends(leader)):
                 leaders=sorted(archive.club.leaders, key=archive.club.name))
 
 
+def _held_by_other(slug: str, tab: str | None, mid: str) -> None:
+    """Refuse a change while someone else's console is taking these minutes (it would undo their work)."""
+    h = console.holder(slug, tab)
+    if h and (tab or h["member"] != mid):
+        raise HTTPException(409, f"{archive.club.name(h['member'])} is taking these minutes. Take over in the console, "
+                                 "or wait until they close it.")
+
+
+@app.post("/api/meetings/{slug}/hold")
+async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
+    """The console checks in every 5 s: keeps this tab's hold on the minutes, or says who has them.
+    {"take": true} takes over; {"peek": true} only asks (a read-only console waiting for them to be free)."""
+    d = await _json(request)
+    if not isinstance(d, dict):
+        raise HTTPException(400, "That request wasn't readable.")
+    m = archive.by_slug.get(slug)
+    if not m or m.status != "draft":  # discarded or submitted from another console: it says so and stops
+        by = console.closed_by.get(slug)  # not known after a restart: the console then says "Someone"
+        return JSONResponse({"closed": "submitted" if m else "discarded", "by": archive.club.name(by) if by else None}, 409)
+    tab = str(d.get("tab") or "")[:40]
+    if not tab:
+        raise HTTPException(400, "No console given.")
+    prev = str(d.get("prev") or "")[:40] or None
+    h = console.holder(slug, tab) if d.get("peek") else console.hold(archive, slug, mid, tab, bool(d.get("take")), prev)
+    if h:
+        return JSONResponse({"holder": archive.club.name(h["member"]), "you": h["member"] == mid, "since": int(h["since"])}, 409)
+    return {"held": not d.get("peek")}
+
+
+@app.post("/api/meetings/{slug}/release")
+async def console_release(request: Request, slug: str, mid: str = Depends(leader)):
+    """The console closing (sent as the page goes away), so someone else can carry on at once."""
+    d = await _json(request)
+    console.release(slug, str(d.get("tab") or "") if isinstance(d, dict) else "")
+    return {"ok": True}
+
+
 @app.put("/api/meetings/{slug}")
 async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
+    data = await _json(request)
+    if not isinstance(data, dict) or not isinstance(data.get("meeting"), dict):
+        raise HTTPException(400, "That request wasn't readable.")
+    tab = str(data.get("tab") or "")[:40]
+    if tab:  # a save is a check-in too: checking and claiming in one step, so two consoles can't both pass
+        if h := console.hold(archive, slug, mid, tab):
+            raise HTTPException(409, f"{archive.club.name(h['member'])} is taking these minutes. Take over in the console, "
+                                     "or wait until they close it.")
+    else:
+        _held_by_other(slug, None, mid)  # a console from before this version (no tab): only someone else's hold stops it
     try:
-        console.apply(archive, slug, await _json(request))
+        console.apply(archive, slug, data)
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}
@@ -2276,7 +2382,8 @@ def email_minutes(slug: str, url: str) -> None:
 @app.post("/console/{slug}/submit")
 def console_submit(request: Request, background: BackgroundTasks, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
-    console.submit(archive, slug)
+    _held_by_other(slug, None, mid)
+    console.submit(archive, slug, by=mid)
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)
@@ -2286,7 +2393,11 @@ def console_submit(request: Request, background: BackgroundTasks, slug: str, mid
 def console_discard(slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     try:
-        console.discard(archive, slug)
+        _held_by_other(slug, None, mid)
+    except HTTPException as e:
+        return RedirectResponse("/console?error=" + quote(e.detail), status_code=303)
+    try:
+        console.discard(archive, slug, by=mid)
     except ValueError as e:
         raise HTTPException(409, str(e))
     return RedirectResponse("/console", status_code=303)

@@ -5,12 +5,14 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## Leader console
-- **Suggest edits during a live meeting:** an editor who isn't leading proposes changes to the live minutes; the leader accepts or rejects each one (REQUIREMENTS §3).
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
 
 ## Look and feel: ideas to consider
+- **Site name, logo and favicon set in the app** (admin): today "W8LBZ Minutes" and the logo are built in, so another club running the app has to change the code.
+- **Menu (nav panel) set from the Links page:** move pages and links up and down, add dividers, and choose which roles see each one (members, leaders, officers, admins), instead of the fixed list.
+- **24-hour clock:** a setting on Your profile → Settings to show times as 19:30 instead of 7:30 PM, across the app (and its emails, if wanted).
+- **Donate button:** a link in the app to a donation page the admin sets (the app handles no payments). Open question: also a "Support the app" link to the developer's sponsor page.
 - **Auto icons from brand logos:** Auto could pick the brand logo for known sites (Discord, YouTube, GitHub, Facebook) instead of the generic chat or play icon.
-- **Meeting page:** "Open in the leader console" smaller and below the title, so the minutes come first.
 
 ## Backups
 Built (server admin guide → Backups): encrypted, scheduled and configured from the app, to S3 and/or Google Drive. Later, if wanted:
@@ -33,8 +35,7 @@ The roster lives in the app (since 0.13.0); the Discord bot reads it from the ro
 - **Admin page for officers:** sync the roster now, email test mode on/off, delete test minutes, review imported minutes.
 
 ## Bylaws
-- **Now:** a link in the app (Club Links) to the Google Doc version.
-- **Later:** the bylaws as text under version control, with each amendment tied to the meeting and motion that adopted it, and a history page showing what changed and when. Open question: members-only or public.
+- The bylaws as text under version control, with each amendment tied to the meeting and motion that adopted it, and a history page showing what changed and when. Open question: members-only or public.
 
 ## Treasurer
 Built (officers guide → Treasurer): who owes what, payments, missed-chow charges, certificates, bills from the minutes, and each member's own figures on Home. Next:

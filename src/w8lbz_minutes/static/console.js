@@ -10,7 +10,7 @@
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",
     "New Business": "Each item you add here is tracked: next week it's in Old Business, and it stays there until it's marked done.",
-    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the club calendar. Add an end for a time range or an event over several days.",
+    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the calendar picked beside it. Add an end for a time range or an event over several days.",
     "Winners": "e.g. “50/50 drawing – Amy A $7.50” and “Weekly drawing – Bob B, not registered (up to $62)”.",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
@@ -66,10 +66,85 @@
     ];
   }
 
+  // ---------- one console at a time (console.hold): this tab keeps the minutes, or watches read-only ----------
+  // A new id each time the page loads, so a duplicated tab (which copies sessionStorage) never shares one; the id
+  // before a reload goes with the first check-in, so a reloaded console keeps its hold (console.hold's prev).
+  let PREV = sessionStorage.getItem("console-tab");
+  const TAB = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + String(Math.random()).slice(2);
+  sessionStorage.setItem("console-tab", TAB);
+  let readOnly = false, held = false;  // held: this tab has had the minutes (so a take-over can cost it unsaved typing)
+  const holdbar = document.getElementById("holdbar");
+  const post = (what, extra = {}) => fetch(`/api/meetings/${M.slug}/${what}`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tab: TAB, ...extra }) });
+  const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  // a dialog that has to be answered, for news that stops this console (the bar keeps saying it after)
+  const exit = () => h("a", { class: "btn small ghost", href: "/" }, "Exit");
+  function notice(title, text, button) {
+    const d = h("dialog", { class: "modal", "aria-labelledby": "notice-title" }, h("div", { class: "body" },
+      h("h2", { id: "notice-title" }, title), h("p", {}, text),
+      h("p", { class: "row" }, button, h("button", { class: "btn small ghost", onclick: () => d.close() }, "Keep reading here"), exit())));
+    document.body.append(d); d.showModal();
+  }
+  function lock(who, lost) {  // someone else is taking the minutes: read-only, with Take over
+    readOnly = true;
+    // the steps and Back/Next still move around (to look); nothing in a step can be changed
+    for (const id of ["panel", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    document.getElementById("endforms").hidden = true;  // Submit and Discard are for whoever holds the minutes
+    saved.textContent = "Read-only"; saved.className = "saved dirty";
+    const take = who.you ? "Take over here" : "Take over";
+    holdbar.replaceChildren(who.you ? `You're taking these minutes in another window or device (since ${clock(who.since)}).`
+        : `${who.holder} is taking these minutes (since ${clock(who.since)}). This page is read-only, so nothing gets overwritten; it shows the minutes as they were when you opened it.`,
+      lost ? " Changes made here after the last save weren't saved." : "", " ",
+      h("a", { href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view ↗"), " ",
+      h("button", { class: "btn small", onclick: async () => {
+        if (!who.you && !confirm(`Take over from ${who.holder}? Their console becomes read-only, and you're recorded as taking the minutes from here.`)) return;
+        const r = await post("hold", { take: true });
+        if (r.ok) location.reload(); else checkIn(); } }, take), " ", exit());
+    holdbar.hidden = false;
+    if (lost) notice(`${who.holder} took over`, `${who.holder} is taking these minutes now, so this page is read-only. ` +
+      "Anything typed here in the last few seconds wasn't saved: copy it if you need it.", h("a", { class: "btn small", href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view"));
+  }
+  function closed(how, by) {  // discarded or submitted in another console: nothing more to do here
+    readOnly = true; closedHow = how;
+    // still readable: the steps and Back/Next move around (as they were when this page was opened); nothing changes
+    for (const id of ["panel", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    document.getElementById("endforms").hidden = true;  // Submit and Discard are for whoever holds the minutes
+    saved.textContent = how === "submitted" ? "Submitted" : "Discarded"; saved.className = "saved dirty";
+    const who = by || "Someone";
+    holdbar.replaceChildren(`${who} ${how} these minutes from another console. `,
+      how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"),
+      " ", exit());
+    holdbar.hidden = false;
+    notice(how === "submitted" ? `Minutes submitted${by ? " by " + by : ""}` : `Minutes discarded${by ? " by " + by : ""}`,
+      how === "submitted" ? `${who} submitted these minutes from another console, so they're finished. This page is read-only now; the finished minutes have everything.`
+        : `${who} discarded these minutes from another console, so they're gone. This page still shows them as they were when you opened it (read-only): copy anything you need before leaving.`,
+      how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
+  }
+  let closedHow = null;
+  async function checkIn() {
+    if (closedHow) return;
+    const r = await post("hold", readOnly ? { peek: true } : PREV ? { prev: PREV } : {}).catch(() => null);
+    if (!r) return;
+    PREV = null;  // only the first check-in carries on from before a reload
+    if (r.status === 409) { const j = await r.json(); if (j.closed) closed(j.closed, j.by); else if (j.holder) lock(j, held && !readOnly); return; }
+    if (!readOnly && r.ok) held = true;
+    if (readOnly && r.ok) {  // they've closed it: carry on (a reload brings their last changes)
+      holdbar.replaceChildren("They've closed the console. ", h("button", { class: "btn small", onclick: () => location.reload() }, "Continue the minutes"));
+    }
+  }
+  checkIn();
+  setInterval(checkIn, 5000);
+  // leaving lets go at once; coming back (Back/Forward restores the page without rerunning it, or the tab comes to
+  // the front) checks in at once, rather than at the next tick, so two consoles are never both editable for long
+  window.addEventListener("pagehide", () => { if (!readOnly) navigator.sendBeacon(`/api/meetings/${M.slug}/release`, new Blob([JSON.stringify({ tab: TAB })], { type: "application/json" })); });
+  window.addEventListener("pageshow", (e) => { if (e.persisted) checkIn(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkIn(); });
+
   // ---------- saving ----------
   let timer = null;
   const waiters = []; // every caller of save() is resolved when the next actual save finishes
   function save(now = false) {
+    if (readOnly) return Promise.resolve();
     saved.textContent = "Saving…"; saved.className = "saved dirty";
     clearTimeout(timer);
     const done = new Promise((resolve) => waiters.push(resolve));
@@ -78,8 +153,9 @@
       try {
         const r = await fetch(`/api/meetings/${M.slug}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ meeting: M, state: S }),
+          body: JSON.stringify({ meeting: M, state: S, tab: TAB }),
         });
+        if (r.status === 409 || r.status === 404) { await checkIn(); if (readOnly) return; }  // taken over, or discarded elsewhere
         if (!r.ok) throw new Error(await r.text());
         saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved";
       } catch (e) { saved.textContent = "Not saved: " + e.message; saved.className = "saved err"; }
@@ -297,8 +373,9 @@
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
   function eventsSection() {
     const sec = "Upcoming Events";
-    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null, until: e.until || null }));
+    const evs = M.sections[sec] = (M.sections[sec] || []).map((e) => ({ text: e.text, member: null, when: e.when || null, until: e.until || null, cal: e.cal || null }));
     const wrap = h("div", {});
+    const cals = h("div", {});  // the calendar list below, refreshed with the events (one removed shows there again)
     const draw = () => {
       wrap.replaceChildren(...evs.map((e, i) => {
         const [d, t] = (e.when || "").split("T"), [ed, et] = (e.until || "").split("T");
@@ -315,21 +392,64 @@
           save();
         };
         [date, time, endDate, endTime].forEach((x) => x.onchange = setWhen);
+        const twin = e.when && (D.calendar || []).find((c) => c.start === e.when.slice(0, 10) && !same(e, c) && similar(c.title, e.text));
         const nodate = h("span", { class: "hint" }, "no date: not on the calendar");
         nodate.hidden = !!e.when;
+        const cal = h("select", { "aria-label": "Calendar", title: "Which calendar it goes on", onchange: (ev) => { e.cal = ev.target.value === "events" ? null : ev.target.value; save(); } },
+          [["events", "Club events"], ["community", "Community"], ["planning", "Planning"]].map(([v, t]) => h("option", { value: v, selected: v === (e.cal || "events") }, t)));
         const ta = h("textarea", { rows: 1, placeholder: "What, and where", "aria-label": "Event",
           oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
         ta.value = e.text;
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
             h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, emo("✖️", "x"))),
-          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, nodate),
-          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")));
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, cal, nodate),
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")),
+          twin ? h("p", { class: "duphint" }, `Possible duplicate: "${twin.title}" is on the calendar that day. If it's the same event, `,
+            h("button", { class: "btn small ghost", title: "Replace this entry with the calendar's: its title, place, date, time and calendar", onclick: () => {
+              Object.assign(e, { text: twin.title + (twin.where ? `, ${twin.where}` : ""), when: twin.when, until: twin.until, cal: twin.cal === "events" ? null : twin.cal });
+              draw(); save(); } }, "use the calendar's"), " (it stays in the minutes, and on the calendar once) or remove this one.") : null);
       }), h("button", { class: "btn small ghost", onclick: () => { evs.push({ text: "", member: null, when: null }); draw();
         wrap.querySelectorAll("textarea")[evs.length - 1].focus(); } }, "+ Add event"));
       setTimeout(() => wrap.querySelectorAll("textarea").forEach(grow), 0);
+      cals.replaceChildren(calendarCard(evs, draw));
     };
     draw();
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap);
+    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap, cals);
+  }
+
+  // Two titles that look like the same event: half the shorter one's words in the other (calview.similar)
+  const SMALL = new Set(["the", "and", "for", "with", "at", "on", "in", "of", "an", "to"]);
+  const words = (t) => new Set((t.toLowerCase().match(/[a-z0-9]+/g) || []).filter((w) => w.length > 1 && !SMALL.has(w)));
+  const similar = (a, b) => { const x = words(a), y = words(b); return x.size > 0 && y.size > 0 && [...x].filter((w) => y.has(w)).length * 2 >= Math.min(x.size, y.size); };
+  const same = (e, c) => e.text.trim().toLowerCase().startsWith(c.title.toLowerCase());  // added from the list: one event
+
+  // What's on the calendar (console.calendar_ahead), to read out; added to the minutes only on a tap.
+  let ahead = "next";
+  function calendarCard(evs, redraw) {
+    const card = h("div", { class: "card" });
+    const day = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const plus = (n) => { const d = new Date(M.date + "T12:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const ends = { next: D.next_meeting, "14": plus(14), "31": plus(31), "92": plus(92) };
+    const pick = h("select", { "aria-label": "How far ahead", onchange: (e) => { ahead = e.target.value; fill(); } },
+      [["next", "until the next meeting"], ["14", "the next 2 weeks"], ["31", "the next month"], ["92", "the next 3 months"]]
+        .map(([v, t]) => h("option", { value: v, selected: v === ahead }, t)));
+    const fill = () => {
+      // already in the minutes: same day, and the text starts with its title ("Fox hunt, the park")
+      const have = (c) => evs.some((e) => (e.when || "").slice(0, 10) === c.start && same(e, c));
+      const alike = (c) => evs.find((e) => (e.when || "").slice(0, 10) === c.start && e.text.trim() && similar(c.title, e.text));
+      const list = (D.calendar || []).filter((c) => c.start <= ends[ahead] && !have(c));
+      card.replaceChildren(h("p", { class: "row" }, h("strong", {}, "From the calendar"), pick),
+        list.length ? h("ul", {}, list.map((c) => [c, alike(c)]).map(([c, dup]) => h("li", { class: dup ? "dup" : null },
+          h("strong", {}, day(c.start), c.time ? " " + c.time : "", c.end !== c.start ? " – " + day(c.end) : ""), " ",
+          c.title, c.where ? ` (${c.where})` : "", " ", h("span", { class: "muted small" }, c.kind), " ",
+          dup ? h("span", { class: "duphint" }, `possibly the same as "${dup.text}" above `) : null,
+          h("button", { class: "btn small ghost", title: "Add to tonight's Upcoming Events", onclick: () => {
+            evs.push({ text: c.title + (c.where ? `, ${c.where}` : ""), member: null, when: c.when, until: c.until, cal: c.cal === "events" ? null : c.cal }); redraw(); save(); } }, "+ Add"))))
+          : h("p", { class: "hint" }, "Nothing on the calendar for then."),
+        h("p", { class: "hint" }, "Club events, community events, Planning, holidays and shared birthdays, to read out. + Add puts one in the minutes (it stays on the calendar once, not twice). An event can be left out from its page on the calendar."));
+    };
+    fill();
+    return card;
   }
 
   // ---------- business: tracked items (business.py); every change is saved on the server at once ----------

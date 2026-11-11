@@ -444,14 +444,19 @@ def list_changed(s: dict, today: dt.date | None = None) -> bool:
     return _list(s, today) != {d: v for d, v in sent["nights"].items() if d >= today_s}
 
 
-def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: str, url: str) -> int:
-    """Send the chow list PDF and remember what was sent, so the Chow page can tell when it has changed."""
+def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: str, url: str, link_to: list[str] = ()) -> int:
+    """Send the chow list (the PDF to `to`, a link to `link_to`, as each chose on their Email tab) and remember what was
+    sent, so the Chow page can tell when it has changed."""
     callsign = club.info.get("callsign", "W8LBZ")
+    rest = (f"Can't make your night? Ask someone to swap on the chow page: {url}/chow\n\nTo change or stop getting the "
+            f"chow list: {url}/profile/email\n\n73,\n{callsign} Minutes")
     sent = auth.send_email(to, f"{callsign} chow list", f"The chow list as of {dt.date.today():%B %-d, %Y} is attached: "
-                           f"who brings chow on each meeting night still to come.\n\nCan't make your night? Ask someone "
-                           f"to swap on the chow page: {url}/chow\n\nTo stop getting the chow list: {url}/profile/email"
-                           f"\n\n73,\n{callsign} Minutes", attachments=[(pdf[0], pdf[1], "application/pdf")],
-                           only_to=club.email_only_to())
+                           f"who brings chow on each meeting night still to come.\n\n{rest}",
+                           attachments=[(pdf[0], pdf[1], "application/pdf")], only_to=club.email_only_to()) if to else 0
+    if link_to:
+        sent += auth.send_email(list(link_to), f"{callsign} chow list", f"The chow list has been updated ({dt.date.today():%B %-d, %Y}): "
+                                f"who brings chow on each meeting night still to come.\n\nSee it: {url}/chow\n"
+                                f"Or as a PDF to print: {url}/chow/list.pdf\n\n{rest}", only_to=club.email_only_to())
     s["emailed"] = {"at": int(time.time()), "by": by, "nights": _list(s)}
     _log("email_list", by, sent=sent)
     return sent

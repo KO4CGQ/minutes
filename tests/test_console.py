@@ -1,4 +1,6 @@
 import datetime as dt
+
+import pytest
 from pathlib import Path
 
 from w8lbz_minutes import console
@@ -170,3 +172,112 @@ def test_celebrations_the_week_up_to_tonight_shared_birthdays_only():
     assert console.celebrations(c, dt.date(2026, 12, 3)) == ["Happy birthday, Cal Cole! (December)"]  # first meeting of the month
     assert console.celebrations(c, dt.date(2026, 12, 10)) == []
     assert console.celebrations(c, dt.date(2027, 1, 2)) == []  # the week crosses New Year
+
+
+def test_recorded_by_shows_only_when_someone_else_led(tmp_path, monkeypatch):
+    from w8lbz_minutes.web import templates
+    from w8lbz_minutes.console import SECTIONS
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")  # the president chairs, Sam takes the minutes
+    m = Archive(tmp_path, club).by_slug[m.slug]  # survives saving
+    assert (m.leader, m.recorder) == ("doe", "kim")
+    html = lambda: templates.get_template("_minutes.html").render(m=m, pdf=False, club=club, SECTIONS=SECTIONS)
+    assert "Led by Jane Doe · Recorded by Sam Kim" in html()
+    m.recorder = "doe"
+    assert "Led &amp; Recorded by Jane Doe" in html()  # one person did both
+    m.recorder = None
+    assert "Recorded by" not in html() and "Led by Jane Doe" in html()  # older minutes: no recorder saved
+
+    a = mail_archive(tmp_path / "mail", monkeypatch, only_to=None)
+    a.by_slug["2026-11-12"].recorder = "kim"
+    console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "u")
+    msg = FakeSMTP.outbox[0]
+    assert msg["Reply-To"] == "sam@example.org" and "led by Jane Doe, recorded by Sam Kim" in msg.get_body(("plain",)).get_content()
+
+
+def test_one_meeting_open_at_a_time(tmp_path):
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe")
+    assert console.start(a, dt.date(2026, 11, 12), "kim").slug == m.slug  # the same date: opens it
+    with pytest.raises(ValueError, match="November 12 are still open"):
+        console.start(a, dt.date(2026, 11, 19), "doe")  # last week's never submitted
+    console.discard(a, m.slug)
+    m = console.start(a, dt.date(2026, 11, 19), "doe")  # after a discard
+    console.submit(a, m.slug)
+    assert console.start(a, dt.date(2026, 11, 26), "doe").status == "draft"  # and after a submit
+
+
+def test_one_console_takes_the_minutes_and_another_can_take_over(tmp_path):
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")
+    assert console.hold(a, m.slug, "kim", "tab1") is None                  # Sam's console holds them
+    assert console.hold(a, m.slug, "kim", "tab1") is None                  # checking in keeps them
+    assert console.hold(a, m.slug, "doe", "tab2")["member"] == "kim"       # Jane's is read-only
+    assert console.holder(m.slug, "tab1") is None and console.holder(m.slug, "tab2")["member"] == "kim"
+    assert console.hold(a, m.slug, "doe", "tab2", take=True) is None       # Jane takes over: she's recording now
+    assert a.by_slug[m.slug].recorder == "doe" and console.hold(a, m.slug, "kim", "tab1")["member"] == "doe"
+    console.release(m.slug, "tab1")                                        # Sam's (read-only) tab closing changes nothing
+    assert console.holder(m.slug)["member"] == "doe"
+    console.release(m.slug, "tab2")                                        # Jane closes hers: free at once
+    assert console.holder(m.slug) is None and console.hold(a, m.slug, "kim", "tab1") is None
+    console._holds[m.slug]["at"] -= console.HOLD_SECONDS                  # a console that lost its connection
+    assert console.hold(a, m.slug, "doe", "tab3") is None and a.by_slug[m.slug].recorder == "doe"  # carries on; no take over
+
+
+def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = archive_with_prev(tmp_path)
+    a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True}, {"id": "kim", "first": "Sam", "last": "Kim", "minutes_editor": True}])
+    monkeypatch.setattr(web, "archive", a)
+    auth = Auth(a.club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", auth)
+    def as_(who):
+        t = TestClient(web.app)
+        t.cookies.set(web.COOKIE, auth.new_session(who))
+        return t
+    sam, jane = as_("kim"), as_("doe")
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")
+    assert sam.post(f"/api/meetings/{m.slug}/hold", json={"tab": "s"}).json() == {"held": True}
+    r = jane.post(f"/api/meetings/{m.slug}/hold", json={"tab": "j"})
+    assert r.status_code == 409 and r.json()["holder"] == "Sam Kim"
+    body = {"meeting": {"sections": {}}, "state": {}, "tab": "j"}
+    assert jane.put(f"/api/meetings/{m.slug}", json=body).status_code == 409   # would overwrite Sam's work
+    assert "is taking these minutes" in jane.post(f"/console/{m.slug}/discard").text  # back on the start page, with why
+    assert m.slug in a.by_slug                                                 # still there
+    assert jane.post(f"/api/meetings/{m.slug}/hold", json={"tab": "j", "take": True}).json() == {"held": True}
+    assert sam.put(f"/api/meetings/{m.slug}", json={**body, "tab": "s"}).status_code == 409  # Sam's console is read-only now
+    jane.post(f"/console/{m.slug}/discard")                                  # Jane discards them: Sam's console is told
+    r = sam.post(f"/api/meetings/{m.slug}/hold", json={"tab": "s", "take": True})
+    assert r.status_code == 409 and r.json() == {"closed": "discarded", "by": "Jane Doe"} and console.holder(m.slug) is None
+
+
+def test_top_bar_says_continue_minutes_for_an_open_meeting_from_another_day(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from w8lbz_minutes import web
+    from w8lbz_minutes.auth import Auth
+    a = archive_with_prev(tmp_path)
+    a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True}, {"id": "kim", "first": "Sam", "last": "Kim"}])
+    monkeypatch.setattr(web, "archive", a)
+    auth = Auth(a.club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", auth)
+    def page_as(who):
+        t = TestClient(web.app)
+        t.cookies.set(web.COOKIE, auth.new_session(who))
+        return t.get("/links").text  # not About: it shows the changelog, which names the button
+    assert "Start meeting" in page_as("doe")
+    console.start(a, dt.date(2026, 11, 12), "doe")  # not today: no red dot for anyone
+    assert "Continue minutes (Nov 12)" in page_as("doe") and "start live" not in page_as("doe")
+    assert "Continue minutes" not in page_as("kim") and "start live" not in page_as("kim")
+
+
+def test_a_reloaded_console_keeps_the_minutes_and_a_duplicated_tab_never_shares_them(tmp_path):
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe")
+    assert console.hold(a, m.slug, "doe", "load1") is None
+    assert console.hold(a, m.slug, "doe", "load2", prev="load1") is None      # reloaded: carries on, no take over
+    assert console.hold(a, m.slug, "doe", "load1")["tab"] == "load2"          # the old page's id no longer holds them
+    assert console.hold(a, m.slug, "kim", "x", prev="load2")["member"] == "doe"  # someone else can't borrow the id

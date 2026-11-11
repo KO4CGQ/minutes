@@ -3,6 +3,8 @@
 <title>{% block title %}W8LBZ Minutes{% endblock %}</title>
 <script nonce="{{ csp_nonce }}">/* theme before first paint: "light", "dark", or follow the device */
 try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+/* Safari (Mac): an empty date or time box shows today in grey (style.css blanks it); other browsers keep their mm/dd/yyyy hint */
+if (/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)) document.documentElement.classList.add("safari");
 /* color emoji? draw one and look for colored pixels; without them, icons drawn by the app stand in (see emoji() in _icons.html) */
 try { const c = document.createElement("canvas").getContext("2d", { willReadFrequently: true }); c.canvas.width = c.canvas.height = 20;
   c.textBaseline = "top"; c.font = "16px sans-serif"; c.fillText("\u270F\uFE0F", 0, 0);
@@ -27,11 +29,12 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   {% if me %}
   <span class="spacer"></span>
   {% if live %}<a class="start live" href="/meetings/{{ live.slug }}">{{ emoji('🔴', 'live') }} Live meeting</a>
+  {% elif can_lead and open_draft %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console/{{ open_draft.slug }}" title="These minutes are still open: continue them, or discard them from Start meeting">Continue minutes ({{ open_draft.date.strftime('%b %-d') }})</a>
   {% elif can_lead %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console" data-meets="{{ meeting_at }}">Start meeting</a>{% endif %}
   <span class="clock" title="Club time"></span>
   <form action="/search" class="barsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business, chow and calendar"></form>
   <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}<span class="name">{{ me.short or me.first }}</span>{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
-    <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">{{ emoji('⬆️', 'arrowup') }} Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/security">Security</a><a href="/admin/email">Email log</a><a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
+    <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">{{ emoji('⬆️', 'arrowup') }} Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin/security">Security</a><a href="/admin/email">Email log</a>{% if STAGE %}<a href="/admin/stage">Stage sync</a>{% endif %}<a href="/admin/updates">Updates{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
     {% if is_admin %}<form method="post" action="/admin/mode"><input type="hidden" name="on" value="{{ 0 if admin_until else 1 }}"><input type="hidden" name="next" value="{{ request.url.path }}">
       <button type="submit"><span class="ico">{{ emoji("🛡️", "shield") }}</span>{{ 'Turn off admin mode' if admin_until else 'Turn on admin mode' }}</button></form>{% endif %}
     <div class="sep"></div>
@@ -62,6 +65,7 @@ document.addEventListener("submit", (e) => {
 {% if admin_until %}<div class="adminbar">Admin mode is on until {{ admin_until|clock }}: you can see and change what officers can.{% if update_available %} <a href="/admin/updates" class="updlink">Version {{ update_available }} is available</a>{% endif %}
 <form method="post" action="/admin/mode"><input type="hidden" name="on" value="0"><input type="hidden" name="next" value="{{ request.url.path }}"><button type="submit">Turn off</button></form></div>{% endif %}
 {% if update_available and not admin_until %}<div class="updbar">Version {{ update_available }} of the app is available. <a href="/admin/updates">Install it when you're ready</a> (you'll turn on admin mode first).</div>{% endif %}
+{% if STAGE %}<div class="preview stage"><b>STAGING</b> server: a test copy of the app, with prod's data from the last sync. Changes here never reach the live app, and email goes only to you{% if is_admin and admin_until %} (<a href="/admin/stage">sync</a> · <a href="/admin/email">email log</a>){% endif %}.</div>{% endif %}
 {% if PREVIEW %}<div class="preview">PREVIEW of <b>{{ PREVIEW }}</b>: a copy of the data. Emails aren't sent{% if is_admin and admin_until %} (see the <a href="/admin/email">email log</a>){% endif %} and roster edits don't reach the real sheet.</div>{% endif %}
 {% if pk_offer %}<div class="msg ok pkoffer" id="pkoffer" hidden><span id="pkoffer-text">Sign in faster next time: add a passkey on this device (fingerprint, face or device PIN), with no email needed.</span>
   <button id="pkoffer-add" class="btn small" type="button">Add passkey</button> <button id="pkoffer-no" class="btn small ghost" type="button">Not now</button></div>
@@ -94,6 +98,9 @@ document.addEventListener("submit", (e) => {
   if (e.target.hasAttribute("data-nosubmit") || (msg && !confirm(msg))) e.preventDefault();
 });
 document.addEventListener("change", (e) => { if (e.target.matches("[data-autosubmit]")) e.target.form.submit(); });
+// Safari: an empty date or time box shows blank (style.css): keep its value attribute in step with what's picked
+const dateEmpty = (e) => { if (e.target.matches?.("input[type=date], input[type=time]")) e.target.setAttribute("value", e.target.value); };
+document.addEventListener("input", dateEmpty); document.addEventListener("change", dateEmpty);
 document.addEventListener("click", (e) => {
   if (e.target.matches("[data-select]")) e.target.select();
   const t = e.target.closest("[data-tick]");  // "Tick all"

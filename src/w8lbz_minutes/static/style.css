@@ -102,6 +102,7 @@ button.linkbtn:hover { color: var(--danger); } button.linkbtn.more { color: var(
 .msg { padding: .7rem .9rem; border-radius: var(--radius-sm); text-align: left; border: 1px solid transparent; }
 .msg.ok { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
 .msg.err { background: var(--danger-soft); color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
+.msg.warn { background: var(--warn-soft); color: var(--warn-text); border-color: var(--warn-edge); }
 .note { margin: 1rem 0 0; padding: .75rem 1rem; border-radius: var(--radius-sm); font-size: .95rem; line-height: 1.4; }
 .note.ok { background: var(--accent-soft); } .note.err { background: var(--danger-soft); color: var(--danger-text); }
 .missed { color: var(--danger); }
@@ -130,6 +131,7 @@ nav.top .drop .themes button { width: auto; flex: 1; text-align: center; padding
 nav.top .drop .themes button.on { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
 .preview { background: var(--warn-soft); color: var(--warn-text); border-bottom: 1px solid var(--warn-edge); padding: .45rem 1rem; font-size: .9rem; text-align: center; }
 .preview a { color: inherit; }
+.preview.stage { background: #0b4f6c; color: #fff; border-color: #0b4f6c; }  /* staging server: not to be mistaken for the live app */
 .adminbar { background: #8b1d1d; color: #fff; padding: .45rem 1rem; font-size: .9rem; text-align: center; }
 .adminbar.viewas { background: #4b2a7a; } .adminbar a.updlink { color: #fff; font-weight: 600; margin-left: .6rem; }
 .adminbar form { display: inline; margin-left: .6rem; }
@@ -491,3 +493,11 @@ dialog.modal.wide { width: min(40rem, calc(100vw - 2rem)); } dialog.modal h3 { f
 dialog.modal .dacts { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 .2rem; } dialog.modal .dacts form { margin: 0; }
 details.hist { margin-top: 1rem; } details.hist summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
 button.cardopen .card-text { display: block; }
+
+/* Safari fills an empty date or time box with today's date in grey, which reads as a value: blank until it's in use.
+   Only in Safari (.safari, set in base.html): Chrome and Edge keep their mm/dd/yyyy and --:-- -- hints */
+.safari input:is([type=date], [type=time]):is([value=""], :not([value])):not(:focus)::-webkit-datetime-edit { color: transparent; }
+
+/* a possible duplicate (calview.mark_duplicates, console.js similar()): highlighted, never hidden */
+.duphint { color: var(--warn-text); font-size: .85rem; }
+li.dup .caltitle, li.dup > strong { background: var(--warn-soft); border-radius: .2rem; }

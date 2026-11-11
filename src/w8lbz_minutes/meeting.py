@@ -29,6 +29,7 @@ SECTIONS = [
 MEMBER_TAG = re.compile(r"\s*<!--\s*member:\s*([\w-]+)\s*-->")
 WHEN_TAG = re.compile(r"\s*<!--\s*when:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
 UNTIL_TAG = re.compile(r"\s*<!--\s*until:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
+CAL_TAG = re.compile(r"\s*<!--\s*cal:\s*(community|planning)\s*-->")
 EVENT_HOURS = 2  # how long a timed event with no end is taken to last
 
 
@@ -38,6 +39,7 @@ class Item:
     member: str | None = None  # roster id, community reports only
     when: str | None = None  # Upcoming Events: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"
     until: str | None = None  # its end: the last day, or the end time (same formats)
+    cal: str | None = None  # its calendar: "community" or "planning"; None for Club events
 
     def span(self) -> tuple[dt.datetime, dt.datetime, bool]:
         """(start, end, all_day). All-day: end is the last day (inclusive). Timed: end is the end time; with
@@ -73,6 +75,7 @@ class Meeting:
     status: str = "draft"  # draft | imported | published
     version: int = 1
     leader: str | None = None
+    recorder: str | None = None  # who took the minutes in the console; shown only when not the leader
     source: str | None = None  # original file name, if imported
     note: str | None = None  # e.g. import warnings for the reviewer
     in_person: list[str] = field(default_factory=list)
@@ -99,6 +102,7 @@ class Meeting:
             "status": self.status,
             "version": self.version,
             "leader": self.leader,
+            "recorder": self.recorder,
             "source": self.source,
             "note": self.note,
             "attendance": {"in_person": self.in_person, "remote": self.remote},
@@ -110,7 +114,7 @@ class Meeting:
         for name in SECTIONS:
             out.append(f"## {name}")
             for it in self.items(name):
-                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "")
+                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "")
                 out.append(f"- {it.text}{tag}")
             out.append("")
         return "\n".join(out)
@@ -125,6 +129,7 @@ class Meeting:
             status=fm.get("status", "draft"),
             version=fm.get("version", 1),
             leader=fm.get("leader"),
+            recorder=fm.get("recorder"),
             source=fm.get("source"),
             note=fm.get("note"),
             in_person=att.get("in_person") or [],
@@ -141,10 +146,10 @@ class Meeting:
                 text = line[2:]
                 tag = MEMBER_TAG.search(text)
                 member = tag.group(1) if tag else None
-                when, until = WHEN_TAG.search(text), UNTIL_TAG.search(text)
-                text = UNTIL_TAG.sub("", WHEN_TAG.sub("", MEMBER_TAG.sub("", text))).strip()
+                when, until, cal = WHEN_TAG.search(text), UNTIL_TAG.search(text), CAL_TAG.search(text)
+                text = CAL_TAG.sub("", UNTIL_TAG.sub("", WHEN_TAG.sub("", MEMBER_TAG.sub("", text)))).strip()
                 m.sections[current].append(Item(text, member, when.group(1) if when else None,
-                                                until.group(1) if until and when else None))
+                                                until.group(1) if until and when else None, cal.group(1) if cal and when else None))
             elif current and line.strip() and m.sections[current]:
                 # continuation line of the previous bullet
                 m.sections[current][-1].text += " " + line.strip()

@@ -52,6 +52,9 @@ def roster_locked(fn):
 # Preview mode (deploy/preview.sh): set to the branch name. Email goes to an outbox file instead of
 # SMTP, and roster edits go to a local copy of the sheet, never the real one.
 PREVIEW = os.environ.get("W8LBZ_PREVIEW") or None
+# Stage mode (a staging server: docs/server-admin.md → Staging server): prod's data, pulled one way each night. Email
+# goes only to the person clicking (auth.send_email); the app doesn't update itself.
+STAGE = bool(os.environ.get("W8LBZ_STAGE"))
 
 
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,3}$", re.I)

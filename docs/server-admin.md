@@ -11,6 +11,28 @@ curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh
 Then put `club.yaml` in `/etc/w8lbz-minutes/` (and `google-service-account.json`, only for backups to Google Drive), and data in `/var/lib/w8lbz-minutes/`.
 The app runs as the `minutes` user on port 8000. The roster cache (`roster.json`) is rebuilt daily at 04:00 from the roster the app keeps (`roster-sheet.json`); backups run on the schedule set on the Backups page.
 
+## Staging server (optional)
+A second container that runs the app on a copy of the live data, to try a change before it's released. It pulls the
+live data **one way** (nightly at 03:00, and **Sync now**); nothing on it can change the live server. Every page has a
+STAGING banner, and email goes only to the person whose click caused it (a sign-in link: to whoever asked for it), with
+"[STAGE]" in the subject; email with nobody clicking (reminders, timers) is held, and all of it is on the Email log page.
+Roles are the same as live; passkeys are per address, so each person adds one on stage too (or signs in by emailed link).
+
+1. Set up the container as above (`setup.sh`, `club.yaml` with stage's own address under the sign-in settings, the
+   SMTP settings in `/etc/w8lbz-minutes/env`), and `apt install rsync` on **both** servers.
+2. On stage, as root: `ssh-keygen -t ed25519 -N "" -f /etc/w8lbz-minutes/stage-sync-key`.
+3. On the **live** server, add its `.pub` line to `/root/.ssh/authorized_keys`, limited to reading the data folder:
+   `command="rrsync -ro /var/lib/w8lbz-minutes/",restrict ssh-ed25519 AAAA... stage-sync`
+4. On stage, add to `/etc/w8lbz-minutes/env`: `W8LBZ_STAGE=1` and `STAGE_SYNC_FROM=root@<live server>:./`. Leave
+   `W8LBZ_BACKUP_PASSPHRASE` out (stage makes no backups).
+5. On stage: `install -m 644 /opt/w8lbz-minutes/deploy/w8lbz-stage-sync.* /etc/systemd/system/ && systemctl daemon-reload &&
+   systemctl enable --now w8lbz-stage-sync.timer w8lbz-stage-sync.path && systemctl start w8lbz-stage-sync && systemctl restart w8lbz-minutes`
+   (these units aren't installed by `update.sh`, so the live server never gets them).
+
+Admin mode → name menu → **Stage sync**: the last sync, **Sync now**, and **Pause nightly sync** (to keep test changes
+overnight). A sync replaces everything except stage's own sign-ins and passkeys, email log, backups and update settings.
+Stage doesn't update itself; a developer installs a branch with `deploy/stage-push.sh` (developer guide).
+
 ## Config
 `club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the admins list, email test mode, the starting club links and the private never-record list. People, their titles and who may lead come from the roster the app keeps (`roster-sheet.json` in the data folder, edited on the Roster pages; moved off the club's Google Sheet in 0.13.0); the list of offices is `offices:` in club.yaml.
 
@@ -23,6 +45,8 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
   Without them, links are written to the server log instead.
 - **AI** (optional) needs `W8LBZ_OPENROUTER_KEY` in `/etc/w8lbz-minutes/env` and `ai: {model: ...}` in club.yaml. Each call is logged to `ai-log.jsonl` in the data folder (time, model, size, cost; never the text).
 - **Recovery:** an admin on the server can print a one-time link for a member: `w8lbz-minutes login-link KD8XYZ`
+
+Admin mode → Security → **Members** lists every member on the roster: their last sign-in, how many passkeys they've set up (and when one was last used), and how many devices are signed in now, so you can see who hasn't signed in or still uses emailed links. `/admin` goes to the Security page.
 
 Officers and members ticked `minutes_editor` on the roster can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
 

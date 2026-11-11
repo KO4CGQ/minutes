@@ -12,7 +12,7 @@
 <div class="headrow"><h2 class="calrange">{{ lo.strftime('%b %-d') }} – {{ hi.strftime('%b %-d, %Y') }}</h2>
 <form class="row" action="{{ base }}">{% if lo != today %}<input type="hidden" name="start" value="{{ lo }}">{% endif %}<label class="small">Show <select name="weeks" data-autosubmit>{% for n, label in agenda_weeks.items() %}<option value="{{ n }}" {{ 'selected' if n == weeks }}>{{ label }}</option>{% endfor %}</select></label><noscript><button class="btn small ghost">Go</button></noscript></form>{{ moves() }}</div>
 {% for d, es in by_day|dictsort %}<h2 class="calday" id="d{{ d }}">{{ 'Today' if d == today else d.strftime('%A, %B %-d') }}</h2>
-<ul class="agenda">{% for e in es %}<li data-kind="{{ e.kind }}">{% call open(e) %}<span class="caltime">{{ e.time if e.time and d == e.start else 'All day' if not e.time else '' }}</span><i class="dot k-{{ e.kind }}"></i><span class="caltitle">{{ e.title }}{% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}</span>{% endcall %}</li>{% endfor %}</ul>
+<ul class="agenda">{% for e in es %}<li data-kind="{{ e.kind }}"{% if e.dup %} class="dup"{% endif %}>{% call open(e) %}<span class="caltime">{{ e.time if e.time and d == e.start else 'All day' if not e.time else '' }}</span><i class="dot k-{{ e.kind }}"></i><span class="caltitle">{{ e.title }}{% if e.end != e.start %}<span class="muted small"> ({{ e.start.strftime('%b %-d') }} – {{ e.end.strftime('%b %-d') }})</span>{% endif %}{% if e.dup %}<span class="duphint"> possible duplicate of "{{ e.dup }}"</span>{% endif %}</span>{% endcall %}</li>{% endfor %}</ul>
 {% else %}<p class="muted">Nothing on the calendar for these weeks.</p>{% endfor %}
 {% if by_day %}<p class="muted" id="calnone" hidden>Everything on these weeks is in a calendar you've hidden; tap it in the list above to show it.</p>{% endif %}
 {{ moves() }}
@@ -23,7 +23,7 @@
 <table class="month"><thead><tr>{% for n in weekdays %}<th>{{ n }}</th>{% endfor %}</tr></thead><tbody>
 {% set ns = namespace(d=lo) %}{% for w in range(((hi - lo).days + 1) // 7) %}<tr>{% for i in range(7) %}{% set d = ns.d %}
 <td class="{{ 'other' if d.month != first.month }}{{ ' today' if d == today }}"><a class="daynum" href="{{ base }}?start={{ d }}" aria-label="{{ d.strftime('%A, %B %-d') }}">{{ d.day }}</a>
-{% set es = by_day.get(d, []) %}{% if es %}<ul>{% for e in es %}<li data-kind="{{ e.kind }}" title="{{ e.time ~ ' ' if e.time }}{{ e.title }}"{% if loop.index > 3 %} class="extra"{% endif %}>{% call open(e) %}<i class="dot k-{{ e.kind }}"></i>{% if e.time and d == e.start %}<span class="caltime">{{ e.time }}</span> {% endif %}<span class="caltitle">{{ e.title }}</span>{% endcall %}</li>{% endfor %}<li class="more"{% if es|length <= 3 %} hidden{% endif %}><a href="{{ base }}?start={{ d }}">+<span>{{ es|length - 3 }}</span> more</a></li></ul>{% endif %}</td>
+{% set es = by_day.get(d, []) %}{% if es %}<ul>{% for e in es %}<li data-kind="{{ e.kind }}" title="{{ e.time ~ ' ' if e.time }}{{ e.title }}{{ ' (possible duplicate of "' ~ e.dup ~ '")' if e.dup }}"{% if loop.index > 3 or e.dup %} class="{{ 'extra' if loop.index > 3 }}{{ ' dup' if e.dup }}"{% endif %}>{% call open(e) %}<i class="dot k-{{ e.kind }}"></i>{% if e.time and d == e.start %}<span class="caltime">{{ e.time }}</span> {% endif %}<span class="caltitle">{{ e.title }}</span>{% endcall %}</li>{% endfor %}<li class="more"{% if es|length <= 3 %} hidden{% endif %}><a href="{{ base }}?start={{ d }}">+<span>{{ es|length - 3 }}</span> more</a></li></ul>{% endif %}</td>
 {% set ns.d = d + timedelta(days=1) %}{% endfor %}</tr>{% endfor %}
 </tbody></table>
 <p class="muted small">Tap an event for details, or a day to see it in the agenda.</p>
@@ -35,6 +35,7 @@
 {% for e in items %}<template id="ev{{ loop.index0 }}">
 <p class="calcal"><i class="dot k-{{ e.kind }}"></i>{{ kinds.get(e.kind, '') }}</p>
 <h2>{{ e.title }}</h2>
+{% if e.dup %}<p class="duphint">Possible duplicate: "{{ e.dup }}" is on the same day. If it's the same event, delete one{% if e.from_minutes %} (this one in the leader console){% endif %}.</p>{% endif %}
 <p class="calwhen">{% if e.starts %}{% if e.starts.date() == e.ends.date() %}{{ e.starts.strftime('%A, %B %-d') }}<br>{{ e.time }} – {{ e.ends.strftime('%-I:%M %p') }}
   {% else %}{{ e.starts.strftime('%a, %b %-d, %-I:%M %p') }} –<br>{{ e.ends.strftime('%a, %b %-d, %-I:%M %p') }}{% endif %}
 {% if e.zone %}<br><span class="muted">{{ e.zone }}</span>{% endif %}
