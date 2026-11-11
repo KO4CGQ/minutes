@@ -48,7 +48,20 @@ document.querySelectorAll("form[data-preview]").forEach((f) => {
     const t = e.target;
     if (t.type === "file" && t.files[0]) {
       const r = new FileReader();
-      r.onload = () => { imgs.forEach((i) => { i.src = r.result; }); pending(true); };
+      r.onload = () => {
+        imgs.forEach((i) => { i.src = r.result; }); pending(true);
+        // the logo with "behind it" on Automatic: guess as the server will (branding.auto_backing): a JPEG has its own
+        // background; a see-through one about as wide as tall gets the circle, any other shape the rounded square
+        const auto = card.querySelector("select[name=backing]");
+        if (!auto || auto.value !== "auto") return;
+        const probe = new Image();
+        probe.onload = () => {
+          const ratio = probe.naturalWidth / probe.naturalHeight;
+          const v = t.files[0].type === "image/jpeg" ? "none" : ratio >= 0.85 && ratio <= 1.18 ? "circle" : "square";
+          imgs.forEach((i) => { i.className = "logo bg-" + v; });
+        };
+        probe.src = r.result;
+      };
       r.readAsDataURL(t.files[0]);
     } else if (t.name === "backing") {
       const v = t.value === "auto" ? f.dataset.auto : t.value;
