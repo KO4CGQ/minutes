@@ -348,6 +348,7 @@ def submit(archive: Archive, slug: str) -> Meeting:
     m.sections.update(business_sections(archive, slug))
     m.status = "published"
     m.save(archive.root)
+    _holds.pop(slug, None)  # finished: nobody holds them now
     archive.reload()
     return archive.by_slug[slug]
 
@@ -358,6 +359,7 @@ def discard(archive: Archive, slug: str) -> None:
     if m.status != "draft":
         raise ValueError("Only drafts can be discarded")
     shutil.rmtree(archive.root / slug)
+    _holds.pop(slug, None)
     s = business.load()
     business.forget_meeting(s, slug)
     business.save(s)

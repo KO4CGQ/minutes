@@ -86,13 +86,23 @@
       h("button", { class: "btn small", onclick: async () => {
         if (!who.you && !confirm(`Take over from ${who.holder}? Their console becomes read-only, and you're recorded as taking the minutes from here.`)) return;
         const r = await post("hold", { take: true });
-        if (r.ok) location.reload(); } }, take));
+        if (r.ok) location.reload(); else checkIn(); } }, take));
     holdbar.hidden = false;
   }
+  function closed(how) {  // discarded or submitted in another console: nothing more to do here
+    readOnly = true; closedHow = how;
+    for (const id of ["panel", "steps", "pager", "endforms", "leader"]) { const el = document.getElementById(id); if (el) el.inert = true; }
+    saved.textContent = how === "submitted" ? "Submitted" : "Discarded"; saved.className = "saved dirty";
+    holdbar.replaceChildren(how === "submitted" ? "These minutes were submitted from another console. " : "These minutes were discarded from another console. ",
+      how === "submitted" ? h("a", { class: "btn small", href: `/meetings/${M.slug}` }, "Read the minutes") : h("a", { class: "btn small", href: "/console" }, "Start a meeting"));
+    holdbar.hidden = false;
+  }
+  let closedHow = null;
   async function checkIn() {
+    if (closedHow) return;
     const r = await post("hold", readOnly ? { peek: true } : {}).catch(() => null);
     if (!r) return;
-    if (r.status === 409) { const j = await r.json(); if (j.holder) lock(j, held && !readOnly); return; }
+    if (r.status === 409) { const j = await r.json(); if (j.closed) closed(j.closed); else if (j.holder) lock(j, held && !readOnly); return; }
     if (!readOnly && r.ok) held = true;
     if (readOnly && r.ok) {  // they've closed it: carry on (a reload brings their last changes)
       holdbar.replaceChildren("They've closed the console. ", h("button", { class: "btn small", onclick: () => location.reload() }, "Continue the minutes"));
@@ -121,7 +131,7 @@
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ meeting: M, state: S, tab: TAB }),
         });
-        if (r.status === 409) { await checkIn(); if (readOnly) return; }
+        if (r.status === 409 || r.status === 404) { await checkIn(); if (readOnly) return; }  // taken over, or discarded elsewhere
         if (!r.ok) throw new Error(await r.text());
         saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved";
       } catch (e) { saved.textContent = "Not saved: " + e.message; saved.className = "saved err"; }

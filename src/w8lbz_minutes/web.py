@@ -2326,10 +2326,13 @@ def _held_by_other(slug: str, tab: str | None, mid: str) -> None:
 async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
     """The console checks in every 30 s: keeps this tab's hold on the minutes, or says who has them.
     {"take": true} takes over; {"peek": true} only asks (a read-only console waiting for them to be free)."""
-    m, d = get_meeting(slug), await _json(request)
+    d = await _json(request)
+    m = archive.by_slug.get(slug)
+    if not m or m.status != "draft":  # discarded or submitted from another console: it says so and stops
+        return JSONResponse({"closed": "submitted" if m else "discarded"}, 409)
     tab = str(d.get("tab") or "")[:40]
-    if m.status != "draft" or not tab:
-        raise HTTPException(409, "These minutes aren't open.")
+    if not tab:
+        raise HTTPException(400, "No console given.")
     h = console.holder(slug, tab) if d.get("peek") else console.hold(archive, slug, mid, tab, bool(d.get("take")))
     if h:
         return JSONResponse({"holder": archive.club.name(h["member"]), "you": h["member"] == mid, "since": int(h["since"])}, 409)

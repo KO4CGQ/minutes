@@ -249,6 +249,9 @@ def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(
     assert m.slug in a.by_slug                                                 # still there
     assert jane.post(f"/api/meetings/{m.slug}/hold", json={"tab": "j", "take": True}).json() == {"held": True}
     assert sam.put(f"/api/meetings/{m.slug}", json={**body, "tab": "s"}).status_code == 409  # Sam's console is read-only now
+    jane.post(f"/console/{m.slug}/discard")                                  # Jane discards them: Sam's console is told
+    r = sam.post(f"/api/meetings/{m.slug}/hold", json={"tab": "s", "take": True})
+    assert r.status_code == 409 and r.json() == {"closed": "discarded"} and console.holder(m.slug) is None
 
 
 def test_top_bar_says_continue_minutes_for_an_open_meeting_from_another_day(tmp_path, monkeypatch):
