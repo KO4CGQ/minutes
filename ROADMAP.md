@@ -32,7 +32,7 @@ The rename (0.20.0's work) becomes 1.0.0: from then on the settings, folders, se
 - **Scan the tree first:** the squash keeps today's files, so they must hold no club data (names, callsigns, emails, phones, addresses), checked file by file (tests, fixtures, docs, examples) besides gitleaks.
 - **Squash in place:** one commit with the 1.0.0 tree, force-pushed to main (needs force-push allowed on main for that moment). Delete the v0.x tags and GitHub Releases, then tag v1.0.0 (the Release workflow publishes it). Old PRs keep their pages but their commit links stop working; Dependabot and code scanning start over. Clones elsewhere (the dev box, CT103) fetch the new main; CT103's updater resets to tags, so it follows.
 - **Install on CT103:** a snapshot, then the move script (the developer's private copy) with v1.0.0; it also points CT103's checkout at the new history.
-- **Open questions:** rename the repo to `club-minutes` too (GitHub keeps redirects; CT103's origin URL changes)? Does `KO4CGQ/minutes` keep its Pages/About text?
+- **The repo stays `KO4CGQ/minutes`** (decided 2026-11-11: renaming it would add work for little gain). Jim does the force-push himself, or allows it for that moment.
 
 ## Leader console
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
