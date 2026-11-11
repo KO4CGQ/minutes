@@ -316,6 +316,7 @@
           save();
         };
         [date, time, endDate, endTime].forEach((x) => x.onchange = setWhen);
+        const twin = e.when && (D.calendar || []).find((c) => c.start === e.when.slice(0, 10) && !same(e, c) && similar(c.title, e.text));
         const nodate = h("span", { class: "hint" }, "no date: not on the calendar");
         nodate.hidden = !!e.when;
         const cal = h("select", { "aria-label": "Calendar", title: "Which calendar it goes on", onchange: (ev) => { e.cal = ev.target.value === "events" ? null : ev.target.value; save(); } },
@@ -326,7 +327,11 @@
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
             h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, emo("✖️", "x"))),
           h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, cal, nodate),
-          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")));
+          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")),
+          twin ? h("p", { class: "duphint" }, `Possible duplicate: "${twin.title}" is on the calendar that day. If it's the same event, `,
+            h("button", { class: "btn small ghost", title: "Replace this entry with the calendar's: its title, place, date, time and calendar", onclick: () => {
+              Object.assign(e, { text: twin.title + (twin.where ? `, ${twin.where}` : ""), when: twin.when, until: twin.until, cal: twin.cal === "events" ? null : twin.cal });
+              draw(); save(); } }, "use the calendar's"), " (it stays in the minutes, and on the calendar once) or remove this one.") : null);
       }), h("button", { class: "btn small ghost", onclick: () => { evs.push({ text: "", member: null, when: null }); draw();
         wrap.querySelectorAll("textarea")[evs.length - 1].focus(); } }, "+ Add event"));
       setTimeout(() => wrap.querySelectorAll("textarea").forEach(grow), 0);
@@ -335,6 +340,12 @@
     draw();
     return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap, cals);
   }
+
+  // Two titles that look like the same event: half the shorter one's words in the other (calview.similar)
+  const SMALL = new Set(["the", "and", "for", "with", "at", "on", "in", "of", "an", "to"]);
+  const words = (t) => new Set((t.toLowerCase().match(/[a-z0-9]+/g) || []).filter((w) => w.length > 1 && !SMALL.has(w)));
+  const similar = (a, b) => { const x = words(a), y = words(b); return x.size > 0 && y.size > 0 && [...x].filter((w) => y.has(w)).length * 2 >= Math.min(x.size, y.size); };
+  const same = (e, c) => e.text.trim().toLowerCase().startsWith(c.title.toLowerCase());  // added from the list: one event
 
   // What's on the calendar (console.calendar_ahead), to read out; added to the minutes only on a tap.
   let ahead = "next";
@@ -348,12 +359,14 @@
         .map(([v, t]) => h("option", { value: v, selected: v === ahead }, t)));
     const fill = () => {
       // already in the minutes: same day, and the text starts with its title ("Fox hunt, the park")
-      const have = (c) => evs.some((e) => (e.when || "").slice(0, 10) === c.start && e.text.trim().toLowerCase().startsWith(c.title.toLowerCase()));
+      const have = (c) => evs.some((e) => (e.when || "").slice(0, 10) === c.start && same(e, c));
+      const alike = (c) => evs.find((e) => (e.when || "").slice(0, 10) === c.start && e.text.trim() && similar(c.title, e.text));
       const list = (D.calendar || []).filter((c) => c.start <= ends[ahead] && !have(c));
       card.replaceChildren(h("p", { class: "row" }, h("strong", {}, "From the calendar"), pick),
-        list.length ? h("ul", {}, list.map((c) => h("li", {},
+        list.length ? h("ul", {}, list.map((c) => [c, alike(c)]).map(([c, dup]) => h("li", { class: dup ? "dup" : null },
           h("strong", {}, day(c.start), c.time ? " " + c.time : "", c.end !== c.start ? " – " + day(c.end) : ""), " ",
           c.title, c.where ? ` (${c.where})` : "", " ", h("span", { class: "muted small" }, c.kind), " ",
+          dup ? h("span", { class: "duphint" }, `possibly the same as "${dup.text}" above `) : null,
           h("button", { class: "btn small ghost", title: "Add to tonight's Upcoming Events", onclick: () => {
             evs.push({ text: c.title + (c.where ? `, ${c.where}` : ""), member: null, when: c.when, until: c.until, cal: c.cal === "events" ? null : c.cal }); redraw(); save(); } }, "+ Add"))))
           : h("p", { class: "hint" }, "Nothing on the calendar for then."),

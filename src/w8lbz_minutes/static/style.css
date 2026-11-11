@@ -496,3 +496,7 @@ button.cardopen .card-text { display: block; }
 /* Safari fills an empty date or time box with today's date in grey, which reads as a value: blank until it's in use.
    Only in Safari (.safari, set in base.html): Chrome and Edge keep their mm/dd/yyyy and --:-- -- hints */
 .safari input:is([type=date], [type=time]):is([value=""], :not([value])):not(:focus)::-webkit-datetime-edit { color: transparent; }
+
+/* a possible duplicate (calview.mark_duplicates, console.js similar()): highlighted, never hidden */
+.duphint { color: var(--warn-text); font-size: .85rem; }
+li.dup .caltitle, li.dup > strong { background: var(--warn-soft); border-radius: .2rem; }

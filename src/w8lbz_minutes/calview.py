@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
@@ -31,6 +32,7 @@ class Entry:
     occ: str | None = None  # a repeating event's original date (which date to edit)
     notes: str = ""
     zone: str = ""  # an event kept in another time zone: its times there ("Sat Jun 27 18:00 – Sun Jun 28 20:59 UTC")
+    dup: str = ""  # another entry the same day that looks like the same event (a hint; nothing is hidden)
 
     def days(self, lo: dt.date, hi: dt.date) -> list[dt.date]:
         """The days it covers within lo..hi (a long event is listed on each day, up to two weeks)."""
@@ -194,7 +196,36 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     # unless the same event is already there (added from the console's calendar list: "Fox hunt, the park" for "Fox hunt")
     out += [x for x in minutes if not any(y.start == x.start and x.title.lower().startswith(y.title.lower()) for y in out)]
     out.sort(key=_order)
+    mark_duplicates(out)
     return out, None
+
+
+SMALL = {"the", "and", "for", "with", "at", "on", "in", "of", "an", "to"}
+
+
+def _words(title: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", title.lower()) if len(w) > 1 and w not in SMALL}
+
+
+def similar(a: str, b: str) -> bool:
+    """Two titles that look like the same event: at least half the words of the shorter one are in the other
+    ("VE testing" and "VE Testing session at the library"). The console has the same check (console.js)."""
+    x, y = _words(a), _words(b)
+    return bool(x and y) and len(x & y) * 2 >= min(len(x), len(y))
+
+
+def mark_duplicates(items: list[Entry]) -> None:
+    """Flag entries that start the same day and look alike, for the Calendar page to highlight. Chow and birthdays
+    are left alone (their titles are made by the app)."""
+    day: dict[dt.date, list[Entry]] = {}
+    for e in items:
+        if e.kind not in ("chow", "birthday"):
+            day.setdefault(e.start, []).append(e)
+    for es in day.values():
+        for i, a in enumerate(es):
+            for b in es[i + 1:]:
+                if similar(a.title, b.title):
+                    a.dup, b.dup = a.dup or b.title, b.dup or a.title
 
 
 def _order(e: Entry):

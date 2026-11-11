@@ -558,3 +558,18 @@ def test_upcoming_events_go_on_their_calendar_once(tmp_path):
     assert ("planning", "Budget meeting") in seen and ("community", "Road race") in seen
     pub, _ = calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)
     assert not {"Budget meeting", "Road race"} & {e.title for e in pub}  # Planning and Community aren't public here
+
+
+def test_look_alike_events_the_same_day_are_flagged_not_hidden(tmp_path):
+    assert calview.similar("VE testing", "VE Testing session at the library") and not calview.similar("VE testing", "Fox hunt")
+    with events.locked():
+        evs = []
+        events.add(evs, "events", form(title="Fox hunt at Osborn Park", date="2026-11-14", time="14:00"), "x")
+        events.add(evs, "community", events.from_form({"title": "Osborn park fox hunt", "date": "2026-11-14"}), "x")
+        events.add(evs, "events", form(title="Fox hunt", date="2026-11-21"), "x")  # another day: not flagged
+        events.save(evs)
+    c = club()
+    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
+    flagged = {(e.start.day, e.title, e.dup) for e in got if e.dup}
+    assert flagged == {(14, "Fox hunt at Osborn Park", "Osborn park fox hunt"), (14, "Osborn park fox hunt", "Fox hunt at Osborn Park")}
+    assert len([e for e in got if "fox hunt" in e.title.lower()]) == 3  # nothing hidden

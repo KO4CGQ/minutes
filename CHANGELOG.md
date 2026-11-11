@@ -5,6 +5,7 @@ What changed in each version of W8LBZ Minutes. Planned work is in [ROADMAP.md](R
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Possible duplicates highlighted:** two entries the same day whose titles look alike (half the shorter one's words in the other, like "VE testing" and "VE Testing session") are highlighted on the Calendar page with "possible duplicate of …", and in the leader console's Upcoming Events (both the calendar list and the minutes' own events). Nothing is hidden or merged on its own; in the console, **use the calendar's** swaps a minutes entry for the calendar's version (title, place, date, time), so it stays in the minutes and shows once on the calendar.
 - **The chow list by link:** on the Email tab, the chow list can now come as a link to the schedule online (and its PDF), instead of the PDF attached.
 - **Security → Members:** every member's last sign-in, passkeys (how many, last used) and devices signed in now. `/admin` goes to the Security page, and an address that isn't there shows a "Page not found" page instead of a line of code. **Plans:** a 24-hour clock setting.
 - **Plans:** site name, logo and favicon set in the app; the menu set from the Links page; a Donate button.
