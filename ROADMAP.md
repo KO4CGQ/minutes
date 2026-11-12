@@ -14,7 +14,7 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 
 ### A new club can start
 - **Manage admins in the app** (Admin → Security): add and remove admins in admin mode, instead of only `admins:` in the server's club.yaml, so the club never depends on whoever has the server. Admins stay a role of their own (not officers); the last admin can't be removed; each change is in the admin log and emailed to the other admins; turning someone into an admin asks for a fresh confirmation (passkey or emailed link), like admin mode. club.yaml's list keeps working (both count), so a server admin can always get back in.
-- **A demo club:** invented data (Example Radio Club, N0CALL-style callsigns, Jane Doe, example.org, 555-01xx) as a fixture: for the screenshots, for previews without the club's data, and for anyone trying the app. **How visitors try it (to decide):** (a) screenshots and a short video in the README only; (b) a hosted demo server, reset every hour, with a "Sign in as…" persona picker and emails kept on its Email log; (c) a static demo on GitHub Pages: the real app running in the visitor's browser (Python in WebAssembly, via Pyodide), everything kept in that browser only, personas to switch between, no email ever sent. (c) needs no server and nobody's changes are seen by anyone else; but the first load is large, the PDFs can't be made in the browser, and it has to be checked to keep working with each release.
+- **A demo club:** invented data (Example Radio Club, N0CALL-style callsigns, Jane Doe, example.org, 555-01xx) as a fixture: for the README's screenshots and a short video (decided 2026-11-11: that's the demo for 1.0, no demo server), and for previews without the club's data.
 - **Examples clearly fictional everywhere** (code, tests, docs, club.example.yaml): Jane/John Doe, example.com/.org, 555-0100…0199, 123 Main St, Anytown, and callsigns that can't be issued (four-letter suffix: N0CALL, W0DEMO). Replace the older realistic ones (Amy Able, KD8AAA, KD8XYZ…), which follow the real callsign format and may belong to someone.
 
 ### Docs and repo
@@ -76,6 +76,7 @@ Suggested follow-ups are done. Next, using the typed minutes we already have (no
   - Through OpenRouter, so the model can be chosen and changed; the expected cost is pennies a month.
 
 ## Later
+- **A demo visitors can try** (after 1.0, if wanted): the real app running in the visitor's browser on GitHub Pages (Python in WebAssembly, via Pyodide), everything kept in that browser, a "Sign in as…" persona picker, emails only on its Email log; PDFs not available there. Or a hosted demo server reset every hour. For 1.0 the README's screenshots and video are the demo.
 - **Audio capture and live transcription** (see REQUIREMENTS.md §4.1–4.2): browser room capture plus a meeting bot, cloud speech-to-text, OpenRouter drafting.
 - **Discord:** a post-meeting summary and weekly reminders, and a post when a meeting starts (when the leader opens the console), with the link to join online.
 - **Anubis proof-of-work in front of public pages** (sign-in, public calendar), to turn away scrapers. Signed-in members never see it:
