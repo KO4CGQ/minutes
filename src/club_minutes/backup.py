@@ -36,7 +36,7 @@ KEY_FILE = Path(os.environ.get("CLUB_MINUTES_GOOGLE_KEY", ROOT / "private" / "go
 
 log = logging.getLogger("club_minutes.backup")
 MAGIC = b"CLUB-MINUTES-BACKUP-1\n"
-OLD_MAGIC = b"W8LBZ-BACKUP-1\n"  # backups made before 0.20.0 (the app's earlier name)
+OLD_MAGIC = b"W8LBZ-BACKUP-1\n"  # backups made before 1.0.0 (the app's earlier name)
 KEEP_LOCAL = 7  # the default; the Backups page changes it
 # What the Backups page recommends: the data folder is small (MBs), so daily backups cost next to nothing.
 RECOMMENDED = {"every": "daily", "hour": 2, "keep_local": 7, "drive_keep": 30, "s3_days": 90}
@@ -352,13 +352,13 @@ def drive_upload(folder: str, name: str, blob: bytes, keep: int = DRIVE_KEEP, se
                data=body, headers={"Content-Type": f"multipart/related; boundary={boundary}"}, timeout=300)
     if r.status_code >= 300:
         raise _drive_error(r)
-    r = s.get(DRIVE, params={"q": f"'{folder}' in parents and (name contains 'club-minutes-' or name contains 'w8lbz-minutes-')"  # w8lbz-: before 0.20.0
+    r = s.get(DRIVE, params={"q": f"'{folder}' in parents and (name contains 'club-minutes-' or name contains 'w8lbz-minutes-')"  # w8lbz-: before 1.0.0
                                   " and trashed = false",
                              "orderBy": "createdTime desc", "fields": "files(id,name)", "pageSize": 1000,
                              "supportsAllDrives": "true", "includeItemsFromAllDrives": "true"}, timeout=60)
     if r.status_code >= 300:
         raise _drive_error(r)
-    for f in r.json().get("files", [])[keep:]:  # newest first (names changed in 0.20.0, so not by name)
+    for f in r.json().get("files", [])[keep:]:  # newest first (names changed in 1.0.0, so not by name)
         d = s.delete(f"{DRIVE}/{f['id']}", params={"supportsAllDrives": "true"}, timeout=60)
         if d.status_code >= 300:
             raise _drive_error(d)
@@ -374,7 +374,7 @@ def status() -> dict:
 
 def local_copies() -> list[Path]:
     d = DATA / "backups"
-    # newest first, by the date in the name (w8lbz-minutes-… before 0.20.0, club-minutes-… since)
+    # newest first, by the date in the name (w8lbz-minutes-… before 1.0.0, club-minutes-… since)
     return sorted(d.glob("*.enc"), key=lambda p: p.name.rsplit("minutes-", 1)[-1], reverse=True) if d.exists() else []
 
 

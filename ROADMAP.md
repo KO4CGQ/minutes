@@ -5,7 +5,7 @@ Planned work, roughly in priority order. Each item becomes its own branch and PR
 Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 
 ## 1.0.0: Club Minutes for any club
-The rename (0.20.0's work) becomes 1.0.0: from then on the settings, folders, services and command names stay put (a change to them is a 2.0). Built on the `rename` branch, released once, then the history is squashed in place. In order:
+The rename becomes 1.0.0: from then on the settings, folders, services and command names stay put (a change to them is a 2.0). Built on the `rename` branch, released once, then the history is squashed in place. In order:
 
 ### Club rules out of the code
 - **Election days: off by default, any region.** The Community calendar's Ohio election days become one region among others: a `calendar.elections` setting (none by default; `us-oh` is the first one written), each region a small set of rules (dates, poll hours, a link) in its own file so another state or country is one file to add. US federal holidays the same way (`calendar.holidays: us`), so a club elsewhere can pick its own or none.

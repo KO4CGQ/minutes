@@ -93,7 +93,7 @@ def test_nightly_run_keeps_sends_and_reports(data, monkeypatch):
     monkeypatch.setattr("httpx.put", lambda url, content, headers, timeout: put.append((url, headers))
                         or type("R", (), {"status_code": 200, "text": ""})())
     monkeypatch.setattr(backup, "drive_session", lambda: drive)
-    # the first two named as before 0.20.0: still pruned oldest-first among the new names
+    # the first two named as before 1.0.0: still pruned oldest-first among the new names
     names = iter(f"{'w8lbz' if d < 3 else 'club'}-minutes-2026-11-{d:02d}-0230.tar.gz.enc" for d in range(1, 30))
     real_make = backup.make
     monkeypatch.setattr(backup, "make", lambda: (next(names), *real_make()[1:]))

@@ -19,7 +19,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
   3. As root, run the developer's `private/rename-from-w8lbz.sh` (copied to the server) with the release: it stops the app, keeps a copy of the data in `/var/backups`, moves everything, installs the release and puts it all back if the app doesn't come up:
 
-          bash rename-from-w8lbz.sh v0.20.0
+          bash rename-from-w8lbz.sh v1.0.0
 
   4. From then on the admin command is `club-minutes` and the logs are `journalctl -u club-minutes`. Once all's well, delete the data copy and the snapshot.
 

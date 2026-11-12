@@ -51,7 +51,7 @@ if not _log.handlers:
     _log.propagate = False
 
 COOKIE = "club_minutes_session"
-OLD_COOKIE = "w8lbz_session"  # shortcut: sign-ins from before 0.20.0 (the app's earlier name); drop once they've expired
+OLD_COOKIE = "w8lbz_session"  # shortcut: sign-ins from before 1.0.0 (the app's earlier name); drop once they've expired
 CHALLENGE_COOKIE = "club_minutes_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret

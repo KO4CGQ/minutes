@@ -11,7 +11,7 @@
 <button type="button" class="btn small" id="feedcopy">Copy</button> <a id="feedwebcal" href="{{ private|replace('https://', 'webcal://') }}">Open in my calendar app</a></p>
 <p id="feednone" class="msg err" hidden>Tick at least one.</p>
 <script nonce="{{ csp_nonce }}">
-// The link names what's ticked (?show=events,chow); all ticked is the plain link.
+// The link names what's ticked (?show=events,planning); all ticked is the plain link.
 (() => {
   // The kinds come from the server, in the order of the boxes; the boxes only say which are ticked.
   const base = {{ private|tojson }}, kinds = {{ kinds.keys()|list|tojson }}, box = document.getElementById("feedlink"),
