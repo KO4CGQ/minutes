@@ -31,7 +31,12 @@ DATES: dict[str, str] = {}  # strftime formats by name (show_date), from club.ya
 
 def set_dates(custom: dict | None) -> None:
     """The four a club sets, then the weekday forms built from them (a club may set those too)."""
-    d = {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d", **(custom or {})}
+    d = {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}
+    known = {*d, "day", "weekday", "day_year"}
+    if not isinstance(custom or {}, dict) or any(k not in known or not isinstance(v, str) or not v.strip() for k, v in (custom or {}).items()):
+        raise ValueError(f"club.yaml club: date_formats: {custom!r} isn't right: each of {', '.join(sorted(known))} "
+                         'is a format in quotes, e.g. list: "%b %-d, %Y"')
+    d.update(custom or {})
     DATES.clear()
     DATES.update({"day": f"%a {d['short']}", "weekday": f"%A, {d['long']}", "day_year": f"%a {d['list']}", **d})
 

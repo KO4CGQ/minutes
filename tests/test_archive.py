@@ -336,3 +336,9 @@ def test_dates_in_the_clubs_format():
     finally:
         set_dates(None)
     assert show_date(d, "weekday") == "Thursday, November 5"
+    for bad in ({"list": 5}, {"lsit": "%b %-d"}, {"short": ""}, ["%b"]):  # stops the app at start, not every page later
+        with pytest.raises(ValueError, match="date_formats"):
+            set_dates(bad)
+    set_dates({"list": "%-d %b %Y"})  # one alone is fine; the rest keep their defaults
+    assert (show_date(d), show_date(d, "short")) == ("5 Nov 2026", "Nov 5")
+    set_dates(None)
