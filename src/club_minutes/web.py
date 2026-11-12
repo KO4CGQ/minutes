@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from markupsafe import Markup, escape
 
-from . import ai, avatars, branding, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
+from . import ai, avatars, branding, theme, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
@@ -116,12 +116,19 @@ templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"),
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
                              cite=lambda rule: archive.club.cite(rule),
-                             cert=lambda: archive.club.certificate,  # {name, short, note} if club.yaml has one, else None  # " (bylaws VII.B)", if club.yaml gives one
+                             cert=lambda: archive.club.certificate,
+                             theme_v=lambda: _theme_stamp(),  # changes with the colours, so browsers fetch them again
+                             theme_light=lambda: "; ".join(f"{k}: {v}" for k, v in theme.palette(**branding.colours())[0].items()),  # PDFs  # {name, short, note} if club.yaml has one, else None  # " (bylaws VII.B)", if club.yaml gives one
                              app_name=lambda: branding.name(archive.club),  # Site's name, else "<callsign> Minutes"
                              # the logo: for a page, its address (new after each upload); for a PDF, the file itself
                              brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
                              f"/brand/{branding.FILES[kind]}?v={branding.stamp()}",
                              logo_class=lambda: f"logo bg-{branding.backing()}")  # what's behind it (Site)
+
+
+def _theme_stamp() -> str:
+    import hashlib
+    return hashlib.sha1(json.dumps(branding.colours(), sort_keys=True).encode()).hexdigest()[:10]
 
 
 # ---------------- login gate ----------------
@@ -324,6 +331,13 @@ def get_meeting(slug: str):
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return RedirectResponse("/brand/favicon.png", status_code=302)  # browsers ask for it regardless of <link rel=icon>
+
+
+@app.get("/brand/theme.css", include_in_schema=False)
+def brand_theme():
+    """The club's colours (Site), as CSS variables over style.css's. Public: the sign-in page uses them too."""
+    c = branding.colours()
+    return Response(theme.css(c["main"], c["bar"]), media_type="text/css", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/brand/{name}", include_in_schema=False)
@@ -1993,7 +2007,10 @@ def site_page(request: Request, error: str = "", note: str = "", mid: str = Depe
         return RedirectResponse("/admin/confirm?next=/admin/site", status_code=303)
     return page(request, "site.html", error=error, note=note, pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
-                default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb())
+                default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb(),
+                colours=(c := branding.colours()), colours_own=bool(branding._settings().get("theme")),
+                palette=theme.palette(**c), swatches=theme.from_logo(branding.path("logo")) if branding.custom() else [],
+                vars=lambda p: "; ".join(f"{k}: {v}" for k, v in p.items()))
 
 
 def _site_admin(request: Request) -> str:
@@ -2029,6 +2046,33 @@ async def site_picture(request: Request, kind: str):
         return RedirectResponse("/admin/site?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_picture=f"{SITE_PICTURES[kind]}: uploaded")
     return RedirectResponse("/admin/site?note=" + quote(f"{SITE_PICTURES[kind]} saved."), status_code=303)
+
+
+@app.get("/admin/site/colours/preview")
+def site_colours_preview(request: Request, main: str = "", bar: str = ""):
+    """The palette for colours being tried on Site (not saved): the preview shows it before Save."""
+    _site_admin(request)
+    light, dark, notes = theme.palette(main, bar or None)
+    return {"light": light, "dark": dark, "notes": notes}
+
+
+@app.post("/admin/site/colours")
+def site_colours(request: Request, main: str = Form(""), own_bar: str = Form(""), bar: str = Form("")):
+    mid = _site_admin(request)
+    try:
+        branding.set_colours(main, bar if own_bar else None, mid)
+    except ValueError as e:
+        return RedirectResponse("/admin/site?error=" + quote(str(e)) + "#colours", status_code=303)
+    _admin_log(request, site_colours=f"{theme.valid(main)}" + (f", top bar {theme.valid(bar)}" if own_bar else ""))
+    return RedirectResponse("/admin/site?note=" + quote("Colours saved.") + "#colours", status_code=303)
+
+
+@app.post("/admin/site/colours/reset")
+def site_colours_reset(request: Request):
+    _site_admin(request)
+    branding.reset_colours()
+    _admin_log(request, site_colours="back to the default")
+    return RedirectResponse("/admin/site?note=" + quote("Colours: back to the app's own blue.") + "#colours", status_code=303)
 
 
 @app.post("/admin/site/backing")

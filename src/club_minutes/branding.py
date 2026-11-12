@@ -49,6 +49,33 @@ def set_name(text: str, by: str) -> None:
     tmp.replace(DATA / "branding.json")
 
 
+def colours() -> dict:
+    """The club's colours from Site: {main, bar} ("#rrggbb"; bar None for automatic), or the app's own blue."""
+    from . import theme
+    t = _settings().get("theme") or {}
+    return {"main": theme.valid(t.get("main")) or theme.DEFAULT, "bar": theme.valid(t.get("bar"))}
+
+
+def set_colours(main: str, bar: str | None, by: str) -> None:
+    """Save the club's colours (bar: None for automatic). A colour that isn't #rrggbb is refused."""
+    from . import theme
+    if not theme.valid(main) or (bar and not theme.valid(bar)):
+        raise ValueError("Pick colours with the colour boxes (they're #rrggbb).")
+    s = _settings()
+    s["theme"] = {"main": theme.valid(main), "bar": theme.valid(bar), "by": by, "at": int(time.time())}
+    tmp = DATA / "branding.json.tmp"
+    tmp.write_text(json.dumps(s))
+    tmp.replace(DATA / "branding.json")
+
+
+def reset_colours() -> None:
+    s = _settings()
+    s.pop("theme", None)
+    tmp = DATA / "branding.json.tmp"
+    tmp.write_text(json.dumps(s))
+    tmp.replace(DATA / "branding.json")
+
+
 def path(kind: str) -> Path:
     """The club's picture if there is one (uploaded, or for an icon, made from the logo), else the plain one."""
     own = _dir() / FILES[kind]

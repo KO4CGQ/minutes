@@ -37,6 +37,47 @@
 </div>
 {% endfor %}
 </div>
+
+<h2 id="colours">Colours</h2>
+<p class="muted small">One main colour sets the buttons, links, top bar and the minutes' section headings, in light and dark mode. Each shade is checked so text stays readable. Now: {{ "the club's own" if colours_own else "the app's own blue" }}.</p>
+<form method="post" action="/admin/site/colours" class="colours" data-colours>
+  <div class="row"><label>Main colour <input type="color" name="main" value="{{ colours.main }}"></label>
+    {% if swatches %}<span class="small swatches">From the logo: {% for c in swatches %}<button type="button" class="swatch" data-colour="{{ c }}" style="background: {{ c }}" title="{{ c }}" aria-label="Use {{ c }}"></button>{% endfor %}</span>{% endif %}</div>
+  <div class="row"><label class="check"><input type="checkbox" name="own_bar" value="1" {{ 'checked' if colours.bar }}> A different top bar colour</label>
+    <input type="color" name="bar" value="{{ colours.bar or palette[0]['--nav-bg'] }}" aria-label="Top bar colour" {{ '' if colours.bar else 'disabled' }}></div>
+  <div class="themeprev">{% for mode, p in (("Light", palette[0]), ("Dark", palette[1])) %}
+    <div class="tp" data-mode="{{ mode|lower }}" style="{{ vars(p) }}" aria-label="{{ mode }} mode, as it would look"><div class="tp-bar">{{ app_name() }}</div>
+      <div class="tp-body"><span class="tp-link">A link</span> <span class="tp-btn">Button</span><div class="tp-h">Old Business</div><span class="tp-muted">{{ mode }} mode</span></div></div>{% endfor %}</div>
+  <p class="small" data-notes>{{ palette[2]|join(' ') }}</p>
+  <p><span class="unsaved" hidden>Not saved yet: this is a preview</span> <button class="btn">Save</button> <button type="button" class="btn ghost" data-cancel>Cancel</button></p>
+</form>
+{% if colours_own %}<form method="post" action="/admin/site/colours/reset" data-confirm="Go back to the app's own blue?"><button class="btn small ghost">Back to the default</button></form>{% endif %}
+<script nonce="{{ csp_nonce }}">
+// Colours: each change asks the server for the palette (as it will be saved, readability fixes included) and shows it
+// in the two previews; nothing changes on the site until Save. Cancel puts the saved colours back.
+(() => {
+  const f = document.querySelector("form[data-colours]"), main = f.elements.main, bar = f.elements.bar, own = f.elements.own_bar;
+  const previews = [...f.querySelectorAll(".tp")], notes = f.querySelector("[data-notes]"), unsaved = f.querySelector(".unsaved");
+  const was = { main: main.value, bar: bar.value, own: own.checked, styles: previews.map((p) => p.getAttribute("style")), notes: notes.textContent };
+  let timer;
+  const show = async () => {
+    bar.disabled = !own.checked;
+    const q = new URLSearchParams({ main: main.value, bar: own.checked ? bar.value : "" });
+    const r = await fetch("/admin/site/colours/preview?" + q, { headers: { Accept: "application/json" } });
+    if (!r.ok) return;
+    const d = await r.json();
+    previews.forEach((p) => Object.entries(d[p.dataset.mode]).forEach(([k, v]) => p.style.setProperty(k, v)));
+    notes.textContent = d.notes.join(" ");
+    unsaved.hidden = false;
+  };
+  f.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(show, 150); });
+  f.querySelectorAll(".swatch").forEach((b) => b.addEventListener("click", () => { main.value = b.dataset.colour; show(); }));
+  f.querySelector("[data-cancel]").addEventListener("click", () => {
+    main.value = was.main; bar.value = was.bar; own.checked = was.own; bar.disabled = !own.checked;
+    previews.forEach((p, i) => p.setAttribute("style", was.styles[i])); notes.textContent = was.notes; unsaved.hidden = true;
+  });
+})();
+</script>
 <script nonce="{{ csp_nonce }}">
 // Preview, then Save: a chosen picture (or a new "behind it") shows in its card first; Cancel puts it back.
 // The chosen file is read as a data: address (the security policy allows those, not blob: ones).

@@ -18,7 +18,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   w.className = "emoji-wrap"; w.append(a, b); return w; };</script>
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="{{ brand('favicon') }}"><link rel="apple-touch-icon" href="{{ brand('icon') }}">
-<link rel="stylesheet" href="/static/style.css?v={{ ASSETS }}"><link rel="stylesheet" href="/static/minutes.css?v={{ ASSETS }}"></head>
+<link rel="stylesheet" href="/static/style.css?v={{ ASSETS }}"><link rel="stylesheet" href="/brand/theme.css?v={{ theme_v() }}"><link rel="stylesheet" href="/static/minutes.css?v={{ ASSETS }}"></head>
 <body><div id="emoji-icons" hidden>{% for n in ('check', 'x', 'xcircle', 'star') %}<span data-i="{{ n }}">{{ icon(n) }}</span>{% endfor %}</div>
 {% set PAGES = (('/', 'Home'), ('/minutes', 'Minutes'), ('/calendar', 'Calendar'), ('/chow', 'Chow'), ('/business', 'Business'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/guests', 'Guests'), ('/links', 'Links')) %}
 {% set here = request.url.path %}

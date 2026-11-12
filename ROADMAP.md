@@ -11,8 +11,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 - **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
 - **Dates in the club's format everywhere:** `date_formats` covers the minutes and lists, but some pages and emails write "Thu Nov 5" themselves (US order); with the 24-hour clock item below.
 
-### Look
-- **Theme:** the club's colours on Site (the top bar, buttons and links: a few colour pickers setting the CSS variables `style.css` already uses, checked for readable contrast in light and dark), so another club's app looks like theirs. Custom CSS beyond that, if ever, admins only: the security policy already stops a stylesheet loading anything from elsewhere.
 
 ### A new club can start
 - **First run on an empty server:** today data comes from W8LBZ's backups and archive. Needed: an empty start (no roster-sheet.json, no meetings) that works, the first admin from club.yaml signing in by emailed link, then adding members on the Roster page; a short "Getting started" in the server admin guide.
@@ -35,6 +33,7 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 - **Weekly drawing and 50/50 tracking:** record each drawing in the Winners step (winner, amount, registered or not), and keep a running pot for the weekly drawing, so the minutes show where the pot sits and a light stats page shows who has won and how much. Later this feeds the Treasurer's records (below): the club's share of each 50/50, and anything donated back, as income, so Spending can show money in beside money out. Today the Winners section is free text and isn't read.
 
 ## Look and feel: ideas to consider
+- **Custom CSS** (later, only if a club asks): an Advanced box on Site, admins only, no `@import` or `url()`. Colours cover what a club usually wants; free-form CSS depends on the pages' inner structure, which changes between releases.
 - **Menu (nav panel) set from the Links page:** move pages and links up and down, add dividers, and choose which roles see each one (members, leaders, officers, admins), instead of the fixed list.
 - **24-hour clock:** a setting on Your profile → Settings to show times as 19:30 instead of 7:30 PM, across the app (and its emails, if wanted).
 - **Donate button:** a link in the app to a donation page the admin sets (the app handles no payments). Open question: also a "Support the app" link to the developer's sponsor page.

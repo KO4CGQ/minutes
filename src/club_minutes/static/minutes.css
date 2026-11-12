@@ -5,12 +5,12 @@
 .minutes h1 { margin: .1rem 0; font-size: 1.7rem; }
 .minutes .date { font-size: 1.15rem; }
 .minutes .leader { color: var(--muted, #445); font-size: .9rem; }
-.minutes h2 { background: var(--sheet-h, #c3d69b); border-radius: .3rem; font-size: 1rem; margin: 1.1rem 0 .4rem; padding: .15rem .4rem; }
+.minutes h2 { background: var(--sheet-h, #95c0dc); border-radius: .3rem; font-size: 1rem; margin: 1.1rem 0 .4rem; padding: .15rem .4rem; }
 .minutes h2 .count { font-weight: normal; float: right; }
 .minutes .att { display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; margin: 0; }
 .minutes .att dt { font-weight: bold; } .minutes .att dd { margin: 0; }
 .minutes ul.items { margin: 0; padding-left: 1.2rem; } .minutes ul.items li { margin: .3rem 0; }
-.minutes .who { font-size: .75rem; background: var(--surface-3, #eef3e0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #364); }
+.minutes .who { font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }
 .minutes .cs { font-family: monospace; }
 .minutes .links ul { padding-left: 1.2rem; font-size: .9rem; } .minutes .ver { font-size: .8rem; color: var(--muted, #667); }
 .minutes a { color: var(--accent-text, #1a4fa0); word-break: break-all; }
@@ -19,7 +19,7 @@ body.pdf { margin: 0; } @page { size: letter; margin: .7in; }
 body.pdf .minutes h2 { break-after: avoid; }
 .bylaws h1, .bylaws h2, .bylaws h2 + p { text-align: center; }
 .bylaws h2 { background: none; font-size: 1.3rem; margin-top: 0; }
-.bylaws h3 { background: var(--sheet-h, #c3d69b); border-radius: .3rem; font-size: 1rem; margin: 1.4rem 0 .5rem; padding: .15rem .4rem; }  /* like a minutes section */
+.bylaws h3 { background: var(--sheet-h, #95c0dc); border-radius: .3rem; font-size: 1rem; margin: 1.4rem 0 .5rem; padding: .15rem .4rem; }  /* like a minutes section */
 @media (max-width: 760px) { .minutes .mh { gap: .9rem; } .minutes .mh img { width: 64px; } .minutes h1 { font-size: 1.4rem; } }
 .chowlist { border-collapse: collapse; width: 100%; } .chowlist td { padding: .25rem 1.2rem .25rem 0; border-bottom: 1px solid #dde; }
 .chowlist td:nth-child(-n+2) { width: 1%; white-space: nowrap; }  /* day and date tight; the name gets the rest */
