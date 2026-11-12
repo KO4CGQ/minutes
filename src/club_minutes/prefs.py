@@ -25,8 +25,8 @@ KINDS = {
 }
 HELP = {
     "minutes": "Sent the night of the meeting, once they're finished.",
-    "digest": "The morning of each meeting: when it starts, whether you're bringing chow, any club business you're "
-              "looking after, upcoming events, and a link to last week's minutes.",
+    "digest": "The morning of each meeting: when it starts, {chow}any club business you're looking after, upcoming events, "
+              "and a link to last week's minutes.",
     "business": "When something you took on at a meeting is due soon, or overdue.",
     "chowlist": "When the Secretary sends out the chow schedule: a new list, or one that has changed.",
     "roster": "Because you keep the roster: when someone's details change or a new member is added.",
@@ -103,6 +103,8 @@ def _sign(club: Club) -> str:
 
 def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:
     """(member, key, subject, body) for each chow reminder due today and not sent yet."""
+    if not club.has("chow"):
+        return []
     s, out, ok = chow.load(), [], {m.id for m in emailable(club)}
     for date, x in chow.upcoming(s, today, n=2):
         mid, days = x.get("member"), (dt.date.fromisoformat(date) - today).days
@@ -123,7 +125,7 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
     wd = chow.WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
     if today.weekday() != wd:
         return []
-    tonight = chow.load()["nights"].get(today.isoformat(), {})
+    tonight = chow.load()["nights"].get(today.isoformat(), {}) if club.has("chow") else {}
     items = business.load()["items"]
     latest = next((m for m in sorted(archive.meetings, key=lambda m: m.date, reverse=True) if m.status == "published" and m.date < today), None)
     at = dt.datetime.strptime(str(club.info.get("meeting_time", "19:30")), "%H:%M").strftime("%-I:%M %p")

@@ -395,7 +395,8 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     # Every meeting night accrues dues, holidays included: 52 x $3.50 is the bylaws' $182 a year.
     nights_owed = chow.meeting_nights(club, dt.date.fromisoformat(start), today)
     missed = sorted(d for d, x in (nights if nights is not None else chow.load()["nights"]).items()
-                    if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat())
+                    if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat()
+                    ) if club.has("chow") else []  # the missed-chow fee is part of the chow module
     mine = [e for e in s["entries"] if e["member"] == mid]
     charged = (sum(rate(c, "dues_weekly", d.isoformat()) for d in nights_owed) + sum(rate(c, "missed_chow", d) for d in missed)
                + (rate(c, "initiation", joined) if m.member_since and m.member_since >= c["start"] else 0)

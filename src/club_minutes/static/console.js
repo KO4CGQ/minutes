@@ -5,7 +5,8 @@
   const S = Object.assign({ done: [], skipped: [], current: null, reports: null, others: [], step: 0 }, D.state);
   const people = Object.fromEntries(D.members.map((m) => [m.id, m]));
   const STEPS = ["Attendance", "Bills and Communications", "Financial Report", "Community Reports",
-    "Old Business", "New Business", "Winners", "Upcoming Chow", "Upcoming Events", "Review"];
+    "Old Business", "New Business", "Winners", "Upcoming Chow", "Upcoming Events", "Review"]
+    .filter((s) => s !== "Upcoming Chow" || D.chow);  // the chow step only where the club has the chow module
   const EMPTY_NOTE = "Leave it empty if there's nothing this week; empty sections are left out of the minutes.";
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",

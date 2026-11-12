@@ -1,4 +1,5 @@
 club: {name: Test Club, callsign: W0TST}
+modules: {chow: true}
 links: []
 privacy:
   never_record: [Tiny Visitor]

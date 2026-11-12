@@ -17,12 +17,12 @@
       <label>Amount<input name="amount" inputmode="decimal" required value="{{ '%d'|format(rate(cfg, 'certificate', '2000-01-01') // 100) }}"></label></div>
     <label>Note<input name="note" maxlength="300" placeholder="e.g. from the old ledger"></label>
     <div class="formrow"><button class="btn small">Record the bond</button></div></form></details>{% endif %}
-<p class="hint">Dues are {{ money(rate(cfg, 'dues_weekly', today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_weeks }} weeks or more behind is in red.</p>
+<p class="hint">Dues are {{ money(rate(cfg, 'dues_weekly', today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {% if module('chow') %}{{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and {% endif %}the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_weeks }} weeks or more behind is in red.</p>
 <nav class="tabs small"><a href="/treasurer?tab=standing" class="{{ 'on' if not everyone }}">Owe something ({{ owing }})</a><a href="/treasurer?tab=standing&everyone=1" class="{{ 'on' if everyone }}">Everyone ({{ standings|length }})</a></nav>
-<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th><th class="n opt">Missed chow</th><th>Bond</th></tr></thead>
+<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th>{% if module('chow') %}<th class="n opt">Missed chow</th>{% endif %}<th>Bond</th></tr></thead>
 <tbody>{% for x in standings if everyone or x.owed > 0 or x.certificate_late %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a>{% if x.suspended %} <span class="chip late">suspended</span>{% endif %}</td>
   <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.weeks_behind or '' }}</td>
-  <td class="n opt">{{ x.missed_chow|length or '' }}</td>
+  {% if module('chow') %}<td class="n opt">{{ x.missed_chow|length or '' }}</td>{% endif %}
   <td>{% if x.certificate %}bought {{ x.certificate_bought[:4] }}{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td></tr>
 {% else %}<tr><td colspan="5" class="muted">{{ 'No one yet.' if everyone else 'Nobody owes anything.' }}</td></tr>{% endfor %}</tbody></table>
 

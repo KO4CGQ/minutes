@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% import "_pager.html" as pager %}{% block body %}
 <h1>Search{% if q %}: “{{ q }}”{% endif %}</h1>
-<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search everything…" value="{{ q or '' }}" aria-label="Search minutes, members, business, chow and calendar">{% if kind != 'all' %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}</form>
+<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search everything…" value="{{ q or '' }}" aria-label="Search minutes, members, business{{ ', chow' if module('chow') }} and calendar">{% if kind != 'all' %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}</form>
 {% set total = found.values()|map('length')|sum %}
 {% if q %}<nav class="tabs" aria-label="Kind of result"><a href="/search?q={{ q|urlencode }}" class="{{ 'on' if kind == 'all' }}"{% if kind == 'all' %} aria-current="page"{% endif %}>All ({{ total }})</a>
 {%- for k, label in kinds.items() if found[k] or kind == k %}<a href="/search?q={{ q|urlencode }}&amp;kind={{ k }}" class="{{ 'on' if kind == k }}"{% if kind == k %} aria-current="page"{% endif %}>{{ label }} ({{ found[k]|length }})</a>{% endfor %}</nav>

@@ -94,8 +94,9 @@ def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | 
     # Old Business: every tracked item still open (business.py).
     m.sections.update(business_sections(archive, m.slug))
     # The next few chow nights after tonight, from the chow schedule.
-    later = [(d, x) for d, x in chow.upcoming(chow.load(), date + dt.timedelta(days=1), n=4)]
-    m.sections["Upcoming Chow"] = [Item(chow.describe(archive.club, d, x)) for d, x in later]
+    if archive.club.has("chow"):
+        later = [(d, x) for d, x in chow.upcoming(chow.load(), date + dt.timedelta(days=1), n=4)]
+        m.sections["Upcoming Chow"] = [Item(chow.describe(archive.club, d, x)) for d, x in later]
     m.save(archive.root)
     archive.reload()
     return archive.by_slug[m.slug]
@@ -231,7 +232,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "invite_after": int(club.info.get("invite_after_visits", 3)),
         "events_public": "events" in (club.info.get("public_calendars") or []),  # Club events shown to anyone
         "email": {"roster": len(recipients(archive)), "only_to": club.email.get("only_to")},
-        "chow": chow_tonight(archive, m),
+        "chow": chow_tonight(archive, m) if club.has("chow") else None,
         "business": business_items(archive, m.slug),
         "ask_about": ask_about_for(history),
         "celebrations": celebrations(club, m.date),
@@ -348,7 +349,8 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
 def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
     m = archive.by_slug[slug]
     # Upcoming Chow comes from the chow schedule as it stands now: tonight's chow, tonight's changes, what's next.
-    m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
+    if archive.club.has("chow"):
+        m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
     m.sections.update(business_sections(archive, slug))
     m.status = "published"
     m.save(archive.root)

@@ -95,6 +95,11 @@ def _birthdays(club: Club, viewer: str, lo: dt.date, hi: dt.date) -> list[Entry]
     return out
 
 
+def kinds(club: Club) -> dict[str, str]:
+    """The calendars this club has: KINDS, less chow unless that module is on."""
+    return {k: v for k, v in KINDS.items() if k != "chow" or club.has("chow")}
+
+
 def public_kinds(club: Club) -> list[str]:
     """The calendars an admin made public (`club.public_calendars`): shown without signing in. Never chow or birthdays."""
     return [k for k in club.info.get("public_calendars") or [] if k in store.CALS or k == "holiday"]
@@ -184,7 +189,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
         out += elections(lo, hi)
     if not public:
         at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
-        for d, x in chow.upcoming(chow.load(), lo, n=400):
+        for d, x in chow.upcoming(chow.load(), lo, n=400) if club.has("chow") else []:
             if d > hi.isoformat():
                 break
             if x.get("status") != "none":

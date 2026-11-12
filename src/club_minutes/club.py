@@ -57,6 +57,9 @@ PREVIEW = os.environ.get("CLUB_MINUTES_PREVIEW") or None
 STAGE = bool(os.environ.get("CLUB_MINUTES_STAGE"))
 
 
+# Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
+# chow: a rotation of members bringing food to meetings (the Chow page, reminders, the console's step, a missed-night fee).
+MODULES = {"chow": False}
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,3}$", re.I)
 
 
@@ -134,6 +137,7 @@ class Club:
         # Offices whose holders add new members to the roster (bylaws IV.C: the Secretary keeps it).
         self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
+        self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
 
         self._mtime = None  # set when the people come from the roster cache, so refresh() can notice a sync
         if roster is None and "members" in cfg:  # inline members (tests, example config)
@@ -142,6 +146,10 @@ class Club:
             self._mtime = ROSTER_CACHE.stat().st_mtime
             roster = json.loads(ROSTER_CACHE.read_text())
         self._load(roster or [])
+
+    def has(self, module: str) -> bool:
+        """Whether an optional part of the app is turned on in club.yaml (`modules:`)."""
+        return self.modules.get(module, False)
 
     @property
     def links(self) -> list[dict]:

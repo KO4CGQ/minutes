@@ -36,6 +36,12 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
   - label: Constitution and Bylaws   # a page of this app: /page, shown in full in the minutes and their PDF
     url: /bylaws
 
+# Optional parts of the app, each off unless turned on here:
+#   chow: a rotation of members bringing food to meetings: the Chow page, swaps, reminders, the console's
+#         Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.
+# modules:
+#   chow: true
+
 # Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer).
 # roster_keepers: [Secretary, Treasurer]
 

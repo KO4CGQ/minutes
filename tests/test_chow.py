@@ -275,3 +275,36 @@ def test_the_chow_list_goes_as_a_pdf_or_a_link_as_each_chose(monkeypatch):
                         "kd8aaa", "https://minutes.example.org", ["bob@example.org"])
     assert n == 2 and sent[0][0] == ["amy@example.org"] and sent[0][2] == 1
     assert sent[1][0] == ["bob@example.org"] and sent[1][2] == 0 and "https://minutes.example.org/chow" in sent[1][1]
+
+
+def test_with_the_chow_module_off_it_leaves_no_trace(env, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from club_minutes import calview, prefs, web
+    club, s, _ = env
+    s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"}, "2099-01-08": {"member": "bob", "status": "scheduled"}}
+    chow.save(s)
+    a = Archive(tmp_path, club)
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "amy"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    c.post("/chow/request", data={"mine": "2099-01-01", "theirs": "2099-01-08"})
+    lo, hi = dt.date(2098, 12, 25), dt.date(2099, 1, 15)
+
+    def looks():
+        who["id"] = "bob"  # has a swap request waiting
+        return {"menu": 'href="/chow"' in c.get("/minutes").text, "home": "chow" in c.get("/").text.lower(),
+                "prefs": "chow" in c.get("/profile/email").text.lower(),
+                "calendar": any(e.kind == "chow" for e in calview.entries(club, a, "bob", lo, hi)[0]),
+                "subscribe": "Chow" in c.get("/calendar/subscribe").text, "search": "Chow" in c.get("/search?q=amy").text,
+                "page": c.get("/chow").status_code == 200, "api": c.post("/chow/request", data={}).status_code != 404,
+                "reminders": bool(prefs.chow_reminders(club, dt.date(2098, 12, 29), "https://x")),
+                "console": "Upcoming Chow" in console.start(a, dt.date(2098, 12, 31), "sec").sections
+                           and bool(console.context(a, console.start(a, dt.date(2098, 12, 31), "sec"))["chow"])}
+
+    on = looks()
+    assert all(on.values()), on  # each check sees chow while the module is on, so none passes by accident
+    console.discard(a, "2098-12-31")
+    club.modules["chow"] = False
+    off = looks()
+    assert not any(off.values()), off

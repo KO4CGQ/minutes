@@ -6,16 +6,22 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 
 ## Unreleased
 - **The app is called Club Minutes inside too:** the Python package is `club_minutes`, the admin command `club-minutes`, the services `club-minutes*` (staging: `club-stage-sync*`), the folders `/opt/club-minutes`, `/etc/club-minutes` and `/var/lib/club-minutes`, and the settings in the env file `CLUB_MINUTES_…` (were `W8LBZ_…`). Nothing members see changes; they stay signed in. Backups made before still restore, and old and new ones are kept and pruned by date. The ROADMAP keeps only work on the app.
+- **Chow is an optional module,** off unless club.yaml has `modules: {chow: true}`. Off, it leaves no trace: no Chow page (its addresses answer "not found"), and nothing about chow on Home, the menu, the calendars, search, email choices and reminders, the console and the minutes, or the Treasurer pages (the missed-night fee). New members join the rotation only while it's on.
 - **Staging banner:** signed out, it only says this is a staging server (a test copy of the app); what it holds and where email goes is shown once signed in.
 - **Fix:** `setup.sh` installs `sudo` too (a fresh Debian container doesn't have it, and updates need it).
 - **Fix:** a calendar feed address with a non-ASCII character in it gave a server error instead of "not found".
 - **Deploy notes:** the server's folders, services and settings move to the new names once, by hand (Update now can't do it, and this note keeps the nightly update from trying):
   1. Take a snapshot of the container.
-  2. As root, run the developer's `private/rename-from-w8lbz.sh` (copied to the server) with the release: it stops the app, keeps a copy of the data in `/var/backups`, moves everything, installs the release and puts it all back if the app doesn't come up:
+  2. To keep the chow list, add to `/etc/w8lbz-minutes/club.yaml` (it moves with the rest):
+
+          modules:
+            chow: true
+
+  3. As root, run the developer's `private/rename-from-w8lbz.sh` (copied to the server) with the release: it stops the app, keeps a copy of the data in `/var/backups`, moves everything, installs the release and puts it all back if the app doesn't come up:
 
           bash rename-from-w8lbz.sh v0.20.0
 
-  3. From then on the admin command is `club-minutes` and the logs are `journalctl -u club-minutes`. Once all's well, delete the data copy and the snapshot.
+  4. From then on the admin command is `club-minutes` and the logs are `journalctl -u club-minutes`. Once all's well, delete the data copy and the snapshot.
 
 ## 0.19.0 (2026-11-11)
 - **The app's name and logo are set in the app** (admin mode → **Admin** → **Site**): the name in the top bar, page titles, the sign-in page, emails and a passkey's name on phones ("<callsign> Minutes" unless changed), and three pictures, each uploaded and reset on its own: the logo (pages, minutes, PDFs), the browser tab's icon and a phone's home-screen icon. The icons are made from the logo unless one is uploaded of its own; each upload is redrawn as a fresh PNG. **Behind the logo** (white circle, white rounded square or nothing; Automatic picks from its shape) keeps dark line art visible in dark mode; it used to be a white circle for every logo, which cut a wide one into an oval. A tab icon made from the logo gets the same white behind it, so it shows on a dark browser tab. The app now comes with a plain logo instead of W8LBZ's, so another club starts with its own name and no one else's emblem.

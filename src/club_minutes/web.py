@@ -114,6 +114,7 @@ def _assets_stamp() -> str:
 
 templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp(),
+                             module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
                              app_name=lambda: branding.name(archive.club),  # Site's name, else "<callsign> Minutes"
                              # the logo: for a page, its address (new after each upload); for a PDF, the file itself
                              brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
@@ -612,6 +613,15 @@ def business_delete(request: Request, iid: str, meeting: str = Form(...), mid: s
 
 
 # ---------------- chow list ----------------
+def _module(name: str):
+    """A route dependency: the page doesn't exist (404) unless club.yaml turns that module on."""
+    def check():
+        if not archive.club.has(name):
+            raise StarletteHTTPException(404)
+    return Depends(check)
+
+
+CHOW = _module("chow")
 _chow_lock = threading.Lock()
 
 
@@ -649,13 +659,13 @@ def chow_list_pdf() -> tuple[str, bytes]:
                                                            today=today))
 
 
-@app.get("/chow/list.pdf")
+@app.get("/chow/list.pdf", dependencies=[CHOW])
 def chow_pdf(mid: str = Depends(me)):
     name, data = chow_list_pdf()
     return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
 
 
-@app.post("/chow/email")
+@app.post("/chow/email", dependencies=[CHOW])
 def chow_email(request: Request, mid: str = Depends(chow_leader)):
     """Send the chow list to every member who wants it (Email tab), e.g. after filling or changing the schedule."""
     how = lambda k: sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == k}, key=str.lower)  # noqa: E731
@@ -663,8 +673,8 @@ def chow_email(request: Request, mid: str = Depends(chow_leader)):
     return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, how("pdf"), mid, base_url(request), how("link")))
 
 
-@app.get("/chow", response_class=HTMLResponse)
-@app.get("/chow/{tab}", response_class=HTMLResponse)
+@app.get("/chow", response_class=HTMLResponse, dependencies=[CHOW])
+@app.get("/chow/{tab}", response_class=HTMLResponse, dependencies=[CHOW])
 def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str = Depends(me)):
     s, club = chow.load(), archive.club
     leader = can_edit_chow(request)
@@ -710,6 +720,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
     members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
                      key=lambda m: (m.last, m.first))
     edit, running = is_treasurer(request), treasurer.on(s)
+    chow_on = club.has("chow")
     entries = [e for e in s["entries"] if full or e["account"] in kept]
     standings = treasurer.standings(club, s) if full and running else []
     return page(request, "treasurer.html", tab=tab, everyone=everyone, bond_note=treasurer.BOND_NOTE,
@@ -718,8 +729,8 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                 entries=sorted(entries, key=lambda e: (e["date"], e["at"]), reverse=True),
                 bills=treasurer.bills(archive, s, treasurer.bills_from(s)) if full and running else [], bills_from=treasurer.bills_from(s),
                 show=show if show in ("waiting", "paid", "dismissed", "all") else "waiting", regular=treasurer.regular_due(s, dt.date.today()),
-                regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=treasurer.RATES, bond=treasurer.BOND,
-                labels=treasurer.LABELS, kinds=treasurer.KINDS if edit else treasurer.NO_MEMBER, accounts=c["accounts"] if edit else kept,
+                regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates={k: v for k, v in treasurer.RATES.items() if k != "missed_chow" or chow_on}, bond=treasurer.BOND,
+                labels=treasurer.LABELS, kinds=[k for k in (treasurer.KINDS if edit else treasurer.NO_MEMBER) if k != "chow" or chow_on], accounts=c["accounts"] if edit else kept,
                 rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
 
@@ -855,34 +866,34 @@ def _form_date(v: str) -> None:
         raise HTTPException(400, "That isn't a date.")
 
 
-@app.post("/chow/request")
+@app.post("/chow/request", dependencies=[CHOW])
 def chow_request(request: Request, mine: str = Form(...), theirs: str = Form(...), mid: str = Depends(me)):
     return chow_change(request, lambda s: chow.request_swap(archive.club, s, mid, mine, theirs, base_url(request)))
 
 
-@app.post("/chow/requests/{rid}/answer")
+@app.post("/chow/requests/{rid}/answer", dependencies=[CHOW])
 def chow_answer(request: Request, rid: str, approve: int = Form(0), mid: str = Depends(me)):
     return chow_change(request, lambda s: chow.decide_swap(archive.club, s, rid, mid, bool(approve), base_url(request)))
 
 
-@app.post("/chow/assign")
+@app.post("/chow/assign", dependencies=[CHOW])
 def chow_assign(request: Request, date: str = Form(...), member: str = Form(""), mid: str = Depends(chow_leader)):
     _form_date(date)
     return chow_change(request, lambda s: chow.assign(archive.club, s, date, owner_id(member), mid, base_url(request)))
 
 
-@app.post("/chow/none")
+@app.post("/chow/none", dependencies=[CHOW])
 def chow_none(request: Request, date: str = Form(...), note: str = Form(""), mid: str = Depends(chow_leader)):
     _form_date(date)
     return chow_change(request, lambda s: chow.set_none(s, date, note, mid))
 
 
-@app.post("/chow/swap")
+@app.post("/chow/swap", dependencies=[CHOW])
 def chow_swap(request: Request, a: str = Form(...), b: str = Form(...), mid: str = Depends(chow_leader)):
     return chow_change(request, lambda s: chow.swap(archive.club, s, a, b, mid, base_url(request)))
 
 
-@app.post("/chow/record")
+@app.post("/chow/record", dependencies=[CHOW])
 def chow_record(request: Request, date: str = Form(...), status: str = Form(...), covered_by: str = Form(""),
                 note: str = Form(""), next: str = Form("/chow/history"), mid: str = Depends(leader)):
     def run(s):
@@ -891,7 +902,7 @@ def chow_record(request: Request, date: str = Form(...), status: str = Form(...)
     return chow_change(request, run, back=_safe_next(next))
 
 
-@app.post("/chow/generate")
+@app.post("/chow/generate", dependencies=[CHOW])
 def chow_generate(request: Request, until: str = Form(...), next_member: str = Form(""), mid: str = Depends(chow_leader)):
     def run(s):
         if next_member:
@@ -901,7 +912,7 @@ def chow_generate(request: Request, until: str = Form(...), next_member: str = F
     return chow_change(request, run, back="/chow/rotation")
 
 
-@app.post("/chow/order")
+@app.post("/chow/order", dependencies=[CHOW])
 def chow_order(request: Request, member: str = Form(...), op: str = Form(...), mid: str = Depends(chow_leader)):
     """Rotation order: move a member up or down, add a waiting member at the bottom, or take one out."""
     def run(s):
@@ -920,7 +931,7 @@ def chow_order(request: Request, member: str = Form(...), op: str = Form(...), m
     return chow_change(request, run, back="/chow/rotation")
 
 
-@app.post("/chow/constraints")
+@app.post("/chow/constraints", dependencies=[CHOW])
 async def chow_constraints(request: Request, mid: str = Depends(chow_leader)):
     form = await request.form()
     who = form.get("member", "")
@@ -1125,15 +1136,18 @@ def profile_page(request: Request, saved: int = 0, email_sent: str = "", error: 
 
 @app.get("/profile/email", response_class=HTMLResponse)
 def email_prefs_page(request: Request, saved: int = 0, mid: str = Depends(me)):
-    kinds = {k: v for k, v in prefs.KINDS.items() if k != "roster" or mid in archive.club.secretaries}
-    return page(request, "email_prefs.html", p=prefs.get(mid), kinds=kinds, help=prefs.HELP, chow_days=prefs.CHOW_DAYS,
+    kinds = {k: v for k, v in prefs.KINDS.items() if (k != "roster" or mid in archive.club.secretaries)
+             and (k != "chowlist" or archive.club.has("chow"))}
+    return page(request, "email_prefs.html", p=prefs.get(mid), kinds=kinds,
+                help={k: v.format(chow="whether you're bringing chow, " if archive.club.has("chow") else "") for k, v in prefs.HELP.items()}, chow_days=prefs.CHOW_DAYS,
                 m=archive.club.members[mid], saved=saved)
 
 
 @app.post("/profile/email")
 async def email_prefs_save(request: Request, mid: str = Depends(me)):
     form = await request.form()
-    prefs.save(mid, {**{k: form.get(k) for k in prefs.KINDS}, "chow_days": form.getlist("chow_days")})
+    days = form.getlist("chow_days") if archive.club.has("chow") else prefs.get(mid)["chow_days"]  # kept while chow is off
+    prefs.save(mid, {**{k: form.get(k) for k in prefs.KINDS}, "chow_days": days})
     return RedirectResponse("/profile/email?saved=1", status_code=303)
 
 
@@ -1418,8 +1432,8 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
         return RedirectResponse(f"/minutes?{request.url.query}", status_code=301)
     club, today = archive.club, dt.date.today()
     nights = chow.meeting_nights(club, today, today + dt.timedelta(days=7))
-    s = chow.load()
-    upcoming = chow.upcoming(s, n=60)
+    s = chow.load() if club.has("chow") else {"swaps": []}
+    upcoming = chow.upcoming(s, n=60) if club.has("chow") else []
     latest = next((m for m in archive.meetings if m.status != "draft"), None)  # newest first
     items = [business.view(club, x, today.isoformat()) for x in business.load()["items"]
              if x["status"] == "open" and x.get("owner") == mid]
@@ -1491,7 +1505,7 @@ def search(request: Request, q: str = "", kind: str = "all", p: str = Query("1",
     for r in minutes:
         r["date"] = archive.by_slug[r["slug"]].date
     found = {**_search_lists(q), "calendar": _search_calendar(q), "minutes": minutes}
-    kind = kind if kind in SEARCH_KINDS else "all"
+    kind = kind if kind in SEARCH_KINDS and (kind != "nights" or archive.club.has("chow")) else "all"
     return page(request, "search.html", q=q, kind=kind, found=found, kinds=SEARCH_KINDS,
                 pg=paginate(found[kind], p, per) if kind != "all" else None)
 
@@ -1519,7 +1533,7 @@ def _search_lists(q: str) -> dict:
     items = [business.view(club, x, dt.date.today().isoformat()) for x in console.business_state(archive)["items"]]
     items = sorted((x for x in items if _has(q, x["text"], x["owner_name"])), key=lambda x: (x["status"] != "open", x["opened"]))
     nights = [(dt.date.fromisoformat(d), club.name(x["member"])) for d, x in chow.upcoming(chow.load(), n=60)
-              if x.get("member") and x.get("status") != "none" and _has(q, club.name(x["member"]))]
+              if x.get("member") and x.get("status") != "none" and _has(q, club.name(x["member"]))] if club.has("chow") else []
     return {"members": members, "guests": guests, "items": items, "nights": nights}
 
 
@@ -2140,7 +2154,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
     for e in items:
         for d in e.days(lo, hi):
             by_day.setdefault(d, []).append(e)
-    kinds = {k: v for k, v in calview.KINDS.items() if not public or k in calview.public_kinds(archive.club)}
+    kinds = {k: v for k, v in calview.kinds(archive.club).items() if not public or k in calview.public_kinds(archive.club)}
     repeats = {e["id"]: events.repeat_label(e["start"], e["repeat"]) for e in events.load() if e.get("repeat")}
     return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
                 items=items, repeats=repeats, weekdays=[dt.date(2024, 1, 1 + (ws + i) % 7).strftime("%a") for i in range(7)],
@@ -2163,7 +2177,7 @@ def calendar_changes(request: Request, p: str = Query("1", alias="page"), per: s
 
 @app.get("/calendar/subscribe", response_class=HTMLResponse)
 def calendar_subscribe(request: Request, mid: str = Depends(me)):
-    kinds = calview.KINDS
+    kinds = calview.kinds(archive.club)
     return page(request, "calendar_subscribe.html", private=_feed_url(request, f"/calendar/feed/{calview.feed_token(mid)}.ics"), kinds=kinds,
                 public=_feed_url(request, "/calendar/public.ics") if calview.public_kinds(archive.club) else None,
                 public_page=_feed_url(request, "/calendar/public") if calview.public_kinds(archive.club) else None)

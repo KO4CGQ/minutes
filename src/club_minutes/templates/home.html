@@ -14,11 +14,11 @@
   {% if chow_next %}<p>Chow{% if not next_meeting or chow_next[0] != next_meeting.isoformat() %} {{ fmt(chow_next[0]) }}{% endif %}: {% if chow_next[1].status == 'none' %}none{% if chow_next[1].note %} ({{ chow_next[1].note }}){% endif %}{% elif chow_next[1].member %}{{ club.name(chow_next[1].member) }}{% else %}not set{% endif %}</p>{% endif %}
   {% if teams %}<p><a href="{{ teams.url }}">Join online ({{ teams.label }})</a></p>{% endif %}
 </section>
-<section class="card">
+{% if module('chow') %}<section class="card">
   <h2>Your chow night</h2>
   {% if my_chow %}<p class="big">{{ fmt(my_chow[0]) }}</p><p class="muted">Can't make it? <a href="/chow">Ask someone to swap</a>.</p>
   {% else %}<p class="muted">You don't have an upcoming chow night scheduled. <a href="/chow">See the chow schedule</a>.</p>{% endif %}
-</section>
+</section>{% endif %}
 {% if dues %}<section class="card">
   <h2>Your dues</h2>
   {% if dues.owed > 0 %}<p class="big{{ ' late' if dues.behind }}">You owe {{ money(dues.owed) }}</p>

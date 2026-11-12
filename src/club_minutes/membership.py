@@ -89,8 +89,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
     club._load(rows)
 
     # New members join the chow rotation at the end of the current round (an officer can move or remove them).
-    s = chow.load()
-    if mid not in s["order"]:
+    if club.has("chow") and mid not in (s := chow.load())["order"]:
         chow.add_to_rotation(club, s, mid, by)
         chow.save(s)
 

@@ -21,7 +21,7 @@
   </dl>
 
   {% for sec in SECTIONS %}{% set items = m.items(sec) %}
-    {% if items or sec in ('Upcoming Chow',) %}
+    {% if items or (sec == 'Upcoming Chow' and module('chow')) %}
     <h2>{{ sec }}</h2>
     {% if sec == 'Upcoming Chow' and not items %}<p class="muted">See the attached chow list.</p>{% endif %}
     <ul class="items {{ 'reports' if sec == 'Community Reports' }}">

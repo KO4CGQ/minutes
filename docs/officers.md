@@ -24,6 +24,8 @@ The app keeps the club calendars itself (`events.json` in the data folder), so n
 **Public calendars:** `public_calendars: [events]` (any of events, planning, community, holiday) under `club:` shows those calendars to anyone, signed in or not, at `/calendar/public`, with a public feed at `/calendar/public.ics`. Chow nights, birthdays and business due dates are never public. Empty by default.
 
 ## Chow schedule
+An optional module: on only when the server's club.yaml has `modules: {chow: true}`. Off, nothing about chow shows anywhere in the app.
+
 `/chow` is the chow list; the app is the source of truth (state in `chow.json`, every change in `chow-log.jsonl`, both in the data directory).
 - One-time import of the Secretary's spreadsheet: `club-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
 - Members ask each other to swap; leaders edit directly; the console records provided, missed or covered on meeting night.
