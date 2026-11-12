@@ -2,7 +2,31 @@
 <h1>Site</h1>
 <nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
-{% if tab == 'dates' %}
+{% if tab == 'club' %}
+{% if meeting_edit %}<p class="msg"><a class="btn small" href="{{ meeting_edit }}">Change the weekly meeting on the calendar</a></p>{% endif %}
+<p class="muted">The club's name and callsign, and when it meets. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
+{% macro source(k) %}<span class="muted small">{{ 'Set here' if k in set_here else 'From club.yaml' }}</span>{% endmacro %}
+<form method="post" action="/admin/site/club" class="profile siteclub">
+<div class="card sitesec"><h2>The club</h2>
+<div class="fmtgrid">
+<label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ source('name') }}
+<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9/]{3,12}" autocapitalize="characters" spellcheck="false">{{ source('callsign') }}
+<label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}"><span class="muted small">{{ 'Set here' if app_name() != default_name else 'From the callsign' }}</span>
+</div>
+<p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
+<div class="card sitesec"><h2>Meetings</h2>
+<div class="fmtgrid">
+<label for="c-day">Day</label><select id="c-day" name="meeting_day">{% for d in weekdays %}<option{{ ' selected' if d|lower == (club.info.meeting_day or '')|lower }}>{{ d }}</option>{% endfor %}</select>{{ source('meeting_day') }}
+<label for="c-time">Starts at</label><input id="c-time" type="time" name="meeting_time" value="{{ club.meeting_time }}" required>{{ source('meeting_time') }}
+<label for="c-tz">Time zone</label><input id="c-tz" name="timezone" list="zones" value="{{ club.timezone }}" required autocomplete="off" spellcheck="false">{{ source('timezone') }}
+</div>
+<datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
+<p class="hint">Every week on this day. A new day or time doesn't change what's already on the calendar: the weekly meeting there is an ordinary event (added once, the first time the calendar was opened), and chow nights come from the chow schedule an officer makes on the Chow page. After you save, the app says what's on the old day and links the meeting to change.</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
 {{ 'Set here.' if dates_here else 'From the server (club.yaml) until you save here.' }}</p>
 <form method="post" action="/admin/site/dates" class="profile sitedates">
@@ -28,16 +52,8 @@
 </form>
 {% if dates_here %}<form method="post" action="/admin/site/dates" data-confirm="Go back to how club.yaml on the server writes dates?"><input type="hidden" name="preset" value="yaml"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% else %}
-<p class="muted">What the app calls itself, the club's pictures and colours. Each change is in the admin log.</p>
+<p class="muted">The club's pictures and colours. Each change is in the admin log. The app's name is on the Club tab.</p>
 
-<details class="card sitesec" open><summary><h2>Name</h2></summary>
-<form method="post" action="/admin/site/name" class="row sitename">
-  <input name="name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}" aria-label="The app's name">
-  <button class="btn">Save</button>
-</form>
-<p class="muted small">In the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p>
-
-</details>
 <details class="card sitesec" open><summary><h2>Pictures</h2></summary>
 <p class="muted small">PNG (best: it can have a see-through background), JPEG or WebP, up to {{ upload_mb }} MB. A new picture shows here first; nothing changes on the site until you press Save. Each saved picture is redrawn as a fresh one, so nothing else in the file is kept. The icons are made from the logo unless you upload one of their own.</p>
 {% set USE = {"logo": "The top bar, the sign-in page, the minutes and their PDF" ~ (", the chow list." if module('chow') else "."),

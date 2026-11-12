@@ -175,7 +175,7 @@ class Member:
 
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
-SITE_KEYS = {("club", "date_formats")}
+SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone")}
 
 
 def _overlay(cfg: dict, site: dict) -> dict:
@@ -207,17 +207,18 @@ class Club:
         p = DATA / "site-settings.json"
         return json.loads(p.read_text()) if p.exists() else {}
 
-    def save_site_setting(self, section: str, key: str, value) -> None:
-        """Set one Site page setting (None: back to club.yaml's). Checked as the app checks club.yaml at start, then
-        used at once; a ValueError says what's wrong and nothing changes."""
-        if (section, key) not in SITE_KEYS:
-            raise ValueError(f"{section}: {key} can't be changed here.")
+    def save_site_settings(self, section: str, values: dict) -> None:
+        """Set Site page settings together ({key: value}; None: back to club.yaml's). Checked as the app checks
+        club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
+        if bad := [k for k in values if (section, k) not in SITE_KEYS]:
+            raise ValueError(f"{section}: {', '.join(bad)} can't be changed here.")
         site = self.site_settings
-        if value is None:
-            site.get(section, {}).pop(key, None)
-            site = {k: v for k, v in site.items() if v}
-        else:
-            site.setdefault(section, {})[key] = value
+        for key, value in values.items():
+            if value is None:
+                site.get(section, {}).pop(key, None)
+            else:
+                site.setdefault(section, {})[key] = value
+        site = {k: v for k, v in site.items() if v}
         cfg = _overlay(self.yaml, site)
         probe = Club.__new__(Club)
         try:

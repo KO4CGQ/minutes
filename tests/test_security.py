@@ -273,6 +273,52 @@ def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkey
         admin.post("/admin/site/dates", data={"preset": "yaml"})
         assert show_date(d) == "Nov 5, 2026" and c.site_settings == {}
         with pytest.raises(ValueError):
-            c.save_site_setting("auth", "rp_id", "evil.example")
+            c.save_site_settings("auth", {"rp_id": "evil.example"})
+    finally:
+        clubmod.set_dates(None)
+
+
+def test_site_club_tab_keeps_only_changes_checks_them_and_says_what_isnt_moved(app, tmp_path, monkeypatch):
+    """Admin → Site → Club: only what differs from club.yaml is kept; a wrong value changes nothing; a new meeting day
+    says what's already planned (the calendar's weekly meeting, chow nights) and links to the meeting."""
+    import datetime as dt
+    from urllib.parse import unquote
+    from club_minutes import club as clubmod, events
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"kd8off"})
+    admin, member = app("kd8off"), app("kd8bbb")
+    same = {"name": "Test Club", "callsign": "w0tst", "meeting_day": "thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
+    try:
+        assert member.get("/admin/site/club").status_code == 404 and member.post("/admin/site/club", data=same).status_code == 404
+        assert admin.get("/admin/site/club").text.count("From club.yaml") == 5
+        admin.post("/admin/site/club", data=same)
+        assert c.site_settings == {}  # nothing differs: nothing kept
+        for bad, why in (({"callsign": "W0 <b>"}, "callsign"), ({"name": "  "}, "name"), ({"timezone": "Mars/Base"}, "time zone: &#39;mars/base&#39; isn"),
+                         ({"meeting_time": "25:99"}, "start time: &#39;25:99&#39;"), ({"meeting_day": "Caturday"}, "meeting day: &#39;caturday&#39;")):
+            r = admin.post("/admin/site/club", data={**same, **bad})
+            assert "msg err" in r.text and why in r.text.lower() and "club.yaml club" not in r.text and c.site_settings == {}, bad
+        c.save_site_settings("club", {"date_formats": {"list": "%-d %b %Y"}})
+        (tmp_path / "x").mkdir(exist_ok=True)
+        (events.DATA / "events-meeting-added").unlink()
+        events.ensure_meeting(c)
+        from club_minutes import chow
+        monkeypatch.setattr(chow, "DATA", tmp_path)
+        nxt_thu = dt.date.today() + dt.timedelta(days=(3 - dt.date.today().weekday()) % 7 or 7)
+        chow.save({"nights": {nxt_thu.isoformat(): {"member": "kd8aaa", "status": "scheduled"}}})
+        r = admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday"}, follow_redirects=False)
+        loc = unquote(r.headers["location"])
+        assert "weekly meeting on the calendar" in loc and "1 chow night on the old day" in loc and "&meeting=" in loc
+        assert c.site_settings["club"] == {"date_formats": {"list": "%-d %b %Y"}, "name": "Test Radio Club", "meeting_day": "Tuesday"}
+        assert c.meeting_weekday == 1 and c.info["name"] == "Test Radio Club"
+        assert 'href="/calendar/edit?id=' in admin.get(r.headers["location"]).text
+        tab = admin.get("/admin/site/club").text
+        assert tab.count("Set here") == 2 and tab.count("From club.yaml") == 3  # name and day were changed
+        assert admin.get("/admin/site/club?meeting=../x&d=2026-01-01").text.count("/calendar/edit") == 0  # only a real id
+        assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
+        admin.post("/admin/site/club", data={"back": "1"})
+        assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay
     finally:
         clubmod.set_dates(None)

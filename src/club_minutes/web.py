@@ -27,7 +27,7 @@ from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, DATES, PREVIEW, STAGE, num, one_line, show_date, valid_email
+from .club import DATA, DATES, PREVIEW, STAGE, WEEKDAYS, _server_timezone, num, one_line, show_date, valid_email
 from .backup import KEY_FILE
 from .roster import COLUMNS, SHAREABLE, SheetError
 
@@ -1840,6 +1840,7 @@ def admin_action(e: dict) -> str:
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
              "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
              "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}",
+             "site_club": lambda v: "Club settings back to club.yaml's" if v == "club.yaml" else f"Club settings: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
              "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
@@ -2061,7 +2062,8 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
-SITE_TABS = (("look", "Look"), ("dates", "Dates"))
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("dates", "Dates"))
+CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
                 "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
 
@@ -2081,6 +2083,8 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
+                set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS], zones=events.ZONES,
+                meeting_edit=_meeting_edit(request.query_params.get("meeting", ""), request.query_params.get("d", "")), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb(),
@@ -2096,14 +2100,6 @@ def _site_admin(request: Request) -> str:
     return mid
 
 
-@app.post("/admin/site/name")
-def site_name(request: Request, name: str = Form("")):
-    mid = _site_admin(request)
-    branding.set_name(name, mid)
-    _admin_log(request, site_name=branding.name(archive.club))
-    return RedirectResponse("/admin/site?note=" + quote("Saved: the app is now called " + branding.name(archive.club) + "."), status_code=303)
-
-
 @app.post("/admin/site/dates")
 async def site_dates(request: Request):
     """Dates tab: a preset, the four formats by hand, or back to club.yaml's."""
@@ -2114,11 +2110,69 @@ async def site_dates(request: Request):
     try:
         if value == "?":
             raise ValueError("Pick how dates are written.")
-        archive.club.save_site_setting("club", "date_formats", value)
+        archive.club.save_site_settings("club", {"date_formats": value})
     except ValueError as e:
         return RedirectResponse("/admin/site/dates?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_dates=choice)
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
+
+
+def _meeting_edit(eid: str, d: str) -> str | None:
+    """The calendar's page for changing the weekly meeting from date d on (after a new meeting day or time)."""
+    try:
+        return f"/calendar/edit?id={eid}&d={dt.date.fromisoformat(d)}" if re.fullmatch(r"[0-9a-f]{6,20}", eid) else None
+    except ValueError:
+        return None
+
+
+@app.post("/admin/site/club")
+async def site_club(request: Request):
+    """Club tab: name, callsign, meeting day and time, time zone; all saved together, or back to club.yaml's.
+    Only what differs from club.yaml is kept, so later changes there still count for the rest."""
+    mid, form, club = _site_admin(request), await request.form(), archive.club
+    old_day, old_time = club.meeting_weekday, club.meeting_time
+    if form.get("back"):
+        values = dict.fromkeys(CLUB_KEYS)
+    else:
+        name, call = " ".join((form.get("name") or "").split())[:80], (form.get("callsign") or "").strip().upper()
+        try:
+            if not name:
+                raise ValueError("Give the club's name.")
+            if not re.fullmatch(r"[A-Z0-9/]{3,12}", call):
+                raise ValueError("The callsign is letters and digits, like W1AW.")
+        except ValueError as e:
+            return RedirectResponse("/admin/site/club?error=" + quote(str(e)), status_code=303)
+        typed = {"name": name, "callsign": call, "meeting_day": (form.get("meeting_day") or "").strip().title(),
+                 "meeting_time": (form.get("meeting_time") or "").strip()[:5], "timezone": (form.get("timezone") or "").strip()}
+        yc = club.yaml.get("club") or {}
+        base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone()}
+        values = {k: None if v.lower() == base[k].lower() else v for k, v in typed.items()}  # only what differs is kept
+    try:
+        club.save_site_settings("club", values)
+    except ValueError as e:  # the start-up checks' words, for this page
+        msg = str(e).replace("club.yaml club: ", "").replace(" (24-hour, in quotes)", "")
+        for k, label in (("meeting_day: ", "Meeting day: "), ("meeting_time: ", "Start time: "), ("timezone: ", "Time zone: ")):
+            msg = msg.replace(k, label)
+        return RedirectResponse("/admin/site/club?error=" + quote(msg), status_code=303)
+    _admin_log(request, site_club="club.yaml" if form.get("back") else ", ".join(k for k, v in values.items() if v is not None) or "club.yaml")
+    app_name = " ".join((form.get("app_name") or "").split())[:60]
+    if not form.get("back") and app_name != (branding._settings().get("name") or ""):  # its own setting (branding.json), not club.yaml's
+        branding.set_name(app_name, mid)
+        _admin_log(request, site_name=branding.name(club))
+    note = "Saved."
+    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time):
+        today = dt.date.today()
+        evs = events.load()
+        e = next((x for x in evs if x.get("meeting")), None)
+        nxt = next(iter(events.dates(e, today, today + dt.timedelta(days=60))), None) if e else None
+        late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
+                   and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0
+        note = ("Saved. Already planned, and not moved: the weekly meeting on the calendar"
+                + (f" (change it there: This and following dates)" if e else "")
+                + (f", and {late} chow night{'s' if late != 1 else ''} on the old day (the Chow page)" if late else "") + ".")
+        if e and nxt:
+            return RedirectResponse("/admin/site/club?note=" + quote(note) + f"&meeting={e['id']}&d={nxt}", status_code=303)
+    return RedirectResponse("/admin/site/club?note=" + quote(note), status_code=303)
 
 
 SITE_PICTURES = {"logo": "Logo", "favicon": "Browser tab icon", "icon": "Phone home-screen icon"}

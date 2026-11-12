@@ -76,7 +76,9 @@ def test_each_picture_is_uploaded_and_reset_on_its_own(data):
 def test_site_page_is_for_admins_in_admin_mode_and_the_pictures_are_public(data, tmp_path, monkeypatch):
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"},
                                                  {"id": "kd8bbb", "first": "Bob", "last": "Baker"}])
-    club.admins = {"kd8adm"}
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    club.save_app_admins({"kd8adm"})  # (a Club tab save reloads the settings: an admin set by hand wouldn't last)
     monkeypatch.setattr(web.archive, "club", club)
     monkeypatch.setattr(web, "DATA", tmp_path)
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -87,11 +89,15 @@ def test_site_page_is_for_admins_in_admin_mode_and_the_pictures_are_public(data,
         t.cookies.set(web.COOKIE, a.new_session(who))
         return t
     bob, amy = as_("kd8bbb"), as_("kd8adm")
-    assert bob.get("/admin/site").status_code == 404 and bob.post("/admin/site/name", data={"name": "X"}).status_code == 404
+    assert bob.get("/admin/site").status_code == 404 and bob.post("/admin/site/club", data={"app_name": "X"}).status_code == 404
     assert amy.get("/admin/site", follow_redirects=False).headers["location"].startswith("/admin/confirm")  # admin mode first
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
-    amy.post("/admin/site/name", data={"name": "Test Club Minutes"})
+    same = {"name": "Test Club", "callsign": "W0TST", "meeting_day": "Thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
+    amy.post("/admin/site/club", data={**same, "app_name": "Test Club Minutes"})
     assert "Test Club Minutes" in bob.get("/links").text  # every page's top bar
+    amy.post("/admin/site/club", data={**same, "callsign": "<b>", "app_name": "Other Minutes"})  # a refused save changes nothing
+    amy.post("/admin/site/club", data={"back": "1", "app_name": "Other Minutes"})                # nor does Back to club.yaml
+    assert branding.name(club) == "Test Club Minutes"
     r = amy.post("/admin/site/picture/logo", files={"file": ("logo.png", png(), "image/png")})
     assert "Logo saved" in r.text and branding.custom() and "Made from the logo" in amy.get("/admin/site").text
     assert amy.post("/admin/site/picture/other", files={"file": ("x.png", png(), "image/png")}).status_code == 404
