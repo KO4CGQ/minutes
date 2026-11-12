@@ -3,10 +3,10 @@
 club:
   name: Example Radio Club
   callsign: W0XYZ
-  meeting_day: Thursday
+  meeting_day: Thursday     # required, with meeting_time
   meeting_time: "19:30"     # 24-hour; the "Start meeting" button pulses from 30 minutes before
   invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit
-  timezone: America/New_York  # for the club calendars
+  timezone: America/New_York  # for the club calendars; left out: the server's own
   public_calendars: []     # e.g. [events, community]: shown to anyone at /calendar/public and /calendar/public.ics
                            # (never chow or birthdays). Leave empty to keep every calendar members-only.
   remind_days_before: 3    # business item owners get an email this many days before the due date (and once if overdue)
@@ -29,8 +29,8 @@ email:
 links:  # shown in the "Club Links" footer of the minutes and on the Links page
   # The starting list: once an admin edits the links on the Links page, links.json in the data folder is used instead.
   # Optional icon: video, chat, globe, document, radio, calendar or link (guessed from the address if left out)
-  - label: Teams meeting
-    url: https://teams.live.com/meet/REPLACE_ME
+  - label: Join online       # a video meeting link (Teams, Zoom, Meet, Jitsi…): Home offers the first one
+    url: https://meet.jit.si/REPLACE_ME
   - label: Club Discord
     url: https://discord.com/invite/REPLACE_ME
   - label: Constitution and Bylaws   # a page of this app: /page, shown in full in the minutes and their PDF

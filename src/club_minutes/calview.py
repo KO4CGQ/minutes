@@ -134,7 +134,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     out: list[Entry] = []
     store.ensure_meeting(club)
     kinds = public_kinds(club) if public else list(store.CALS)
-    tz = str(club.info.get("timezone", "America/New_York"))
+    tz = club.timezone
     for e in store.load():
         if e["cal"] not in kinds:
             continue
@@ -160,7 +160,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     if "community" in kinds:
         out += elections(club, lo, hi)
     if not public:
-        at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
+        at = dt.time.fromisoformat(club.meeting_time)
         for d, x in chow.upcoming(chow.load(), lo, n=400) if club.has("chow") else []:
             if d > hi.isoformat():
                 break

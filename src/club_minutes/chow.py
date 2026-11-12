@@ -22,11 +22,10 @@ import time
 from pathlib import Path
 
 from . import auth, branding, regions
-from .club import DATA, Club
+from .club import DATA, WEEKDAYS, Club  # noqa: F401  (WEEKDAYS: others import it from here)
 
 log = logging.getLogger("club_minutes.chow")
 STATUSES = ("scheduled", "provided", "missed", "covered", "none")
-WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
 def _path() -> Path:
@@ -101,7 +100,7 @@ def eligible(club: Club, s: dict, mid: str, date: dt.date) -> bool:
 
 
 def meeting_nights(club: Club, start: dt.date, until: dt.date) -> list[dt.date]:
-    wd = WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
+    wd = club.meeting_weekday
     d = start + dt.timedelta(days=(wd - start.weekday()) % 7)
     out = []
     while d <= until:
@@ -339,7 +338,7 @@ def import_xlsx(club: Club, path: Path, order: list[str], by: str, year: int) ->
         if date is None:
             continue
         day = date.date() if isinstance(date, dt.datetime) else date
-        wd = WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
+        wd = club.meeting_weekday
         if day.weekday() != wd:  # a typo'd date: use the nearest meeting night
             fixed = day + dt.timedelta(days=(wd - day.weekday() + 3) % 7 - 3)
             problems.append(f"Row {row[0].row}: {day:%a %b %-d} isn't a meeting night; used {fixed:%a %b %-d}")

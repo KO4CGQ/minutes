@@ -7,7 +7,7 @@ For working on the code: running it locally, previews, tests, releases and the s
 curl -LsSf https://astral.sh/uv/install.sh | sh     # once
 uv sync
 uv run club-minutes roster                          # rebuild data/roster.json from data/roster-sheet.json
-uv run club-minutes import archive                  # (re)build data/ from archive/
+uv run club-minutes import archive                  # optional: (re)build data/ from old minutes in archive/ (importer.py)
 uv run club-minutes serve --host 0.0.0.0 --port 8765
 uv run playwright install chromium                  # once: the mobile-first test uses it (skipped without it)
 uv run pytest -q

@@ -1,4 +1,4 @@
-club: {name: Test Club, callsign: W0TST}
+club: {name: Test Club, callsign: W0TST, meeting_day: Thursday, meeting_time: "19:30"}
 modules: {chow: true}
 calendar: {holidays: us, elections: us-oh}
 treasurer: {certificate: {name: Bond (Certificate of Indebtedness), short: bond, note: Each member buys one.}}

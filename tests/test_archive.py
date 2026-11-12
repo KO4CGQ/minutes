@@ -291,3 +291,31 @@ def test_inline_scripts_parse(client, tmp_path):
             f.write_text(js)
             r = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True)
             assert r.returncode == 0, f"{path} script {i}: {r.stderr}"
+
+
+def test_join_online_is_the_first_video_link(client, monkeypatch):
+    from club_minutes import web
+    c = web.archive.club
+    monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"},
+                                           {"label": "Weekly meeting", "url": "https://us02web.zoom.us/j/123"}])
+    assert 'href="https://us02web.zoom.us/j/123">Join online (Weekly meeting)' in client.get("/").text
+    monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"}])
+    assert "Join online" not in client.get("/").text
+
+
+def test_the_meeting_day_time_and_zone_are_the_clubs_own(tmp_path, monkeypatch):
+    from club_minutes import club as club_mod
+    c = Club(FIX / "test-club.yaml")
+    assert (c.meeting_weekday, c.meeting_time) == (3, "19:30")
+    c.info.update(meeting_day=" tuesday ", meeting_time=1170)  # unquoted in YAML, 19:30 arrives as 1170 minutes
+    assert (c.meeting_weekday, c.meeting_time) == (1, "19:30")
+    for k, bad in (("meeting_day", None), ("meeting_day", "Thurs"), ("meeting_time", None), ("meeting_time", "7:30 PM"),
+                   ("meeting_time", "24:00"), ("meeting_time", True), ("timezone", "Mars/Olympus")):
+        d = Club(FIX / "test-club.yaml")
+        d.info[k] = bad
+        with pytest.raises(ValueError, match=f"club.yaml club: {k}"):
+            d.meeting_weekday, d.meeting_time, d.timezone
+    monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/usr/share/zoneinfo/Europe/Berlin")
+    assert Club(FIX / "test-club.yaml").timezone == "Europe/Berlin"  # none in club.yaml: the server's own
+    monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/etc/localtime")
+    assert Club(FIX / "test-club.yaml").timezone == "UTC"

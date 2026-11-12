@@ -8,6 +8,7 @@ As root on the container:
 curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh | bash   # first time
 /opt/club-minutes/deploy/update.sh                                                     # by hand: the latest main (TAG=v0.15.0 for a release)
 ```
+To set the server's time zone too, run setup as `… | TZ_NAME=America/Chicago bash` (otherwise it keeps the server's own; the app uses that unless club.yaml names one).
 Then put `club.yaml` in `/etc/club-minutes/` (and `google-service-account.json`, only for backups to Google Drive), and data in `/var/lib/club-minutes/`.
 The app runs as the `minutes` user on port 8000. The roster cache (`roster.json`) is rebuilt daily at 04:00 from the roster the app keeps (`roster-sheet.json`); backups run on the schedule set on the Backups page.
 
@@ -34,7 +35,7 @@ overnight). A sync replaces everything except stage's own sign-ins and passkeys,
 Stage doesn't update itself; a developer installs a branch with `deploy/stage-push.sh` (developer guide).
 
 ## Config
-`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the optional modules (`modules: {chow: true}`; each is off unless turned on), the holidays and election days by region (`calendar: {holidays: us, elections: us-oh}`; none by default), the bylaws sections the app cites (`bylaws: refs:`, each shown only if given), a certificate members buy (`treasurer: certificate:`, off unless named), the meeting's sections in order (`meeting: sections:`, the built-ins and the club's own), the admins list, email test mode, the starting club links and the private never-record list. People, their titles and who may lead come from the roster the app keeps (`roster-sheet.json` in the data folder, edited on the Roster pages; moved off the club's Google Sheet in 0.13.0); the list of offices is `offices:` in club.yaml.
+`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the optional modules (`modules: {chow: true}`; each is off unless turned on), the holidays and election days by region (`calendar: {holidays: us, elections: us-oh}`; none by default), the bylaws sections the app cites (`bylaws: refs:`, each shown only if given), a certificate members buy (`treasurer: certificate:`, off unless named), the meeting's sections in order (`meeting: sections:`, the built-ins and the club's own), and under `club:` the meeting's day and time (`meeting_day`, `meeting_time`: required; the app won't start without them), the admins list, email test mode, the starting club links and the private never-record list. People, their titles and who may lead come from the roster the app keeps (`roster-sheet.json` in the data folder, edited on the Roster pages; moved off the club's Google Sheet in 0.13.0); the list of offices is `offices:` in club.yaml.
 
 Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
 

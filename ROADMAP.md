@@ -9,7 +9,7 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 
 ### Club rules out of the code
 - **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
-- **Other defaults to check while there:** the meeting day (Thursday) and time zone (America/New_York) defaults, Teams as the meeting link in the example config, US date formats, and the PDF importer for old minutes (a W8LBZ archive format: keep as an optional tool, documented as such, or drop).
+- **Dates in the club's format everywhere:** `date_formats` covers the minutes and lists, but some pages and emails write "Thu Nov 5" themselves (US order); with the 24-hour clock item below.
 
 ### Look
 - **Theme:** the club's colours on Site (the top bar, buttons and links: a few colour pickers setting the CSS variables `style.css` already uses, checked for readable contrast in light and dark), so another club's app looks like theirs. Custom CSS beyond that, if ever, admins only: the security policy already stops a stylesheet loading anything from elsewhere.

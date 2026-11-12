@@ -122,13 +122,13 @@ def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str,
 def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:
     """The meeting-day email, the morning of each meeting: the time, your chow if it's tonight,
     the business you're looking after, the calendar until the next meeting, and last meeting's minutes."""
-    wd = chow.WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
+    wd = club.meeting_weekday
     if today.weekday() != wd:
         return []
     tonight = chow.load()["nights"].get(today.isoformat(), {}) if club.has("chow") else {}
     items = business.load()["items"]
     latest = next((m for m in sorted(archive.meetings, key=lambda m: m.date, reverse=True) if m.status == "published" and m.date < today), None)
-    at = dt.datetime.strptime(str(club.info.get("meeting_time", "19:30")), "%H:%M").strftime("%-I:%M %p")
+    at = dt.datetime.strptime(club.meeting_time, "%H:%M").strftime("%-I:%M %p")
     # undated Upcoming Events in the minutes (all of them before events had dates) still count, as written
     undated = [i.text for i in latest.items("Upcoming Events") if not i.when] if latest else []
     out = []

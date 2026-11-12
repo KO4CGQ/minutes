@@ -68,11 +68,10 @@ def ensure_meeting(club) -> None:
     with locked():
         if marker.exists():
             return
-        from .chow import WEEKDAYS
-        wd = WEEKDAYS.index(str(club.info.get("meeting_day", "Thursday")).lower())
+        wd = club.meeting_weekday
         today = dt.date.today()
         first = today + dt.timedelta(days=(wd - today.weekday()) % 7)
-        at = str(club.info.get("meeting_time", "19:30"))
+        at = club.meeting_time
         start = dt.datetime.fromisoformat(f"{first}T{at}")
         evs = load()
         e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": "", "notes": "",

@@ -13,6 +13,7 @@ import threading
 from dataclasses import dataclass, field, fields
 from functools import cached_property, wraps
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
@@ -58,6 +59,15 @@ PREVIEW = os.environ.get("CLUB_MINUTES_PREVIEW") or None
 # Stage mode (a staging server: docs/server-admin.md → Staging server): prod's data, pulled one way each night. Email
 # goes only to the person clicking (auth.send_email); the app doesn't update itself.
 STAGE = bool(os.environ.get("CLUB_MINUTES_STAGE"))
+
+
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def _server_timezone() -> str:
+    """The server's time zone name (/etc/localtime links into the zoneinfo folder), else UTC."""
+    path = os.path.realpath("/etc/localtime")
+    return path.split("zoneinfo/", 1)[1] if "zoneinfo/" in path else "UTC"
 
 
 def _agenda(raw) -> list[dict]:
@@ -173,6 +183,34 @@ class Club:
             self._mtime = ROSTER_CACHE.stat().st_mtime
             roster = json.loads(ROSTER_CACHE.read_text())
         self._load(roster or [])
+
+    @property
+    def meeting_weekday(self) -> int:
+        """The weekly meeting's day (Monday 0), from club.yaml `club: meeting_day:`. Required: no club's day is a default."""
+        day = str(self.info.get("meeting_day") or "").strip().lower()
+        if day not in WEEKDAYS:
+            raise ValueError(f"club.yaml club: meeting_day: {self.info.get('meeting_day')!r} isn't a day of the week (e.g. Thursday)")
+        return WEEKDAYS.index(day)
+
+    @property
+    def meeting_time(self) -> str:
+        """The meeting's start, "HH:MM" (24-hour), from club.yaml `club: meeting_time:`. Required. Unquoted, YAML reads
+        19:30 as 1170 (minutes): taken as that time, not an error."""
+        raw = self.info.get("meeting_time")
+        t = f"{raw // 60:02d}:{raw % 60:02d}" if isinstance(raw, int) and not isinstance(raw, bool) else str(raw or "").strip()
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t):
+            raise ValueError(f"club.yaml club: meeting_time: {raw!r} isn't a time like \"19:30\" (24-hour, in quotes)")
+        return t
+
+    @property
+    def timezone(self) -> str:
+        """The club's time zone: club.yaml `club: timezone:`, else the server's own (setup.sh sets it)."""
+        tz = str(self.info.get("timezone") or "").strip() or _server_timezone()
+        try:
+            ZoneInfo(tz)
+        except (ValueError, ZoneInfoNotFoundError):
+            raise ValueError(f"club.yaml club: timezone: {tz!r} isn't a time zone (e.g. America/New_York)")
+        return tz
 
     def sections(self) -> list[str]:
         """The meeting's sections, in order: club.yaml `meeting: sections:` (built-in ones and the club's own), else the

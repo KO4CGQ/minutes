@@ -38,6 +38,7 @@ app = FastAPI(title="Club minutes", docs_url=None, redoc_url=None, openapi_url=N
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 archive = Archive()
+_ = (archive.club.meeting_weekday, archive.club.meeting_time, archive.club.timezone)  # a club.yaml mistake stops the start, saying which
 authn = Auth(archive.club)
 
 # Show the app's own log lines (emails sent or withheld, rate limits) alongside uvicorn's.
@@ -242,8 +243,7 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         "me": archive.club.members.get(mid) if mid else None,
         "can_lead": (archive.club.can_lead(mid) or admin_mode(request)) if mid else False,
         # JS weekday (0 = Sunday) and time of the weekly meeting, for the "Start meeting" button
-        "meeting_at": f"{(chow.WEEKDAYS.index(str(archive.club.info.get('meeting_day', 'Thursday')).lower()) + 1) % 7} "
-                      f"{archive.club.info.get('meeting_time', '19:30')}",
+        "meeting_at": f"{(archive.club.meeting_weekday + 1) % 7} {archive.club.meeting_time}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
         **_money_nav(request, mid),
@@ -1450,7 +1450,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
-                today=today, teams=next((ln for ln in club.links if "teams" in (ln.get("url", "") + ln.get("label", "")).lower()), None),
+                today=today, teams=next((ln for ln in club.links if (ln.get("icon") or link_icon(ln.get("url", ""))) == "video"), None),  # Teams, Zoom, Meet…
                 fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"), error=error)
 
 
@@ -2194,7 +2194,7 @@ def calendar_subscribe_reset(mid: str = Depends(me)):
 
 
 def _ics(items: list, name: str) -> Response:
-    return Response(calview.ics(items, name, str(archive.club.info.get("timezone", "America/New_York"))),
+    return Response(calview.ics(items, name, archive.club.timezone),
                     media_type="text/calendar; charset=utf-8", headers={"Cache-Control": "private, max-age=900"})
 
 
@@ -2223,7 +2223,7 @@ def calendar_public_feed():
 
 
 def _club_tz() -> str:
-    return str(archive.club.info.get("timezone", "America/New_York"))
+    return archive.club.timezone
 
 
 def can_edit_calendar_now(request: Request) -> bool:
@@ -2344,7 +2344,7 @@ async def calendar_import(request: Request, mid: str = Depends(me)):
                     "That file isn't text; is it an .ics file?", since=form.get("since", ""))
     with events.locked():
         evs = events.load()
-        report = events.import_ics(evs, text, cal, mid, str(archive.club.info.get("timezone", "America/New_York")), since)
+        report = events.import_ics(evs, text, cal, mid, archive.club.timezone, since)
         events.save(evs)
     events.log(mid, f"imported {len(report['added'])} new and {len(report['updated'])} updated events into", {"cal": cal, "title": f.filename})
     return page(request, "calendar_import.html", cals=events.CALS, report=report, cal=cal, since=form.get("since", ""))

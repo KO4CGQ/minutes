@@ -6,9 +6,11 @@
 set -euo pipefail
 REPO=${REPO:-https://github.com/KO4CGQ/minutes.git}
 APP=/opt/club-minutes CONF=/etc/club-minutes DATA=/var/lib/club-minutes
-TZ_NAME=${TZ_NAME:-America/New_York}  # the club's local time: "today" in the console depends on it
-
-timedatectl set-timezone "$TZ_NAME" 2>/dev/null || ln -sf "/usr/share/zoneinfo/$TZ_NAME" /etc/localtime
+# The club's time zone: "today" in the console and the calendars' times depend on it. TZ_NAME=America/Chicago sets
+# the server's; without it the server keeps its own (club.yaml club: timezone: can also name one for the app).
+if [ -n "${TZ_NAME:-}" ]; then
+  timedatectl set-timezone "$TZ_NAME" 2>/dev/null || ln -sf "/usr/share/zoneinfo/$TZ_NAME" /etc/localtime
+fi
 
 apt-get update -qq
 # git/curl: deploy; sudo: update.sh runs git and uv as the app's user; pango + fonts: PDF rendering (WeasyPrint)
