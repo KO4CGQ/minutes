@@ -556,7 +556,7 @@
           C.note ? `: ${C.note}` : ""),
         h("div", { class: "row" }, what,
           h("button", { class: "btn small", onclick: () => post({ status: "provided", note: what.value }) }, "Provided"),
-          h("button", { class: "btn small ghost", onclick: () => { if (confirm(`Record that ${C.name} did not provide chow? (Bylaws VII.F: $35 added to dues.)`)) post({ status: "missed" }); } }, "Not provided"),
+          h("button", { class: "btn small ghost", onclick: () => { if (confirm(`Record that ${C.name} did not provide chow?${C.missed_note ? " " + C.missed_note : ""}`)) post({ status: "missed" }); } }, "Not provided"),
           C.status && C.status !== "scheduled" ? h("button", { class: "btn small ghost", title: "Clear", onclick: () => post({ status: "scheduled" }) }, "Undo") : null),
         h("details", { class: "edit" }, h("summary", {}, "Someone else brought it"),
           h("div", { class: "row" }, cover,

@@ -115,6 +115,7 @@ def _assets_stamp() -> str:
 templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
+                             cite=lambda rule: archive.club.cite(rule),  # " (bylaws VII.B)", if club.yaml gives one
                              app_name=lambda: branding.name(archive.club),  # Site's name, else "<callsign> Minutes"
                              # the logo: for a page, its address (new after each upload); for a PDF, the file itself
                              brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else

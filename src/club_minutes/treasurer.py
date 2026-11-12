@@ -1,4 +1,4 @@
-"""Treasurer: what each member owes and has paid, and the club's bills (bylaws VII). Not a bookkeeping system.
+"""Treasurer: what each member owes and has paid, and the club's bills. Not a bookkeeping system.
 
 State lives in treasurer.json in the data directory; every change is appended to treasurer-log.jsonl.
 - settings: set by the Treasurer on the page, never in club.yaml: mode (off; preview: officers see it all, members
@@ -35,7 +35,7 @@ PAYMENTS = ("dues", "initiation", "chow", "certificate")
 KINDS = PAYMENTS + ("adjustment", "income", "expense")
 NO_MEMBER = ("income", "expense")  # money in or out of the club as a whole
 BOND = "Bond (Certificate of Indebtedness)"
-BOND_NOTE = ("“Bond” is the club's everyday name for the Certificate of Indebtedness in the bylaws (VII.D), which each member "
+BOND_NOTE = ("“Bond” is the club's everyday name for the Certificate of Indebtedness in the bylaws, which each member "
              "buys within two years of joining. It isn't a government or savings bond.")
 LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": BOND,
           "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
@@ -48,7 +48,7 @@ GUESSES = (("utilities", r"\bgas\b|\belec|edison|water|sewer"), ("insurance", r"
            ("internet", r"internet|phone|credit card|blink"), ("food", r"pizza|food|chow|drink|soda|\bpop\b"),
            ("equipment", r"radio|antenna|rope|pull[ei]|\bups\b|bulb|\bkeys?\b|tool|part|cable|coax|print|shirt"))
 MODES = {"off": "Off", "preview": "Preview: officers only", "on": "On: members see their own figures"}
-# the bylaws (VII); amounts in cents, each a list of {from, cents} so a change takes effect on a date
+# the club's amounts; in cents, each a list of {from, cents} so a change takes effect on a date
 DEFAULTS = {"mode": "off", "start": None, "certificate_years": 2, "arrears_weeks": 4, "alerts": False,
             "rates": {"dues_weekly": 350, "initiation": 2500, "certificate": 10000, "missed_chow": 3500},
             "accounts": ["Checking", "Cash"], "funds": [], "categories": [{"key": k, "label": v, "slot": n} for n, (k, v) in enumerate(CATEGORIES.items(), 1)]}
@@ -392,7 +392,7 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
         return None
     start, joined = max(c["start"], m.member_since or ""), m.member_since or c["start"]
     weekly = rate(c, "dues_weekly", today.isoformat())
-    # Every meeting night accrues dues, holidays included: 52 x $3.50 is the bylaws' $182 a year.
+    # Every meeting night accrues dues, holidays included (a weekly club's year is 52 nights).
     nights_owed = chow.meeting_nights(club, dt.date.fromisoformat(start), today)
     missed = sorted(d for d, x in (nights if nights is not None else chow.load()["nights"]).items()
                     if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat()
@@ -541,7 +541,7 @@ def remove_fund(s: dict, by: str, name: str) -> None:
 # ---- arrears alerts (the daily job) ----
 
 def arrears_alert(club: Club, s: dict, today: dt.date) -> tuple[list[str], str, str] | None:
-    """Members who have just reached the arrears line (bylaws VII.B), for the Treasurer and the Board, once each time
+    """Members who have just reached the arrears line, for the Treasurer and the Board, once each time
     they cross it. Only with alerts on and tracking on (not in preview). The Board decides; the app never suspends."""
     c = config(s)
     if not (members_see(s) and c["alerts"]):
@@ -559,8 +559,8 @@ def arrears_alert(club: Club, s: dict, today: dt.date) -> tuple[list[str], str, 
     to = sorted({m.email for m in club.members.values() if m.email and m.status.lower() == "active"
                  and (m.board or "treasurer" in (m.role or "").lower())})
     lines = "\n".join(f"- {club.name(x['member'])}: {money(x['owed'])}, about {x['weeks_behind']} weeks" for x in new)
-    body = (f"These members are now {c['arrears_weeks']} or more weeks behind on dues (bylaws VII.B):\n\n{lines}\n\n"
-            "Under bylaws VIII only the Board can suspend a member, after notice by certified mail at least five days "
-            "before the Board meeting, and the member may answer the charges and appeal. If the Board suspends someone, "
-            "record it on their member page (status Suspended, and a Membership Log row).\n")
+    note = " ".join(str(club.bylaws.get("arrears_note") or "").split())  # the club's own rules on what happens next
+    body = (f"These members are now {c['arrears_weeks']} or more weeks behind on dues{club.cite('arrears')}:\n\n{lines}\n\n"
+            + (f"{note}\n\n" if note else "") + "The app never suspends anyone. If the club suspends a member, record it "
+            "on their member page (status Suspended, and a Membership Log row).\n")
     return to, f"Dues: {len(new)} member{'s' if len(new) > 1 else ''} {c['arrears_weeks']}+ weeks behind", body

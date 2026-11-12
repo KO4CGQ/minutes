@@ -432,4 +432,13 @@ def chow_tonight(archive: Archive, m: Meeting) -> dict:
     return {"date": m.slug, "member": x.get("member"), "name": club.name(x["member"]) if x.get("member") else None,
             "status": x.get("status", "scheduled") if x else None, "covered_by": x.get("covered_by"),
             "note": x.get("note", ""), "next": chow.describe(club, *nxt[0]) if nxt else None,
-            "section": chow.minutes_section(club, s, chow.history(), m.slug)}
+            "section": chow.minutes_section(club, s, chow.history(), m.slug), "missed_note": _missed_note(club, m.date)}
+
+
+def _missed_note(club, date: dt.date) -> str:
+    """What "Not provided" costs the member, for the console to say before recording it: the Treasurer's fee for a
+    missed night, while dues are tracked, and the bylaws section if club.yaml gives one."""
+    from . import treasurer
+    s = treasurer.load()
+    fee = treasurer.rate(treasurer.config(s), "missed_chow", date.isoformat()) if treasurer.members_see(s) else 0
+    return f"{treasurer.money(fee)} is added to their dues{club.cite('missed_chow')}." if fee else ""

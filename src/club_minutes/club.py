@@ -136,9 +136,10 @@ class Club:
         self.redact = [_n(x) for x in (cfg.get("privacy") or {}).get("never_record", [])]
         self.ai = cfg.get("ai") or {}  # AI assistance (ai.py): model, and whether it's on
         self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
-        # Offices whose holders add new members to the roster (bylaws IV.C: the Secretary keeps it).
+        # Offices whose holders add new members to the roster (the Secretary keeps it, usually).
         self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
+        self.bylaws = cfg.get("bylaws") or {}  # refs: the sections the app cites; arrears_note: added to the arrears email
         self.calendar = cfg.get("calendar") or {}  # holidays / elections: region codes (regions/), none by default
         for k in ("holidays", "elections"):
             regions._module(self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
@@ -151,6 +152,11 @@ class Club:
             self._mtime = ROSTER_CACHE.stat().st_mtime
             roster = json.loads(ROSTER_CACHE.read_text())
         self._load(roster or [])
+
+    def cite(self, rule: str) -> str:
+        """" (bylaws VII.B)" for a rule club.yaml gives a section for (bylaws: refs:), else "": the sentence reads without it."""
+        ref = " ".join(str((self.bylaws.get("refs") or {}).get(rule) or "").split())[:20]
+        return f" (bylaws {ref})" if ref else ""
 
     def has(self, module: str) -> bool:
         """Whether an optional part of the app is turned on in club.yaml (`modules:`)."""
@@ -247,7 +253,7 @@ class Club:
 
     @property
     def secretaries(self) -> list[str]:
-        """Members whose title includes Secretary (they keep the roster, bylaws IV.C)."""
+        """Members whose title includes Secretary (they keep the roster)."""
         return [m.id for m in self.members.values() if m.role and "secretary" in m.role.lower()]
 
     @property

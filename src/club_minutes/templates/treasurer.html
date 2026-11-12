@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Treasurer{% endblock %}{% block body %}
 <h1>Treasurer</h1>
-{% if full %}<p class="muted">Dues, fees and the club's bills (bylaws VII). Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
+{% if full %}<p class="muted">Dues, fees and the club's bills{{ cite('dues') }}. Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
 <p class="muted small">{{ bond_note }}</p>
 {% else %}<p class="muted">The money in and out of {{ kept|join(' and ') }}, which you look after.</p>{% endif %}
 <nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills'), ('settings', 'Settings')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
@@ -55,7 +55,7 @@
 {% macro cat_pick(sel) %}<label>Category<select name="category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if k == sel }}>{{ v }}</option>{% endfor %}</select></label>{% endmacro %}
 {% macro regular_pick() %}{% if regular_all %}<label>Regular bill<select name="regular"><option value="">(not one of them)</option>{% for r in regular_all %}<option value="{{ r.id }}">{{ r.payee }}</option>{% endfor %}</select></label>{% endif %}{% endmacro %}
 <h2>Regular bills</h2>
-<p class="hint">What the club pays every month or year (bylaws IV.C: gas, electricity, water, phone and internet, taxes, insurance), whether or not it's read at a meeting.</p>
+<p class="hint">What the club pays every month or year{{ cite('bills') }}, like gas, electricity, water, phone and internet, taxes and insurance, whether or not it's read at a meeting.</p>
 <div class="cards">{% for r in regular %}<article class="card{{ ' done' if r.paid }}">
   <div class="card-text">{{ r.payee }}</div>
   <div class="card-meta"><span class="chip">about {{ money(r.cents) }}</span><span class="chip">{{ every[r.every] }}{% if r.month %} ({{ '%02d'|format(r.month) }}){% endif %}</span>
@@ -114,13 +114,13 @@
     <label>Behind after (weeks)<input type="number" name="arrears_weeks" min="1" max="52" value="{{ cfg.arrears_weeks }}" {{ ro }}></label>
     <label>Years to buy the bond<input type="number" name="certificate_years" min="0" max="10" value="{{ cfg.certificate_years }}" {{ ro }}></label>
   </div>
-  <label class="check"><input type="checkbox" name="alerts" value="1" {{ 'checked' if cfg.alerts }} {{ ro }}> Email the Treasurer and the Board when a member reaches that many weeks behind (only when On; the Board decides on any suspension, bylaws VIII)</label>
+  <label class="check"><input type="checkbox" name="alerts" value="1" {{ 'checked' if cfg.alerts }} {{ ro }}> Email the Treasurer and the Board when a member reaches that many weeks behind (only when On; the app never suspends anyone)</label>
   <p class="hint">Nothing is owed before the start date: enter older balances as adjustments. Preview is for checking the figures: officers see everything, members see nothing, and no emails go out.</p>
   {% if edit %}<div class="formrow"><button class="btn small">Save</button></div>{% endif %}
 </form>
 
 <div class="card"><h2>Amounts</h2>
-  <p class="hint">The bylaws' amounts (VII). When they change, add the new amount with the date it takes effect: earlier weeks keep the old one, and the bond's price is the one in effect when a member joined.</p>
+  <p class="hint">The club's amounts{{ cite('dues') }}. When they change, add the new amount with the date it takes effect: earlier weeks keep the old one, and the bond's price is the one in effect when a member joined.</p>
   <table class="list"><thead><tr><th>What</th><th>From</th><th class="n">Amount</th>{% if edit %}<th></th>{% endif %}</tr></thead><tbody>
   {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ money(x.cents) }}</td>
     {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}

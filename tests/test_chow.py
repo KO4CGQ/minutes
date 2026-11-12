@@ -308,3 +308,18 @@ def test_with_the_chow_module_off_it_leaves_no_trace(env, tmp_path, monkeypatch)
     club.modules["chow"] = False
     off = looks()
     assert not any(off.values()), off
+
+
+def test_not_provided_says_the_clubs_real_fee_and_section(env, monkeypatch):
+    from club_minutes import treasurer
+    club, *_ = env
+    monkeypatch.setattr(treasurer, "load", lambda: {})
+    monkeypatch.setattr(treasurer, "members_see", lambda s: False)
+    assert console._missed_note(club, THU) == ""  # dues not tracked: no fee to mention
+    monkeypatch.setattr(treasurer, "members_see", lambda s: True)
+    monkeypatch.setattr(treasurer, "config", lambda s: {"rates": {"missed_chow": [{"from": "2000-01-01", "cents": 1250}]}})
+    assert console._missed_note(club, THU) == "$12.50 is added to their dues."
+    club.bylaws = {"refs": {"missed_chow": "  VII.F  "}}
+    assert console._missed_note(club, THU) == "$12.50 is added to their dues (bylaws VII.F)."
+    club.bylaws = {"refs": {"missed_chow": "x" * 99}}
+    assert club.cite("missed_chow") == f" (bylaws {'x' * 20})" and club.cite("nothing") == ""  # kept short; unset: nothing

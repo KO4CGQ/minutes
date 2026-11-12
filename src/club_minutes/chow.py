@@ -220,7 +220,7 @@ def swap(club: Club, s: dict, a: str, b: str, by: str, url: str = "", request: s
 
 
 def record(club: Club, s: dict, date: str, status: str, by: str, covered_by: str | None = None, note: str = "") -> None:
-    """On meeting night: did the scheduled member provide chow? (missed counts toward bylaws VII.F)."""
+    """On meeting night: did the scheduled member provide chow? (a missed night can carry a fee: Treasurer settings)."""
     if status not in ("provided", "missed", "covered", "scheduled"):
         raise ValueError("Unknown status")
     x = night(s, date)

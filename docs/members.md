@@ -18,7 +18,7 @@ Your name menu → **Your profile**:
 **Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights and calendar events. A member's name also finds its other spellings and common nicknames (Richard, Rich, Rick and Dick find each other when a Richard is a member); a typo is caught when nothing else is found.
 
 ## Chow
-**Chow** shows the schedule and your nights. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap costs $35 (bylaws VII.F).
+**Chow** shows the schedule and your nights. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
 
 ## Business
 **Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting) and the leader reads it out.
@@ -27,7 +27,7 @@ Your name menu → **Your profile**:
 **Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google.
 
 ## Your dues
-Once the Treasurer has turned tracking on, Home shows what you owe (or that you're paid up, and through which date) and whether you still need to buy your bond. “Bond” is the club's everyday name for the Certificate of Indebtedness in the bylaws (VII.D); it isn't a government or savings bond. Only you and the officers see your figures. Pay the Treasurer at a meeting.
+Once the Treasurer has turned tracking on, Home shows what you owe (or that you're paid up, and through which date) and whether you still need to buy your bond. “Bond” is the club's everyday name for the Certificate of Indebtedness in the bylaws; it isn't a government or savings bond. Only you and the officers see your figures. Pay the Treasurer at a meeting.
 
 ## Where the club's money goes
 Once the Treasurer has turned tracking on, **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in.

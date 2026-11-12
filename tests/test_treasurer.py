@@ -152,8 +152,13 @@ def test_arrears_alert_once_each_time_and_never_in_preview(club, monkeypatch):
     assert treasurer.arrears_alert(club, s, today) is None  # preview: no emails
     s["settings"]["mode"] = "on"
     to, subject, body = treasurer.arrears_alert(club, s, today)
-    assert to == ["pres@example.org", "tre@example.org"] and "Amy Able" in body and "certified mail" in body
+    assert to == ["pres@example.org", "tre@example.org"] and "Amy Able" in body and "behind on dues:" in body
+    assert "bylaws" not in body and "The app never suspends" in body  # no club rules unless club.yaml gives them
     assert treasurer.arrears_alert(club, s, today) is None  # once
+    s["alerted"] = {}
+    club.bylaws = {"refs": {"arrears": "IX.Z"}, "arrears_note": "Only the Board suspends,\n after a hearing."}
+    body = treasurer.arrears_alert(club, s, today)[2]
+    assert "behind on dues (bylaws IX.Z):" in body and "Only the Board suspends, after a hearing.\n" in body
     treasurer.record(club, s, "tre", "dues", "100", "2026-12-03", "Cash", "amy")
     treasurer.arrears_alert(club, s, today)
     assert "amy" not in s["alerted"]  # caught up: a later slip alerts again
@@ -187,6 +192,10 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
     assert tre.post("/treasurer/settings/rate", data={"kind": "dues_weekly", "start": "2027-01-07", "amount": "4"}).status_code == 200
     assert tre.post("/treasurer/settings/account", data={"name": "Emergency Fund"}).status_code == 200
     assert "Emergency Fund" in tre.get("/treasurer?tab=settings").text and "$4.00" in pres.get("/treasurer?tab=settings").text
+    assert "bylaws (" not in (pg := tre.get("/treasurer?tab=settings").text) and "(bylaws" not in pg  # no sections unless given
+    club.bylaws = {"refs": {"dues": "VII", "bills": "<b>IV.C</b>"}}
+    pg = tre.get("/treasurer?tab=settings").text + tre.get("/treasurer?tab=bills").text
+    assert "The club's amounts (bylaws VII)." in pg and "every month or year (bylaws &lt;b&gt;IV.C&lt;/b&gt;)" in pg  # escaped
     tre.post("/treasurer/settings", data={**on, "mode": "on"})
     assert "Your dues" in amy.get("/").text
 

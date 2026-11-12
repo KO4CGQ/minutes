@@ -41,6 +41,16 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #   holidays: us        # US federal holidays (plus Christmas Eve and New Year's Eve)
 #   elections: us-oh    # Ohio's election days, on the Community calendar
 
+# The club's bylaws, where the app refers to them. Each section is shown only if given ("… (bylaws VII.B)").
+# bylaws:
+#   refs:
+#     dues: VII            # the Treasurer pages: dues, fees and the amounts
+#     bills: IV.C          # regular bills
+#     arrears: VII.B       # the arrears email to the Treasurer and the Board
+#     certificate: VII.D   # the bond (Certificate of Indebtedness)
+#     missed_chow: VII.F   # the fee for a missed chow night
+#   arrears_note: What happens next under your bylaws (who may suspend a member, and how), added to the arrears email.
+
 # Optional parts of the app, each off unless turned on here:
 #   chow: a rotation of members bringing food to meetings: the Chow page, swaps, reminders, the console's
 #         Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.
