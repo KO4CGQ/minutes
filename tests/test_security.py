@@ -236,3 +236,16 @@ def test_admins_add_and_remove_admins_in_the_app(app, tmp_path, monkeypatch):
     c.admins = set()  # only app admins now: the last one can't go
     c.save_app_admins({"kd8off"})
     assert admin.post("/admin/security/admins/remove", data={"member": "kd8off"}).status_code == 400 and c.is_admin("kd8off")
+
+
+@pytest.mark.parametrize("headers, ok", [
+    ({}, True),  # scripts and older browsers: the SameSite cookie still covers them
+    ({"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"}, True),
+    ({"Origin": "https://meet.example-tailnet.ts.net", "Sec-Fetch-Site": "same-site"}, False),  # a sibling host
+    ({"Origin": "https://evil.example"}, False),
+    ({"Origin": "null"}, False),
+    ({"Sec-Fetch-Site": "cross-site"}, False),
+])
+def test_changes_come_only_from_the_apps_own_pages(app, headers, ok):
+    r = app("kd8bbb").post("/profile/settings", data={}, headers=headers)
+    assert (r.status_code != 403) == ok and (("another site" in r.text) != ok)

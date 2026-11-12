@@ -11,7 +11,7 @@ import threading
 import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -176,6 +176,18 @@ async def upload_limit(request: Request, call_next):
     if (num(size) or 0) > limits.max_upload() + limits.FORM_ROOM:
         return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
                             status_code=413)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def same_origin_only(request: Request, call_next):
+    """Changes come only from the app's own pages. The SameSite=lax cookie stops other sites but not sibling hosts
+    (other names on the same tailnet, e.g. a public Jitsi server), so the browser's Sec-Fetch-Site / Origin decides."""
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("origin")
+        if (request.headers.get("sec-fetch-site") in ("cross-site", "same-site")
+                or (origin is not None and urlsplit(origin).netloc != request.headers.get("host", ""))):
+            return HTMLResponse("That came from another site, so it was refused. Open the app itself and try again.", status_code=403)
     return await call_next(request)
 
 
