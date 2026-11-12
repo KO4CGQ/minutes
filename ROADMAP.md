@@ -12,7 +12,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 
 
 ### A new club can start
-- **Manage admins in the app** (Admin → Security): add and remove admins in admin mode, instead of only `admins:` in the server's club.yaml, so the club never depends on whoever has the server. Admins stay a role of their own (not officers); the last admin can't be removed; each change is in the admin log and emailed to the other admins; turning someone into an admin asks for a fresh confirmation (passkey or emailed link), like admin mode. club.yaml's list keeps working (both count), so a server admin can always get back in.
 - **A demo club:** invented data (Example Radio Club, N0CALL-style callsigns, Jane Doe, example.org, 555-01xx) as a fixture: for the README's screenshots and a short video (decided 2026-11-11: that's the demo for 1.0, no demo server), and for previews without the club's data.
 - **Examples clearly fictional everywhere** (code, tests, docs, club.example.yaml): Jane/John Doe, example.com/.org, 555-0100…0199, 123 Main St, Anytown, and callsigns that can't be issued (four-letter suffix: N0CALL, W0DEMO). Replace the older realistic ones (Amy Able, KD8AAA, KD8XYZ…), which follow the real callsign format and may belong to someone.
 

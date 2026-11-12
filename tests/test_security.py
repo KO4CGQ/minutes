@@ -206,3 +206,33 @@ def test_admin_address_members_tab_and_a_page_for_not_found(app, monkeypatch):
                          (int(_t.time()),))
     got = web.authn.by_member()
     assert got["kd8bbb"]["passkeys"] == 1 and got["kd8bbb"]["devices"] == 1 and "last" not in got["kd8bbb"]
+
+
+def test_admins_add_and_remove_admins_in_the_app(app, tmp_path, monkeypatch):
+    """Admin → Security → Admins: adding needs a fresh confirmation; club.yaml's stay; never the last admin; others are told."""
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    sent = []
+    monkeypatch.setattr(web.authmod, "send_email", lambda to, subject, body, **k: sent.append((to, subject)) or 1)
+    c = web.archive.club
+    c.admins = {"kd8off"}  # club.yaml's
+    admin, member = app("kd8off"), app("kd8bbb")
+    tok = admin.cookies.get(web.COOKIE)
+    assert member.post("/admin/security/admins/add", data={"member": "kd8bbb"}).status_code == 404  # not an admin
+    assert admin.post("/admin/security/admins/add", data={"member": "kd8bbb"}).status_code == 403  # admin mode first
+    web.authn.set_admin(tok, 50)  # an hour from confirming, so confirmed 10 minutes ago
+    r = admin.post("/admin/security/admins/add", data={"member": "kd8bbb"}, follow_redirects=False)
+    assert r.headers["location"] == "/admin/confirm?next=" + web.quote("/admin/security/admins?add=kd8bbb") and not c.app_admins
+    web.authn.set_admin(tok, 60)  # just confirmed
+    assert admin.post("/admin/security/admins/add", data={"member": "nobody"}).status_code == 400
+    page_ = admin.post("/admin/security/admins/add", data={"member": "kd8bbb"}).text
+    assert "Bob Baker is now an admin." in page_ and c.is_admin("kd8bbb") and c.app_admins == {"kd8bbb"}
+    assert sent == [(["bob@example.org"], "Bob Baker is now an admin")]  # not to whoever made the change
+    assert "Made Bob Baker an admin" in admin.get("/admin/security/admin").text
+    assert admin.post("/admin/security/admins/remove", data={"member": "kd8off"}).status_code == 400  # club.yaml's: on the server
+    assert "Bob Baker is no longer an admin." in admin.post("/admin/security/admins/remove", data={"member": "kd8bbb"}).text
+    assert not c.is_admin("kd8bbb") and sent[-1] == (["bob@example.org"], "Bob Baker is no longer an admin")
+    c.admins = set()  # only app admins now: the last one can't go
+    c.save_app_admins({"kd8off"})
+    assert admin.post("/admin/security/admins/remove", data={"member": "kd8off"}).status_code == 400 and c.is_admin("kd8off")

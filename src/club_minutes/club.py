@@ -337,9 +337,25 @@ class Club:
         m = self.members.get(mid)
         return bool(m and (self.can_lead(mid) or m.calendar_editor))
 
+    @property
+    def app_admins(self) -> set[str]:
+        """Admins added in the app (Admin → Security → Admins), besides club.yaml's `admins:` (self.admins)."""
+        p = DATA / "admins.json"
+        return set(json.loads(p.read_text())) if p.exists() else set()
+
+    @property
+    def all_admins(self) -> set[str]:
+        return {self.canonical(a) for a in self.admins | self.app_admins}  # club.yaml may still have an old call
+
+    def save_app_admins(self, ids: set[str]) -> None:
+        p = DATA / "admins.json"
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(sorted(ids)))
+        tmp.replace(p)
+
     def is_admin(self, mid: str | None) -> bool:
-        """Listed under admins: in club.yaml. Admin rights apply only while admin mode is on."""
-        return bool(mid) and mid in {self.canonical(a) for a in self.admins}  # club.yaml may still have an old call
+        """Listed under admins: in club.yaml or added in the app. Admin rights apply only while admin mode is on."""
+        return bool(mid) and mid in self.all_admins
 
     def can_see(self, viewer: str | None, mid: str, fld: str, elevated: bool = False) -> bool:
         """Contact details: officers, admins in admin mode, and the member always; others only what was shared."""

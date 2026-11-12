@@ -69,7 +69,7 @@ When a leader submits the minutes, they go to every roster member with an email 
 - **Removing a test meeting:** `club-minutes delete-meeting 2026-12-31`, then `systemctl restart club-minutes`.
 
 ## Admin mode
-Callsigns listed under `admins:` in `club.yaml` get **Turn on admin mode** in the name menu. For an hour (or until turned off) that sign-in can see and do what officers can, with a red banner showing. Each switch is logged in `admin-log.jsonl` in the data directory.
+Admins get **Turn on admin mode** in the name menu: callsigns listed under `admins:` in `club.yaml`, and members made admins in the app (admin mode → Admin → Security → **Admins**, kept in `admins.json` in the data directory). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is in Admin actions and emailed to the other admins, and the last admin can't be removed. Admins in `club.yaml` can only be removed there, so whoever has the server can always get back in. For an hour (or until turned off) that sign-in can see and do what officers can, with a red banner showing. Each switch is logged in `admin-log.jsonl` in the data directory.
 
 In admin mode, a member's page has **View the app as …**: the app as that member sees it, read-only (no changes, and not their sign-in or passkey page), until **Stop** or admin mode ends. Also logged. Trying to save anything while viewing as someone opens a small "Read-only" dialog instead.
 

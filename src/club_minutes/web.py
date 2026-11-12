@@ -749,7 +749,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                 show=show if show in ("waiting", "paid", "dismissed", "all") else "waiting", regular=treasurer.regular_due(s, dt.date.today()),
                 regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=rates,
                 labels=treasurer.labels(club), kinds=[k for k in (treasurer.KINDS if edit else treasurer.NO_MEMBER) if (k != "chow" or chow_on) and (k != "certificate" or club.certificate)], accounts=c["accounts"] if edit else kept,
-                rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
+                rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.all_admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: show_date(d, "day_year"))
 
 
@@ -1807,7 +1807,7 @@ def _security_admin(request: Request) -> str:
 
 
 SECURITY_TABS = (("signins", "Sign-ins"), ("members", "Members"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
-                 ("bans", "Banned addresses"), ("admin", "Admin actions"), ("server", "Server"))
+                 ("bans", "Banned addresses"), ("admins", "Admins"), ("admin", "Admin actions"), ("server", "Server"))
 # Backups has its own card on the Admin page and its own page; it keeps this address (emails link to it)
 SECURITY_PAGES = dict(SECURITY_TABS) | {"backups": "Backups"}
 
@@ -1826,7 +1826,8 @@ def admin_action(e: dict) -> str:
              "auto_update": lambda v: f"Turned automatic updates {'on' if v else 'off'}", "unban": lambda v: f"Lifted the ban on {v}",
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
              "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
-             "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}"}
+             "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}",
+             "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
 
@@ -1893,7 +1894,8 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 suggestion=backup.suggest() if tab == "backups" else "",
                 failed_today=sum(e["at"] > time.time() - 86400 for e in events), signins=authn.signins(100), events=events, bans=authn.bans(),
                 by_member=authn.by_member() if tab == "members" else {},
-                sessions=authn.all_sessions(), who=member, admin_log=admin_log, event_names=authmod.EVENT_NAMES,
+                sessions=authn.all_sessions(), who=member, admin_log=admin_log,
+                add=request.query_params.get("add", ""), event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
                 test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
                 upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
@@ -1908,6 +1910,52 @@ def security_limits(request: Request, upload_mb: int = Form(...)):
         return RedirectResponse("/admin/security/server?error=" + quote(str(e)), status_code=303)
     _admin_log(request, upload_mb=upload_mb)
     return RedirectResponse("/admin/security/server?note=" + quote(f"Uploads up to {upload_mb} MB."), status_code=303)
+
+
+FRESH_SECONDS = 300  # making someone an admin needs a passkey or emailed link this recent
+
+
+def _tell_admins(request: Request, before: set[str], subject: str, what: str) -> None:
+    """Every admin before or after the change (so the one added or removed too), except whoever made it."""
+    club = archive.club
+    to = [club.members[a].email for a in sorted(before | club.all_admins)
+          if a != request.state.real_member and a in club.members and club.members[a].email]
+    if to:
+        authmod.send_email(to, subject, f"{what}\n\nEvery admin change is in the admin log: {base_url(request)}/admin/security/admin"
+                           f"\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())
+
+
+@app.post("/admin/security/admins/add")
+def admins_add(request: Request, member: str = Form("")):
+    mid, club = _security_admin(request), archive.club
+    if member not in club.members:
+        raise HTTPException(400, "Pick a member from the roster.")
+    if member in club.all_admins:
+        return RedirectResponse("/admin/security/admins", status_code=303)
+    confirmed = (request.state.admin_until or 0) - ADMIN_MINUTES * 60  # when they last confirmed it's them
+    if confirmed < time.time() - FRESH_SECONDS:
+        return RedirectResponse("/admin/confirm?next=" + quote(f"/admin/security/admins?add={member}"), status_code=303)
+    before = club.all_admins
+    club.save_app_admins(club.app_admins | {member})
+    _admin_log(request, admin_added=member)
+    _tell_admins(request, before, f"{club.name(member)} is now an admin", f"{club.name(mid)} made {club.name(member)} an admin of "
+                 f"{branding.name(club)}. If that's a surprise, ask {club.members[mid].first} about it.")
+    return RedirectResponse("/admin/security/admins?note=" + quote(f"{club.name(member)} is now an admin."), status_code=303)
+
+
+@app.post("/admin/security/admins/remove")
+def admins_remove(request: Request, member: str = Form("")):
+    mid, club = _security_admin(request), archive.club
+    if member not in club.app_admins:
+        raise HTTPException(400, "Only admins added here can be removed here; those in club.yaml are changed on the server.")
+    before = club.all_admins
+    if before == {member}:
+        raise HTTPException(400, "That's the last admin: add another first.")
+    club.save_app_admins(club.app_admins - {member})
+    _admin_log(request, admin_removed=member)
+    _tell_admins(request, before, f"{club.name(member)} is no longer an admin",
+                 f"{club.name(mid)} removed {club.name(member)} as an admin of {branding.name(club)}.")
+    return RedirectResponse("/admin/security/admins?note=" + quote(f"{club.name(member)} is no longer an admin."), status_code=303)
 
 
 @app.post("/admin/security/ban")

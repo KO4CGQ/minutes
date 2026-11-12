@@ -170,7 +170,7 @@ def set_auto(on: bool, hour: int | None = None) -> None:
 
 def _tell_admins(club, subject: str, body: str) -> None:
     from . import auth
-    to = [m.email for mid, m in club.members.items() if mid in club.admins and m.email]
+    to = [m.email for mid, m in club.members.items() if club.is_admin(mid) and m.email]
     if to:
         try:
             auth.send_email(to, f"{branding.name(club)}: {subject}", body + f"\n\n73,\n{branding.name(club)}")

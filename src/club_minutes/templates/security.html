@@ -52,6 +52,20 @@
 <p class="muted">SSH bans by fail2ban on the server aren't shown here; lift one on the server with <code>fail2ban-client set sshd unbanip ADDRESS</code>.</p>
 
 {% endif %}
+{% if tab == 'admins' %}
+{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+{% set all = club.all_admins %}
+<table class="list"><thead><tr><th>Admin</th><th>Added</th><th></th></tr></thead><tbody>
+{% for a in all|by_last_name %}<tr><td>{{ club.name(a) }}</td>
+<td>{{ 'in the app' if a in club.app_admins else 'on the server (club.yaml)' }}</td>
+<td>{% if a in club.app_admins and all|length > 1 %}<form method="post" action="/admin/security/admins/remove" class="inline" data-confirm="Remove {{ club.name(a) }} as an admin? The other admins get an email."><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Remove</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<form method="post" action="/admin/security/admins/add" class="inline"><label>Make an admin <select name="member" required><option value="">Pick a member</option>
+{% for m in club.members|by_last_name if m not in all %}<option value="{{ m }}"{{ ' selected' if m == add }}>{{ club.name(m) }}</option>{% endfor %}</select></label>
+<button class="btn small">Make admin</button></form>
+<p class="hint">Admins can turn on admin mode: all contact details, offices, updates, backups and this page. Making someone an admin asks you to confirm it's you (passkey or emailed link) unless you just did; each change is in Admin actions and emailed to the other admins. Admins set on the server stay until they're taken out of club.yaml there.</p>
+
+{% endif %}
 {% if tab == 'admin' %}
 {% if admin_log %}<table class="list"><thead><tr><th>When</th><th>Admin</th><th>What</th><th class="opt">From</th></tr></thead><tbody>
 {% for e in admin_log %}<tr><td>{{ e.at|tsfull }}</td><td>{{ club.name(e.member) if e.member else '' }}</td>

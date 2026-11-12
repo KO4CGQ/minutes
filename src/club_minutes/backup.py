@@ -414,7 +414,7 @@ def run(club: Club, url: str = "") -> dict:
 
 def _tell_admins(club: Club, st: dict, url: str) -> None:
     from . import auth
-    to = [m.email for mid, m in club.members.items() if mid in club.admins and m.email]
+    to = [m.email for mid, m in club.members.items() if club.is_admin(mid) and m.email]
     if not to:
         return
     try:
