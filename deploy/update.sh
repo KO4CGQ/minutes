@@ -42,6 +42,8 @@ main() {
   install_and_restart
   if ! healthy; then
     echo "The app didn't come back up after the update: going back to $(sudo -u minutes git log --oneline -1 "$before")" >&2
+    # why, for the Updates page and its email (often a club.yaml setting the new version needs)
+    journalctl -u club-minutes --since "-10min" --no-pager -o cat 2>/dev/null | grep -E "Error|error:" | tail -1 | sed 's/^/Why: /' >&2 || true
     sudo -u minutes git reset -q --hard "$before"
     install_and_restart
     if healthy; then echo "Rolled back: the app is running the version it had before." >&2
