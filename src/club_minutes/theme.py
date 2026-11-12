@@ -104,6 +104,9 @@ def palette(main: str = DEFAULT, bar: str | None = None) -> tuple[dict, dict, li
     notes: set[str] = set()
     if valid(bar):
         light["--nav-bg"] = valid(bar)  # the exact colour picked, unless white text on it isn't readable (below)
+        # dark mode: the same colour dimmed (its hue and most of its strength), so a purple bar is a dark purple there
+        hb, lb, sb = colorsys.rgb_to_hls(*_rgb(valid(bar)))
+        dark["--nav-bg"] = _hex(*colorsys.hls_to_rgb(hb, min(lb, 0.22), sb * 0.85))
     for p, pairs, texts in ((light, LIGHT_PAIRS, LIGHT_TEXT), (dark, DARK_PAIRS, DARK_TEXT)):
         for text, background, least in pairs:
             _fix(p, text, background, least, notes, move=background)

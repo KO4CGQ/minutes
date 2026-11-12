@@ -13,6 +13,7 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 
 
 ### A new club can start
+- **Manage admins in the app** (Admin → Security): add and remove admins in admin mode, instead of only `admins:` in the server's club.yaml, so the club never depends on whoever has the server. Admins stay a role of their own (not officers); the last admin can't be removed; each change is in the admin log and emailed to the other admins; turning someone into an admin asks for a fresh confirmation (passkey or emailed link), like admin mode. club.yaml's list keeps working (both count), so a server admin can always get back in.
 - **A demo club:** invented data (Example Radio Club, W0XYZ, Amy Able, Bob Baker...) as a fixture: for the screenshots, for previews without the club's data, and for anyone trying the app.
 
 ### Docs and repo

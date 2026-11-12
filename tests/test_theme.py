@@ -105,3 +105,11 @@ def test_site_sets_the_colours_every_page_and_pdf_follows(data, tmp_path, monkey
     assert f"--sheet-h: {theme.palette('#aa2222', '#103060')[0]['--sheet-h']}" in html  # the PDF's section headings too
     amy.post("/admin/site/colours/reset")
     assert branding.colours() == {"main": theme.DEFAULT, "bar": None} and link() == before
+
+
+def test_a_picked_top_bar_shows_in_dark_mode_too_dimmed():
+    hue = lambda h: round(colorsys.rgb_to_hls(*theme._rgb(h))[0], 2)
+    light, dark, _ = theme.palette(theme.DEFAULT, "#7a3fb0")
+    assert light["--nav-bg"] == "#7a3fb0" and hue(dark["--nav-bg"]) == hue("#7a3fb0")  # a purple bar is a dark purple bar
+    assert colorsys.rgb_to_hls(*theme._rgb(dark["--nav-bg"]))[1] <= 0.22  # dimmed: a dark page keeps a dark bar
+    assert theme.palette(theme.SHAPE_FROM)[1]["--nav-bg"] == theme.DARK["--nav-bg"]  # no bar picked: unchanged
