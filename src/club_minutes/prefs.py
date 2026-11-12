@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from . import branding, business, calview, chow
-from .club import DATA, Club, num
+from .club import DATA, Club, num, show_date
 
 # kind: (heading, {choice: what it means}, default), in the order the Email tab shows them. "roster" is for the Secretaries.
 KINDS = {
@@ -112,8 +112,8 @@ def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str,
             continue
         m = club.members[mid]
         when = "tomorrow" if days == 1 else f"in {days} days"
-        out.append((mid, f"chow:{date}:{mid}:{days}", f"Your chow night is {when}: {dt.date.fromisoformat(date).strftime('%A, %B %-d')}",
-                    f"Hi {m.first},\n\nA reminder that you're bringing chow on {dt.date.fromisoformat(date).strftime('%A, %B %-d')}.\n\n"
+        out.append((mid, f"chow:{date}:{mid}:{days}", f"Your chow night is {when}: {show_date(date, 'weekday')}",
+                    f"Hi {m.first},\n\nA reminder that you're bringing chow on {show_date(date, 'weekday')}.\n\n"
                     f"Can't make it? Ask someone to swap on the chow page: {url}/chow\n\n"
                     f"To change how many days ahead you're reminded, or stop these reminders: {url}/profile/email\n\n{_sign(club)}"))
     return out
@@ -141,14 +141,14 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
         due = sorted((x for x in items if x["status"] == "open" and x["owner"] == m.id), key=lambda x: x["due"] or "9999")
         if due:
             lines.append("Club business you're looking after:\n" + "\n".join(
-                f"  - {x['text']}" + (f" (due {dt.date.fromisoformat(x['due']).strftime('%b %-d')})" if x["due"] else "") for x in due)
+                f"  - {x['text']}" + (f" (due {show_date(x['due'], 'short')})" if x["due"] else "") for x in due)
                 + f"\n  Mark them done at {url}/business")
         week, _ = calview.entries(club, archive, m.id, today + dt.timedelta(days=1), today + dt.timedelta(days=6))
-        events = [f"{e.start:%a %b %-d}{f' {e.time}' if e.time else ''}: {e.title}" for e in week if e.kind != "chow"][:10] + undated
+        events = [f"{show_date(e.start, 'day')}{f' {e.time}' if e.time else ''}: {e.title}" for e in week if e.kind != "chow"][:10] + undated
         if events:
             lines.append("Coming up this week:\n" + "\n".join(f"  - {e}" for e in events) + f"\n  The calendar: {url}/calendar")
         if latest:
-            lines.append(f"Last meeting's minutes ({latest.date.strftime('%B %-d')}): {url}/meetings/{latest.slug}")
+            lines.append(f"Last meeting's minutes ({show_date(latest.date, 'long')}): {url}/meetings/{latest.slug}")
         out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign') or 'Club'} meeting tonight",
                     f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nTo stop this email, or choose which others you get: {url}/profile/email\n\n{_sign(club)}"))
     return out

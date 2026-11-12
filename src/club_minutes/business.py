@@ -22,7 +22,7 @@ import secrets
 import time
 
 from . import branding
-from .club import DATA, Club
+from .club import DATA, Club, show_date
 
 MAX_TEXT = 600
 
@@ -357,7 +357,7 @@ def for_meeting(s: dict, date: str, since: str | None = None) -> tuple[list[dict
 def line(club: Club, x: dict, date: str) -> str:
     """One bullet for the minutes: the text, who has it and by when, and Done if closed tonight."""
     meta = [club.short(x["owner"]) if x["owner"] else None,
-            f"due {dt.date.fromisoformat(x['due']).strftime('%b %-d')}" if x["due"] else None]
+            f"due {show_date(x['due'], 'short')}" if x["due"] else None]
     meta = [m for m in meta if m]
     out = x["text"] + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
     if x["closed"] and x["closed"] <= date:
@@ -405,9 +405,9 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
     def when(x, kind):
         due = dt.date.fromisoformat(x["due"])
         if kind == "overdue":
-            return f"was due {due.strftime('%A, %B %-d')}"
+            return f"was due {show_date(due, 'weekday')}"
         days = (due - today).days
-        return f"due {due.strftime('%A, %B %-d')}" + (" (today)" if days == 0 else " (tomorrow)" if days == 1 else "")
+        return f"due {show_date(due, 'weekday')}" + (" (today)" if days == 0 else " (tomorrow)" if days == 1 else "")
     late = any(k == "overdue" for _, k in items)
     lines = "\n".join(f"- {x['text']}\n  {when(x, k)}" for x, k in items)
     subject = f"{club.info.get('callsign') or 'Club'} club business: " + ("past due" if late else "coming due")

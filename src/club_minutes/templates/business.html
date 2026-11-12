@@ -36,7 +36,7 @@
   <form method="post" action="/business/notes/{{ n.id }}/withdrawn" class="inline"><button class="linkbtn">Withdraw</button></form></div>
   <div class="card-text">{{ n.text }}</div></article>{% endfor %}</div>
 <form method="post" action="/business/notes" class="modern card">
-  <label>For the meeting on<select name="meeting">{% for d in next_meetings %}<option value="{{ d.isoformat() }}">{{ d.strftime('%A, %B %-d') }}</option>{% endfor %}</select></label>
+  <label>For the meeting on<select name="meeting">{% for d in next_meetings %}<option value="{{ d.isoformat() }}">{{ d|date('weekday') }}</option>{% endfor %}</select></label>
   <label>Note<textarea name="text" rows="4" required placeholder="e.g. I'll be away for this one. Since last time I finished my 40 m dipole and made a few contacts with it."></textarea></label>
   <div class="formrow"><button class="btn small">Send note</button></div>
 </form>

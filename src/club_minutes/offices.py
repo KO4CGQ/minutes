@@ -16,7 +16,7 @@ import secrets
 import time
 
 from . import branding, auth, profile
-from .club import ROSTER_CACHE, Club, roster_locked
+from .club import ROSTER_CACHE, Club, roster_locked, show_date
 from .membership import LOG_TAB
 from .roster import Sheet
 
@@ -163,7 +163,7 @@ def record_term(club: Club, title: str, mid: str, start: str, end: str, by: str,
 
 def _tell(club: Club, title: str, out_mid: str | None, in_mid: str | None, date: str, by: str, url: str) -> None:
     """Every officer (the new ones included) and whoever left the office."""
-    day = dt.date.fromisoformat(date).strftime("%B %-d, %Y")
+    day = show_date(date, "document")
     what = (f"{club.name(in_mid)} took over as {title} from {club.name(out_mid)}" if in_mid and out_mid else
             f"{club.name(in_mid)} became {title}" if in_mid else f"{club.name(out_mid)} left the office of {title}")
     ids = [m.id for m in club.members.values() if m.officer] + ([out_mid] if out_mid else [])

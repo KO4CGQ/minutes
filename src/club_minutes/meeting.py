@@ -56,12 +56,13 @@ class Item:
 
     @property
     def shown(self) -> str:
-        """The text as readers see it, dates first: "Sat, Nov 21, 10:00 AM – 1:00 PM: VE testing",
-        "Sat, Jun 27 – Sun, Jun 28: Field Day"."""
+        """The text as readers see it, dates first: "Sat Nov 21, 10:00 AM – 1:00 PM: VE testing",
+        "Sat Jun 27 – Sun Jun 28: Field Day" (dates in the club's format)."""
+        from .club import DATES  # club.py imports this module"
         if not self.when:
             return self.text
         start, end, all_day = self.span()
-        day, clock = "%a, %b %-d", "%-I:%M %p"
+        day, clock = DATES["day"], "%-I:%M %p"
         if all_day:
             when = start.strftime(day) + (end.strftime(" – " + day) if end.date() != start.date() else "")
         else:

@@ -14,7 +14,7 @@ import threading
 import time
 
 from . import ai, auth, business, chow, prefs
-from .club import DATA
+from .club import DATA, show_date
 from .meeting import Item, Meeting
 from .store import Archive
 
@@ -77,7 +77,7 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
         if date.isoformat() in archive.by_slug:
             return archive.by_slug[date.isoformat()]
         if (open_ := [m for m in archive.meetings if m.status == "draft"]):
-            raise ValueError(f"The minutes of {open_[0].date:%B %-d} are still open: continue them, or discard them, "
+            raise ValueError(f"The minutes of {show_date(open_[0].date, 'long')} are still open: continue them, or discard them, "
                              "before starting another meeting.")
         return _start(archive, date, leader, recorder)
 
@@ -403,7 +403,7 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
     leader = club.members.get(m.leader or "")
     recorder = club.members.get(m.recorder or "") if m.recorder != m.leader else None
     writer = recorder or leader  # replies (corrections) go to whoever took the minutes
-    date = m.date.strftime("%B %-d, %Y")
+    date = show_date(m.date, "document")
     body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
             f"{f', led and recorded by {leader.name}' if leader and m.recorder == m.leader else f', led by {leader.name}' if leader else ''}"
             f"{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"

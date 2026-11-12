@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from . import auth, branding, regions
-from .club import DATA, WEEKDAYS, Club  # noqa: F401  (WEEKDAYS: others import it from here)
+from .club import DATA, WEEKDAYS, Club, show_date  # noqa: F401  (WEEKDAYS: others import it from here)
 
 log = logging.getLogger("club_minutes.chow")
 STATUSES = ("scheduled", "provided", "missed", "covered", "none")
@@ -81,7 +81,7 @@ def past(s: dict, today: dt.date | None = None, n: int = 20) -> list[tuple[str, 
 
 def describe(club: Club, date: str, x: dict) -> str:
     """One line for the minutes' Upcoming Chow section."""
-    day = dt.date.fromisoformat(date).strftime("%b %-d")
+    day = show_date(date, "short")
     if x.get("status") == "none":
         return f"{day}: no chow{f' ({x['note']})' if x.get('note') else ''}"
     return f"{day}: {club.name(x['member'])}" if x.get("member") else f"{day}: (open)"
@@ -341,7 +341,7 @@ def import_xlsx(club: Club, path: Path, order: list[str], by: str, year: int) ->
         wd = club.meeting_weekday
         if day.weekday() != wd:  # a typo'd date: use the nearest meeting night
             fixed = day + dt.timedelta(days=(wd - day.weekday() + 3) % 7 - 3)
-            problems.append(f"Row {row[0].row}: {day:%a %b %-d} isn't a meeting night; used {fixed:%a %b %-d}")
+            problems.append(f"Row {row[0].row}: {show_date(day, 'day')} isn't a meeting night; used {show_date(fixed, 'day')}")
             day = fixed
         d = day.isoformat()
         if not name or not str(name).strip():
@@ -446,11 +446,11 @@ def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: s
     callsign = club.info.get("callsign") or "Club"
     rest = (f"Can't make your night? Ask someone to swap on the chow page: {url}/chow\n\nTo change or stop getting the "
             f"chow list: {url}/profile/email\n\n73,\n{branding.name(club)}")
-    sent = auth.send_email(to, f"{callsign} chow list", f"The chow list as of {dt.date.today():%B %-d, %Y} is attached: "
+    sent = auth.send_email(to, f"{callsign} chow list", f"The chow list as of {show_date(dt.date.today(), 'document')} is attached: "
                            f"who brings chow on each meeting night still to come.\n\n{rest}",
                            attachments=[(pdf[0], pdf[1], "application/pdf")], only_to=club.email_only_to()) if to else 0
     if link_to:
-        sent += auth.send_email(list(link_to), f"{callsign} chow list", f"The chow list has been updated ({dt.date.today():%B %-d, %Y}): "
+        sent += auth.send_email(list(link_to), f"{callsign} chow list", f"The chow list has been updated ({show_date(dt.date.today(), 'document')}): "
                                 f"who brings chow on each meeting night still to come.\n\nSee it: {url}/chow\n"
                                 f"Or as a PDF to print: {url}/chow/list.pdf\n\n{rest}", only_to=club.email_only_to())
     s["emailed"] = {"at": int(time.time()), "by": by, "nights": _list(s)}
@@ -459,7 +459,7 @@ def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: s
 
 
 def _day(date: str) -> str:
-    return dt.date.fromisoformat(date).strftime("%A, %B %-d")
+    return show_date(date, "weekday")
 
 
 def _tell(club: Club, members: list[str | None], subject: str, text: str, url: str, e: dict,

@@ -26,7 +26,7 @@ from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, PREVIEW, STAGE, num, one_line, valid_email
+from .club import DATA, DATES, PREVIEW, STAGE, num, one_line, show_date, valid_email
 from .backup import KEY_FILE
 from .roster import COLUMNS, SHAREABLE, SheetError
 
@@ -68,11 +68,10 @@ def by_last_name(ids):
     return sorted(ids, key=lambda i: (c.members[i].last, c.members[i].first) if i in c.members else (i, ""))
 
 
-DATES = {"list": "%b %-d, %Y", "document": "%B %-d, %Y", **(archive.club.info.get("date_formats") or {})}
 templates.env.filters["linkify"] = linkify
-templates.env.filters["longdate"] = lambda d: d.strftime(DATES["document"])
-templates.env.filters["listdate"] = lambda d: d.strftime(DATES["list"])
-templates.env.filters["isodate"] = lambda d: dt.date.fromisoformat(d).strftime(DATES["list"])  # "2026-11-09" in the list format
+templates.env.filters["date"] = show_date  # {{ d|date("weekday") }}: club.show_date
+templates.env.filters["longdate"] = lambda d: show_date(d, "document")
+templates.env.filters["listdate"] = show_date
 templates.env.filters["by_last_name"] = by_last_name
 templates.env.filters["clock"] = lambda t: dt.datetime.fromtimestamp(t).strftime("%-I:%M %p")
 def monthday(md: str | None) -> str:
@@ -80,7 +79,7 @@ def monthday(md: str | None) -> str:
     try:
         if md and len(md) == 2:
             return dt.date(2000, int(md), 1).strftime("%B")
-        return dt.date(2000, int(md[:2]), int(md[3:5])).strftime("%B %-d") if md and len(md) == 5 else (md or "")
+        return show_date(dt.date(2000, int(md[:2]), int(md[3:5])), "long") if md and len(md) == 5 else (md or "")
     except ValueError:
         return md
 
@@ -478,7 +477,7 @@ def business_page(request: Request, tab: str = "open", error: str = "", note: st
                 suggestions=pending, ai_on=ai.configured(archive.club) and leader_, submitted=submitted,
                 by_id={x["id"]: x for x in items}, results=business.RESULTS, result=result,
                 motions=[x for x in business.motions(s) if not result or x["motion"]["result"] == result],
-                members=members, today=today, fmt=lambda d: dt.date.fromisoformat(d).strftime("%b %-d, %Y"))
+                members=members, today=today, fmt=show_date)
 
 
 def run_followups(slug: str) -> str:
@@ -493,8 +492,8 @@ def run_followups(slug: str) -> str:
         n = business.add_suggestions(s, slug, found, archive.club.ai.get("model", ""))
         business.save(s)
     _log.info("AI suggested %d follow-ups for %s", n, one_line(slug))
-    return f"{n} suggestion{'s' if n != 1 else ''} from the {m.date:%B %-d} minutes." if n else \
-        f"No follow-ups found in the {m.date:%B %-d} minutes."
+    return f"{n} suggestion{'s' if n != 1 else ''} from the {show_date(m.date, 'long')} minutes." if n else \
+        f"No follow-ups found in the {show_date(m.date, 'long')} minutes."
 
 
 def followups_after_submit(slug: str) -> None:
@@ -706,7 +705,7 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
                 next_up=chow.next_up(club, s), today=today.isoformat(),
                 default_until=(today + dt.timedelta(days=180)).isoformat(),
                 list_changed=chow.list_changed(s), emailed=s.get("emailed"),
-                log=chow.history(30) if leader else [], fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"))
+                log=chow.history(30) if leader else [], fmt=lambda d: show_date(d, "day"))
 
 
 def is_treasurer(request: Request) -> bool:
@@ -751,7 +750,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                 regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=rates,
                 labels=treasurer.labels(club), kinds=[k for k in (treasurer.KINDS if edit else treasurer.NO_MEMBER) if (k != "chow" or chow_on) and (k != "certificate" or club.certificate)], accounts=c["accounts"] if edit else kept,
                 rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
-                money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
+                money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: show_date(d, "day_year"))
 
 
 def money_change(fn, tab: str):
@@ -1466,7 +1465,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
                 today=today, teams=next((ln for ln in club.links if (ln.get("icon") or link_icon(ln.get("url", ""))) == "video"), None),  # Teams, Zoom, Meet…
-                fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d"), error=error)
+                fmt=lambda d: show_date(d, "day"), error=error)
 
 
 @app.get("/minutes", response_class=HTMLResponse)

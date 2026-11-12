@@ -29,7 +29,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from . import chow
-from .club import DATA, Club
+from .club import DATA, Club, show_date
 
 PAYMENTS = ("dues", "initiation", "chow", "certificate")
 KINDS = PAYMENTS + ("adjustment", "income", "expense")
@@ -147,7 +147,7 @@ def day(v: str, latest: dt.date | None = None) -> str:
     except ValueError:
         raise ValueError("That isn't a date.") from None
     if latest and d > latest:
-        raise ValueError(f"That date is after {latest:%b %-d, %Y}.")
+        raise ValueError(f"That date is after {show_date(latest)}.")
     return d.isoformat()
 
 

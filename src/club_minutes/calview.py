@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
 from . import business, chow, events as store, regions
-from .club import DATA, Club
+from .club import DATA, Club, show_date
 
 KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays",
          "holiday": "Holidays"}
@@ -63,7 +63,7 @@ def _zone(o: dict, tz: str | None, club_tz: str) -> str:
     s = dt.datetime.fromisoformat(o["start"])
     f = dt.datetime.fromisoformat(o["end"]) if o.get("end") else s + dt.timedelta(hours=store_hours())
     abbr = s.replace(tzinfo=ZoneInfo(tz)).tzname()
-    return f"{s:%H:%M} – {f:%H:%M} {abbr}" if s.date() == f.date() else f"{s:%a %b %-d %H:%M} – {f:%a %b %-d %H:%M} {abbr}"
+    return f"{s:%H:%M} – {f:%H:%M} {abbr}" if s.date() == f.date() else f"{show_date(s, 'day')} {s:%H:%M} – {show_date(f, 'day')} {f:%H:%M} {abbr}"
 
 
 def store_hours() -> int:

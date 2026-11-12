@@ -12,8 +12,8 @@
 <span class="muted small">{{ r.visits|length }} visit{{ 's' if r.visits|length != 1 }}, last {{ r.visits[-1][0]|listdate }}</span></li>
 {% elif k == 'items' %}<li><a href="/business{{ '?tab=done' if r.status == 'done' }}#i{{ r.id }}">{{ r.text }}</a>
 <div class="muted small">{{ 'Open' if r.status == 'open' else 'Done' }}{% if r.owner_name %} · {{ r.owner_name }}{% endif %}{% if r.due and r.status == 'open' %} · due {{ r.due }}{% endif %}</div></li>
-{% elif k == 'nights' %}<li><a href="/chow">{{ r[0].strftime('%a %b %-d, %Y') }}</a> {{ r[1] }}</li>
-{% elif k == 'calendar' %}<li><a href="/calendar?start={{ r.date }}">{{ r.date.strftime('%a %b %-d, %Y') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}
+{% elif k == 'nights' %}<li><a href="/chow">{{ r[0]|date('day_year') }}</a> {{ r[1] }}</li>
+{% elif k == 'calendar' %}<li><a href="/calendar?start={{ r.date }}">{{ r.date|date('day_year') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}
 <div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>
 {% else %}<li><a href="/meetings/{{ r.slug }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>
 {% if r.member %}<a class="who" href="/members/{{ r.member }}">{{ club.short(r.member) }}</a>{% endif %}

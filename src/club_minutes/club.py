@@ -5,6 +5,7 @@ data/roster.json by `club-minutes roster`). club.yaml (local only, never in git)
 """
 from __future__ import annotations
 
+import datetime as dt
 import fcntl
 import json
 import os
@@ -25,6 +26,23 @@ DATA = Path(os.environ.get("CLUB_MINUTES_DATA", ROOT / "data"))
 MEETINGS = DATA / "meetings"
 ROSTER_CACHE = DATA / "roster.json"
 ROSTER_LOCK = threading.RLock()  # one roster change at a time: the sheet, then roster.json (read, change, write)
+DATES: dict[str, str] = {}  # strftime formats by name (show_date), from club.yaml club: date_formats: when a Club loads
+
+
+def set_dates(custom: dict | None) -> None:
+    """The four a club sets, then the weekday forms built from them (a club may set those too)."""
+    d = {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d", **(custom or {})}
+    DATES.clear()
+    DATES.update({"day": f"%a {d['short']}", "weekday": f"%A, {d['long']}", "day_year": f"%a {d['list']}", **d})
+
+
+def show_date(d: dt.date | str, kind: str = "list") -> str:
+    """A date (or ISO "2026-11-05") in the club's format. US defaults: list Nov 5, 2026; document November 5, 2026;
+    short Nov 5; long November 5; day Thu Nov 5; weekday Thursday, November 5; day_year Thu Nov 5, 2026."""
+    return (dt.date.fromisoformat(d) if isinstance(d, str) else d).strftime(DATES[kind])
+
+
+set_dates(None)
 _depth = 0  # nesting of roster_locked calls in this process (changed only while ROSTER_LOCK is held)
 
 
@@ -155,6 +173,7 @@ class Club:
         path = path or Path(os.environ.get("CLUB_MINUTES_CONFIG", ROOT / "club.yaml"))
         cfg = yaml.safe_load(path.read_text()) or {}
         self.info = cfg.get("club", {})
+        set_dates(self.info.get("date_formats"))  # one club per process: the last Club loaded sets them
         self._yaml_links = cfg.get("links", [])  # until an admin edits them on the Links page (links.json)
         self.auth = cfg.get("auth") or {}
         self.email = cfg.get("email") or {}

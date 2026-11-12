@@ -24,7 +24,7 @@ import time
 from contextlib import contextmanager
 from zoneinfo import ZoneInfo, available_timezones
 
-from .club import DATA
+from .club import DATA, show_date
 
 CALS = {"events": "Club events", "planning": "Planning", "community": "Community"}
 REPEATS = ("", "daily", "weekly", "biweekly", "monthly", "monthly_weekday", "monthly_last", "monthly_weeks", "yearly",
@@ -116,14 +116,14 @@ def repeat_label(start: str, r: dict | None) -> str:
     if r.get("weeks"):  # "Monthly on the 1st, 3rd and last Tuesday"
         names = [ORDINAL[k] for k in r["weeks"]] + (["last"] if r.get("last") else [])
         return f"Monthly on the {', '.join(names[:-1])} and {names[-1]} {d:%A}".replace("the  and ", "the ") + (
-            f", until {_dt(r['until']):%b %-d, %Y}" if r.get("until") else "")
+            f", until {show_date(_dt(r['until']).date())}" if r.get("until") else "")
     every = {"daily": "Every day" if r.get("interval", 1) == 1 else f"Every {r['interval']} days",
              "weekly": f"Every {d:%A}" if r.get("interval", 1) == 1 else f"Every {r['interval']} weeks on {d:%A}",
              "monthly": f"Monthly on the {d.day}{'th' if 10 <= d.day % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(d.day % 10, 'th')}",
              "monthly_weekday": f"Monthly on the {'last' if r.get('last') else ORDINAL.get((d.day - 1) // 7 + 1, 'last')} {d:%A}",
-             "yearly": f"Every year on {d:%B} {d.day}",
+             "yearly": f"Every year on {show_date(d.date(), 'long')}",
              "yearly_weekday": f"Every year on the {'last' if r.get('last') else ORDINAL.get((d.day - 1) // 7 + 1, 'last')} {d:%A} of {d:%B}"}[r["freq"]]
-    return every + (f", until {_dt(r['until']):%b %-d, %Y}" if r.get("until") else "")
+    return every + (f", until {show_date(_dt(r['until']).date())}" if r.get("until") else "")
 
 
 def _nth_weekday(year: int, month: int, weekday: int, n: int, last: bool) -> dt.date | None:

@@ -9,7 +9,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 
 ### Club rules out of the code
 - **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
-- **Dates in the club's format everywhere:** `date_formats` covers the minutes and lists, but some pages and emails write "Thu Nov 5" themselves (US order); with the 24-hour clock item below.
 
 
 ### A new club can start

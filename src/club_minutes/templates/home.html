@@ -10,7 +10,7 @@
 <section class="card">
   <h2>{% if live %}Meeting in progress{% else %}Next meeting{% endif %}</h2>
   {% if live %}<p class="big"><a href="/meetings/{{ live.slug }}">{{ emoji('🔴', 'live') }} Follow tonight's minutes live</a></p>
-  {% elif next_meeting %}<p class="big">{{ next_meeting.strftime('%A, %B %-d') }}{% if next_meeting == today %} · tonight{% endif %}</p>{% endif %}
+  {% elif next_meeting %}<p class="big">{{ next_meeting|date('weekday') }}{% if next_meeting == today %} · tonight{% endif %}</p>{% endif %}
   {% if chow_next %}<p>Chow{% if not next_meeting or chow_next[0] != next_meeting.isoformat() %} {{ fmt(chow_next[0]) }}{% endif %}: {% if chow_next[1].status == 'none' %}none{% if chow_next[1].note %} ({{ chow_next[1].note }}){% endif %}{% elif chow_next[1].member %}{{ club.name(chow_next[1].member) }}{% else %}not set{% endif %}</p>{% endif %}
   {% if teams %}<p><a href="{{ teams.url }}">Join online ({{ teams.label }})</a></p>{% endif %}
 </section>
@@ -43,7 +43,7 @@
 {% endif %}
 <section class="card">
   <h2>Coming up</h2>
-  {% if coming %}<ul class="plain">{% for e in coming %}<li><i class="dot k-{{ e.kind }}"></i><b>{{ 'Today' if e.start == today else e.start.strftime('%a %b %-d') }}</b>{% if e.time %} {{ e.time }}{% endif %}: {{ e.title|linkify }}</li>{% endfor %}</ul>
+  {% if coming %}<ul class="plain">{% for e in coming %}<li><i class="dot k-{{ e.kind }}"></i><b>{{ 'Today' if e.start == today else e.start|date('day') }}</b>{% if e.time %} {{ e.time }}{% endif %}: {{ e.title|linkify }}</li>{% endfor %}</ul>
   {% elif not undated %}<p class="muted">Nothing on the calendar for the next two weeks.</p>{% endif %}
   {% if undated %}<p class="muted small">From the last minutes:</p><ul class="plain">{% for t in undated %}<li>{{ t|linkify }}</li>{% endfor %}</ul>{% endif %}
   <p><a href="/calendar">The calendar</a></p>

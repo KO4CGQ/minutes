@@ -321,3 +321,18 @@ def test_the_meeting_day_time_and_zone_are_the_clubs_own(tmp_path, monkeypatch):
     assert bare.timezone == "Europe/Berlin"  # none in club.yaml: the server's own
     monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/etc/localtime")
     assert bare.timezone == "UTC"
+
+
+def test_dates_in_the_clubs_format():
+    from club_minutes.club import set_dates, show_date
+    from club_minutes.meeting import Item
+    d = dt.date(2026, 11, 5)
+    try:
+        set_dates({"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})  # day first
+        assert [show_date(d, k) for k in ("list", "short", "day", "weekday", "day_year")] == \
+            ["5 Nov 2026", "5 Nov", "Thu 5 Nov", "Thursday, 5 November", "Thu 5 Nov 2026"]
+        assert show_date("2026-11-05", "document") == "5 November 2026"
+        assert Item("VE testing", when="2026-11-05").shown == "Thu 5 Nov: VE testing"
+    finally:
+        set_dates(None)
+    assert show_date(d, "weekday") == "Thursday, November 5"
