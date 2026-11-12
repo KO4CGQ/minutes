@@ -31,7 +31,6 @@ from .backup import KEY_FILE
 from .roster import COLUMNS, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
-from .meeting import SECTIONS
 from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
@@ -112,7 +111,7 @@ def _assets_stamp() -> str:
     return h.hexdigest()[:10]
 
 
-templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
+templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
                              cite=lambda rule: archive.club.cite(rule),
@@ -2429,8 +2428,7 @@ def roster_api(request: Request):
 @app.get("/api/meetings/{slug}/live", response_class=HTMLResponse)
 def live_fragment(request: Request, slug: str):
     """The rendered minutes, for members following along (polled)."""
-    return templates.get_template("_minutes.html").render(m=get_meeting(slug), pdf=False, club=archive.club,
-                                                          SECTIONS=SECTIONS)
+    return templates.get_template("_minutes.html").render(m=get_meeting(slug), pdf=False, club=archive.club)
 
 
 # ---------------- leader console (officers + minutes editors) ----------------

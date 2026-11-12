@@ -41,6 +41,22 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #   holidays: us        # US federal holidays (plus Christmas Eve and New Year's Eve)
 #   elections: us-oh    # Ohio's election days, on the Community calendar
 
+# The meeting's sections, in order (the leader console's steps between Attendance and Review). Built in, each with
+# something behind it: Bills and Communications (bills read out reach the Treasurer pages), Financial Report,
+# Community Reports (each tied to a member), Old Business and New Business (tracked week to week), Upcoming Chow (the
+# chow module) and Upcoming Events (the calendars). Any other name is the club's own free-text section, with an
+# optional hint for the console. Left out: the built-ins except Upcoming Chow (added with the chow module).
+# meeting:
+#   sections:
+#     - Bills and Communications
+#     - Financial Report
+#     - Community Reports
+#     - Old Business
+#     - New Business
+#     - name: Winners
+#       hint: e.g. “50/50 drawing – Amy A $7.50”.
+#     - Upcoming Events
+
 # A certificate each member buys once (some clubs call it a bond), on the Treasurer pages: who has bought it, who
 # owes it and by when (the years to buy it and its price are Treasurer settings). Off unless named here.
 # treasurer:

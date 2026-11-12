@@ -17,6 +17,7 @@ from pathlib import Path
 import yaml
 
 from . import regions
+from .meeting import SECTIONS
 
 ROOT = Path(os.environ.get("CLUB_MINUTES_ROOT", Path(__file__).resolve().parents[2]))
 DATA = Path(os.environ.get("CLUB_MINUTES_DATA", ROOT / "data"))
@@ -57,6 +58,20 @@ PREVIEW = os.environ.get("CLUB_MINUTES_PREVIEW") or None
 # Stage mode (a staging server: docs/server-admin.md → Staging server): prod's data, pulled one way each night. Email
 # goes only to the person clicking (auth.send_email); the app doesn't update itself.
 STAGE = bool(os.environ.get("CLUB_MINUTES_STAGE"))
+
+
+def _agenda(raw) -> list[dict]:
+    """club.yaml meeting: sections: as [{name, hint}]: each a name or {name, hint}; one line each, no repeats.
+    A mistake stops the app at start, saying what's wrong."""
+    out = []
+    for x in raw or []:
+        x = x if isinstance(x, dict) else {"name": x}
+        name = " ".join(str(x.get("name") or "").split())
+        if not name or len(name) > 60 or name in ("Attendance", "Review") or name in [s["name"] for s in out]:
+            raise ValueError(f"club.yaml meeting: sections: {x.get('name')!r} isn't a usable section name "
+                             "(one line, at most 60 characters, not Attendance or Review, and listed once)")
+        out.append({"name": name, "hint": " ".join(str(x.get("hint") or "").split())})
+    return out
 
 
 # Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
@@ -144,7 +159,8 @@ class Club:
         self.certificate = {"name": " ".join(str(cert["name"]).split())[:80],
                             "short": " ".join(str(cert.get("short") or "certificate").split())[:30],
                             "note": " ".join(str(cert.get("note") or "").split())} if cert.get("name") else None
-        self.bylaws = cfg.get("bylaws") or {}  # refs: the sections the app cites; arrears_note: added to the arrears email
+        self.bylaws = cfg.get("bylaws") or {}
+        self._sections = _agenda((cfg.get("meeting") or {}).get("sections"))  # refs: the sections the app cites; arrears_note: added to the arrears email
         self.calendar = cfg.get("calendar") or {}  # holidays / elections: region codes (regions/), none by default
         for k in ("holidays", "elections"):
             regions._module(self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
@@ -157,6 +173,22 @@ class Club:
             self._mtime = ROSTER_CACHE.stat().st_mtime
             roster = json.loads(ROSTER_CACHE.read_text())
         self._load(roster or [])
+
+    def sections(self) -> list[str]:
+        """The meeting's sections, in order: club.yaml `meeting: sections:` (built-in ones and the club's own), else the
+        built-ins with something behind them. Upcoming Chow is there only with the chow module (before Upcoming Events
+        if the list doesn't place it)."""
+        names = [s["name"] for s in self._sections] if self._sections else \
+            [s for s in SECTIONS if s not in ("Winners", "Upcoming Chow")]
+        names = [s for s in names if s != "Upcoming Chow" or self.has("chow")]
+        if self.has("chow") and "Upcoming Chow" not in names:
+            i = names.index("Upcoming Events") if "Upcoming Events" in names else len(names)
+            names.insert(i, "Upcoming Chow")
+        return names
+
+    def section_hints(self) -> dict[str, str]:
+        """The console's hint for each of the club's own sections that club.yaml gives one for."""
+        return {s["name"]: s["hint"] for s in self._sections if s.get("hint")}
 
     def cite(self, rule: str) -> str:
         """" (bylaws VII.B)" for a rule club.yaml gives a section for (bylaws: refs:), else "": the sentence reads without it."""

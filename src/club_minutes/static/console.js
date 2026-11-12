@@ -4,17 +4,15 @@
   const M = D.meeting;
   const S = Object.assign({ done: [], skipped: [], current: null, reports: null, others: [], step: 0 }, D.state);
   const people = Object.fromEntries(D.members.map((m) => [m.id, m]));
-  const STEPS = ["Attendance", "Bills and Communications", "Financial Report", "Community Reports",
-    "Old Business", "New Business", "Winners", "Upcoming Chow", "Upcoming Events", "Review"]
-    .filter((s) => s !== "Upcoming Chow" || D.chow);  // the chow step only where the club has the chow module
+  const STEPS = ["Attendance", ...D.sections, "Review"];  // the club's agenda (club.yaml meeting: sections:)
   const EMPTY_NOTE = "Leave it empty if there's nothing this week; empty sections are left out of the minutes.";
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",
     "New Business": "Each item you add here is tracked: next week it's in Old Business, and it stays there until it's marked done.",
     "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the calendar picked beside it. Add an end for a time range or an event over several days.",
-    "Winners": "e.g. “50/50 drawing – Amy A $7.50” and “Weekly drawing – Bob B, not registered (up to $62)”.",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
+  Object.assign(HINTS, D.hints);  // the club's own sections' hints
   if (D.events_public) HINTS["Upcoming Events"] += " Dated events also go on the public calendar, which anyone can see, signed in or not: keep anything members-only out of them.";
   const RECENT_GUESTS = 8; // quick-pick buttons; older guests are in the name field's autocomplete
   // A guest on their Nth visit or later gets a reminder to invite them to apply for membership.

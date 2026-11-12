@@ -8,7 +8,7 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 The rename becomes 1.0.0: from then on the settings, folders, services and command names stay put (a change to them is a 2.0). Built on the `rename` branch, released once, then the history is squashed in place. In order:
 
 ### Club rules out of the code
-- **The meeting's steps.** The console's steps and their hints (Winners and the 50/50 drawing, the Financial Report) are W8LBZ's agenda: make the step list a setting with today's as the example, and the drawing step an optional module, switched like chow (`modules:` in club.yaml).
+- **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
 - **Other defaults to check while there:** the meeting day (Thursday) and time zone (America/New_York) defaults, Teams as the meeting link in the example config, US date formats, and the PDF importer for old minutes (a W8LBZ archive format: keep as an optional tool, documented as such, or drop).
 
 ### Look

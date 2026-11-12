@@ -15,6 +15,8 @@ from pathlib import Path
 
 import yaml
 
+# The built-in sections (each has something behind it: bills, reports, business tracking, the calendar, chow), in
+# their usual order. A club's agenda (club.yaml meeting: sections:) picks from these and adds its own free-text ones.
 SECTIONS = [
     "Bills and Communications",
     "Financial Report",
@@ -92,6 +94,10 @@ class Meeting:
     def attendance(self) -> int:
         return len(self.in_person) + len(self.remote)
 
+    def section_order(self, agenda: list[str]) -> list[str]:
+        """The club's agenda, then any other section these minutes have (one later dropped from the agenda still shows)."""
+        return agenda + [s for s, items in self.sections.items() if s not in agenda and items]
+
     def items(self, section: str) -> list[Item]:
         return self.sections.get(section, [])
 
@@ -111,7 +117,7 @@ class Meeting:
         }
         fm = {k: v for k, v in fm.items() if v not in (None, [], {}, 0)}
         out = ["---", yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip(), "---", ""]
-        for name in SECTIONS:
+        for name in self.sections:  # in the order they were made (the club's agenda), so nothing is dropped
             out.append(f"## {name}")
             for it in self.items(name):
                 tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "")

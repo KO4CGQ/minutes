@@ -15,7 +15,7 @@ import time
 
 from . import ai, auth, business, chow, prefs
 from .club import DATA
-from .meeting import SECTIONS, Item, Meeting
+from .meeting import Item, Meeting
 from .store import Archive
 
 log = logging.getLogger("club_minutes.console")
@@ -85,7 +85,7 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
 def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None) -> Meeting:
     m = Meeting(date=date, status="draft", leader=leader, recorder=recorder)
     prev = previous(archive, date)
-    for sec in SECTIONS:
+    for sec in archive.club.sections():  # the club's agenda, in its order
         m.sections[sec] = []
     if prev:
         # events already past drop off; undated ones stay until a leader removes them
@@ -220,7 +220,8 @@ def context(archive: Archive, m: Meeting) -> dict:
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
             "in_person": m.in_person, "remote": m.remote, "guests": m.guests, "visitors": m.visitors,
-            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until, "cal": i.cal} for i in m.items(s)] for s in SECTIONS},
+            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until, "cal": i.cal} for i in m.items(s)]
+                         for s in m.section_order(club.sections())},
         },
         "state": load_state(archive, m.slug),
         "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
@@ -228,7 +229,8 @@ def context(archive: Archive, m: Meeting) -> dict:
         "history": history,
         "guest_history": guests,
         "past_guests": sorted(past, key=lambda g: (g["last"], g["visits"]), reverse=True),
-        "sections": SECTIONS,
+        "sections": m.section_order(club.sections()),  # the console's steps, between Attendance and Review
+        "hints": club.section_hints(),  # for the club's own sections
         "invite_after": int(club.info.get("invite_after_visits", 3)),
         "events_public": "events" in (club.info.get("public_calendars") or []),  # Club events shown to anyone
         "email": {"roster": len(recipients(archive)), "only_to": club.email.get("only_to")},
@@ -338,7 +340,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")),
                            i.get("cal") if i.get("cal") in ("community", "planning") else None)
                       for i in d.get("sections", {}).get(s, []) if i.get("text", "").strip()]
-                  for s in SECTIONS}
+                  for s in m.section_order(archive.club.sections())}  # only sections these minutes have: no others from the browser
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser
     m.save(archive.root)
     state_path(archive, slug).write_text(json.dumps(data.get("state") or {}))

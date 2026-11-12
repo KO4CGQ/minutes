@@ -176,12 +176,11 @@ def test_celebrations_the_week_up_to_tonight_shared_birthdays_only():
 
 def test_recorded_by_shows_only_when_someone_else_led(tmp_path, monkeypatch):
     from club_minutes.web import templates
-    from club_minutes.console import SECTIONS
     a = archive_with_prev(tmp_path)
     m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")  # the president chairs, Sam takes the minutes
     m = Archive(tmp_path, club).by_slug[m.slug]  # survives saving
     assert (m.leader, m.recorder) == ("doe", "kim")
-    html = lambda: templates.get_template("_minutes.html").render(m=m, pdf=False, club=club, SECTIONS=SECTIONS)
+    html = lambda: templates.get_template("_minutes.html").render(m=m, pdf=False, club=club)
     assert "Led by Jane Doe · Recorded by Sam Kim" in html()
     m.recorder = "doe"
     assert "Led &amp; Recorded by Jane Doe" in html()  # one person did both
@@ -282,3 +281,35 @@ def test_a_reloaded_console_keeps_the_minutes_and_a_duplicated_tab_never_shares_
     assert console.hold(a, m.slug, "doe", "load2", prev="load1") is None      # reloaded: carries on, no take over
     assert console.hold(a, m.slug, "doe", "load1")["tab"] == "load2"          # the old page's id no longer holds them
     assert console.hold(a, m.slug, "kim", "x", prev="load2")["member"] == "doe"  # someone else can't borrow the id
+
+
+def test_the_meeting_follows_the_clubs_agenda(tmp_path):
+    from club_minutes import club as club_mod
+    from club_minutes.web import templates
+    c = Club(Path(__file__).parent / "fixtures" / "test-club.yaml")
+    assert c.sections() == ["Bills and Communications", "Financial Report", "Community Reports", "Old Business", "New Business",
+                            "Upcoming Chow", "Upcoming Events"]  # the default: no Winners; chow only with its module
+    c.modules["chow"] = False
+    assert "Upcoming Chow" not in c.sections()
+    c._sections = club_mod._agenda(["Old Business", {"name": "  Treasurer's\n corner ", "hint": "Balances only."},
+                                    "New Business", {"name": "Upcoming Chow"}])  # listed, but the module is off
+    assert c.sections() == ["Old Business", "Treasurer's corner", "New Business"]
+    assert c.section_hints() == {"Treasurer's corner": "Balances only."}
+    # an older meeting with a section the agenda has since dropped: it still shows and still saves
+    Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Winners": [Item("50/50: Amy A $7")]}).save(tmp_path)
+    a = Archive(tmp_path, c)
+    old = a.by_slug["2026-11-05"]
+    assert old.section_order(c.sections())[-1] == "Winners" and "50/50: Amy A $7" in templates.get_template("_minutes.html").render(m=old, pdf=False, club=c)
+    m = console.start(a, dt.date(2026, 11, 12), "doe")
+    ctx = console.context(a, m)
+    assert ctx["sections"] == c.sections() and ctx["hints"] == {"Treasurer's corner": "Balances only."}
+    data = {"meeting": {"sections": {"Treasurer's corner": [{"text": "$412 in checking"}], "Winners": [{"text": "sneaked in"}],
+                                     "Made up": [{"text": "nope"}]}}}
+    m = console.apply(a, m.slug, data)
+    assert [i.text for i in m.items("Treasurer's corner")] == ["$412 in checking"] and not m.items("Winners") and "Made up" not in m.sections
+    text = (tmp_path / m.slug / "minutes.md").read_text()
+    assert text.index("## Old Business") < text.index("## Treasurer's corner") < text.index("## New Business")  # the club's order
+    assert Meeting.from_markdown(text).items("Treasurer's corner")[0].text == "$412 in checking"  # survives a save and reload
+    for bad in (["Attendance"], ["Old Business", "Old Business"], ["x" * 61], [""], [{"hint": "no name"}]):
+        with pytest.raises(ValueError, match="meeting: sections"):
+            club_mod._agenda(bad)
