@@ -69,7 +69,8 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
                   optional=("phone", "address", "class"))
     try:
         sheet.add_row({"callsign": f["callsign"], "full_name": name, "date": f["joined"], "event": "Joined",
-                       "note": f"Added in the app by {club.name(by)}"}, tab=LOG_TAB, optional=("note", "callsign"))
+                       "note": "The roster's first member, added on the server" if by == "first-member"
+                       else f"Added in the app by {club.name(by)}"}, tab=LOG_TAB, optional=("note", "callsign"))
     except SheetError as e:  # the roster row is the part that matters
         log.warning("new member %s: Membership Log not written: %s", name, e)
 

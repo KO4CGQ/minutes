@@ -30,7 +30,7 @@ def test_first_member_starts_the_roster_once_and_prints_their_way_in(tmp_path):
     assert r.returncode == 0 and "Started the roster with Amy Able (KD8XYZ)" in r.stdout and "isn't under admins" not in r.stdout
     assert "https://minutes.example.org/login/link?t=" in r.stdout
     sheet = json.loads((tmp_path / "data" / "roster-sheet.json").read_text())
-    assert sheet["Member Roster"][1][:3] == ["KD8XYZ", "Amy Able", "amy@example.org"] and sheet["Membership Log"][1][3] == "Joined"
+    assert sheet["Member Roster"][1][:3] == ["KD8XYZ", "Amy Able", "amy@example.org"] and sheet["Membership Log"][1][3:] == ["Joined", "The roster's first member, added on the server"]
     assert run(tmp_path, "login-link", "KD8XYZ").returncode == 0
     r = run(tmp_path, "first-member", "KD8BBB", "--first", "Bob", "--last", "Baker", "--email", "bob@example.org", "--class", "General")
     assert "There's already a roster" in r.stderr and len(json.loads((tmp_path / "data" / "roster-sheet.json").read_text())["Member Roster"]) == 2
