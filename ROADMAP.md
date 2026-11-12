@@ -12,7 +12,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 
 
 ### A new club can start
-- **A demo club:** invented data (Example Radio Club, N0CALL-style callsigns, Jane Doe, example.org, 555-01xx) as a fixture: for the README's screenshots and a short video (decided 2026-11-11: that's the demo for 1.0, no demo server), and for previews without the club's data.
 - **Examples clearly fictional everywhere** (code, tests, docs, club.example.yaml): Jane/John Doe, example.com/.org, 555-0100…0199, 123 Main St, Anytown, and callsigns that can't be issued (four-letter suffix: N0CALL, W0DEMO). Replace the older realistic ones (Amy Able, KD8AAA, KD8XYZ…), which follow the real callsign format and may belong to someone.
 
 ### Docs and repo

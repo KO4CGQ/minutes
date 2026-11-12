@@ -1,0 +1,39 @@
+# The demo club: invented people and data (demo/build.py), for screenshots, the video and previews without a club's data.
+# Every name, callsign, email and phone here is made up: callsigns with a four-letter suffix are never issued,
+# example.org is reserved, and 555-0100 to 555-0199 are reserved for fiction.
+
+club:
+  name: Example Radio Club
+  callsign: W0DEMO
+  meeting_day: Thursday
+  meeting_time: "19:30"
+  timezone: America/New_York
+  invite_after_visits: 3
+  public_calendars: [events]
+
+auth:
+  rp_id: localhost
+  session_days: 180
+
+admins: [N0JANE]
+
+roster:
+  source: app
+
+links:
+  - label: Video meeting
+    url: https://meet.example.org/example-radio-club
+  - label: Club website
+    url: https://www.example.org/
+
+offices:
+  - President
+  - Vice President
+  - Secretary
+  - Treasurer
+  - {title: Trustee, officer: false, seats: 3}
+
+modules:
+  chow: true
+calendar:
+  holidays: us
