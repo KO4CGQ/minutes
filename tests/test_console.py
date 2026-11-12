@@ -269,8 +269,9 @@ def test_top_bar_says_continue_minutes_for_an_open_meeting_from_another_day(tmp_
         t.cookies.set(web.COOKIE, auth.new_session(who))
         return t.get("/links").text  # not About: it shows the changelog, which names the button
     assert "Start meeting" in page_as("doe")
-    console.start(a, dt.date(2026, 11, 12), "doe")  # not today: no red dot for anyone
-    assert "Continue minutes (Nov 12)" in page_as("doe") and "start live" not in page_as("doe")
+    day = next(d for d in (dt.date(2026, 11, 12), dt.date(2026, 11, 19)) if d != dt.date.today())  # never today
+    console.start(a, day, "doe")  # not today: no red dot for anyone
+    assert f"Continue minutes ({day:%b %-d})" in page_as("doe") and "start live" not in page_as("doe")
     assert "Continue minutes" not in page_as("kim") and "start live" not in page_as("kim")
 
 
