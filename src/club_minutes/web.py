@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import threading
+import string
 import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
@@ -1839,6 +1840,7 @@ def admin_action(e: dict) -> str:
              "signed_out": lambda v: f"Signed out a device of {name(v) if v else 'someone'}",
              "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
              "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}",
+             "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
              "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
@@ -2059,13 +2061,27 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
+SITE_TABS = (("look", "Look"), ("dates", "Dates"))
+DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
+                "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
+
+
 @app.get("/admin/site", response_class=HTMLResponse)
-def site_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):
-    if not archive.club.is_admin(mid):
+@app.get("/admin/site/{tab}", response_class=HTMLResponse)
+def site_page(request: Request, tab: str = "look", error: str = "", note: str = "", mid: str = Depends(real_me)):
+    if not archive.club.is_admin(mid) or tab not in dict(SITE_TABS):
         raise HTTPException(404)
     if not admin_mode(request):
-        return RedirectResponse("/admin/confirm?next=/admin/site", status_code=303)
-    return page(request, "site.html", error=error, note=note, pictures=SITE_PICTURES, source=branding.source,
+        return RedirectResponse(f"/admin/confirm?next=/admin/site/{tab}", status_code=303)
+    club = archive.club
+    fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
+    sample = dt.date.today()  # the examples and the live preview show today
+    return page(request, "site.html", tab=tab, tabs=SITE_TABS, error=error, note=note,
+                presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
+                dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
+                # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
+                codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
+                pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb(),
                 colours=(c := branding.colours()), colours_own=bool(branding._settings().get("theme")),
@@ -2086,6 +2102,23 @@ def site_name(request: Request, name: str = Form("")):
     branding.set_name(name, mid)
     _admin_log(request, site_name=branding.name(archive.club))
     return RedirectResponse("/admin/site?note=" + quote("Saved: the app is now called " + branding.name(archive.club) + "."), status_code=303)
+
+
+@app.post("/admin/site/dates")
+async def site_dates(request: Request):
+    """Dates tab: a preset, the four formats by hand, or back to club.yaml's."""
+    mid, form = _site_admin(request), await request.form()
+    choice = form.get("preset", "")
+    value = (None if choice == "yaml" else DATE_PRESETS[choice][1] if choice in DATE_PRESETS else
+             {k: (form.get(k) or "").strip() for k in ("list", "document", "short", "long")} if choice == "custom" else "?")
+    try:
+        if value == "?":
+            raise ValueError("Pick how dates are written.")
+        archive.club.save_site_setting("club", "date_formats", value)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/dates?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, site_dates=choice)
+    return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
 
 
 SITE_PICTURES = {"logo": "Logo", "favicon": "Browser tab icon", "icon": "Phone home-screen icon"}

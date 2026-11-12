@@ -10,6 +10,11 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 ### Club rules out of the code
 - **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
 
+- **Club settings on Admin → Site, in tabs** (decided 2026-11-12): the page's value wins over club.yaml's, like the Links page (`site-settings.json`, same names as club.yaml; "Back to club.yaml" on each). Sign-in (`auth:`), `admins:`, email test mode, AI and the roster's source stay server-only. One tab at a time, each tested on stage:
+  - **Club:** name, callsign, meeting day and time, time zone (checked like club.yaml at start, so a typo can't stop the app).
+  - **Meetings:** the agenda's sections and hints, the guest invite reminder (`invite_after_visits`), business reminder days (`remind_days_before`).
+  - **Features:** chow on or off, which calendars are public, holiday and election regions.
+  - **Bylaws and Treasurer:** the bylaws references, the arrears note, the certificate (bond).
 
 ### A new club can start
 - **Examples clearly fictional everywhere** (code, tests, docs, club.example.yaml): Jane/John Doe, example.com/.org, 555-0100…0199, 123 Main St, Anytown, and callsigns that can't be issued (four-letter suffix: N0CALL, W0DEMO). Replace the older realistic ones (Amy Able, KD8AAA, KD8XYZ…), which follow the real callsign format and may belong to someone.
@@ -82,6 +87,7 @@ Suggested follow-ups are done. Next, using the typed minutes we already have (no
   - Through OpenRouter, so the model can be chosen and changed; the expected cost is pennies a month.
 
 ## Later
+- **Meetings that aren't weekly:** every other Tuesday, the 2nd Thursday of the month, the last Friday… The meeting night is a weekday today (chow nights, the meeting-day email, the chow fee, the calendar's weekly meeting, the Start meeting pulse); the calendar's repeat rules (every 2 weeks, monthly on chosen weeks, last) already cover these, so the meeting could take one as a new setting beside `meeting_day`. A new setting, so it needn't wait for 2.0.
 - **A demo visitors can try** (after 1.0, if wanted): the real app running in the visitor's browser on GitHub Pages (Python in WebAssembly, via Pyodide), everything kept in that browser, a "Sign in as…" persona picker, emails only on its Email log; PDFs not available there. Or a hosted demo server reset every hour. For 1.0 the README's screenshots and video are the demo.
 - **Audio capture and live transcription** (see REQUIREMENTS.md §4.1–4.2): browser room capture plus a meeting bot, cloud speech-to-text, OpenRouter drafting.
 - **Discord:** a post-meeting summary and weekly reminders, and a post when a meeting starts (when the leader opens the console), with the link to join online.

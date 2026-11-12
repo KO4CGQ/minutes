@@ -173,10 +173,67 @@ class Member:
         return f"{self.first} {self.last}".strip()
 
 
+# Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
+# Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
+SITE_KEYS = {("club", "date_formats")}
+
+
+def _overlay(cfg: dict, site: dict) -> dict:
+    """club.yaml with the Site page's settings on top: a key there replaces club.yaml's, section by section."""
+    out = dict(cfg)
+    for sec, keys in site.items():
+        out[sec] = {**(cfg.get(sec) or {}), **keys}
+    return out
+
+
 class Club:
     def __init__(self, path: Path | None = None, roster: list[dict] | None = None):
         path = path or Path(os.environ.get("CLUB_MINUTES_CONFIG", ROOT / "club.yaml"))
-        cfg = yaml.safe_load(path.read_text()) or {}
+        self.yaml = yaml.safe_load(path.read_text()) or {}
+        cfg = _overlay(self.yaml, self.site_settings)
+        self._configure(cfg)
+
+        self._mtime = None  # set when the people come from the roster cache, so refresh() can notice a sync
+        if roster is None and "members" in cfg:  # inline members (tests, example config)
+            roster = [{"id": k, **(v or {})} for k, v in cfg["members"].items()]
+        if roster is None and ROSTER_CACHE.exists():
+            self._mtime = ROSTER_CACHE.stat().st_mtime
+            roster = json.loads(ROSTER_CACHE.read_text())
+        self._load(roster or [])
+
+    @property
+    def site_settings(self) -> dict:
+        """What admins saved on Admin → Site: {section: {key: value}}, over club.yaml's."""
+        p = DATA / "site-settings.json"
+        return json.loads(p.read_text()) if p.exists() else {}
+
+    def save_site_setting(self, section: str, key: str, value) -> None:
+        """Set one Site page setting (None: back to club.yaml's). Checked as the app checks club.yaml at start, then
+        used at once; a ValueError says what's wrong and nothing changes."""
+        if (section, key) not in SITE_KEYS:
+            raise ValueError(f"{section}: {key} can't be changed here.")
+        site = self.site_settings
+        if value is None:
+            site.get(section, {}).pop(key, None)
+            site = {k: v for k, v in site.items() if v}
+        else:
+            site.setdefault(section, {})[key] = value
+        cfg = _overlay(self.yaml, site)
+        probe = Club.__new__(Club)
+        try:
+            probe._configure(cfg)
+            _ = (probe.meeting_weekday, probe.meeting_time, probe.timezone)
+        except Exception:
+            set_dates(self.info.get("date_formats"))  # the probe may have set the shared formats already
+            raise
+        p = DATA / "site-settings.json"
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(site, indent=1))
+        tmp.replace(p)
+        self._configure(cfg)
+
+    def _configure(self, cfg: dict) -> None:
+        """The settings, from club.yaml with the Site page's on top. Raises ValueError for a wrong one."""
         self.info = cfg.get("club", {})
         set_dates(self.info.get("date_formats"))  # one club per process: the last Club loaded sets them
         self._yaml_links = cfg.get("links", [])  # until an admin edits them on the Links page (links.json)
@@ -199,14 +256,6 @@ class Club:
         for k in ("holidays", "elections"):
             regions._module(self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
         self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
-
-        self._mtime = None  # set when the people come from the roster cache, so refresh() can notice a sync
-        if roster is None and "members" in cfg:  # inline members (tests, example config)
-            roster = [{"id": k, **(v or {})} for k, v in cfg["members"].items()]
-        if roster is None and ROSTER_CACHE.exists():
-            self._mtime = ROSTER_CACHE.stat().st_mtime
-            roster = json.loads(ROSTER_CACHE.read_text())
-        self._load(roster or [])
 
     @property
     def meeting_weekday(self) -> int:

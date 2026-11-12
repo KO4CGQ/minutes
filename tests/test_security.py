@@ -249,3 +249,30 @@ def test_admins_add_and_remove_admins_in_the_app(app, tmp_path, monkeypatch):
 def test_changes_come_only_from_the_apps_own_pages(app, headers, ok):
     r = app("kd8bbb").post("/profile/settings", data={}, headers=headers)
     assert (r.status_code != 403) == ok and (("another site" in r.text) != ok)
+
+
+def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkeypatch):
+    """Admin → Site → Dates: a preset or own formats, used at once; a wrong one changes nothing; never other settings."""
+    import datetime as dt
+    from club_minutes import club as clubmod
+    from club_minutes.club import show_date
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c, d = web.archive.club, dt.date(2026, 11, 5)
+    c.save_app_admins({"kd8off"})  # (a save reloads the settings: an admin set by hand here wouldn't last)
+    admin, member = app("kd8off"), app("kd8bbb")
+    try:
+        assert member.get("/admin/site/dates").status_code == 404 and member.post("/admin/site/dates", data={"preset": "dayfirst"}).status_code == 404
+        assert "US: month first" in admin.get("/admin/site/dates").text and admin.get("/admin/site/nope").status_code == 404
+        assert "Saved" in admin.post("/admin/site/dates", data={"preset": "dayfirst"}).text and show_date(d) == "5 Nov 2026"
+        assert c.site_settings == {"club": {"date_formats": web.DATE_PRESETS["dayfirst"][1]}}
+        bad = admin.post("/admin/site/dates", data={"preset": "custom", "list": "", "document": "%B", "short": "%b", "long": "%B"})
+        assert "date_formats" in bad.text and show_date(d) == "5 Nov 2026"  # unchanged
+        assert "Dates: Day first" in admin.get("/admin/security/admin").text
+        admin.post("/admin/site/dates", data={"preset": "yaml"})
+        assert show_date(d) == "Nov 5, 2026" and c.site_settings == {}
+        with pytest.raises(ValueError):
+            c.save_site_setting("auth", "rp_id", "evil.example")
+    finally:
+        clubmod.set_dates(None)
