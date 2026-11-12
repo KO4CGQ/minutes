@@ -41,6 +41,14 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #   holidays: us        # US federal holidays (plus Christmas Eve and New Year's Eve)
 #   elections: us-oh    # Ohio's election days, on the Community calendar
 
+# A certificate each member buys once (some clubs call it a bond), on the Treasurer pages: who has bought it, who
+# owes it and by when (the years to buy it and its price are Treasurer settings). Off unless named here.
+# treasurer:
+#   certificate:
+#     name: Bond (Certificate of Indebtedness)   # its full name
+#     short: bond                                 # in sentences ("Record a bond bought before …")
+#     note: What it is, shown with it to members and officers.
+
 # The club's bylaws, where the app refers to them. Each section is shown only if given ("… (bylaws VII.B)").
 # bylaws:
 #   refs:

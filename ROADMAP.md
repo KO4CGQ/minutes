@@ -8,7 +8,6 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 The rename becomes 1.0.0: from then on the settings, folders, services and command names stay put (a change to them is a 2.0). Built on the `rename` branch, released once, then the history is squashed in place. In order:
 
 ### Club rules out of the code
-- **Bond wording configurable.** The Treasurer's bond / Certificate of Indebtedness: the name in club.yaml (`treasurer.certificate_name`), and the whole certificate feature off unless the club has one (the amounts are already settings).
 - **The meeting's steps.** The console's steps and their hints (Winners and the 50/50 drawing, the Financial Report) are W8LBZ's agenda: make the step list a setting with today's as the example, and the drawing step an optional module, switched like chow (`modules:` in club.yaml).
 - **Other defaults to check while there:** the meeting day (Thursday) and time zone (America/New_York) defaults, Teams as the meeting link in the example config, US date formats, and the PDF importer for old minutes (a W8LBZ archive format: keep as an optional tool, documented as such, or drop).
 

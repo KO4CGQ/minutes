@@ -139,6 +139,11 @@ class Club:
         # Offices whose holders add new members to the roster (the Secretary keeps it, usually).
         self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
+        cert = (cfg.get("treasurer") or {}).get("certificate") or {}
+        # A certificate each member buys once (a "bond" at some clubs): only if club.yaml names it; off otherwise.
+        self.certificate = {"name": " ".join(str(cert["name"]).split())[:80],
+                            "short": " ".join(str(cert.get("short") or "certificate").split())[:30],
+                            "note": " ".join(str(cert.get("note") or "").split())} if cert.get("name") else None
         self.bylaws = cfg.get("bylaws") or {}  # refs: the sections the app cites; arrears_note: added to the arrears email
         self.calendar = cfg.get("calendar") or {}  # holidays / elections: region codes (regions/), none by default
         for k in ("holidays", "elections"):

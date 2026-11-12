@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}Treasurer{% endblock %}{% block body %}
 <h1>Treasurer</h1>
 {% if full %}<p class="muted">Dues, fees and the club's bills{{ cite('dues') }}. Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
-<p class="muted small">{{ bond_note }}</p>
+{% if certificate_note %}<p class="muted small">{{ certificate_note }}</p>{% endif %}
 {% else %}<p class="muted">The money in and out of {{ kept|join(' and ') }}, which you look after.</p>{% endif %}
 <nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills'), ('settings', 'Settings')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
@@ -9,21 +9,21 @@
 {% elif full and cfg.mode == 'preview' %}<p class="msg ok">Preview: officers see everything here; members don't see their figures yet, and no emails go out. Switch it on under <a href="/treasurer?tab=settings">Settings</a> when it looks right.</p>{% endif %}
 
 {% if tab == 'standing' %}
-{% if edit and cfg.start %}<details class="card"><summary>Record a bond bought before {{ cfg.start|isodate }}</summary>
+{% if edit and cfg.start and cert() %}<details class="card"><summary>Record a {{ cert().short }} bought before {{ cfg.start|isodate }}</summary>
   <form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="certificate"><input type="hidden" name="account" value="">
-    <p class="hint">For members who bought their bond years ago: it's kept on file so they show as bought, and it doesn't count as money received now. Use the date and amount if you know them; otherwise the year they joined and the price then ({{ money(rate(cfg, 'certificate', '2000-01-01')) }}).</p>
-    <div class="formrow"><label>Member<input name="member" data-combo="no-bond-names" required placeholder="Type a name…"></label>
+    <p class="hint">For members who bought their {{ cert().short }} years ago: it's kept on file so they show as bought, and it doesn't count as money received now. Use the date and amount if you know them; otherwise the year they joined and the price then ({{ money(rate(cfg, 'certificate', '2000-01-01')) }}).</p>
+    <div class="formrow"><label>Member<input name="member" data-combo="no-certificate-names" required placeholder="Type a name…"></label>
       <label>Bought on<input type="date" name="date" required max="{{ cfg.start }}"></label>
       <label>Amount<input name="amount" inputmode="decimal" required value="{{ '%d'|format(rate(cfg, 'certificate', '2000-01-01') // 100) }}"></label></div>
     <label>Note<input name="note" maxlength="300" placeholder="e.g. from the old ledger"></label>
-    <div class="formrow"><button class="btn small">Record the bond</button></div></form></details>{% endif %}
+    <div class="formrow"><button class="btn small">Record the {{ cert().short }}</button></div></form></details>{% endif %}
 <p class="hint">Dues are {{ money(rate(cfg, 'dues_weekly', today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {% if module('chow') %}{{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and {% endif %}the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_weeks }} weeks or more behind is in red.</p>
 <nav class="tabs small"><a href="/treasurer?tab=standing" class="{{ 'on' if not everyone }}">Owe something ({{ owing }})</a><a href="/treasurer?tab=standing&everyone=1" class="{{ 'on' if everyone }}">Everyone ({{ standings|length }})</a></nav>
-<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th>{% if module('chow') %}<th class="n opt">Missed chow</th>{% endif %}<th>Bond</th></tr></thead>
+<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th>{% if module('chow') %}<th class="n opt">Missed chow</th>{% endif %}{% if cert() %}<th>{{ cert().short|capitalize }}</th>{% endif %}</tr></thead>
 <tbody>{% for x in standings if everyone or x.owed > 0 or x.certificate_late %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a>{% if x.suspended %} <span class="chip late">suspended</span>{% endif %}</td>
   <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.weeks_behind or '' }}</td>
   {% if module('chow') %}<td class="n opt">{{ x.missed_chow|length or '' }}</td>{% endif %}
-  <td>{% if x.certificate %}bought {{ x.certificate_bought[:4] }}{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td></tr>
+  {% if cert() %}<td>{% if x.certificate %}bought {{ x.certificate_bought[:4] }}{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td>{% endif %}</tr>
 {% else %}<tr><td colspan="5" class="muted">{{ 'No one yet.' if everyone else 'Nobody owes anything.' }}</td></tr>{% endfor %}</tbody></table>
 
 {% elif tab == 'money' %}
@@ -112,7 +112,7 @@
   <div class="formrow">
     <label>Tracking starts<input type="date" name="start" value="{{ cfg.start or '' }}" {{ ro }}></label>
     <label>Behind after (weeks)<input type="number" name="arrears_weeks" min="1" max="52" value="{{ cfg.arrears_weeks }}" {{ ro }}></label>
-    <label>Years to buy the bond<input type="number" name="certificate_years" min="0" max="10" value="{{ cfg.certificate_years }}" {{ ro }}></label>
+    {% if cert() %}<label>Years to buy the {{ cert().short }}<input type="number" name="certificate_years" min="0" max="10" value="{{ cfg.certificate_years }}" {{ ro }}></label>{% else %}<input type="hidden" name="certificate_years" value="{{ cfg.certificate_years }}">{% endif %}
   </div>
   <label class="check"><input type="checkbox" name="alerts" value="1" {{ 'checked' if cfg.alerts }} {{ ro }}> Email the Treasurer and the Board when a member reaches that many weeks behind (only when On; the app never suspends anyone)</label>
   <p class="hint">Nothing is owed before the start date: enter older balances as adjustments. Preview is for checking the figures: officers see everything, members see nothing, and no emails go out.</p>
@@ -120,7 +120,7 @@
 </form>
 
 <div class="card"><h2>Amounts</h2>
-  <p class="hint">The club's amounts{{ cite('dues') }}. When they change, add the new amount with the date it takes effect: earlier weeks keep the old one, and the bond's price is the one in effect when a member joined.</p>
+  <p class="hint">The club's amounts{{ cite('dues') }}. When they change, add the new amount with the date it takes effect: earlier weeks keep the old one{% if cert() %}, and the {{ cert().short }}'s price is the one in effect when a member joined{% endif %}.</p>
   <table class="list"><thead><tr><th>What</th><th>From</th><th class="n">Amount</th>{% if edit %}<th></th>{% endif %}</tr></thead><tbody>
   {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ money(x.cents) }}</td>
     {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}
@@ -163,7 +163,7 @@
 </div>
 {% endif %}
 
-<datalist id="no-bond-names">{% for x in standings if not x.certificate %}<option value="{{ club.name(x.member) }}"></option>{% endfor %}</datalist>
+<datalist id="no-certificate-names">{% for x in standings if not x.certificate %}<option value="{{ club.name(x.member) }}"></option>{% endfor %}</datalist>
 <datalist id="roster-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
 {% endblock %}

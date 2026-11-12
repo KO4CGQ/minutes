@@ -328,7 +328,31 @@ def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, 
     owe, everyone = tre.get("/treasurer").text, tre.get("/treasurer?everyone=1").text
     table = lambda html: html.split("<tbody>")[1].split("</tbody>")[0]
     assert "Pat Prez" not in table(owe) and "Pat Prez" in table(everyone)
-    assert "everyday name for the Certificate of Indebtedness" in owe and "Thu" not in owe.split("Record a bond bought before")[1][:20]
+    assert "Each member buys one." in owe and "Thu" not in owe.split("Record a bond bought before")[1][:20]
+
+
+def test_without_a_certificate_in_club_yaml_nobody_owes_one(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    monkeypatch.setattr(treasurer.chow, "DATA", tmp_path)  # an empty chow schedule (Home reads it too)
+    with treasurer.locked():
+        s = started("on", "2026-01-01")
+        treasurer.save(s)
+    tre, amy = TestClient(web.app), TestClient(web.app)
+    tre.cookies.set(web.COOKIE, a.new_session("tre"))
+    amy.cookies.set(web.COOKIE, a.new_session("amy"))
+    pages = lambda: "".join(tre.get(f"/treasurer?tab={t}&everyone=1").text for t in ("standing", "money", "settings")) + amy.get("/").text
+    looks = lambda html: {"name": "Certificate of Indebtedness" in html, "record": "Record a bond" in html,
+                          "column": "<th>Bond</th>" in html, "years": "Years to buy the bond" in html, "note": "Each member buys one." in html,
+                          "kind": 'value="certificate"' in html}
+    assert all((on := looks(pages())).values()), on  # each check sees it while the club has one
+    club.certificate = None
+    assert not any((off := looks(pages())).values()), off
+    assert treasurer.standing(club, s, "amy", dt.date(2026, 3, 1))["certificate"]  # nothing to buy: never late
 
 
 def test_the_treasurer_manages_categories_and_colours_stay_put(club):

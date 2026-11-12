@@ -1,6 +1,7 @@
 club: {name: Test Club, callsign: W0TST}
 modules: {chow: true}
 calendar: {holidays: us, elections: us-oh}
+treasurer: {certificate: {name: Bond (Certificate of Indebtedness), short: bond, note: Each member buys one.}}
 links: []
 privacy:
   never_record: [Tiny Visitor]

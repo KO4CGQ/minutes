@@ -34,12 +34,20 @@ from .club import DATA, Club
 PAYMENTS = ("dues", "initiation", "chow", "certificate")
 KINDS = PAYMENTS + ("adjustment", "income", "expense")
 NO_MEMBER = ("income", "expense")  # money in or out of the club as a whole
-BOND = "Bond (Certificate of Indebtedness)"
-BOND_NOTE = ("“Bond” is the club's everyday name for the Certificate of Indebtedness in the bylaws, which each member "
-             "buys within two years of joining. It isn't a government or savings bond.")
-LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": BOND,
+def labels(club: Club) -> dict[str, str]:
+    """LABELS with the club's name for its certificate."""
+    return {**LABELS, **({"certificate": club.certificate["name"]} if club.certificate else {})}
+
+
+def certificate_note(club: Club) -> str:
+    """The note club.yaml gives on what the certificate is, with its bylaws section if given."""
+    c = club.certificate
+    return (c["note"] + (f"{club.cite('certificate')}." if club.cite("certificate") else "")).strip() if c and c["note"] else ""
+
+
+LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": "Certificate",
           "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
-RATES = {"dues_weekly": "Dues, each meeting night", "initiation": "Initiation fee", "certificate": BOND, "missed_chow": "Missed chow night"}
+RATES = {"dues_weekly": "Dues, each meeting night", "initiation": "Initiation fee", "certificate": "Certificate", "missed_chow": "Missed chow night"}
 # Where the club's money goes, for the Spending page; each expense has one (guessed from its words, the Treasurer can change it).
 MAX_CATEGORIES = 8  # the chart's tested colours; a ninth would need a colour nobody checked
 CATEGORIES = {"utilities": "Utilities", "insurance": "Insurance", "internet": "Internet and phone", "food": "Food",
@@ -406,16 +414,17 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     # the bond's price when they joined: a later rise doesn't ask existing holders for more
     bonds = [e for e in mine if e["kind"] == "certificate"]
     # a bond on file from before tracking counts whatever it cost then; otherwise paid in full at the price when they joined
-    cert = any(e.get("on_file") for e in bonds) or sum(e["cents"] for e in bonds) >= rate(c, "certificate", joined)
+    # no certificate in club.yaml: nothing to buy, so never owed
+    cert = not club.certificate or any(e.get("on_file") for e in bonds) or sum(e["cents"] for e in bonds) >= rate(c, "certificate", joined)
     cert_due = None
-    if not cert and m.member_since:
+    if not cert and m.member_since:  # (only with a certificate: cert is True without one)
         j = dt.date.fromisoformat(m.member_since)
         cert_due = j.replace(year=j.year + int(c["certificate_years"]), day=28 if (j.month, j.day) == (2, 29) else j.day)
     ahead = -owed // weekly if owed < 0 else 0  # whole meeting nights already paid for (monthly or yearly payers)
     later = chow.meeting_nights(club, today + dt.timedelta(days=1), today + dt.timedelta(weeks=ahead + 1))
     return {"member": mid, "owed": owed, "weeks_behind": -(-owed // weekly) if owed > 0 else 0,
             "behind": owed >= int(c["arrears_weeks"]) * weekly, "missed_chow": missed, "certificate": cert,
-            "certificate_bought": max(e["date"] for e in bonds) if cert else None, "suspended": m.status.lower() == "suspended", "paid_through": later[ahead - 1].isoformat() if ahead else None,
+            "certificate_bought": max((e["date"] for e in bonds), default=None) if cert else None, "suspended": m.status.lower() == "suspended", "paid_through": later[ahead - 1].isoformat() if ahead else None,
             "certificate_due": cert_due.isoformat() if cert_due else None,
             "certificate_late": bool(cert_due and cert_due < today)}
 
@@ -443,7 +452,7 @@ def set_general(s: dict, by: str, mode: str, start: str, arrears_weeks: int, cer
     elif mode != "off":
         raise ValueError("Give the date tracking starts before turning it on.")
     if not (1 <= arrears_weeks <= 52 and 0 <= certificate_years <= 10):
-        raise ValueError("Weeks behind: 1 to 52; years to buy the bond: 0 to 10.")
+        raise ValueError("Weeks behind: 1 to 52; years to buy the certificate: 0 to 10.")
     new = {"mode": mode, "start": start or None, "arrears_weeks": arrears_weeks, "certificate_years": certificate_years, "alerts": alerts}
     _settings(s).update(new)
     _log("settings", by, **new)

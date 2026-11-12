@@ -115,7 +115,8 @@ def _assets_stamp() -> str:
 templates.env.globals.update(club=archive.club, SECTIONS=SECTIONS, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
-                             cite=lambda rule: archive.club.cite(rule),  # " (bylaws VII.B)", if club.yaml gives one
+                             cite=lambda rule: archive.club.cite(rule),
+                             cert=lambda: archive.club.certificate,  # {name, short, note} if club.yaml has one, else None  # " (bylaws VII.B)", if club.yaml gives one
                              app_name=lambda: branding.name(archive.club),  # Site's name, else "<callsign> Minutes"
                              # the logo: for a page, its address (new after each upload); for a PDF, the file itself
                              brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
@@ -722,16 +723,19 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                      key=lambda m: (m.last, m.first))
     edit, running = is_treasurer(request), treasurer.on(s)
     chow_on = club.has("chow")
+    rates = {k: v for k, v in treasurer.RATES.items() if (k != "missed_chow" or chow_on) and (k != "certificate" or club.certificate)}
+    if club.certificate:
+        rates["certificate"] = club.certificate["name"]
     entries = [e for e in s["entries"] if full or e["account"] in kept]
     standings = treasurer.standings(club, s) if full and running else []
-    return page(request, "treasurer.html", tab=tab, everyone=everyone, bond_note=treasurer.BOND_NOTE,
+    return page(request, "treasurer.html", tab=tab, everyone=everyone, certificate_note=treasurer.certificate_note(club),
                 owing=sum(1 for x in standings if x["owed"] > 0 or x["certificate_late"]), error=error, cfg=c, edit=edit, full=full, kept=kept, members=members, running=running,
                 standings=standings,
                 entries=sorted(entries, key=lambda e: (e["date"], e["at"]), reverse=True),
                 bills=treasurer.bills(archive, s, treasurer.bills_from(s)) if full and running else [], bills_from=treasurer.bills_from(s),
                 show=show if show in ("waiting", "paid", "dismissed", "all") else "waiting", regular=treasurer.regular_due(s, dt.date.today()),
-                regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates={k: v for k, v in treasurer.RATES.items() if k != "missed_chow" or chow_on}, bond=treasurer.BOND,
-                labels=treasurer.LABELS, kinds=[k for k in (treasurer.KINDS if edit else treasurer.NO_MEMBER) if k != "chow" or chow_on], accounts=c["accounts"] if edit else kept,
+                regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=rates,
+                labels=treasurer.labels(club), kinds=[k for k in (treasurer.KINDS if edit else treasurer.NO_MEMBER) if (k != "chow" or chow_on) and (k != "certificate" or club.certificate)], accounts=c["accounts"] if edit else kept,
                 rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: dt.date.fromisoformat(d).strftime("%a %b %-d, %Y"))
 
@@ -1443,7 +1447,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
     coming = [e for e in coming if e.kind != "chow"][:8]
     # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
     undated = [i.text for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
-    return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, bond_note=treasurer.BOND_NOTE, money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+    return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, certificate_note=treasurer.certificate_note(club), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
