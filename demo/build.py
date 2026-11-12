@@ -1,7 +1,7 @@
 """Build the demo club's data folder through the app's own code: `uv run python demo/build.py OUTDIR`.
 
 OUTDIR gets club.yaml and data/ (roster, offices, minutes, business, chow, calendar), dated around today so the
-pages always look current. Everyone is invented (see demo/club.yaml). Run it in a fresh folder: it refuses one with data.
+pages always look current. Everyone is invented (see demo/club.yaml). Run it in a new or empty folder: it refuses any other.
 """
 import datetime as dt
 import os
@@ -11,8 +11,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "demo-out").resolve()
-if (OUT / "data").exists():
-    raise SystemExit(f"{OUT}/data already exists: give an empty folder.")
+if OUT.exists() and any(OUT.iterdir()):  # never next to (or over) a real club's data
+    raise SystemExit(f"{OUT} isn't empty: give a new or empty folder.")
 (OUT / "data").mkdir(parents=True)
 shutil.copy(HERE / "club.yaml", OUT / "club.yaml")
 os.environ.update(CLUB_MINUTES_DATA=str(OUT / "data"), CLUB_MINUTES_CONFIG=str(OUT / "club.yaml"),
