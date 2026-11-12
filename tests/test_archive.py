@@ -316,6 +316,8 @@ def test_the_meeting_day_time_and_zone_are_the_clubs_own(tmp_path, monkeypatch):
         with pytest.raises(ValueError, match=f"club.yaml club: {k}"):
             d.meeting_weekday, d.meeting_time, d.timezone
     monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/usr/share/zoneinfo/Europe/Berlin")
-    assert Club(FIX / "test-club.yaml").timezone == "Europe/Berlin"  # none in club.yaml: the server's own
+    bare = Club(FIX / "test-club.yaml")
+    bare.info.pop("timezone")
+    assert bare.timezone == "Europe/Berlin"  # none in club.yaml: the server's own
     monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/etc/localtime")
-    assert Club(FIX / "test-club.yaml").timezone == "UTC"
+    assert bare.timezone == "UTC"
