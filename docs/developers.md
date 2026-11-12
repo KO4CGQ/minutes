@@ -12,7 +12,7 @@ uv run club-minutes serve --host 0.0.0.0 --port 8765
 uv run playwright install chromium                  # once: the mobile-first test uses it (skipped without it)
 uv run pytest -q
 ```
-People come from `data/roster-sheet.json` (the roster's two tabs, Member Roster and Membership Log, as grids of values). Copy it from a backup of the club's server, or start one by hand with the column headers listed in `roster.py`.
+People come from `data/roster-sheet.json` (the roster's two tabs, Member Roster and Membership Log, as grids of values). Copy it from a backup of the club's server, or start one with `uv run club-minutes first-member YOURCALL --first … --last … --email … --class General` (only when there's none).
 
 PDF generation needs the system Pango library: `sudo apt install libpango-1.0-0 libpangoft2-1.0-0`.
 

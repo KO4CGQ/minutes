@@ -434,6 +434,11 @@ def _email_log(entry: dict) -> None:
         log.exception("couldn't write the email log")
 
 
+def email_ready() -> bool:
+    """Whether this server can send email (SMTP settings in the env file), or records it instead (a preview)."""
+    return bool(PREVIEW or (os.environ.get("CLUB_MINUTES_SMTP_USER") and os.environ.get("CLUB_MINUTES_SMTP_PASSWORD")))
+
+
 def send_email(to: str | list[str], subject: str, body: str, attachments: list[tuple[str, bytes, str]] = (),
                only_to: set[str] | None = None, reply_to: str | None = None, to_self: bool = False) -> int:
     """Send through SMTP (Gmail by default) using CLUB_MINUTES_SMTP_* environment variables.

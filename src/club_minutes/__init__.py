@@ -13,6 +13,13 @@ def main() -> None:
     lk = sub.add_parser("login-link", help="print a one-time sign-in link for a member (admin recovery)")
     lk.add_argument("who", help="callsign, or the member's email")
     lk.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
+    fm = sub.add_parser("first-member", help="a new club, once: start the roster with its first member (an admin) and print their sign-in link")
+    fm.add_argument("callsign")
+    fm.add_argument("--first", required=True)
+    fm.add_argument("--last", required=True)
+    fm.add_argument("--email", required=True, help="their sign-in links go here")
+    fm.add_argument("--class", dest="license_class", required=True, help="license class: Technician, General or \"Amateur Extra\"")
+    fm.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
     rm = sub.add_parser("delete-meeting", help="delete one meeting's minutes, e.g. after a test (restart the service afterwards)")
     rm.add_argument("date", help="YYYY-MM-DD")
     ci = sub.add_parser("chow-import", help="one-time import of the Secretary's chow .xlsx (prints it; --write saves)")
@@ -68,6 +75,29 @@ def main() -> None:
             raise SystemExit(f"No active member matches {a.who!r}")
         print(f"Sign-in link for {auth.club.name(mid)} (one use, 15 minutes):")
         print(auth.create_link(mid, base_url=a.base_url))
+    elif a.cmd == "first-member":
+        from . import membership, roster
+        from .auth import Auth
+        from .club import Club
+        sheet = roster.LocalSheet(roster._local())
+        if sheet.path.exists():  # never over a roster: a missing one on a running club means restore, not start again
+            raise SystemExit(f"There's already a roster ({sheet.path}). Add members in the app: Roster → Add a member.")
+        if not a.email:
+            raise SystemExit("--email is needed: sign-in links go there.")
+        club = Club()
+        sheet.save({"Member Roster": [roster.PreviewSheet.HEADER], "Membership Log": [roster.PreviewSheet.LOG_HEADER]})
+        try:
+            mid = membership.add_member(club, {"callsign": a.callsign, "first": a.first, "last": a.last, "email": a.email,
+                                               "license_class": a.license_class}, by="first-member")
+        except Exception as e:
+            sheet.path.unlink(missing_ok=True)  # as if never run: fix the details and run it again
+            raise SystemExit(str(e)) if isinstance(e, ValueError) else e
+        print(f"Started the roster with {club.name(mid)} ({club.members[mid].callsign}).")
+        if not club.is_admin(mid):
+            print(f"Note: {club.members[mid].callsign} isn't under admins: in club.yaml, so they can't turn on admin mode yet. "
+                  "Add it there, then restart the app.")
+        print("Their sign-in link (one use, 15 minutes), then add a passkey and the other members in the app:")
+        print(Auth(club).create_link(mid, base_url=a.base_url))
     elif a.cmd == "delete-meeting":
         import datetime as dt
         import shutil

@@ -13,7 +13,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 
 
 ### A new club can start
-- **First run on an empty server:** today data comes from W8LBZ's backups and archive. Needed: an empty start (no roster-sheet.json, no meetings) that works, the first admin from club.yaml signing in by emailed link, then adding members on the Roster page; a short "Getting started" in the server admin guide.
 - **A demo club:** invented data (Example Radio Club, W0XYZ, Amy Able, Bob Baker...) as a fixture: for the screenshots, for previews without the club's data, and for anyone trying the app.
 
 ### Docs and repo

@@ -17,7 +17,7 @@
     <button class="btn big" type="submit">Send link</button>
   </form>
 
-  {% if sent %}<p class="note ok">If that address is on the club roster, a sign-in link is on its way. It works once, for 15 minutes.</p>{% endif %}
+  {% if sent and not email_ready() %}<p class="note">This server can't send email yet (no SMTP settings: server admin guide → Login), so the link is in its log: <code>journalctl -u club-minutes</code>.</p>{% elif sent %}<p class="note ok">If that address is on the club roster, a sign-in link is on its way. It works once, for 15 minutes.</p>{% endif %}
   {% if error == 'link' %}<p class="note err">That sign-in link has expired or was already used. Request a new one above.</p>{% endif %}
 
   <p class="muted small">Members only. If your email address has changed, ask a club officer to update the roster.</p>

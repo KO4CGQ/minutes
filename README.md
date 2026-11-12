@@ -18,7 +18,7 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md), and planned work in [ROA
 ## Guides
 - [Members guide](docs/members.md): signing in, Home, your profile and emails, chow swaps, business, the calendar, your dues.
 - [Officers guide](docs/officers.md): the roster and profiles, calendars, the chow schedule, the Treasurer.
-- [Server admin guide](docs/server-admin.md): deploy, config, sign-in and email, admin mode, backups, hardening.
+- [Server admin guide](docs/server-admin.md) (a new club starts at Getting started): deploy, config, sign-in and email, admin mode, backups, hardening.
 - [Developer guide](docs/developers.md): running it locally, previews, releases, security checks.
 
 ## License

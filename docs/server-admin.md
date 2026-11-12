@@ -2,7 +2,14 @@
 
 For whoever runs the server: install, configure, back up and secure the app. Back to the [README](../README.md).
 
-## Deploy (Debian container)
+## Getting started (a new club)
+1. **Install** (below): `setup.sh` on a Debian container.
+2. **club.yaml:** copy `club.example.yaml` to `/etc/club-minutes/club.yaml` and fill it in. At least the club's name and callsign, `meeting_day` and `meeting_time` (required), `auth: rp_id` (the HTTPS address members will use: passkeys only work there) and your own callsign under `admins:`. Then `systemctl restart club-minutes`.
+3. **You, the first member:** `club-minutes first-member YOURCALL --first First --last Last --email you@example.org --class General` starts the roster with you and prints a sign-in link. (It runs once: with a roster in place it refuses, so it can't overwrite one.)
+4. **Sign in** with that link, add a passkey when offered, then admin mode (name menu → Admin): on your member page tick yourself (and the other officers, once added) as an officer; add the other members on the Roster page; set the name, logo and colours on Site.
+5. **Email** (sign-in links, the minutes): the SMTP settings in `/etc/club-minutes/env` (Login, below). Until then, links are written to the server's log (`journalctl -u club-minutes`), and the pages say so.
+6. **Backups** (Admin → Backups) before anything else is entered for real.
+
 As root on the container:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh | bash   # first time

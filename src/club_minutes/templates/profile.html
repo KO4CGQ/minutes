@@ -2,7 +2,7 @@
 <h1>Your profile</h1>
 {% include "_profile_tabs.html" %}
 {% if saved and not error %}<p class="msg ok">Saved. The club roster is updated.</p>{% endif %}
-{% if email_sent %}<p class="msg ok">We sent a confirmation link to <b>{{ email_sent }}</b>. Your email changes once you open it.</p>{% endif %}
+{% if email_sent and not email_ready() %}<p class="msg err">This server can't send email yet, so the confirmation link for <b>{{ email_sent }}</b> is in its log (ask an admin). Your email changes once it's opened.</p>{% elif email_sent %}<p class="msg ok">We sent a confirmation link to <b>{{ email_sent }}</b>. Your email changes once you open it.</p>{% endif %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 
 {% if photo %}<p class="msg ok">Picture saved.</p>{% endif %}

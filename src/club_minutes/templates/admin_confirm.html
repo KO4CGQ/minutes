@@ -3,7 +3,7 @@
 {% if PREVIEW %}<p class="msg ok">Preview: the email step goes straight through here.</p>{% endif %}
 <p class="muted">Admin mode lets you see and change what officers can, and view the app as another member, for an hour. First, confirm it's really you.</p>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-{% if sent %}<p class="msg ok">We emailed a link to <b>{{ email }}</b>. Open it in this browser within 5 minutes.</p>{% endif %}
+{% if sent and not email_ready() %}<p class="msg err">This server can't send email yet (no SMTP settings: server admin guide → Login), so the link is in its log: <code>journalctl -u club-minutes</code>. Open it in this browser within 5 minutes.</p>{% elif sent %}<p class="msg ok">We emailed a link to <b>{{ email }}</b>. Open it in this browser within 5 minutes.</p>{% endif %}
 {% if passkey %}
 <p><button class="btn" id="confirm">Confirm with your passkey</button> <span id="pkmsg" class="muted"></span></p>
 <script src="/static/auth.js?v={{ ASSETS }}"></script>

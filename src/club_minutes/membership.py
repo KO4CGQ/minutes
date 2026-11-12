@@ -45,7 +45,7 @@ def clean(form: dict) -> dict:
     if f["email"] and not valid_email(f["email"]):
         raise ValueError(f"{f['email']} doesn't look like an email address.")
     if f["license_class"] not in CLASSES:
-        raise ValueError("Unknown license class.")
+        raise ValueError(f"Unknown license class: use one of {', '.join(CLASSES)}.")
     try:
         f["joined"] = dt.date.fromisoformat(f["joined"]).isoformat() if f["joined"] else dt.date.today().isoformat()
     except ValueError:

@@ -116,6 +116,7 @@ templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"),
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
                              cite=lambda rule: archive.club.cite(rule),
+                             email_ready=authmod.email_ready,  # a new server, before its SMTP settings: links go to its log
                              cert=lambda: archive.club.certificate,
                              theme_v=lambda: _theme_stamp(),  # changes with the colours, so browsers fetch them again
                              theme_light=lambda: "; ".join(f"{k}: {v}" for k, v in theme.palette(**branding.colours())[0].items()),  # PDFs  # {name, short, note} if club.yaml has one, else None  # " (bylaws VII.B)", if club.yaml gives one
