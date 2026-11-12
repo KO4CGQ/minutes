@@ -21,7 +21,7 @@ import secrets
 import time
 from pathlib import Path
 
-from . import branding, auth
+from . import auth, branding, regions
 from .club import DATA, Club
 
 log = logging.getLogger("club_minutes.chow")
@@ -346,7 +346,7 @@ def import_xlsx(club: Club, path: Path, order: list[str], by: str, year: int) ->
             day = fixed
         d = day.isoformat()
         if not name or not str(name).strip():
-            s["nights"][d] = {"member": None, "status": "none", "note": holiday(day) or ""}
+            s["nights"][d] = {"member": None, "status": "none", "note": holiday(club, day) or ""}
             continue
         mid = match_name(club, name)
         if not mid:
@@ -372,12 +372,9 @@ def import_xlsx(club: Club, path: Path, order: list[str], by: str, year: int) ->
     return s, problems
 
 
-def holiday(d: dt.date) -> str | None:
-    """Holidays that fall on a meeting night and usually mean no chow."""
-    if d.month == 11 and d.weekday() == 3 and 22 <= d.day <= 28:
-        return "Thanksgiving"
-    return {(12, 24): "Christmas Eve", (12, 25): "Christmas", (12, 31): "New Year's Eve", (1, 1): "New Year's Day",
-            (7, 4): "Independence Day"}.get((d.month, d.day))
+def holiday(club: Club, d: dt.date) -> str | None:
+    """A holiday of the club's region on that night (why a night has no chow), if any."""
+    return next((name for day, name in regions.holidays(club.calendar.get("holidays"), d, d)), None)
 
 
 def _parse_day(text: str, year: int) -> dt.date | None:

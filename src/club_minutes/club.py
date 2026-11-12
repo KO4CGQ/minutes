@@ -16,6 +16,8 @@ from pathlib import Path
 
 import yaml
 
+from . import regions
+
 ROOT = Path(os.environ.get("CLUB_MINUTES_ROOT", Path(__file__).resolve().parents[2]))
 DATA = Path(os.environ.get("CLUB_MINUTES_DATA", ROOT / "data"))
 MEETINGS = DATA / "meetings"
@@ -137,6 +139,9 @@ class Club:
         # Offices whose holders add new members to the roster (bylaws IV.C: the Secretary keeps it).
         self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
+        self.calendar = cfg.get("calendar") or {}  # holidays / elections: region codes (regions/), none by default
+        for k in ("holidays", "elections"):
+            regions._module(self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
         self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
 
         self._mtime = None  # set when the people come from the roster cache, so refresh() can notice a sync

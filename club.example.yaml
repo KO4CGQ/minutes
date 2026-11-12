@@ -36,6 +36,11 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
   - label: Constitution and Bylaws   # a page of this app: /page, shown in full in the minutes and their PDF
     url: /bylaws
 
+# Holidays and election days on the calendars, by region (a file in src/club_minutes/regions/). None by default.
+# calendar:
+#   holidays: us        # US federal holidays (plus Christmas Eve and New Year's Eve)
+#   elections: us-oh    # Ohio's election days, on the Community calendar
+
 # Optional parts of the app, each off unless turned on here:
 #   chow: a rotation of members bringing food to meetings: the Chow page, swaps, reminders, the console's
 #         Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.

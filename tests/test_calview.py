@@ -474,7 +474,7 @@ def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
     got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
     hol = [(e.start.isoformat(), e.title) for e in got if e.kind == "holiday"]
     assert hol == [("2026-11-11", "Veterans Day"), ("2026-11-26", "Thanksgiving")]
-    assert [e.start for e in calview.holidays(dt.date(2027, 1, 1), dt.date(2027, 12, 31)) if e.title in ("Memorial Day", "Labor Day")] == \
+    assert [e.start for e in calview.holidays(club(), dt.date(2027, 1, 1), dt.date(2027, 12, 31)) if e.title in ("Memorial Day", "Labor Day")] == \
         [dt.date(2027, 5, 31), dt.date(2027, 9, 6)]
     assert not any(e.kind == "holiday" for e in calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)[0])
     c.info["public_calendars"] = ["holiday"]
@@ -499,7 +499,7 @@ def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
 
 
 def test_ohio_election_days_on_community():
-    got = [(e.start.isoformat(), e.title) for e in calview.elections(dt.date(2024, 1, 1), dt.date(2026, 12, 31))]
+    got = [(e.start.isoformat(), e.title) for e in calview.elections(club(), dt.date(2024, 1, 1), dt.date(2026, 12, 31))]
     assert got == [("2024-03-19", "Ohio primary election"), ("2024-11-05", "Election Day (Ohio general election)"),  # a presidential year: March
                    ("2025-05-06", "Ohio primary election"), ("2025-11-04", "Election Day (Ohio general election)"),
                    ("2026-05-05", "Ohio primary election"), ("2026-11-03", "Election Day (Ohio general election)")]
@@ -574,3 +574,23 @@ def test_look_alike_events_the_same_day_are_flagged_not_hidden(tmp_path):
     flagged = {(e.start.day, e.title, e.dup) for e in got if e.dup}
     assert flagged == {(14, "Fox hunt at Osborn Park", "Osborn park fox hunt"), (14, "Osborn park fox hunt", "Fox hunt at Osborn Park")}
     assert len([e for e in got if "fox hunt" in e.title.lower()]) == 3  # nothing hidden
+
+
+def test_holidays_and_elections_are_none_unless_club_yaml_picks_a_region(tmp_path):
+    import pytest
+    from club_minutes import regions
+    c = club()
+    c.calendar = {}  # a new club: no region picked
+    got = calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2026, 1, 1), dt.date(2026, 12, 31))[0]
+    assert not [e for e in got if e.kind == "holiday" or (e.id or "").startswith("election-")] and "holiday" not in calview.kinds(c)
+    c.calendar = {"holidays": "us"}  # a state's file carries its country's holidays, so a club can pick either
+    assert "holiday" in calview.kinds(c) and regions.holidays("us-oh", dt.date(2026, 7, 4), dt.date(2026, 7, 4)) == \
+        [(dt.date(2026, 7, 4), "Independence Day")]
+    assert regions.holidays("us", dt.date(2028, 5, 1), dt.date(2028, 5, 31)) == [(dt.date(2028, 5, 29), "Memorial Day")]  # the last Monday
+    for bad in ("zz", "us-xx", "../etc", "US", "us_oh"):
+        with pytest.raises(ValueError, match="club.yaml calendar"):
+            regions.holidays(bad, dt.date(2026, 1, 1), dt.date(2026, 1, 2))
+    cfg = tmp_path / "club.yaml"
+    cfg.write_text("club: {name: T}\ncalendar: {elections: us-ohio}\n")
+    with pytest.raises(ValueError, match="us-ohio"):  # a misspelled region stops the app at start, saying which
+        Club(cfg, roster=[])

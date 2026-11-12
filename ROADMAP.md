@@ -8,7 +8,6 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 The rename becomes 1.0.0: from then on the settings, folders, services and command names stay put (a change to them is a 2.0). Built on the `rename` branch, released once, then the history is squashed in place. In order:
 
 ### Club rules out of the code
-- **Election days: off by default, any region.** The Community calendar's Ohio election days become one region among others: a `calendar.elections` setting (none by default; `us-oh` is the first one written), each region a small set of rules (dates, poll hours, a link) in its own file so another state or country is one file to add. US federal holidays the same way (`calendar.holidays: us`), so a club elsewhere can pick its own or none.
 - **Bylaws references configurable.** Help text and emails cite sections ("bylaws VII.B", "IV.C", "VII.F"): each becomes a named reference in club.yaml (`bylaws_refs: {dues: VII.B, report: IV.C, ...}`), shown only when set; without one the sentence reads without it.
 - **Bond wording configurable.** The Treasurer's bond / Certificate of Indebtedness: the name in club.yaml (`treasurer.certificate_name`), and the whole certificate feature off unless the club has one (the amounts are already settings).
 - **The meeting's steps.** The console's steps and their hints (Winners and the 50/50 drawing, the Financial Report) are W8LBZ's agenda: make the step list a setting with today's as the example, and the drawing step an optional module, switched like chow (`modules:` in club.yaml).

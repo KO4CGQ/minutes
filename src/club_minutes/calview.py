@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
-from . import business, chow, events as store
+from . import business, chow, events as store, regions
 from .club import DATA, Club
 
 KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays",
@@ -96,8 +96,8 @@ def _birthdays(club: Club, viewer: str, lo: dt.date, hi: dt.date) -> list[Entry]
 
 
 def kinds(club: Club) -> dict[str, str]:
-    """The calendars this club has: KINDS, less chow unless that module is on."""
-    return {k: v for k, v in KINDS.items() if k != "chow" or club.has("chow")}
+    """The calendars this club has: KINDS, less chow unless that module is on, and Holidays if it picked none."""
+    return {k: v for k, v in KINDS.items() if (k != "chow" or club.has("chow")) and (k != "holiday" or club.calendar.get("holidays"))}
 
 
 def public_kinds(club: Club) -> list[str]:
@@ -117,43 +117,15 @@ def due_dates(club: Club, lo: dt.date, hi: dt.date) -> list[Entry]:
     return out
 
 
-def _nth(year: int, month: int, weekday: int, n: int) -> dt.date:
-    """The nth weekday (Monday 0) of a month; n = -1 for the last."""
-    return store._nth_weekday(year, month, weekday, n, n == -1)
+def elections(club: Club, lo: dt.date, hi: dt.date) -> list[Entry]:
+    """Election days of the club's region (club.yaml calendar: elections), on the Community calendar."""
+    return [Entry(d, d, name, "community", id=f"election-{d}", notes=notes)
+            for d, name, notes in regions.elections(club.calendar.get("elections"), lo, hi)]
 
 
-HOLIDAYS = [  # (name, month, day) or (name, month, (weekday, nth)): US federal holidays, and two nights clubs often skip
-    ("New Year's Day", 1, 1), ("Martin Luther King Jr. Day", 1, (0, 3)), ("Presidents' Day", 2, (0, 3)),
-    ("Memorial Day", 5, (0, -1)), ("Juneteenth", 6, 19), ("Independence Day", 7, 4), ("Labor Day", 9, (0, 1)),
-    ("Columbus Day", 10, (0, 2)), ("Veterans Day", 11, 11), ("Thanksgiving", 11, (3, 4)), ("Christmas Eve", 12, 24),
-    ("Christmas", 12, 25), ("New Year's Eve", 12, 31)]
-
-
-def elections(lo: dt.date, hi: dt.date) -> list[Entry]:
-    """Ohio's regular election days, on the Community calendar (Ohio Revised Code 3501.01; there's no official feed):
-    the general election every November, the first Tuesday after the first Monday; the primary on that Tuesday in
-    May, or the 3rd Tuesday of March in a presidential year. August special elections are left out: held only when
-    something is put on that ballot. shortcut: Ohio only, rules as of 2026; if the law changes, change them here."""
-    def after_first_monday(year, month):
-        return _nth(year, month, 0, 1) + dt.timedelta(days=1)
-    out = []
-    for year in range(lo.year, hi.year + 1):
-        primary = _nth(year, 3, 1, 3) if year % 4 == 0 else after_first_monday(year, 5)
-        for d, name in ((primary, "Ohio primary election"), (after_first_monday(year, 11), "Election Day (Ohio general election)")):
-            if lo <= d <= hi:
-                out.append(Entry(d, d, name, "community", id=f"election-{d}", notes="Polls are open 6:30 AM to 7:30 PM. "
-                                 "Registration closes 30 days before. Your ballot and polling place: voteohio.gov"))
-    return out
-
-
-def holidays(lo: dt.date, hi: dt.date) -> list[Entry]:
-    out = []
-    for year in range(lo.year, hi.year + 1):
-        for name, month, day in HOLIDAYS:
-            d = dt.date(year, month, day) if isinstance(day, int) else _nth(year, month, *day)
-            if lo <= d <= hi:
-                out.append(Entry(d, d, name, "holiday"))
-    return out
+def holidays(club: Club, lo: dt.date, hi: dt.date) -> list[Entry]:
+    """Holidays of the club's region (club.yaml calendar: holidays), on the Holidays calendar."""
+    return [Entry(d, d, name, "holiday") for d, name in regions.holidays(club.calendar.get("holidays"), lo, hi)]
 
 
 def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, public: bool = False) -> tuple[list[Entry], None]:
@@ -184,9 +156,9 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     if "planning" in kinds and not public:
         out += due_dates(club, lo, hi)
     if "holiday" in public_kinds(club) or not public:
-        out += holidays(lo, hi)
+        out += holidays(club, lo, hi)
     if "community" in kinds:
-        out += elections(lo, hi)
+        out += elections(club, lo, hi)
     if not public:
         at = dt.time.fromisoformat(str(club.info.get("meeting_time", "19:30")))
         for d, x in chow.upcoming(chow.load(), lo, n=400) if club.has("chow") else []:

@@ -7,15 +7,19 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 ## Unreleased
 - **The app is called Club Minutes inside too:** the Python package is `club_minutes`, the admin command `club-minutes`, the services `club-minutes*` (staging: `club-stage-sync*`), the folders `/opt/club-minutes`, `/etc/club-minutes` and `/var/lib/club-minutes`, and the settings in the env file `CLUB_MINUTES_…` (were `W8LBZ_…`). Nothing members see changes; they stay signed in. Backups made before still restore, and old and new ones are kept and pruned by date. The ROADMAP keeps only work on the app.
 - **Chow is an optional module,** off unless club.yaml has `modules: {chow: true}`. Off, it leaves no trace: no Chow page (its addresses answer "not found"), and nothing about chow on Home, the menu, the calendars, search, email choices and reminders, the console and the minutes, or the Treasurer pages (the missed-night fee). New members join the rotation only while it's on.
+- **Holidays and election days by region,** none unless club.yaml picks them: `calendar: {holidays: us, elections: us-oh}`. Each region is one small file (`regions/`), so another state or country is one file to add; a misspelled region stops the app at start, saying which. Without holidays, the Holidays calendar isn't offered.
 - **Staging banner:** signed out, it only says this is a staging server (a test copy of the app); what it holds and where email goes is shown once signed in.
 - **Fix:** `setup.sh` installs `sudo` too (a fresh Debian container doesn't have it, and updates need it).
 - **Fix:** a calendar feed address with a non-ASCII character in it gave a server error instead of "not found".
 - **Deploy notes:** the server's folders, services and settings move to the new names once, by hand (Update now can't do it, and this note keeps the nightly update from trying):
   1. Take a snapshot of the container.
-  2. To keep the chow list, add to `/etc/w8lbz-minutes/club.yaml` (it moves with the rest):
+  2. To keep the chow list, the US holidays and Ohio's election days, add to `/etc/w8lbz-minutes/club.yaml` (it moves with the rest):
 
           modules:
             chow: true
+          calendar:
+            holidays: us
+            elections: us-oh
 
   3. As root, run the developer's `private/rename-from-w8lbz.sh` (copied to the server) with the release: it stops the app, keeps a copy of the data in `/var/backups`, moves everything, installs the release and puts it all back if the app doesn't come up:
 
