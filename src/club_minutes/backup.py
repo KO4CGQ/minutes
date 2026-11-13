@@ -41,7 +41,7 @@ KEEP_LOCAL = 7  # the default; the Backups page changes it
 # What the Backups page recommends: the data folder is small (MBs), so daily backups cost next to nothing.
 RECOMMENDED = {"every": "daily", "hour": 2, "keep_local": 7, "drive_keep": 30, "s3_days": 90}
 SKIP_SUFFIXES = (".lock", ".tmp")
-SKIP_DIRS = ("backups",)
+SKIP_DIRS = ("backups", "before-upgrade")  # the second: a copy of the data, taken before an upgrade (upgrade.py)
 SKIP_FILES = ("backup-settings.json",)  # holds the S3 secret: re-enter it after a restore
 
 

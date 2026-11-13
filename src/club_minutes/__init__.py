@@ -37,11 +37,20 @@ def main() -> None:
     rs = sub.add_parser("restore", help="unpack a backup into an empty folder (asks for the passphrase)")
     rs.add_argument("file", type=Path)
     rs.add_argument("dest", type=Path)
+    un = sub.add_parser("data-undo", help="put back the data folder's copy from before an upgrade (update.sh, when the new version didn't start)")
+    un.add_argument("was", type=int, help="the data version before the update")
     srv = sub.add_parser("serve", help="run the web UI")
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--port", type=int, default=8000)
     srv.add_argument("--reload", action="store_true")
     a = ap.parse_args()
+    from . import upgrade
+    if a.cmd == "data-undo":
+        print("Put back the data from before the upgrade." if upgrade.undo(a.was) else "No upgrade to undo.")
+        return
+    if a.cmd != "restore":
+        for what in upgrade.run():  # every command sees the data in this version's shape
+            print(f"Data upgraded: {what}")
 
     if a.cmd == "import":
         from .importer import import_archive

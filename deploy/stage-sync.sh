@@ -19,7 +19,7 @@ main() {
   local owner=${STAGE_OWNER-minutes:minutes}  # empty in tests (chown needs root)
   if rsync -a --delete ${owner:+--chown=$owner} \
        -e "ssh -i ${STAGE_SYNC_KEY:-/etc/club-minutes/stage-sync-key} -o BatchMode=yes -o StrictHostKeyChecking=accept-new" \
-       --exclude='auth.sqlite*' --exclude=email-log.jsonl --exclude=preview-outbox.jsonl --exclude=backups/ \
+       --exclude='auth.sqlite*' --exclude=email-log.jsonl --exclude=preview-outbox.jsonl --exclude=backups/ --exclude=before-upgrade/ \
        --exclude='backup-*.json' --exclude='update-*.json' --exclude='stage-sync-*' --exclude='*.lock' --exclude='*.tmp' \
        "$FROM" "$DATA/" >"$LOG" 2>&1 && ${STAGE_RESTART:-systemctl restart club-minutes} >>"$LOG" 2>&1; then
     ok=true; echo "Synced from the live app." >>"$LOG"

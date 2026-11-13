@@ -59,6 +59,7 @@ from . import (
     theme,
     treasurer,
     updates,
+    upgrade,
 )
 from . import auth as authmod
 from . import callsign as callsign_mod
@@ -87,6 +88,8 @@ HERE = Path(__file__).parent
 app = FastAPI(title="Club minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
+for _what in upgrade.run():  # before anything reads the data (club-minutes serve has done it already)
+    logging.getLogger("club_minutes").warning("Data upgraded: %s", _what)
 archive = Archive()
 _ = (archive.club.meeting_weekday, archive.club.meeting_time, archive.club.timezone)  # a club.yaml mistake stops the start, saying which
 authn = Auth(archive.club)
