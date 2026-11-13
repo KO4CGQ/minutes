@@ -37,3 +37,21 @@ modules:
   chow: true
 calendar:
   holidays: us
+  extra_holidays:
+    - {name: Christmas Eve, month: 12, day: 24}
+  elections: us
+
+treasurer:
+  certificate:
+    name: Bond (Certificate of Indebtedness)
+    short: bond
+    note: Each member buys one bond within two years of joining; the club repays it if the club ever dissolves.
+
+bylaws:
+  refs:
+    dues: VII
+    bills: IV.C
+    arrears: VII.B
+    certificate: VII.D
+    missed_chow: VII.F
+  arrears_note: Under the bylaws (VII.B), the Board may suspend a member who is 8 weeks or more behind, after a written notice.
