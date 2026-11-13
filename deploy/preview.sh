@@ -75,8 +75,9 @@ systemctl --user reset-failed "$U" 2>/dev/null || true
 ENV=(CLUB_MINUTES_PREVIEW="$B" CLUB_MINUTES_DATA="$DIR/data" CLUB_MINUTES_CONFIG="$DIR/club.yaml" CLUB_MINUTES_ROOT="$DIR/app")
 # To try backups in a preview, run this script with CLUB_MINUTES_BACKUP_PASSPHRASE set (never a real one: previews hold copies of the minutes).
 [ -n "${CLUB_MINUTES_BACKUP_PASSPHRASE:-}" ] && ENV+=(CLUB_MINUTES_BACKUP_PASSPHRASE="$CLUB_MINUTES_BACKUP_PASSPHRASE")
+SETENV=(); for e in "${ENV[@]}"; do SETENV+=(--setenv="$e"); done  # one argument each: a value may have spaces
 systemd-run --user -q --unit "$U" --collect -p WorkingDirectory="$DIR/app" \
-  $(printf -- '--setenv=%s ' "${ENV[@]}") "$DIR/app/.venv/bin/club-minutes" serve --host 0.0.0.0 --port "$PORT"
+  "${SETENV[@]}" "$DIR/app/.venv/bin/club-minutes" serve --host 0.0.0.0 --port "$PORT"
 for _ in $(seq 20); do curl -s -o /dev/null "http://127.0.0.1:$PORT/login" && break; sleep 0.5; done
 
 echo "Preview of $B ($(git -C "$DIR/app" log --oneline -1)): http://$HOST_IP:$PORT"

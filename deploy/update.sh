@@ -22,8 +22,7 @@ main() {
     systemctl restart club-minutes
   }
   healthy() {  # the sign-in page answers within 5 minutes (startup takes seconds; the margin is for a slow, busy server)
-    local i
-    for i in $(seq 100); do
+    for _ in $(seq 100); do
       "$APP/.venv/bin/python" -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/login', timeout=3)" 2>/dev/null && return 0
       sleep 2
     done
