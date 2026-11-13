@@ -44,7 +44,9 @@ Your name menu → **Your profile**:
 > Keep your subscription link to yourself: anyone with it can see the club's calendar. Lost track of who has it? **Make a new link**, and the old one stops working.
 
 ## 💵 Your dues
-Once the Treasurer has turned tracking on, Home shows what you owe (or that you're paid up, and through which date) and, if your club has a certificate each member buys once (some clubs call it a bond), whether you still need to buy it. 🔒 Only you and the officers see your figures. Pay the Treasurer at a meeting.
+The app's money pages (your dues here, and Spending below) start when the Treasurer turns on **tracking**: one switch for both. With it on, the Treasurer records in the app the dues members pay and the bills the club pays, and the app works out the rest. Until then there's no dues card on Home and no Spending page. The Treasurer may check the figures with the officers first, before members see anything.
+
+Once tracking is on, Home shows what you owe (or that you're paid up, and through which date) and, if your club has a certificate each member buys once (some clubs call it a bond), whether you still need to buy it. 🔒 Only you and the officers see your figures. Pay the Treasurer at a meeting.
 
 > [!NOTE]
 > **An example:** with dues of $3.50 a meeting night, someone who's paid for all but the last 7 meeting nights sees **You owe $24.50**, "about 7 weeks of dues". Paid ahead? Home says which date you're paid through instead.
@@ -52,6 +54,6 @@ Once the Treasurer has turned tracking on, Home shows what you owe (or that you'
 ![Home, for a member 7 weeks behind on dues](screenshots/home-dues.png)
 
 ## 📊 Where the club's money goes
-Once the Treasurer has turned tracking on, **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in.
+With tracking on (the same switch as your dues, above), **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in.
 
 ![Where the club's money goes: a year of spending by category](screenshots/spending.png)
