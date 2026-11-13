@@ -129,7 +129,7 @@ Then `systemctl restart fail2ban` and check it with `fail2ban-client status sshd
 3. A firewall that allows only SSH and the app's port.
 
 ## 🧪 Staging server (optional)
-A second container that runs the app on a copy of the live data, to try a change before it's released. It pulls the live data **one way** (nightly at 03:00, and **Sync now**); nothing on it can change the live server.
+A second container that runs the app on a copy of the live data, to try a change before it's released. It pulls the live data **one way** (nightly at 03:00 server time, and **Sync now**); nothing on it can change the live server.
 
 - Every page has a **STAGING** banner.
 - Email goes only to the person whose click caused it, with "[STAGE]" in the subject; email nobody clicked for (reminders) is held. All of it is on the Email log.
@@ -150,6 +150,15 @@ systemctl enable --now club-stage-sync.timer club-stage-sync.path && systemctl s
 ```
 
 Admin → **Stage sync** shows the last sync, **Sync now**, and **Pause nightly sync** (to keep test changes overnight). A sync replaces everything except stage's own sign-ins and passkeys, email log, backups and update settings. Stage doesn't update itself; a developer installs a branch on it (developer guide).
+
+> [!TIP]
+> **Another time for the nightly sync?** `systemctl edit club-stage-sync.timer`, and put in:
+>
+>     [Timer]
+>     OnCalendar=
+>     OnCalendar=*-*-* 05:30
+>
+> (the bare `OnCalendar=` clears the 03:00), then `systemctl daemon-reload && systemctl restart club-stage-sync.timer`. Updates keep it.
 
 ## 🔌 Roster API
 For the club's other tools on the same server (the Discord bot): `GET /api/roster` returns active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON.
