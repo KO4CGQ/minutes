@@ -15,6 +15,7 @@
 {% elif k == 'nights' %}<li><a href="/chow">{{ r[0]|date('day_year') }}</a> {{ r[1] }}</li>
 {% elif k == 'calendar' %}<li><a href="/calendar?start={{ r.date }}">{{ r.date|date('day_year') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}
 <div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>
+{% elif k == 'help' %}<li><a href="/help/{{ r.guide }}#{{ r.id }}">{{ r.heading }}</a> <span class="sec">{{ r.label }} guide</span></li>
 {% else %}<li><a href="/meetings/{{ r.slug }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>
 {% if r.member %}<a class="who" href="/members/{{ r.member }}">{{ club.short(r.member) }}</a>{% endif %}
 <div>{{ r.snippet|safe }}</div></li>{% endif %}{% endfor %}</ul>{% endmacro %}

@@ -199,7 +199,25 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .changelog h2, .changelog h3 { font-size: 1rem; margin: .8rem 0 .3rem; } .changelog li { margin: .2rem 0; }
 .changelog details { border-bottom: 1px solid var(--border, #dde); padding: .4rem 0; } .changelog summary { cursor: pointer; }
 .changelog pre, .deploynotes pre, .guide pre { overflow-x: auto; max-width: 100%; }  /* a long command scrolls inside its box on a phone */
-.guide { overflow-wrap: anywhere; }  /* long paths and inline code in the guides wrap */
+.guide { overflow-wrap: break-word; } .guide code, .minutes.guide a { overflow-wrap: anywhere; word-break: normal; }  /* long paths and inline code wrap; words only if they must */
+.guide pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem .8rem; } .guide pre code { background: none; padding: 0; }
+.guide img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: block; }
+.guide .shot { border: 0; padding: 0; background: none; cursor: zoom-in; width: min(100%, 24rem); margin: .4rem 0; }  /* a thumbnail; tap for full size */
+.guide .shot:hover img, .guide .shot:focus-visible img { outline: 2px solid var(--accent); outline-offset: 2px; }
+.modal.shotbig[popover] { width: auto; max-width: calc(100vw - 2rem); padding: 0; background: none; box-shadow: none; overflow: visible; }
+.shotbig img { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); border: 0; }
+.modal.shotbig > .calclose { background: var(--surface); border-radius: 50%; width: 2rem; height: 2rem; }
+.guide table { display: block; overflow-x: auto; border-collapse: collapse; } .guide th, .guide td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; vertical-align: top; }
+.guide h2 { scroll-margin-top: 4rem; } .guide h2 + p, .guide h2 + ul { margin-top: .4rem; }
+.toc { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 1.4rem; }  /* the guide's sections, as chips */
+.toc a { background: var(--accent-soft); color: var(--accent-text); border-radius: 1rem; padding: .2rem .75rem; font-size: .88rem; text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+.callout { margin: 1rem 0; padding: .6rem .9rem; border-left: 4px solid var(--accent); border-radius: var(--radius-sm); background: var(--info-soft); }
+.callout p { margin: .3rem 0; } .calloutlabel { font-weight: 700; }
+.callout.tip { background: var(--accent-soft); }
+.callout.warning, .callout.important { background: var(--warn-soft); color: var(--warn-text); border-left-color: var(--warn-edge); }
+.callout.caution { background: var(--danger-soft); color: var(--danger-text); border-left-color: var(--danger); }
+.callout.warning a, .callout.important a, .callout.caution a, .callout.warning code, .callout.caution code { color: inherit; }
 form.profile { max-width: 36rem; } form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
 form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }

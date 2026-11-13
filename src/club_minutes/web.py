@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import functools
+import itertools
 import json
 import logging
 import os
@@ -1583,13 +1584,15 @@ def search(request: Request, q: str = "", kind: str = "all", p: str = Query("1",
     minutes = archive.search(q, limit=1000) if q else []
     for r in minutes:
         r["date"] = archive.by_slug[r["slug"]].date
-    found = {**_search_lists(q), "calendar": _search_calendar(q), "minutes": minutes}
+    found = {**_search_lists(q), "calendar": _search_calendar(q), "minutes": minutes,
+             "help": [{"guide": g, "label": t, "heading": h, "id": i} for g, t in guides_for(request).items()
+                      for h, i, body in guide_sections(g) if q.split() and _has(q, h, body)]}
     kind = kind if kind in SEARCH_KINDS and (kind != "nights" or archive.club.has("chow")) else "all"
     return page(request, "search.html", q=q, kind=kind, found=found, kinds=SEARCH_KINDS,
                 pg=paginate(found[kind], p, per) if kind != "all" else None)
 
 
-SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "nights": "Chow", "calendar": "Calendar", "minutes": "Minutes"}
+SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "nights": "Chow", "calendar": "Calendar", "minutes": "Minutes", "help": "Help"}
 
 
 def _has(q: str, *texts) -> bool:
@@ -1808,24 +1811,69 @@ def dependencies() -> list[dict]:
 
 
 GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin"}  # docs/<name>.md; not developers.md
+DOCS = Path(__file__).resolve().parents[2] / "docs"
+# GitHub's alert syntax ("> [!TIP]" on a blockquote's first line), so a box looks the same here and on GitHub
+CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Important", "WARNING": "⚠️ Warning", "CAUTION": "🛑 Caution"}
+
+
+def guides_for(request: Request) -> dict:
+    """The guides offered to this member: everyone gets the members guide, leaders, officers and admins the
+    officers guide (it has admins' setup steps too), admins the server admin guide."""
+    mid, admin = request.state.member, archive.club.is_admin(real_me(request))
+    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request), "server-admin": admin}
+    return {g: t for g, t in GUIDES.items() if show[g]}
+
+
+def _guide_text(guide: str) -> str:
+    text = (DOCS / f"{guide}.md").read_text()
+    text = re.sub(r"\]\(([\w-]+)\.md(#[\w-]+)?\)", r"](/help/\1\2)", text)  # links between guides stay in the app
+    text = text.replace("](screenshots/", "](/help/screenshots/")
+    return text.replace("](../", "](https://github.com/KO4CGQ/minutes/blob/main/")  # anything else in the repo
+
+
+@functools.cache
+def guide_sections(guide: str) -> list[tuple[str, str, str]]:
+    """(heading, its id on the page, its text) for each ## and ### section of a guide, for the search."""
+    from markdown.extensions.toc import slugify, unique
+    text, ids = _guide_text(guide), {slugify(t, "-") for t in re.findall(r"^# +(.+)$", _guide_text(guide), flags=re.MULTILINE)}
+    parts = re.split(r"^#{2,3} +(.+)$", text, flags=re.MULTILINE)
+    return [(h.strip(), unique(slugify(h.strip(), "-"), ids), body)  # the ids the page gives them, repeats included
+            for h, body in zip(parts[1::2], parts[2::2], strict=True)]
 
 
 @app.get("/help", response_class=HTMLResponse)
 @app.get("/help/{guide}", response_class=HTMLResponse)
 def help_page(request: Request, guide: str = "members"):
-    """A guide from docs/, as of the running version. Open to every member (they're public on GitHub anyway); the
-    tabs offer each one to whoever it's for."""
+    """A guide from docs/, as of the running version, with its contents at the top. Open to every member (they're
+    public on GitHub anyway); the tabs offer each one to whoever it's for."""
     import markdown
     if guide not in GUIDES:
         raise HTTPException(404)
-    text = (Path(__file__).resolve().parents[2] / "docs" / f"{guide}.md").read_text()
-    text = re.sub(r"\]\(([\w-]+)\.md\)", r"](/help/\1)", text)  # links between guides stay in the app
-    text = text.replace("](../", "](https://github.com/KO4CGQ/minutes/blob/main/")  # the README and friends
-    mid, admin = request.state.member, archive.club.is_admin(real_me(request))
-    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or guide == "officers",
-            "server-admin": admin or guide == "server-admin"}  # admins' setup steps are in the officers guide too
-    return page(request, "help.html", guide=guide, guides={g: t for g, t in GUIDES.items() if show[g]},
-                html=Markup(markdown.markdown(text, extensions=["fenced_code"])))
+    md = markdown.Markdown(extensions=["fenced_code", "tables", "toc"], extension_configs={"toc": {"toc_depth": "2-2"}})
+    html = re.sub(r"<blockquote>\s*<p>\[!(\w+)\]\s*",
+                  lambda m: f'<blockquote class="callout {m[1].lower()}"><p class="calloutlabel">{CALLOUTS.get(m[1], m[1].title())}</p><p>',
+                  md.convert(_guide_text(guide)))
+    n = itertools.count(1)
+
+    def thumbnail(m):  # a picture as a thumbnail that opens full size in a popover (no script needed)
+        i, alt, src = next(n), m[1], m[2]
+        return (f'<button type="button" class="shot" popovertarget="shot{i}" aria-label="{alt}: show full size"><img alt="{alt}" src="{src}"></button>'
+                f'<div popover id="shot{i}" class="modal shotbig"><button type="button" class="calclose" popovertarget="shot{i}" '
+                f'popovertargetaction="hide" aria-label="Close">✕</button><img alt="{alt}" src="{src}"></div>')
+    html = re.sub(r'(?:<p>)?<img alt="([^"]*)" src="([^"]*)" />(?:</p>)?', thumbnail, html)  # a popover can't sit in a <p>
+    toc = "".join(f'<a href="#{t["id"]}">{t["name"]}</a>' for t in md.toc_tokens)  # names come escaped
+    if toc:  # after the title and the line under it
+        html = html.replace("</p>", f'</p><nav class="toc" aria-label="On this page">{toc}</nav>', 1)
+    guides = guides_for(request)
+    return page(request, "help.html", guide=guide, guides=guides | ({guide: GUIDES[guide]} if guide not in guides else {}),
+                html=Markup(html))
+
+
+@app.get("/help/screenshots/{name}")
+def help_picture(name: str):
+    if not re.fullmatch(r"[\w-]+\.png", name) or not (DOCS / "screenshots" / name).is_file():
+        raise HTTPException(404)
+    return FileResponse(DOCS / "screenshots" / name, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/about", response_class=HTMLResponse)

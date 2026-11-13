@@ -261,18 +261,27 @@ def test_help_pages_show_the_guides(monkeypatch):
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: False)
     c = TestClient(web.app)
     html = c.get("/help").text
-    assert "<h1>Members guide</h1>" in html and 'aria-label="Guide"' not in html  # a member: just their guide
+    assert ">Members guide</h1>" in html and 'aria-label="Guide"' not in html  # a member: just their guide
     assert 'href="/help"' in c.get("/links").text
     for g in web.GUIDES:  # every link in a guide works in the app: another guide, or a full address
         body = c.get(f"/help/{g}").text.split('class="minutes guide"')[1]
         assert all(h.startswith(("/help", "https://", "#")) for h in re.findall(r'href="([^"]*)"', body)), g
+        assert not [x for x in re.findall(r"<p>(.*?)</p>", body, re.DOTALL) if re.search(r"\n(- |\d+\. )", x)], g  # no list run into a paragraph
+        assert "[!" not in body and all(s.startswith("/help/screenshots/") for s in re.findall(r'<img[^>]* src="([^"]*)"', body)), g
+        assert all(c.get(s).status_code == 200 for s in re.findall(r'<img[^>]* src="([^"]*)"', body)), g  # every picture is there
     off = c.get("/help/officers").text  # every guide is public anyway; the link to the next stays in the app
     assert 'href="/help/members"' in off and "Server admin</a>" not in off
     admin = c.get("/help/server-admin").text
     assert "<pre><code" in admin and "Server admin</a>" in admin
+    assert 'popovertarget="shot1"' in admin and '<div popover id="shot1"' in admin and "<p><button" not in admin  # pictures open full size
     assert c.get("/help/developers").status_code == 404 and c.get("/help/..%2Fsecrets").status_code == 404
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: True)
     assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin"))
+    found = c.get("/search", params={"q": "passphrase", "kind": "help"}).text  # the search finds guide sections
+    assert 'href="/help/server-admin#backups"' in found and 'id="backups"' in c.get("/help/server-admin").text
+    monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: False)
+    assert "/help/server-admin#" not in c.get("/search", params={"q": "passphrase"}).text  # only the guides offered to you
+    assert c.get("/help/screenshots/..%2Fofficers.md").status_code == 404
 
 
 def test_top_bar_links_everyone_to_tonights_live_meeting(client, monkeypatch):

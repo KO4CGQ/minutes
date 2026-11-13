@@ -20,7 +20,7 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md).
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode (with a Security page: sign-ins, devices, failed attempts and bans).
 - **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders. Motions keep their mover, seconder and result (Business → Motions).
-- **Calendar:** the club's calendars kept by the app, with a place and an online meeting link per event, .ics import and subscriptions ([officers guide → Club calendars](docs/officers.md#calendars)).
+- **Calendar:** the club's calendars kept by the app, with a place and an online meeting link per event, .ics import and subscriptions ([officers guide](docs/officers.md)).
 - **Chow schedule** (optional module): the rotation, swaps, reminders before your night, and who provided, missed or covered each night.
 - **Treasurer:** who owes what (dues, fees, missed chow, certificates), payments and expenses, regular bills and bills read at meetings, and funds a committee keeps; each member sees their own figures on Home.
 - **Site** (admins): the club's name, callsign, logo and colours, the meeting night and its place and online link, the agenda's sections, optional features, holidays by country or state, bylaws references and date formats, all in the app.

@@ -2,143 +2,184 @@
 
 For whoever runs the server: install, configure, back up and secure the app. It's in the app too, for the version that's running: Admin → Server admin guide.
 
-## Getting started (a new club)
-1. **Install** (below): `setup.sh` on a Debian container.
-2. **club.yaml:** copy `club.example.yaml` to `/etc/club-minutes/club.yaml` and fill it in. At least the club's name and callsign, `meeting_day` and `meeting_time` (required), `auth: rp_id` (the HTTPS address members will use: passkeys only work there) and your own callsign under `admins:`. Then `systemctl restart club-minutes`.
-3. **You, the first member:** `club-minutes first-member YOURCALL --first First --last Last --email you@example.org --class General` starts the roster with you and prints a sign-in link. (It runs once: with a roster in place it refuses, so it can't overwrite one.)
-4. **Sign in** with that link, add a passkey when offered, then admin mode (name menu → Admin): on your member page tick yourself (and the other officers, once added) as an officer; add the other members on the Roster page; set the name, logo and colours on Site.
-5. **Email** (sign-in links, the minutes): the SMTP settings in `/etc/club-minutes/env` (Login, below). Until then, links are written to the server's log (`journalctl -u club-minutes`), and the pages say so.
-6. **Backups** (Admin → Backups) before anything else is entered for real.
+## 🚀 Getting started (a new club)
+Install on a Debian container, as root:
 
-As root on the container:
 ```sh
-curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh | bash   # first time
-/opt/club-minutes/deploy/update.sh                                                     # by hand: the latest main (TAG=v0.15.0 for a release)
+curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh | bash
 ```
-To set the server's time zone too, run setup as `… | TZ_NAME=America/Chicago bash` (otherwise it keeps the server's own; the app uses that unless club.yaml names one).
-Then put `club.yaml` in `/etc/club-minutes/` (and `google-service-account.json`, only for backups to Google Drive), and data in `/var/lib/club-minutes/`.
-The app runs as the `minutes` user on port 8000. The roster cache (`roster.json`) is rebuilt daily at 04:00 from the roster the app keeps (`roster-sheet.json`); backups run on the schedule set on the Backups page.
 
-## Staging server (optional)
-A second container that runs the app on a copy of the live data, to try a change before it's released. It pulls the
-live data **one way** (nightly at 03:00, and **Sync now**); nothing on it can change the live server. Every page has a
-STAGING banner, and email goes only to the person whose click caused it (a sign-in link: to whoever asked for it), with
-"[STAGE]" in the subject; email with nobody clicking (reminders, timers) is held, and all of it is on the Email log page.
-Roles are the same as live; passkeys are per address, so each person adds one on stage too (or signs in by emailed link).
+To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwise it keeps the server's own; the app uses that unless club.yaml names one). Then:
 
-1. Set up the container as above (`setup.sh`, `club.yaml` with stage's own address under the sign-in settings, the
-   SMTP settings in `/etc/club-minutes/env`), and `apt install rsync` on **both** servers.
-2. On stage, as root: `ssh-keygen -t ed25519 -N "" -f /etc/club-minutes/stage-sync-key`.
-3. On the **live** server, add its `.pub` line to `/root/.ssh/authorized_keys`, limited to reading the data folder:
-   `command="rrsync -ro /var/lib/club-minutes/",restrict ssh-ed25519 AAAA... stage-sync`
-4. On stage, add to `/etc/club-minutes/env`: `CLUB_MINUTES_STAGE=1` and `STAGE_SYNC_FROM=root@<live server>:./`. Leave
-   `CLUB_MINUTES_BACKUP_PASSPHRASE` out (stage makes no backups).
-5. On stage: `install -m 644 /opt/club-minutes/deploy/club-stage-sync.* /etc/systemd/system/ && systemctl daemon-reload &&
-   systemctl enable --now club-stage-sync.timer club-stage-sync.path && systemctl start club-stage-sync && systemctl restart club-minutes`
-   (these units aren't installed by `update.sh`, so the live server never gets them).
+1. **club.yaml:** copy `club.example.yaml` to `/etc/club-minutes/club.yaml` and fill in at least:
+    - the club's name and callsign, `meeting_day` and `meeting_time` (required: the app won't start without them)
+    - `auth: rp_id`: the HTTPS address members will use (passkeys only work there)
+    - your own callsign under `admins:`
 
-Admin mode → name menu → **Stage sync**: the last sync, **Sync now**, and **Pause nightly sync** (to keep test changes
-overnight). A sync replaces everything except stage's own sign-ins and passkeys, email log, backups and update settings.
-Stage doesn't update itself; a developer installs a branch with `deploy/stage-push.sh` (developer guide).
+    Then `systemctl restart club-minutes`.
 
-## Config
-`club.yaml` (local only, git-ignored; copy from `club.example.yaml`) holds the sign-in settings, the optional modules (`modules: {chow: true}`; each is off unless turned on), the holidays and election days by region (`calendar: {holidays: us, extra_holidays: [{name: Christmas Eve, month: 12, day: 24}], elections: us-oh}`; holidays for any country or state from python-holidays, plus the club's own; none by default), the bylaws sections the app cites (`bylaws: refs:`, each shown only if given), a certificate members buy (`treasurer: certificate:`, off unless named), the meeting's sections in order (`meeting: sections:`, the built-ins and the club's own), and under `club:` the meeting's day and time (`meeting_day`, `meeting_time`: required; the app won't start without them), how dates are written (`date_formats`: US order unless set; club.example.yaml shows day-first; admins can also choose on Admin → Site → Dates), the admins list, email test mode, the starting club links and the private never-record list. People, their titles and who may lead come from the roster the app keeps (`roster-sheet.json` in the data folder, edited on the Roster pages; moved off the club's Google Sheet in 0.13.0); the list of offices is `offices:` in club.yaml.
+2. **You, the first member:** `club-minutes first-member YOURCALL --first First --last Last --email you@example.org --class General` starts the roster with you and prints a sign-in link. It runs once: with a roster in place it refuses, so it can't overwrite one.
+3. **Sign in** with that link and add a passkey when offered. Turn on admin mode (name menu → Admin), tick yourself (and the other officers, once added) as an officer on your member page, add the other members on the Roster page, and set the name, logo and colours on **Site**.
+4. **Email** (sign-in links, the minutes): the SMTP settings in `/etc/club-minutes/env` (Sign-in and email, below). Until then, links are written to the server's log (`journalctl -u club-minutes`), and the pages say so.
+5. **Backups** (Admin → Backups), before anything is entered for real.
 
-Some of these settings can also be changed by admins on **Admin → Site** (in admin mode). What's saved there is kept in `site-settings.json` in the data folder, under the same names, and wins over club.yaml until an admin picks **Back to club.yaml**; it's checked like club.yaml (a wrong value is refused, saying why) and used at once, without a restart. Sign-in (`auth:`), `admins:`, email test mode and AI can only be set in club.yaml. On the page now: **Club** (`name`, `callsign`, `meeting_day`, `meeting_time`, `timezone`, plus the weekly meeting's Where and online link on the calendar; a new day, time, Where or link changes the calendar's meeting from the Starting date picked there), **Agenda** (`meeting: sections:`, `invite_after_visits`, `remind_days_before`), **Features** (`modules: chow`, `public_calendars`, `calendar: holidays / elections`), **Bylaws** (`bylaws: refs / arrears_note`, `treasurer: certificate`) and **Dates** (`date_formats`). The other processes (reminders, backups, the roster sync) read the same file, so they follow the page too.
+> [!TIP]
+> To update by hand: `/opt/club-minutes/deploy/update.sh` installs the latest main (`TAG=v1.0.0` before it for a release). Admin → **Updates** installs new releases from the app, or nightly.
 
-Club data (`archive/`, `data/`, `club.yaml`, credentials) is never committed.
+Good to know: the app runs as the `minutes` user on port 8000, with its settings in `/etc/club-minutes/` and its data in `/var/lib/club-minutes/`. `google-service-account.json` goes in `/etc/club-minutes/` too, only for backups to Google Drive.
 
-## Login
+## 🧭 The Admin page
+In admin mode, the name menu's **Admin** lists the admin tools, each with a line of how things stand.
+
+![The Admin page: Security, Backups, Updates, Site, Email log and this guide](screenshots/admin.png)
+
+- 🛡️ **Security:** failed sign-ins today, bans. Its **Members** tab lists every member's last sign-in, passkeys and signed-in devices, so you can see who hasn't signed in or still uses emailed links.
+- 💾 **Backups:** the last one.
+- ⬆️ **Updates:** what's running and what's available.
+- 🎨 **Site:** the club's settings.
+- ✉️ **Email log:** anything held back this week.
+- 🧪 **Stage sync**, on a staging server only.
+
+## 🎨 Site settings
+Admin → **Site** changes most of the club's settings in the app, checked as you save (a wrong value is refused, saying why) and used at once, without a restart.
+
+![Site → Look: the logo, icons and colours](screenshots/site-look.png)
+
+| Tab | What's there |
+| --- | --- |
+| **Look** | The logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon, each with **Upload…** and **Reset** (the icons are made from the logo until one has its own). **Behind it**, so a dark logo on a see-through background still shows in dark mode. **Colours:** one main colour sets buttons, links, the top bar and the minutes' headings; the app makes light and dark palettes from it, checks every text colour is readable, and previews both before Save. |
+| **Club** | The app's name, the club's name and callsign, meeting day and time, time zone, and the weekly meeting's place and online link. A new day, time, place or link changes the calendar's meeting from the **Starting date** you pick. |
+| **Agenda** | The meeting's sections in order (built-in and the club's own), when a guest is invited to join, how many days before a reminder goes out. |
+| **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own) and election days. |
+| **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
+| **Dates** | How dates are written (US order unless changed). |
+
+> [!NOTE]
+> What's saved on Site wins over club.yaml until an admin picks **Back to club.yaml**. Sign-in (`auth:`), `admins:`, email test mode and AI can only be set in club.yaml.
+
+## 🔑 Sign-in and email
 Members sign in with a passkey, or with a one-time link emailed to their roster address.
-- **Passkeys** only work at the HTTPS address in `club.yaml` (`auth.rp_id`).
-- **Email** needs `CLUB_MINUTES_SMTP_USER` / `CLUB_MINUTES_SMTP_PASSWORD` (a Gmail app password) in `/etc/club-minutes/env`.
-  Without them, links are written to the server log instead.
-- **AI** (optional) needs `CLUB_MINUTES_OPENROUTER_KEY` in `/etc/club-minutes/env` and `ai: {model: ...}` in club.yaml. Each call is logged to `ai-log.jsonl` in the data folder (time, model, size, cost; never the text).
-- **Recovery:** an admin on the server can print a one-time link for a member: `club-minutes login-link N0CALL`
 
-In admin mode, the name menu's **Admin** (`/admin`) lists the admin tools, each with a line of how things stand: Security (failed sign-ins today, bans), Backups (the last one), Updates (what's running, what's available), Site, the Email log (anything held back this week) and, on a staging server, Stage sync.
+- **Passkeys** only work at the HTTPS address in club.yaml (`auth.rp_id`).
+- **Email** needs `CLUB_MINUTES_SMTP_USER` and `CLUB_MINUTES_SMTP_PASSWORD` (a Gmail app password) in `/etc/club-minutes/env`. Without them, links go to the server log instead.
+- **Locked out?** On the server: `club-minutes login-link N0CALL` prints a one-time link for any member.
+- **AI** (optional): `CLUB_MINUTES_OPENROUTER_KEY` in the env file and `ai: {model: ...}` in club.yaml. Each call is logged (time, model, size, cost; never the text).
 
-Admin mode → Admin → **Site**: on **Club**, the app's name (default "<callsign> Minutes", or `app_name:` in club.yaml); on **Look**, three pictures, each with its own **Upload…** and **Reset**: the logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon. The icons are made from the logo until one is uploaded of its own. **Behind it** sets what's under the logo on pages, so a logo of dark lines on a see-through background still shows in dark mode; the Logo card shows it on a light and a dark page. **Colours:** one main colour sets the buttons, links, top bar and the minutes' section headings (a top bar of its own is optional; the logo's colours are offered as one-click picks). The app makes the light and dark palettes from it, checks every text colour for readability and adjusts a shade if needed, and previews both before Save; **Back to the default** returns to the app's blue. Uploads are redrawn as fresh PNGs in `branding/` in the data folder; the name, the colours (and which icons are the club's own) are in `branding.json`. Both are in the backups.
+**Emailing the minutes:** when a leader submits them, every member with an email address (except Inactive and Silent Key) gets their own copy: the PDF, or a link, as each chose on their profile (or nothing, if they turned it off). Replies go to the meeting's leader. Each meeting is emailed once, and leaders see the outcome on the minutes page.
 
-Admin mode → Security → **Members** lists every member on the roster: their last sign-in, how many passkeys they've set up (and when one was last used), and how many devices are signed in now, so you can see who hasn't signed in or still uses emailed links. 
+> [!TIP]
+> **Testing email?** While club.yaml has `email.only_to`, only those callsigns or addresses get mail; everyone else's is held and logged. The submit dialog says which mode is on.
 
-Officers and members ticked `minutes_editor` on the roster can lead a meeting (the leader console). Admins are a separate list in `club.yaml`.
+**Removing a test meeting:** `club-minutes delete-meeting 2026-12-31`, then `systemctl restart club-minutes`.
 
-## Emailing the minutes
-When a leader submits the minutes, they go to every roster member with an email address (except Inactive and Silent Key), each getting their own copy: the PDF attached, or a link, as each member chose on the Email tab of their profile (or not at all, if they turned it off). Replies go to the meeting's leader.
-- **Test mode:** while `club.yaml` has `email.only_to`, only those callsigns or addresses get mail; everyone else is withheld and logged. The submit dialog says which mode is on.
-- Each meeting is emailed once. The outcome is in `emailed.json` beside the minutes, and leaders see it on the minutes page.
-- **Removing a test meeting:** `club-minutes delete-meeting 2026-12-31`, then `systemctl restart club-minutes`.
+## 🛡️ Admin mode
+Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged.
 
-## Admin mode
-Admins get **Turn on admin mode** in the name menu: callsigns listed under `admins:` in `club.yaml`, and members made admins in the app (admin mode → Admin → Security → **Admins**, kept in `admins.json` in the data directory). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is in Admin actions and emailed to the other admins, and the last admin can't be removed. Admins in `club.yaml` can only be removed there, so whoever has the server can always get back in. For an hour (or until turned off) that sign-in can see and do what officers can, with a red banner showing. Each switch is logged in `admin-log.jsonl` in the data directory.
+- **Who's an admin:** callsigns under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins, and the last admin can't be removed.
+- Admins in club.yaml can only be removed there, so whoever has the server can always get back in.
+- **View the app as …** (on a member's page): the app as that member sees it, read-only, until **Stop** or admin mode ends. Also logged.
 
-In admin mode, a member's page has **View the app as …**: the app as that member sees it, read-only (no changes, and not their sign-in or passkey page), until **Stop** or admin mode ends. Also logged. Trying to save anything while viewing as someone opens a small "Read-only" dialog instead.
+## 💾 Backups
+The app backs up its whole data folder into one compressed file, encrypts it with a passphrase only the admins hold, and opens it again to check it. It keeps the newest on the server and sends each to **S3-compatible storage** (Backblaze B2), a **Google Drive** folder, or both. If anything fails, the admins get an email.
 
-## Backups
-The app backs up its whole data folder (minutes, chow, business, calendars, settings, logs, the roster cache, and a consistent copy of the sign-in database) into one compressed `.tar.gz`, encrypts it (scrypt + AES-256-GCM) with a passphrase only the admins hold, and decrypts it again to check it opens. It keeps the newest on the server (`backups/` in the data folder) and sends each to **S3-compatible storage** (Backblaze B2), a **Google Drive** folder, or both. If anything fails, the admins get an email.
+![The Backups page before a passphrase is set](screenshots/backups.png)
 
-Admin mode → Admin → **Backups** has everything else: the size of the data and of the last backup, Back up now, **Download a backup now** (a fresh one, compressed and encrypted, to your computer), the server's copies, the **schedule** (daily, weekly, or only by hand, at a chosen hour; the `club-minutes-backup.timer` checks hourly), **how many to keep** on the server and on Drive, and the S3 and Drive settings, with the recommended values: daily, 7 on the server, 30 on Drive, 90 days on S3. The settings are in `backup-settings.json`, which holds the S3 secret and is left out of the backups (re-enter it after a restore).
+Admin → **Backups** has the rest: **Back up now**, **Download a backup now**, the server's copies, the schedule (daily, weekly or by hand, at a chosen hour), how many to keep, and the S3 and Drive settings. Recommended: daily, 7 on the server, 30 on Drive, 90 days on S3.
+
+> [!NOTE]
+> Until the passphrase is set, scheduled backups don't run. With only the passphrase (no S3 or Drive), backups stay on the server: enough to undo a mistake, not to survive losing the server. The S3 secret isn't in the backups: re-enter it after a restore.
 
 **Setup:**
-1. A long passphrase in `/etc/club-minutes/env`: `CLUB_MINUTES_BACKUP_PASSPHRASE=...`, then restart. Keep a copy somewhere other than the server (a password manager the admins share, and a printed copy somewhere safe): without it no backup can be opened. It's not set from the app on purpose: a stolen admin sign-in could otherwise set one it knows. The Backups page **suggests** one (24 capitals and digits without look-alikes, in groups of four: easy to type from paper, about 119 bits) and **checks** one: whether it matches the server's, its strength, and whether it's in Have I Been Pwned's leaked passwords (free Pwned Passwords range API: only the first 5 characters of the SHA-1 are sent). Neither stores nor logs the passphrase.
-2. **S3 / Backblaze B2:** a private bucket with a lifecycle rule for the folder (B2: Lifecycle Settings → custom rule for `minutes/`: hide files 90 days after upload, delete them 1 day after hiding), and an application key limited to that bucket with read and write. Enter the endpoint, region, bucket, key ID and secret on the Backups page (`CLUB_MINUTES_S3_KEY_ID` / `CLUB_MINUTES_S3_SECRET` in the env file override them). The app never deletes anything there.
-3. **Google Drive:** a folder in a **Shared Drive** (Google Workspace). Google gives service accounts no storage of their own, so a folder in someone's My Drive fails with a storage-quota error. Add the service account (its email is in `google-service-account.json`) to the Shared Drive as **Content manager**, so it can delete backups beyond the number to keep, and paste the folder's link on the Backups page.
-4. Back up now, and check the page says where it was sent.
 
-Until the passphrase is set, scheduled backups don't run (and send no "failed" emails); the Backups page shows "Passphrase: not set". With only the passphrase (no S3 or Drive), backups are kept on the server and can be downloaded: enough to undo a mistake, not to survive losing the server.
+1. **The passphrase:** `CLUB_MINUTES_BACKUP_PASSPHRASE=...` in `/etc/club-minutes/env`, then restart. The Backups page can **suggest** one (24 letters and digits in groups of four, easy to type from paper) and **check** yours (matches the server's, strength, and not among leaked passwords). Neither stores it.
+2. **S3 / Backblaze B2:** a private bucket with a lifecycle rule (B2: Lifecycle Settings → custom rule for `minutes/`: hide files 90 days after upload, delete 1 day after hiding), and an application key limited to that bucket, read and write. Enter them on the Backups page. The app never deletes anything there.
+3. **Google Drive:** a folder in a **Shared Drive** (Google Workspace); a folder in someone's My Drive fails, as service accounts have no storage of their own. Add the service account (its email is in `google-service-account.json`) as **Content manager**, and paste the folder's link on the Backups page.
+4. **Back up now**, and check the page says where it went.
 
-**Restore** (onto this server or a fresh one set up with `setup.sh`):
+> [!WARNING]
+> Keep a copy of the passphrase off the server: a password manager the admins share, and a printed copy somewhere safe. **Without it no backup can be opened.** It can't be set from the app on purpose: a stolen admin sign-in could otherwise set one it knows.
+
+**Restore** (onto this server, or a fresh one set up with `setup.sh`):
 ```sh
 sudo -u minutes /opt/club-minutes/.venv/bin/club-minutes restore BACKUP.tar.gz.enc /tmp/restored   # asks for the passphrase
 systemctl stop club-minutes
 rsync -a /tmp/restored/ /var/lib/club-minutes/ && chown -R minutes:minutes /var/lib/club-minutes
 systemctl start club-minutes
 ```
-`restore` only unpacks into an empty folder, never over live data. Members stay signed in (the sign-in database is in the backup); passkeys keep working as long as the hostname is the same.
+`restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same.
 
-## Upload limit
-Admin mode → Security → **Server** → **Largest upload** (1–100 MB, 10 by default; kept in `limits.json` in the data folder). It covers profile pictures and calendar .ics imports; a bigger request is turned away (413) before the app reads it. A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
+## 🔒 Security
+The app blocks web visitors itself after repeated failed sign-ins (Admin → Security). On **Failed attempts**, **Details** shows each attempt's device and browser, and a banned address links to its ban.
 
-## Server hardening (recommended)
-The app blocks web visitors itself after repeated failed sign-ins (admin **Security** page). On its Failed attempts tab, **Details** shows each attempt's device and browser (user agent) and any note, and an address already banned says **Banned**, linking to the Banned addresses tab. For SSH, use fail2ban:
+**Upload limit:** Security → **Server** → **Largest upload** (1–100 MB, 10 by default), for profile pictures and calendar imports. A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
 
-1. Install it:
+**Hardening the server** (recommended). First, fail2ban for SSH: `apt install fail2ban python3-systemd`, then create `/etc/fail2ban/jail.d/sshd.local` (list your own LAN and tailnet under `ignoreip`, so you can't lock yourself out):
 
-        apt install fail2ban python3-systemd
+```ini
+[sshd]
+enabled = true
+backend = systemd
+ignoreip = 127.0.0.1/8 ::1 192.168.1.0/24 100.64.0.0/10
+```
 
-2. Create `/etc/fail2ban/jail.d/sshd.local` with this content (on `ignoreip`, list your own LAN and tailnet so you can't lock yourself out):
+Then `systemctl restart fail2ban` and check it with `fail2ban-client status sshd`. To lift a ban: `fail2ban-client set sshd unbanip ADDRESS`. Also:
 
-        [sshd]
-        enabled = true
-        backend = systemd
-        ignoreip = 127.0.0.1/8 ::1 192.168.1.0/24 100.64.0.0/10
+1. SSH with keys only: `PasswordAuthentication no` in `/etc/ssh/sshd_config`.
+2. Automatic security updates, with restarts: `apt install unattended-upgrades needrestart`, then `dpkg-reconfigure -plow unattended-upgrades`. In `/etc/needrestart/conf.d/50-auto.conf` put `$nrconf{restart} = 'a';` (and, in a container, `$nrconf{kernelhints} = 0;`), or needrestart only lists what needs restarting.
+3. A firewall that allows only SSH and the app's port.
 
-3. Restart it and check that the jail is running:
+## 🧪 Staging server (optional)
+A second container that runs the app on a copy of the live data, to try a change before it's released. It pulls the live data **one way** (nightly at 03:00, and **Sync now**); nothing on it can change the live server.
 
-        systemctl restart fail2ban
-        fail2ban-client status sshd
+- Every page has a **STAGING** banner.
+- Email goes only to the person whose click caused it, with "[STAGE]" in the subject; email nobody clicked for (reminders) is held. All of it is on the Email log.
+- Roles are the same as live; passkeys are per address, so each person adds one on stage too (or uses emailed links).
 
-To lift a ban: `fail2ban-client set sshd unbanip ADDRESS`.
+**Setting it up:**
 
-Also worth doing: SSH with keys only (`PasswordAuthentication no` in `/etc/ssh/sshd_config`), automatic security updates with restarts afterwards (`apt install unattended-upgrades needrestart`, then `dpkg-reconfigure -plow unattended-upgrades`, and `$nrconf{restart} = 'a';` plus, in a container, `$nrconf{kernelhints} = 0;` in `/etc/needrestart/conf.d/50-auto.conf`: Debian's needrestart otherwise only lists the services still running an updated library), and a firewall that allows only SSH and the app's port.
+1. Set up the container as above (`setup.sh`; club.yaml with stage's own address under `auth:`; the SMTP settings), and `apt install rsync` on **both** servers.
+2. On stage, as root: `ssh-keygen -t ed25519 -N "" -f /etc/club-minutes/stage-sync-key`.
+3. On the **live** server, add its `.pub` line to `/root/.ssh/authorized_keys`, limited to reading the data folder:
+    `command="rrsync -ro /var/lib/club-minutes/",restrict ssh-ed25519 AAAA... stage-sync`
+4. On stage, add to `/etc/club-minutes/env`: `CLUB_MINUTES_STAGE=1` and `STAGE_SYNC_FROM=root@<live server>:./`. Leave out `CLUB_MINUTES_BACKUP_PASSPHRASE` (stage makes no backups).
+5. On stage, install the sync's timer (`update.sh` doesn't, so the live server never gets it):
 
-## Bylaws
-`/bylaws` shows the club's constitution and bylaws from `bylaws.md` in the data directory (`/var/lib/club-minutes/bylaws.md` on the server). It's kept out of this public repo.
+```sh
+install -m 644 /opt/club-minutes/deploy/club-stage-sync.* /etc/systemd/system/ && systemctl daemon-reload
+systemctl enable --now club-stage-sync.timer club-stage-sync.path && systemctl start club-stage-sync && systemctl restart club-minutes
+```
 
-## Roster API
+Admin → **Stage sync** shows the last sync, **Sync now**, and **Pause nightly sync** (to keep test changes overnight). A sync replaces everything except stage's own sign-ins and passkeys, email log, backups and update settings. Stage doesn't update itself; a developer installs a branch on it (developer guide).
+
+## 🔌 Roster API
 For the club's other tools on the same server (the Discord bot): `GET /api/roster` returns active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON.
+
 - Off until `CLUB_MINUTES_ROSTER_API_TOKEN=...` (a long random string) is in `/etc/club-minutes/env`.
 - Then it answers only `Authorization: Bearer <token>` requests from the server itself or an address in `CLUB_MINUTES_ROSTER_API_ALLOW` (comma-separated; the bot's container), never through the web proxy. E.g. from the bot's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`.
-- Give the bot's container a fixed IP, and ideally limit port 8000 to it with the Proxmox firewall. Every call, allowed or not, is logged in `api-log.jsonl` in the data directory.
+- Give the bot's container a fixed IP, and ideally limit port 8000 to it with the Proxmox firewall. Every call, allowed or not, is logged.
 
-## Who keeps the roster
-`roster_keepers:` in club.yaml lists the titles that may edit the roster (`[Secretary, Treasurer]` by default). Admins in admin mode always can.
+## 📜 Bylaws
+The Bylaws page shows the club's constitution and bylaws from `bylaws.md` in the data folder (`/var/lib/club-minutes/bylaws.md`). It's kept out of the public repo.
 
-## Importing a chow spreadsheet
+## 🍲 Importing a chow spreadsheet
 Once, for a club moving its chow list into the app: `club-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
 
-## Where things are kept
-All in the data folder (`/var/lib/club-minutes`):
-- State: the roster (`roster-sheet.json`), `events.json` (calendars), `chow.json`, `business.json`, `treasurer.json`, `email-prefs.json`, `settings.json` (each member's display choices), `site-settings.json`.
-- Logs, each change with who made it: `profile-changes.jsonl` (roster), `calendar-log.jsonl`, `chow-log.jsonl`, `treasurer-log.jsonl`, `api-log.jsonl`, `email-log.jsonl`.
+## ⚙️ club.yaml
+`/etc/club-minutes/club.yaml` (copied from `club.example.yaml`, which explains each setting). Most of it can be changed on Site instead; these only here:
+
+- **Sign-in:** `auth:` (the HTTPS address passkeys use, how long a sign-in lasts).
+- **Admins:** `admins:`, the callsigns who can always get in.
+- **Email test mode:** `email: only_to:`.
+- **AI:** `ai: {model: ...}`, and the private never-record list.
+- **Offices:** `offices:`, the club's offices (a title with one seat, or `{title: Trustee, officer: false, seats: 3}` for a board seat).
+- **Roster keepers:** `roster_keepers:`, the titles that may edit the roster (`[Secretary, Treasurer]` by default; admins in admin mode always can).
+- **Starting links** for the Links page.
+
+People, their titles and who may lead come from the roster the app keeps, edited on the Roster pages.
+
+## 🗂️ Where things are kept
+All in the data folder (`/var/lib/club-minutes`), and all in the backups:
+
+- **State:** the roster (`roster-sheet.json`, rebuilt into `roster.json` daily at 04:00), `events.json` (calendars), `chow.json`, `business.json`, `treasurer.json`, `email-prefs.json`, `settings.json` (each member's display choices), `site-settings.json` (Site), `branding/` and `branding.json` (Look), `admins.json`, `limits.json`, `backup-settings.json` (not in the backups: it holds the S3 secret).
+- **Logs**, each change with who made it: `profile-changes.jsonl` (roster), `calendar-log.jsonl`, `chow-log.jsonl`, `treasurer-log.jsonl`, `admin-log.jsonl`, `api-log.jsonl`, `ai-log.jsonl`, `email-log.jsonl`.
+- **The minutes:** a folder per meeting, with `emailed.json` beside each saying who it was sent to.

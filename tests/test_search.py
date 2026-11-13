@@ -38,20 +38,20 @@ def test_results_by_kind_a_page_at_a_time(tmp_path, monkeypatch):
     with events.locked():
         evs = []
         for i in range(12):
-            events.add(evs, "events", events.from_form({"title": f"Fox hunt {i}", "date": (day + dt.timedelta(days=i)).isoformat()}), "x")
+            events.add(evs, "events", events.from_form({"title": f"Zebra hunt {i}", "date": (day + dt.timedelta(days=i)).isoformat()}), "x")
         events.save(evs)
     root = tmp_path / "meetings"
     root.mkdir()
     m, club, _ = signed_in(tmp_path, monkeypatch, "n0aaaa")
     monkeypatch.setattr(web, "archive", Archive(root, club))
-    every = m.get("/search?q=fox").text
+    every = m.get("/search?q=zebra").text
     assert "All (12)" in every and "Calendar (12)" in every and "Members (" not in every  # tabs only for kinds found
-    assert every.count("Fox hunt") == 5 and "See all 12" in every and "kind=calendar" in every
-    first = m.get("/search?q=fox&kind=calendar&per=10").text
-    assert first.count("Fox hunt") == 10 and "Page 1 of 2" in first
-    assert m.get("/search?q=fox&kind=calendar&per=10&page=2").text.count("Fox hunt") == 2
-    assert "No members found." in m.get("/search?q=fox&kind=members").text
-    assert "All (12)" in m.get("/search?q=fox&kind=junk").text  # an unknown kind: All
+    assert every.count("Zebra hunt") == 5 and "See all 12" in every and "kind=calendar" in every
+    first = m.get("/search?q=zebra&kind=calendar&per=10").text
+    assert first.count("Zebra hunt") == 10 and "Page 1 of 2" in first
+    assert m.get("/search?q=zebra&kind=calendar&per=10&page=2").text.count("Zebra hunt") == 2
+    assert "No members found." in m.get("/search?q=zebra&kind=members").text
+    assert "All (12)" in m.get("/search?q=zebra&kind=junk").text  # an unknown kind: All
 
 
 def test_text_typed_into_the_minutes_or_console_cannot_run_as_script(tmp_path, monkeypatch):
