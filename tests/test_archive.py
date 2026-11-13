@@ -252,6 +252,22 @@ def test_about_page(monkeypatch):
     assert 'href="/about"' in c.get("/links").text  # in the name menu on every page
 
 
+def test_breadcrumbs_back(client):
+    from club_minutes import web
+    c, slug = client, web.archive.meetings[0].slug
+    back = lambda url: re.search(r'class="crumb"[^>]*><a href="([^"]+)">‹ ([^<]+)</a>', c.get(url).text).groups()
+    assert back(f"/meetings/{slug}") == ("/minutes", "Minutes")
+    assert back(f"/meetings/{slug}?from=stats") == ("/stats", "Attendance") and f"/meetings/{slug}?from=stats" in c.get("/stats").text
+    assert back("/calendar/subscribe") == ("/calendar", "Calendar")
+    mid = next(iter(web.archive.club.members))  # a member: back to the Roster, or to the list they were opened from
+    assert back(f"/members/{mid}") == ("/roster", "Roster") and back(f"/members/{mid}?from=treasurer") == ("/treasurer", "Treasurer")
+    assert back(f"/members/{mid}?from=junk") == ("/roster", "Roster") and f"/members/{mid}?from=stats" in c.get("/stats").text
+    assert back(f"/members/{mid}?from=business&item=ab12") == ("/business#iab12", "Business")  # back to the item, open
+    assert back(f"/members/{mid}?from=business&item=ab12&tab=done") == ("/business?tab=done#iab12", "Business")
+    assert back(f"/members/{mid}?from=home&item=ab12") == ("/#iab12", "Home")
+    assert back(f"/members/{mid}?from=business&item=x%22%3E") == ("/business", "Business")  # only a plain id goes in the link
+
+
 def test_help_pages_show_the_guides(monkeypatch):
     from fastapi.testclient import TestClient
 

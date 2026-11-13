@@ -26,7 +26,7 @@
   <span class="dateblk"><b>{{ dd.day }}</b><small>{{ dd.strftime('%b') }}</small></span>
   <div class="rot-main">
     {% if x.status == 'none' %}<div class="rot-name muted">No chow</div>{% if x.note %}<div class="rot-note">{{ x.note }}</div>{% endif %}
-    {% elif x.member %}<div class="rot-name"><a href="/members/{{ x.member }}">{{ club.name(x.member) }}</a>{% if x.member == me.id %} <span class="badge">you</span>{% endif %}{% if d == today %} <span class="badge">tonight</span>{% endif %}</div>
+    {% elif x.member %}<div class="rot-name"><a href="/members/{{ x.member }}?from=chow">{{ club.name(x.member) }}</a>{% if x.member == me.id %} <span class="badge">you</span>{% endif %}{% if d == today %} <span class="badge">tonight</span>{% endif %}</div>
     {% else %}<div class="rot-name muted">(open)</div>{% endif %}
   </div>
   <div class="rot-ops">

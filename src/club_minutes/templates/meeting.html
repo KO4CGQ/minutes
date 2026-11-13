@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Minutes {{ m.date }}{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}Minutes {{ m.date }}{% endblock %}{% block crumb %}{{ back('/minutes', 'Minutes') }}{% endblock %}{% block body %}
 {% if has_original or m.status != 'draft' %}<div class="actions">
   {% if has_original %}<a class="btn ghost" href="/meetings/{{ m.slug }}/original.pdf">View original</a>
   {% elif m.status != 'draft' %}<a class="btn" href="/meetings/{{ m.slug }}/minutes.pdf">Download PDF</a>{% endif %}

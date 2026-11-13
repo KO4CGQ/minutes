@@ -1,10 +1,12 @@
 {# A business item's dialog and its pieces: shared by the Business page and Home. Import with context. #}
 {% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}
+{# after a member's link in an item: back to this item, on Home or Business (Done tab for a done one) #}
+{% macro from_item(x) %}?from={{ 'home' if request.url.path == '/' else 'business' }}&amp;item={{ x.id }}{% if x.status == 'done' %}&amp;tab=done{% endif %}{% endmacro %}
 {% macro timeline(x, comments=True) %}{# changes (and comments) together, newest first #}
 {% set ev = [] %}{% for e in x.history %}{% set _ = ev.append({'at': e.at, 'e': e}) %}{% endfor %}
 {% if comments %}{% for c in x.comments or [] %}{% set _ = ev.append({'at': c.at, 'c': c}) %}{% endfor %}{% endif %}
 <ul class="timeline">{% for t in ev|sort(attribute='at', reverse=True) %}<li>
-  <div class="tl-head">{% set who = (t.e or t.c).by %}{% if who %}<span class="chip">{{ avatar(who, 'xs') }}<a href="/members/{{ who }}">{{ club.short(who) }}</a></span>{% endif %}
+  <div class="tl-head">{% set who = (t.e or t.c).by %}{% if who %}<span class="chip">{{ avatar(who, 'xs') }}<a href="/members/{{ who }}{{ from_item(x) }}">{{ club.short(who) }}</a></span>{% endif %}
     <span class="muted small">{{ t.at|tsfull }}{% if t.e and t.e.meeting %} · at the <a href="/meetings/{{ t.e.meeting }}">{{ fmt(t.e.meeting) }}</a> meeting{% endif %}</span></div>
   {% if t.c %}<div class="tl-comment">{{ emoji('💬', 'chat') }} {{ t.c.text }}</div>
   {% else %}<div>{{ t.e.what|capitalize }}</div>{% for f, ov in (t.e.changes or {}).items() %}<div class="change small"><b>{{ f }}:</b> <s class="muted">{{ ov[0] or '(none)' }}</s> → {{ ov[1] or '(none)' }}</div>{% endfor %}{% endif %}
@@ -17,7 +19,7 @@
 <div class="body"><h2 id="t{{ x.id }}">{{ x.text }}</h2>{{ caller() }}</div></dialog>{% endmacro %}
 
 {% macro chips(x, full=False) %}{# full: in the dialog, with links and when it was first mentioned #}
-    {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{% if full %}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a>{% else %}{{ x.owner_name }}{% endif %}</span>{% else %}<span class="chip muted">No owner</span>{% endif %}
+    {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{% if full %}<a href="/members/{{ x.owner }}{{ from_item(x) }}">{{ x.owner_name }}</a>{% else %}{{ x.owner_name }}{% endif %}</span>{% else %}<span class="chip muted">No owner</span>{% endif %}
     {% if x.due %}<span class="chip{{ ' late' if x.overdue }}">{{ emoji('⏰', 'clock') }} due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}
     {% if x.agenda and x.agenda > today|string %}<span class="chip">{{ emoji('⏸️', 'pause') }} on the agenda for {{ fmt(x.agenda) }}</span>{% endif %}
     {% if x.quiet %}<span class="chip warn" title="Nothing has changed on it for weeks">quiet for a while: still on?</span>{% endif %}
@@ -43,7 +45,7 @@
       <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-toggle="e{{ x.id }}">Cancel</button></div></form></div>{% endif %}
   <h3>Comments</h3>
   <div class="comments">{% for c in cs %}<div class="comment">
-      <span class="chip">{{ avatar(c.by, 'xs') }}<a href="/members/{{ c.by }}">{{ club.short(c.by) }}</a></span> <span class="muted small">{{ c.at|tsfull }}</span>
+      <span class="chip">{{ avatar(c.by, 'xs') }}<a href="/members/{{ c.by }}{{ from_item(x) }}">{{ club.short(c.by) }}</a></span> <span class="muted small">{{ c.at|tsfull }}</span>
       {% if leader or c.by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
       <div class="ctext">{{ c.text }}</div></div>{% else %}<p class="muted small">No comments yet.</p>{% endfor %}</div>
   <form method="post" action="/business/{{ x.id }}/comment" class="modern">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<textarea name="text" rows="3" required placeholder="Write an update, a question, or an offer to help…" aria-label="Comment"></textarea>

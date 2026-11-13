@@ -48,7 +48,7 @@
 <div class="cards">{% for x in done %}
 {% call card(x) %}{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{{ x.owner_name }}</span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>{% endcall %}
 {% call shell(x) %}
-  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a></span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>
+  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}?from=business{% if x.status == 'done' %}&amp;tab=done{% endif %}">{{ x.owner_name }}</a></span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>
     <span class="chip">{{ emoji('📅', 'calendar') }} first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span></div>
   {% if leader or x.owner == me.id %}<div class="dacts"><form method="post" action="/business/{{ x.id }}/done" class="inline"><input type="hidden" name="done" value="0"><button class="act">{{ emoji('🔄', 'refresh') }} Reopen</button></form></div>{% endif %}
   {{ history(x, True) }}

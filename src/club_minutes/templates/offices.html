@@ -10,7 +10,7 @@
   <div class="card-head"><div class="card-text"><b>{{ o.title }}</b>{% if o.seats > 1 %} <span class="muted small">({{ o.seats }} seats)</span>{% endif %}{% if not o.officer %} <span class="muted small">board, not an officer</span>{% endif %}</div>
     {% if can_change %}<div class="topacts"><button type="button" class="act" data-panel="c{{ loop.index }}">Change</button>
       <button type="button" class="act" data-panel="t{{ loop.index }}">Add a past term</button></div>{% endif %}</div>
-  <div class="card-meta">{% for h in o.holders %}<span class="chip">{{ avatar(h, 'xs') }}<a href="/members/{{ h }}">{{ club.name(h) }}</a></span>{% endfor %}
+  <div class="card-meta">{% for h in o.holders %}<span class="chip">{{ avatar(h, 'xs') }}<a href="/members/{{ h }}?from=offices">{{ club.name(h) }}</a></span>{% endfor %}
     {% for _ in range(o.seats - o.holders|length) %}<span class="chip muted">vacant</span>{% endfor %}</div>
   {% if o.terms %}<ul class="small">{% for t in o.terms %}<li>{{ club.name(t.member) }}: {% if t.start %}{{ day(t.start) }}{% else %}before the records{% endif %} – {% if t.end %}{{ day(t.end) }}{% elif t.open %}now{% else %}?{% endif %}</li>{% endfor %}</ul>{% endif %}
   {% if can_change %}<div class="panel" id="c{{ loop.index }}" hidden><form method="post" action="/offices/change" class="modern" data-confirm="Change who holds {{ o.title }}? The roster is updated and the officers are emailed.">
