@@ -47,7 +47,7 @@ def sheet_row(tmp, cs):
 
 
 def test_keeper_edits_and_undo(env):
-    club, tmp, sent, who, c = env
+    club, tmp, sent, _who, c = env
     r = c.post("/members/n0bbbb/edit", data=form(first="Robert", license_class="General", minutes_editor="1",
                                                role="Net Manager", aliases="Bobby, Bob B"), follow_redirects=False)
     assert "saved=1" in r.headers["location"]
@@ -87,7 +87,7 @@ def test_only_roster_keepers(env):
 
 def test_admins_email_needs_admin_mode(env, monkeypatch):
     """A roster keeper can't point an admin's sign-in (and admin-mode confirmation) email at another inbox."""
-    club, tmp, _, who, c = env
+    club, _tmp, _, _who, c = env
     club.admins = {"n0bbbb"}
     r = c.post("/members/n0bbbb/edit", data=form(email="mallory@example.org"), follow_redirects=False)
     assert "Only%20an%20admin" in r.headers["location"] and club.members["n0bbbb"].email == "bob@example.org"

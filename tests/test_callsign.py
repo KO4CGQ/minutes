@@ -101,6 +101,7 @@ def test_callsign_change_refusals(env, monkeypatch):
 
 def test_callsign_change_from_the_page(env, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.store import Archive
     club, d = env

@@ -99,7 +99,7 @@ def colours(s: dict) -> dict[str, int]:
 def guess(text: str, s: dict | None = None) -> str:
     """The likely category from a bill's words: "Gas Bill $81" -> utilities. Other when nothing matches, or when the
     Treasurer removed the one it would be."""
-    c = next((c for c, pat in GUESSES if re.search(pat, text, re.I)), "other")
+    c = next((c for c, pat in GUESSES if re.search(pat, text, re.IGNORECASE)), "other")
     return c if s is None or c in categories(s) else "other"
 
 
@@ -311,7 +311,7 @@ def bills(archive, s: dict, start: str | None) -> list[dict]:
                 after = it.text[found.end():found_all[n + 1].start() if n + 1 < len(found_all) else None]
                 before = it.text[found_all[n - 1].end() if n else 0:found.start()]
                 label, other = (after, before) if found_all[0].start() == 0 else (before, after)
-                label = label if re.search(r"[a-z]", label, re.I) else other
+                label = label if re.search(r"[a-z]", label, re.IGNORECASE) else other
                 cat = guess(label, s)
                 out.append({"key": key, "meeting": m.slug, "text": it.text, "amount": found.group(0), "category": cat,
                             "label": label.strip(" ,.;:-–/") or it.text, "split": len(found_all) > 1,

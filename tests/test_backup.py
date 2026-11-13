@@ -122,17 +122,19 @@ def test_sigv4_matches_botocore():
     import datetime as dt
     cfg = {"endpoint": "https://s3.us-west-004.backblazeb2.com", "bucket": "club-backups", "region": "us-west-004",
            "key_id": "keyid", "secret": "secret"}
-    url, h = backup.s3_request(cfg, "PUT", "minutes/w8lbz a.enc", b"x", now=dt.datetime(2026, 11, 9, 3, 6, 57, tzinfo=dt.timezone.utc))
+    url, h = backup.s3_request(cfg, "PUT", "minutes/w8lbz a.enc", b"x", now=dt.datetime(2026, 11, 9, 3, 6, 57, tzinfo=dt.UTC))
     assert url == "https://s3.us-west-004.backblazeb2.com/club-backups/minutes/w8lbz%20a.enc"
     assert h["authorization"].endswith("Signature=723393ff098d298c48a161b085e26c52035aabb0b57248f1fb2d6d1bc31051fb")
 
 
 def test_schedule_and_page(data, tmp_path, monkeypatch):
     import datetime as dt
+
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     assert backup.due(dt.datetime(2026, 11, 9, 3)) and not backup.due(dt.datetime(2026, 11, 9, 1))  # daily at 2 by default
-    (data / "backup-status.json").write_text('{"at": %d, "ok": false}' % dt.datetime(2026, 11, 9, 2, 5).timestamp())
+    (data / "backup-status.json").write_text(f'{{"at": {int(dt.datetime(2026, 11, 9, 2, 5).timestamp())}, "ok": false}}')
     assert not backup.due(dt.datetime(2026, 11, 9, 23)) and backup.due(dt.datetime(2026, 11, 10, 2))  # one try a day
     backup.save_settings({"every": "weekly", "hour": "4", "keep_local": "3"})
     assert not backup.due(dt.datetime(2026, 11, 14, 5)) and backup.due(dt.datetime(2026, 11, 16, 4))

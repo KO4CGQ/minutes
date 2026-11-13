@@ -115,7 +115,7 @@ def auto_backing() -> str:
         _auto.clear()
         try:
             _auto[key] = _pick(p)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _auto[key] = "none"
     return _auto[key]
 

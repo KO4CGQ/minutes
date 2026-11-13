@@ -93,6 +93,7 @@ def test_suggestions_wait_for_a_person(tmp_path, monkeypatch):
 
 def test_business_page_suggestions_for_leaders_only(env, monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.store import Archive
     club, m, _ = env

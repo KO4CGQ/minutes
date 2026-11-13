@@ -141,7 +141,7 @@ def decrypt(blob: bytes, pw: str) -> bytes:
         raise BackupError("Wrong passphrase, or the file is damaged.")
 
 
-def archive(data: Path = None) -> bytes:
+def archive(data: Path | None = None) -> bytes:
     """The data folder as .tar.gz bytes. The sign-in database is copied with SQLite's backup API (consistent
     even while the app writes to it)."""
     data = data or DATA
@@ -228,7 +228,7 @@ def due(now: dt.datetime | None = None) -> bool:
     return now - last >= dt.timedelta(days=6, hours=12) if sch.get("every") == "weekly" else last.date() < now.date()
 
 
-def data_size(data: Path = None) -> int:
+def data_size(data: Path | None = None) -> int:
     """Bytes in what a backup takes (before compression)."""
     data = data or DATA
     return sum(p.stat().st_size for p in data.rglob("*") if p.is_file() and p.relative_to(data).parts[0] not in SKIP_DIRS
@@ -297,7 +297,7 @@ def _sign(k: bytes, msg: str) -> bytes:
 def s3_request(cfg: dict, method: str, key: str, body: bytes = b"", now: dt.datetime | None = None) -> tuple[str, dict]:
     """URL and headers for an AWS Signature Version 4 request (path-style), so no SDK is needed."""
     from urllib.parse import quote, urlparse
-    now = now or dt.datetime.now(dt.timezone.utc)
+    now = now or dt.datetime.now(dt.UTC)
     amz, day = now.strftime("%Y%m%dT%H%M%SZ"), now.strftime("%Y%m%d")
     host = urlparse(cfg["endpoint"]).netloc
     path = "/" + quote(f"{cfg['bucket']}/{key}")

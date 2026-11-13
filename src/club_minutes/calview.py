@@ -9,7 +9,8 @@ import re
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
-from . import business, chow, events as store, regions
+from . import business, chow, regions
+from . import events as store
 from .club import DATA, Club, show_date
 
 KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays",
@@ -149,7 +150,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     minutes = []  # the minutes' dated Upcoming Events, on the calendar the leader picked (Club events by default)
     for i in (archive.meetings[0].items("Upcoming Events") if archive.meetings else []):  # the newest list (a draft counts)
         if i.when and (i.cal or "events") in kinds:
-            s, f, all_day = i.span()
+            _s, f, all_day = i.span()
             o = {"title": i.text, "start": i.when, "end": i.until or (None if all_day else f.strftime("%Y-%m-%dT%H:%M"))}
             x = _entry(o, i.cal or "events", from_minutes=True)
             if x.end >= lo and x.start <= hi:
@@ -251,7 +252,7 @@ def _fold(line: str) -> str:
 def ics(items: list[Entry], name: str, tz: str) -> str:
     """An iCalendar file of these entries, for Apple Calendar, Outlook, Google and phones to subscribe to."""
     import hashlib
-    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Minutes//Club calendar//EN", "CALSCALE:GREGORIAN",
              f"X-WR-CALNAME:{_ics_text(name)}", f"X-WR-TIMEZONE:{tz}", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H"]
     for e in items:

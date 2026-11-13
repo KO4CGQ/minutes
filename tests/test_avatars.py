@@ -1,6 +1,5 @@
 """Profile pictures: squared and stripped of camera data, members-only, removable by the member or an officer."""
 import io
-import json
 from pathlib import Path
 
 import pytest
@@ -44,6 +43,7 @@ def test_save_squares_and_strips(env):
 
 def test_routes(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.club import Club
     from club_minutes.store import Archive
@@ -71,6 +71,7 @@ def test_routes(env, tmp_path, monkeypatch):
 
 def test_roster_card_view_is_remembered(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.club import Club
     from club_minutes.store import Archive

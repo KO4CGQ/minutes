@@ -17,11 +17,20 @@ import time
 from email.message import EmailMessage
 from pathlib import Path
 
-from webauthn import (generate_authentication_options, generate_registration_options, options_to_json,
-                      verify_authentication_response, verify_registration_response)
+from webauthn import (
+    generate_authentication_options,
+    generate_registration_options,
+    options_to_json,
+    verify_authentication_response,
+    verify_registration_response,
+)
 from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
-from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
-                                      ResidentKeyRequirement, UserVerificationRequirement)
+from webauthn.helpers.structs import (
+    AuthenticatorSelectionCriteria,
+    PublicKeyCredentialDescriptor,
+    ResidentKeyRequirement,
+    UserVerificationRequirement,
+)
 
 from . import branding
 from .club import DATA, PREVIEW, STAGE, Club, one_line, valid_email

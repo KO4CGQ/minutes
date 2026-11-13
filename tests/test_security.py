@@ -36,7 +36,7 @@ def routes():
     for r in web.app.routes:
         path = r.path
         for p in ("slug", "iid", "eid", "rid", "cid", "sid", "nid", "mid", "tab", "tid", "id", "key", "kind"):
-            path = path.replace("{%s}" % p, "x")
+            path = path.replace(f"{{{p}}}", "x")
         path = path.replace("{token}.ics", "x.ics")
         if "{" not in path and not path.startswith(("/static", "/docs", "/openapi")):
             for m in getattr(r, "methods", None) or ():
@@ -109,7 +109,9 @@ def test_a_slow_profile_save_doesnt_hold_up_everyone_else(app, monkeypatch):
     """Saving a profile writes the Google roster sheet, which can take seconds; other requests are answered meanwhile."""
     import asyncio
     import time
+
     import httpx
+
     from club_minutes import profile
     monkeypatch.setattr(profile, "change", lambda *a, **k: time.sleep(2))  # the sheet, slow today
     cookie = {web.COOKIE: web.authn.new_session("n0aaaa")}
@@ -172,11 +174,12 @@ def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, m
     import subprocess
     import sys
     import time
+
     from club_minutes import club as clubmod
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     holder = subprocess.Popen(
-        [sys.executable, "-c", "import time; from club_minutes.club import roster_locked\n"
-                               "roster_locked(lambda: (print('held', flush=True), time.sleep(1.5)))()"],
+        [sys.executable, "-c", ("import time; from club_minutes.club import roster_locked\n"
+                                "roster_locked(lambda: (print('held', flush=True), time.sleep(1.5)))()")],
         env={**os.environ, "CLUB_MINUTES_DATA": str(tmp_path)}, stdout=subprocess.PIPE, text=True)
     assert holder.stdout.readline().strip() == "held"  # the "sync" has the lock
     t0 = time.monotonic()
@@ -254,6 +257,7 @@ def test_changes_come_only_from_the_apps_own_pages(app, headers, ok):
 def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkeypatch):
     """Admin → Site → Dates: a preset or own formats, used at once; a wrong one changes nothing; never other settings."""
     import datetime as dt
+
     from club_minutes import club as clubmod
     from club_minutes.club import show_date
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
@@ -283,7 +287,9 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
     moves the calendar's weekly meeting from the Starting date on (earlier dates stay) and says which chow nights aren't moved."""
     import datetime as dt
     from urllib.parse import unquote
-    from club_minutes import club as clubmod, events
+
+    from club_minutes import club as clubmod
+    from club_minutes import events
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     monkeypatch.setattr(web, "DATA", tmp_path)
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
@@ -364,6 +370,7 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
     """Admin → Site → Agenda: tick, place and hint each section, add one, and the two reminders; only changes from
     club.yaml are kept; a wrong one changes nothing."""
     import pytest as _pytest
+
     from club_minutes import club as clubmod
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     monkeypatch.setattr(web, "DATA", tmp_path)
@@ -439,7 +446,8 @@ def test_site_features_and_bylaws_tabs(app, tmp_path, monkeypatch):
     before = c.site_settings
     assert "Pick a region" in admin.post("/admin/site/features", data={"holidays": "zz"}).text and c.site_settings == before
     import datetime as dt
-    from club_minutes import chow, regions
+
+    from club_minutes import chow
     rows = lambda *hs: {"hol_rows": str(len(hs) + 1)} | {f"hol_{k}{i}": v for i, h in enumerate(hs) for k, v in h.items()}
     eve = {"name": "Christmas  Eve", "month": "12", "day": "d24", "after": "0"}
     black = {"name": "Black Friday", "month": "11", "day": "w3:4", "after": "1"}  # the day after the 4th Thursday

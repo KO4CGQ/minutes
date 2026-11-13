@@ -106,7 +106,7 @@ def _minutes(m, q):
 
 
 def test_nicknames_find_each_other_for_names_on_the_roster(tmp_path, monkeypatch):
-    m, club = _nick_env(tmp_path, monkeypatch, {"n0bbbb": "Richard"},
+    m, _club = _nick_env(tmp_path, monkeypatch, {"n0bbbb": "Richard"},
                         ["Rich passed his Extra exam", "Dick fixed the repeater", "Rick brought the coffee"])
     assert "passed his" in _minutes(m, "Richard Extra")          # Richard finds Rich
     assert "fixed the" in _minutes(m, "richard repeater")        # any case

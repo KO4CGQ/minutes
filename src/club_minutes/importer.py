@@ -27,7 +27,7 @@ HEADINGS = {
     "Upcoming Chow Dates": "Upcoming Chow",
     "Upcoming Events": "Upcoming Events",
 }
-HEAD_RE = re.compile(r"^(%s):\s*(.*)$" % "|".join(map(re.escape, HEADINGS)))
+HEAD_RE = re.compile(r"^({}):\s*(.*)$".format("|".join(map(re.escape, HEADINGS))))
 DATE_RE = re.compile(r"Date:?\s*(\d{1,2})\s+([A-Za-z]+)\.?\s+(\d{4})")
 ATTEND_RE = re.compile(r"([A-Z][A-Za-z']+)\s*_+\s*([TtXx])?")
 CALLSIGN_RE = re.compile(r"\b([A-Z]{1,3}\d{1,2}[A-Z]{1,4}|W[A-Z]{3}\d{3})\b")  # ham, or GMRS like WRXS650
@@ -110,7 +110,7 @@ def parse(text: str, club: Club) -> Meeting:
             if not leftover:
                 paras = []  # the empty template, not real figures
         if section == "Upcoming Chow":
-            paras = [p for p in paras if not re.fullmatch(r"see attached( chow)? list", p, re.I)]
+            paras = [p for p in paras if not re.fullmatch(r"see attached( chow)? list", p, re.IGNORECASE)]
         items = []
         for p in paras:
             if club.is_redacted(p):

@@ -235,6 +235,7 @@ def test_import_ics():
 
 def signed_in(tmp_path, monkeypatch, who):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     c = club()
@@ -256,7 +257,7 @@ def test_import_turns_html_descriptions_into_text():
 
 
 def test_leaders_add_change_delete_and_import_on_the_page(tmp_path, monkeypatch):
-    t, c, a = signed_in(tmp_path, monkeypatch, "n0bbbb")
+    t, _c, a = signed_in(tmp_path, monkeypatch, "n0bbbb")
     assert "Add an event" not in t.get("/calendar").text and t.get("/calendar/edit").status_code == 403  # members see; leaders edit
     t.cookies.set(web_cookie(), a.new_session("n0aaaa"))  # an officer
     r = t.post("/calendar/save", data={"cal": "events", "title": "Fox hunt", "date": "2026-11-21", "time": "14:00", "end_time": "13:00"})
@@ -285,6 +286,7 @@ def web_cookie():
 
 def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     today = dt.date.today()
     s = chow.load()
@@ -297,13 +299,13 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
         events.add(evs, "planning", events.from_form({"title": "Board dinner", "date": (today + dt.timedelta(days=4)).isoformat(),
                                                       "end_date": (today + dt.timedelta(days=5)).isoformat()}), "x")
         events.save(evs)
-    m, c, a = signed_in(tmp_path, monkeypatch, "n0bbbb")
+    m, c, _a = signed_in(tmp_path, monkeypatch, "n0bbbb")
     anon = TestClient(web.app)
     assert anon.get("/calendar/public", follow_redirects=False).status_code == 404  # nothing public yet
     tok = calview.feed_token("n0bbbb")
     body = anon.get(f"/calendar/feed/{tok}.ics").text
     assert anon.get("/calendar/feed/%E0%A3%8E.ics").status_code == 404  # not ASCII: no one's, not a server error
-    assert "SUMMARY:Fox hunt\; bring a radio\\, and snacks" in body and "LOCATION:City park" in body
+    assert "SUMMARY:Fox hunt\\; bring a radio\\, and snacks" in body and "LOCATION:City park" in body
     assert "URL:https://meet.example.com/fox" in body and "DESCRIPTION:Join online: https://meet.example.com/fox" in body
     assert "DTSTART;TZID=America/New_York:" in body and "SUMMARY:Chow: Amy Appleseed" in body
     assert f"DTEND;VALUE=DATE:{(today + dt.timedelta(days=6)):%Y%m%d}" in body  # Board dinner: two days, end is the day after
@@ -470,7 +472,7 @@ def test_daily_and_several_weeks_of_the_month():
 
 
 def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
-    from club_minutes import business, web
+    from club_minutes import business
     c = club()
     got, _ = calview.entries(c, Archive(tmp_path, c), "n0bbbb", *NOV)
     hol = [(e.start.isoformat(), e.title) for e in got if e.kind == "holiday"]
@@ -579,6 +581,7 @@ def test_look_alike_events_the_same_day_are_flagged_not_hidden(tmp_path):
 
 def test_holidays_and_elections_are_none_unless_club_yaml_picks_a_region(tmp_path):
     import pytest
+
     from club_minutes import regions
     c = club()
     c.calendar = {}  # a new club: no region picked

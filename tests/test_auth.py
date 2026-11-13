@@ -63,7 +63,7 @@ def test_safe_next():
 
 
 def test_passkey_options(a):
-    cid, options = a.registration_options("n0aaaa")
+    _cid, options = a.registration_options("n0aaaa")
     assert '"residentKey": "required"' in options and '"id": "localhost"' in options
     with pytest.raises(ValueError):
         a.register("n0aaaa", "wrong-challenge", {})
@@ -123,6 +123,7 @@ def test_rename_passkey_and_old_db_upgrade(a, tmp_path):
 def test_email_links_ignore_forged_host(monkeypatch):
     """A sign-in link must never point at whatever Host header the request carried."""
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     sent = []
     monkeypatch.setattr(web.authn, "send_link", lambda email, nxt, base_url=None, **kw: sent.append(base_url))
@@ -158,6 +159,7 @@ def test_failed_attempts_ban_internet_addresses_only(a):
 
 def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -175,6 +177,7 @@ def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, mo
 
 def test_sign_in_from_before_the_rename_still_works(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -188,6 +191,7 @@ def test_sign_in_from_before_the_rename_still_works(tmp_path, monkeypatch):
 
 def test_security_page_tabs(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])
     club.admins = {"n0admn"}
@@ -224,8 +228,9 @@ def test_an_emailed_link_sign_in_offers_a_passkey_until_dismissed(tmp_path, monk
     device and clears the cookie on Add or Not now, so the next emailed-link sign-in offers again."""
     from fastapi.testclient import TestClient
     from test_calview import signed_in
+
     from club_minutes import web
-    _, club, a = signed_in(tmp_path, monkeypatch, "n0aaaa")
+    _, _club, a = signed_in(tmp_path, monkeypatch, "n0aaaa")
     monkeypatch.setattr(a, "rp_id", "minutes.example")  # the passkey host
     t = TestClient(web.app, base_url="https://minutes.example")
     r = t.get("/login/link?t=" + a.create_link("n0aaaa").split("t=")[1], follow_redirects=False)

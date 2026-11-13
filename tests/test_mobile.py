@@ -51,6 +51,7 @@ def pages(app) -> list[str]:
 def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
     club.admins = {"n0admn"}
@@ -149,6 +150,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
 def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch, engine):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True},
                                                {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"}])
@@ -189,6 +191,7 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
 def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_path, monkeypatch, engine):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
+
     from club_minutes import business, web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
     a = Auth(club, tmp_path / "auth.sqlite")

@@ -18,10 +18,10 @@ tmp = Path(tempfile.mkdtemp(prefix="club-minutes-demo-"))
 subprocess.run([sys.executable, str(HERE / "build.py"), str(tmp)], check=True)
 os.environ.update(CLUB_MINUTES_DATA=str(tmp / "data"), CLUB_MINUTES_CONFIG=str(tmp / "club.yaml"), CLUB_MINUTES_PREVIEW="demo")
 
-from fastapi.testclient import TestClient  # noqa: E402  (after the folders are set)
-from playwright.sync_api import sync_playwright  # noqa: E402
+from fastapi.testclient import TestClient
+from playwright.sync_api import sync_playwright
 
-from club_minutes import web  # noqa: E402
+from club_minutes import web
 
 club = web.archive.club
 me = club.canonical("n0jane")

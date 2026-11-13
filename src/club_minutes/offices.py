@@ -15,7 +15,7 @@ import logging
 import secrets
 import time
 
-from . import branding, auth, profile
+from . import auth, branding, profile
 from .club import ROSTER_CACHE, Club, roster_locked, show_date
 from .membership import LOG_TAB
 from .roster import Sheet

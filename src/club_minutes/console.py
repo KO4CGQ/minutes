@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import re
 import logging
+import re
 import shutil
 import threading
 import time
@@ -269,7 +269,8 @@ def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
     community events, Planning, holidays and birthdays shared with everyone. Left out: events ticked to leave out (the
     weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events. next_meeting: the meeting
     event's next date, else a week on."""
-    from . import calview, events as store
+    from . import calview
+    from . import events as store
     evs = store.load()
     quiet = {e["id"] for e in evs if store.quiet(e)}
     items, _ = calview.entries(archive.club, archive, "", date, date + dt.timedelta(days=days))  # "": no private birthdays

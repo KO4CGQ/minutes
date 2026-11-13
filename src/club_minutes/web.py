@@ -7,29 +7,75 @@ import json
 import logging
 import os
 import re
-import threading
 import string
+import threading
 import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
-from fastapi.staticfiles import StaticFiles
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+)
 from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from markupsafe import Markup, escape
+from starlette.concurrency import (
+    run_in_threadpool,  # async routes hand slow work (the roster sheet, email, S3) to a thread
+)
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import ai, avatars, branding, theme, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
+from . import (
+    ai,
+    avatars,
+    backup,
+    branding,
+    business,
+    calview,
+    chow,
+    console,
+    events,
+    limits,
+    membership,
+    offices,
+    prefs,
+    profile,
+    regions,
+    theme,
+    treasurer,
+    updates,
+)
 from . import auth as authmod
-from . import regions
-from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, DATES, PREVIEW, STAGE, WEEKDAYS, _agenda, _server_timezone, num, one_line, show_date, valid_email
 from .backup import KEY_FILE
+from .club import (
+    DATA,
+    DATES,
+    PREVIEW,
+    STAGE,
+    WEEKDAYS,
+    _agenda,
+    _server_timezone,
+    num,
+    one_line,
+    show_date,
+    valid_email,
+)
 from .roster import COLUMNS, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
@@ -292,7 +338,7 @@ def _update_badge(request: Request) -> str | None:
         return None  # stage is updated by hand (deploy/stage-push.sh)
     try:
         rel = updates.available()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     return rel["version"] if rel else None
 
@@ -516,11 +562,11 @@ def followups_after_submit(slug: str) -> None:
     if ai.configured(archive.club):
         try:
             run_followups(slug)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _log.exception("AI follow-ups for %s failed", slug)
         try:
             console.refresh_ask_about(archive)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _log.exception("AI ask-about prompts after %s failed", slug)
 
 
@@ -698,7 +744,7 @@ def chow_pdf(mid: str = Depends(me)):
 @app.post("/chow/email", dependencies=[CHOW])
 def chow_email(request: Request, mid: str = Depends(chow_leader)):
     """Send the chow list to every member who wants it (Email tab), e.g. after filling or changing the schedule."""
-    how = lambda k: sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == k}, key=str.lower)  # noqa: E731
+    how = lambda k: sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == k}, key=str.lower)
     pdf = chow_list_pdf()
     return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, how("pdf"), mid, base_url(request), how("link")))
 
@@ -1038,7 +1084,7 @@ async def admin_confirm_verify(request: Request, mid: str = Depends(real_me)):
     body = await _json(request)
     try:
         authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"], kind="step-up", member=mid)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(400, str(e))
     _admin_on(request, mid, "passkey")
     return {"ok": True, "next": _safe_next(body.get("next", "/"))}
@@ -1398,7 +1444,7 @@ async def passkey_register_verify(request: Request, mid: str = Depends(me)):
     body = await _json(request)
     try:
         authn.register(mid, request.cookies.get(CHALLENGE_COOKIE), body["credential"], body.get("label", ""))
-    except Exception as e:  # verification errors come from several exception types
+    except Exception as e:  # verification errors come from several exception types  # noqa: BLE001
         raise HTTPException(400, f"Couldn't add the passkey: {e}")
     return {"ok": True}
 
@@ -1416,7 +1462,7 @@ async def passkey_login_verify(request: Request):
     body = await _json(request)
     try:
         member = authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"])
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         authn.event("passkey_failed", client_ip(request), detail=str(e)[:120])
         raise HTTPException(400, str(e))
     if not authn.is_active(member):
@@ -1873,7 +1919,7 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
     sp = DATA / "stage-sync-status.json"
     try:
         upd = None if STAGE else updates.available()
-    except Exception:  # GitHub not reachable: just don't say
+    except Exception:  # GitHub not reachable: just don't say  # noqa: BLE001
         upd = None
     return page(request, "admin.html", failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
                 passphrase_set=len(os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE", "")) >= 12, upd=upd,
@@ -2055,7 +2101,7 @@ def security_unban(request: Request, ip: str = Form(...)):
 
 
 @app.post("/admin/security/signout")
-def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):
+def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):  # noqa: B008 (FastAPI's form fields)
     """Sign out one device, or every ticked one."""
     _security_admin(request)
     for sid in session:
@@ -2115,7 +2161,7 @@ def _site_admin(request: Request) -> str:
 @app.post("/admin/site/dates")
 async def site_dates(request: Request):
     """Dates tab: a preset, the four formats by hand, or back to club.yaml's."""
-    mid, form = _site_admin(request), await request.form()
+    _mid, form = _site_admin(request), await request.form()
     choice = form.get("preset", "")
     value = (None if choice == "yaml" else DATE_PRESETS[choice][1] if choice in DATE_PRESETS else
              {k: (form.get(k) or "").strip() for k in ("list", "document", "short", "long")} if choice == "custom" else "?")
@@ -2173,7 +2219,7 @@ def _own_holidays(form) -> list[dict]:
 @app.post("/admin/site/features")
 async def site_features(request: Request):
     """Features tab: chow on or off, the public calendars, holiday and election regions."""
-    mid, form, club = _site_admin(request), await request.form(), archive.club
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
     regs = regions.choices()
     try:
         if form.get("back"):
@@ -2197,7 +2243,7 @@ async def site_features(request: Request):
 @app.post("/admin/site/bylaws")
 async def site_bylaws(request: Request):
     """Bylaws tab: the references the app cites, the arrears note, and the certificate (bond) members buy, if any."""
-    mid, form, club = _site_admin(request), await request.form(), archive.club
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
     line = lambda k, n: " ".join((form.get(k) or "").split())[:n]
     try:
         if form.get("back"):
@@ -2241,7 +2287,7 @@ def _agenda_rows(club) -> list[dict]:
 async def site_agenda(request: Request):
     """Agenda tab: the sections in order (tick to use, a number for the place) with their console hints, and the two
     reminders. Only what differs from club.yaml is kept."""
-    mid, form, club = _site_admin(request), await request.form(), archive.club
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
     keys = (("meeting", "sections"), ("club", "invite_after_visits"), ("club", "remind_days_before"))
     try:
         if form.get("back"):
@@ -2606,7 +2652,7 @@ def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str
 def _repeat_choices(day: str) -> list[tuple[str, str]]:
     """The Repeats menu, worded for the start day ("Monthly on the 2nd Tuesday")."""
     start = day[:10]
-    lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})  # noqa: E731
+    lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})
     return [("", "Doesn't repeat"), ("daily", lab("daily")), ("weekly", lab("weekly")), ("biweekly", lab("weekly", interval=2)),
             ("monthly_weekday", lab("monthly_weekday")), ("monthly_last", lab("monthly_weekday", last=True)),
             ("monthly_weeks", f"Monthly on some {dt.date.fromisoformat(start):%A}s (pick the weeks)"),

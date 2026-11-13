@@ -151,7 +151,7 @@ def test_arrears_alert_once_each_time_and_never_in_preview(club, monkeypatch):
     today = dt.date(2026, 12, 3)
     assert treasurer.arrears_alert(club, s, today) is None  # preview: no emails
     s["settings"]["mode"] = "on"
-    to, subject, body = treasurer.arrears_alert(club, s, today)
+    to, _subject, body = treasurer.arrears_alert(club, s, today)
     assert to == ["pres@example.org", "tre@example.org"] and "Amy Appleseed" in body and "behind on dues:" in body
     assert "bylaws" not in body and "The app never suspends" in body  # no club rules unless club.yaml gives them
     assert treasurer.arrears_alert(club, s, today) is None  # once
@@ -166,6 +166,7 @@ def test_arrears_alert_once_each_time_and_never_in_preview(club, monkeypatch):
 
 def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -202,6 +203,7 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
 
 def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -255,6 +257,7 @@ def test_categories_spending_by_month_and_the_console(club, tmp_path, monkeypatc
 
 def test_spending_page_members_once_on_officers_in_preview(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -313,6 +316,7 @@ def test_a_bond_bought_years_ago_is_on_file_and_moves_no_money(club):
 
 def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -333,6 +337,7 @@ def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, 
 
 def test_without_a_certificate_in_club_yaml_nobody_owes_one(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -391,6 +396,7 @@ def test_bills_from_older_minutes_only_when_asked(club, tmp_path):
 
 def test_bill_tabs_names_and_the_read_only_dialog(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -431,6 +437,7 @@ def test_amounts_and_dates_that_are_typos_or_tricks(club):
 
 def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -461,6 +468,7 @@ def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, 
 
 def test_text_from_the_minutes_and_members_is_never_run_as_html(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import business, web
     from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")

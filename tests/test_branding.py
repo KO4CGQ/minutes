@@ -58,7 +58,7 @@ def test_an_uploaded_logo_becomes_three_fresh_pngs_and_odd_files_are_refused(dat
 def test_each_picture_is_uploaded_and_reset_on_its_own(data):
     blue, red = png(color=(0, 0, 255, 255)), png(color=(255, 0, 0, 255))
     # the colour in the middle, rounded (resizing blends a shade or two)
-    pixel = lambda kind: tuple(round(c / 255) * 255 for c in Image.open(branding.path(kind)).convert("RGB").getpixel((32, 32)))  # noqa: E731
+    pixel = lambda kind: tuple(round(c / 255) * 255 for c in Image.open(branding.path(kind)).convert("RGB").getpixel((32, 32)))
     branding.save("logo", red)
     assert [branding.source(k) for k in branding.FILES] == ["own", "logo", "logo"] and pixel("favicon") == (255, 0, 0)
     branding.save("favicon", blue)                                     # the tab icon on its own
@@ -123,7 +123,7 @@ def test_behind_the_logo_is_picked_from_its_shape_unless_chosen(data):
 
 def test_a_tab_icon_made_from_the_logo_gets_the_logos_white_behind_it(data):
     branding.save("logo", png((300, 300), (0, 0, 0, 0)))                # line art: see-through, round-ish
-    fav = lambda: Image.open(branding.path("favicon")).convert("RGBA")  # noqa: E731
+    fav = lambda: Image.open(branding.path("favicon")).convert("RGBA")
     assert branding.backing() == "circle" and fav().getpixel((32, 32)) == (255, 255, 255, 255) and fav().getpixel((0, 0))[3] == 0
     branding.set_backing("none")                                         # changing "behind it" redraws it
     assert fav().getpixel((32, 32))[3] == 0

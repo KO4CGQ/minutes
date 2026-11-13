@@ -113,9 +113,9 @@ def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str,
         m = club.members[mid]
         when = "tomorrow" if days == 1 else f"in {days} days"
         out.append((mid, f"chow:{date}:{mid}:{days}", f"Your chow night is {when}: {show_date(date, 'weekday')}",
-                    f"Hi {m.first},\n\nA reminder that you're bringing chow on {show_date(date, 'weekday')}.\n\n"
-                    f"Can't make it? Ask someone to swap on the chow page: {url}/chow\n\n"
-                    f"To change how many days ahead you're reminded, or stop these reminders: {url}/profile/email\n\n{_sign(club)}"))
+                    (f"Hi {m.first},\n\nA reminder that you're bringing chow on {show_date(date, 'weekday')}.\n\n"
+                     f"Can't make it? Ask someone to swap on the chow page: {url}/chow\n\n"
+                     f"To change how many days ahead you're reminded, or stop these reminders: {url}/profile/email\n\n{_sign(club)}")))
     return out
 
 

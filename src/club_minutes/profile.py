@@ -12,7 +12,7 @@ import os
 import secrets
 import time
 
-from . import branding, auth, prefs
+from . import auth, branding, prefs
 from .club import DATA, ROSTER_CACHE, Club, one_line, roster_locked
 from .roster import COLUMNS, EDITABLE, FLAGS, Sheet, _truthy
 

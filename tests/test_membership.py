@@ -1,5 +1,4 @@
 """Adding a member: a new roster row and Membership Log row (values only), the app updated, guests offered."""
-import datetime as dt
 import json
 from pathlib import Path
 
@@ -77,6 +76,7 @@ def test_ready_guests_and_names():
 
 def test_only_roster_keepers_can_add(env, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.store import Archive
     club, tmp, _ = env

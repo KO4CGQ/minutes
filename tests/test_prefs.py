@@ -80,6 +80,7 @@ def test_meeting_day_email(tmp_path, monkeypatch):
 
 def test_email_tab(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     c = club()
@@ -97,6 +98,7 @@ def test_email_tab(tmp_path, monkeypatch):
 
 def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     assert prefs.settings("n0aaaa") == prefs.settings(None) == {"week_start": "sunday"}
@@ -107,7 +109,7 @@ def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):
     monkeypatch.setattr(web.archive, "club", c)
     t = TestClient(web.app)
     t.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
-    month = lambda: t.get("/calendar?view=month&month=2026-11").text  # noqa: E731  Nov 1, 2026 is a Sunday
+    month = lambda: t.get("/calendar?view=month&month=2026-11").text
     assert "<th>Sun</th><th>Mon</th>" in month() and 'aria-label="Sunday, November 1"' in month()
     assert 'aria-label="Saturday, December 5"' in month() and 'aria-label="Sunday, December 6"' not in month()  # ends with the week of the 30th
     r = t.post("/profile/settings", data={"week_start": "monday"}, follow_redirects=False)

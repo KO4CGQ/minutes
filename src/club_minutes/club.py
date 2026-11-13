@@ -61,7 +61,7 @@ def roster_locked(fn):
             f = None
             if _depth == 0:
                 DATA.mkdir(parents=True, exist_ok=True)
-                f = open(DATA / "roster.lock", "w")
+                f = open(DATA / "roster.lock", "w")  # noqa: SIM115 (held until the lock is released, then closed)
                 try:
                     fcntl.flock(f, fcntl.LOCK_EX)
                 except BaseException:
@@ -110,7 +110,7 @@ def _agenda(raw) -> list[dict]:
 # Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
 # chow: a rotation of members bringing food to meetings (the Chow page, reminders, the console's step, a missed-night fee).
 MODULES = {"chow": False}
-CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,4}$", re.I)  # 4 letters: some countries issue them, and examples like N0CALL can't be anyone's
+CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,4}$", re.IGNORECASE)  # 4 letters: some countries issue them, and examples like N0CALL can't be anyone's
 
 
 def num(v) -> int | None:
@@ -471,7 +471,7 @@ class Club:
         for first, ids in firsts.items():
             if len(ids) == 1:
                 pats.append((rf"{first}(?:'?s)?\b", ids[0]))  # "Amy", "Amys", "Amy's"
-        return [(re.compile(rf"^\s*{p}", re.I), mid) for p, mid in pats]
+        return [(re.compile(rf"^\s*{p}", re.IGNORECASE), mid) for p, mid in pats]
 
     def speaker_of(self, text: str, present: list[str] | None = None) -> str | None:
         """Guess which member a report is about from its first words.

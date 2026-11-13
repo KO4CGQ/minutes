@@ -18,9 +18,9 @@ shutil.copy(HERE / "club.yaml", OUT / "club.yaml")
 os.environ.update(CLUB_MINUTES_DATA=str(OUT / "data"), CLUB_MINUTES_CONFIG=str(OUT / "club.yaml"),
                   CLUB_MINUTES_PREVIEW="demo")  # email goes to the outbox, never out
 
-from club_minutes import business, chow, events, membership, offices, roster  # noqa: E402  (after the folders are set)
-from club_minutes.club import MEETINGS, Club  # noqa: E402
-from club_minutes.meeting import Item, Meeting  # noqa: E402
+from club_minutes import business, chow, events, membership, offices, roster
+from club_minutes.club import MEETINGS, Club
+from club_minutes.meeting import Item, Meeting
 
 PEOPLE = [  # callsign, first, last, license class; office (or None)
     ("N0JANE", "Jane", "Doe", "Amateur Extra", "President"), ("K0JOHN", "John", "Doe", "General", "Vice President"),

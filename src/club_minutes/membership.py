@@ -11,8 +11,8 @@ import json
 import logging
 import re
 
-from . import branding, auth, chow, prefs, profile
-from .club import ROSTER_CACHE, Club, one_line, valid_email, roster_locked
+from . import auth, branding, chow, prefs, profile
+from .club import ROSTER_CACHE, Club, one_line, roster_locked, valid_email
 from .roster import Sheet, SheetError
 
 log = logging.getLogger("club_minutes.membership")

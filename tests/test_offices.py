@@ -76,6 +76,7 @@ def test_change_refuses_mistakes(env):
 
 def test_past_term_and_page(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.store import Archive
     club, _, _ = env

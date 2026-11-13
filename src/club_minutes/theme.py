@@ -136,7 +136,7 @@ def from_logo(path) -> list[str]:
     opaque.paste(img, mask=img.split()[3])
     out = []
     for count, rgb in sorted(opaque.quantize(12).convert("RGB").getcolors(96 * 96) or [], reverse=True):
-        hue, light, s = colorsys.rgb_to_hls(*(c / 255 for c in rgb))
+        _hue, light, s = colorsys.rgb_to_hls(*(c / 255 for c in rgb))
         h = _hex(*(c / 255 for c in rgb))
         if 0.1 < light < 0.9 and s > 0.2 and all(contrast(h, o) > 1.4 for o in out):
             out.append(h)

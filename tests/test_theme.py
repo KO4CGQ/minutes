@@ -37,7 +37,7 @@ def test_every_colour_and_top_bar_stays_readable():
             for lightness in (0, 0.2, 0.5, 0.8, 1):
                 c = theme._hex(*colorsys.hls_to_rgb(h / 360, lightness, s))
                 for bar in (None, c, "#ffffff", "#000000", "#ffff00"):
-                    light, dark, notes = theme.palette(c, bar)
+                    light, dark, _notes = theme.palette(c, bar)
                     assert not failing(light, dark), (c, bar)
     assert theme.palette("#ffff00", "#ffff00")[2]  # a pale bar behind white text was darkened, and the admin is told
 
@@ -76,6 +76,7 @@ def test_suggestions_from_the_logo_are_its_colours_not_white_black_or_see_throug
 
 def test_site_sets_the_colours_every_page_and_pdf_follows(data, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed"}, {"id": "n0bbbb", "first": "Bob", "last": "Bloggs"}])

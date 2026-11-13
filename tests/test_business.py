@@ -56,7 +56,7 @@ def test_items_carry_until_done(env):
 
 
 def test_agenda_hold_and_deleted_meetings(env):
-    club, a = env
+    _club, a = env
     s = business.load()
     business.seed(s, a.meetings)
     sotc = business.add(s, "State of the Club (President)", "sec", agenda="2027-01-07", opened="2026-11-01")
@@ -76,8 +76,9 @@ def test_agenda_hold_and_deleted_meetings(env):
 
 def test_business_page_permissions(env, monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
-    club, a = env
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "amy"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
@@ -101,7 +102,7 @@ def test_business_page_permissions(env, monkeypatch, tmp_path):
 
 
 def test_reminders_once_each_and_only_owners(env):
-    club, a = env
+    club, _a = env
     s = business.load()
     soon = business.add(s, "Book the park", "sec", owner="amy", due="2026-12-03")
     late = business.add(s, "Return the borrowed antenna", "sec", owner="amy", due="2026-11-20")
@@ -122,8 +123,9 @@ def test_reminders_once_each_and_only_owners(env):
 
 def test_comments_history_and_notes(env, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
-    club, a = env
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "bob"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
@@ -160,8 +162,9 @@ def test_comments_history_and_notes(env, monkeypatch):
 
 def test_owner_typed_by_name(env, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
-    club, a = env
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     monkeypatch.setattr(web.authn, "member_for", lambda token: "sec")
     c = TestClient(web.app)
@@ -177,6 +180,7 @@ def test_owner_typed_by_name(env, monkeypatch):
 
 def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club, a = env
     club.members["bob"].minutes_editor = True  # may lead a meeting, but isn't an officer
@@ -198,8 +202,9 @@ def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch)
 def test_motions_are_records(env, monkeypatch):
     """A motion keeps its mover, seconder and result as data; its text is the minutes' line."""
     from fastapi.testclient import TestClient
+
     from club_minutes import web
-    club, a = env
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "amy"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
@@ -244,8 +249,9 @@ def test_motions_are_records(env, monkeypatch):
 
 def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
-    club, a = env
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "sec"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])

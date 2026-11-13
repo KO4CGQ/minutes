@@ -44,7 +44,7 @@ def deploy_notes(notes: str) -> str:
     import textwrap
     first, rest, on = "", [], False
     for line in notes.splitlines():
-        m = re.match(r"^\s*[-*]?\s*\**Deploy notes:?\**:?\s*(.*)$", line, re.I)
+        m = re.match(r"^\s*[-*]?\s*\**Deploy notes:?\**:?\s*(.*)$", line, re.IGNORECASE)
         if m:
             on, first = True, m.group(1).strip()
             continue
@@ -81,7 +81,7 @@ def latest(fetch=None, force: bool = False) -> dict | None:
                      "deploy_notes": deploy_notes(d.get("body") or "")}
                     for d in data if not d.get("draft") and not d.get("prerelease") and re.fullmatch(r"v?\d+\.\d+\.\d+", d.get("tag_name", ""))]
             cache.write_text(json.dumps({"at": int(time.time()), "releases": rels}))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.warning("update check failed: %s", e)
             if not cache.exists():
                 return None
@@ -94,7 +94,7 @@ def latest(fetch=None, force: bool = False) -> dict | None:
     if len(ahead) < 2:
         return dict(rels[0])
     both = lambda key: "\n\n".join(f"**{r['version']}:** {r[key]}" if key == "deploy_notes" else f"### {r['version']}\n\n{r[key]}"
-                                    for r in ahead if r[key])  # noqa: E731
+                                    for r in ahead if r[key])
     return {**rels[0], "notes": both("notes"), "deploy_notes": both("deploy_notes")}
 
 

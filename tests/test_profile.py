@@ -75,7 +75,7 @@ def test_change_writes_only_changed_cells_and_tells_the_secretary(env):
     assert (m.address, m.birthday, m.share) == ("9 Oak Ave", "07-04", ["phone", "birthday"])
     cached = {r["id"]: r for r in json.loads((profile.ROSTER_CACHE).read_text())}
     assert cached["n0cccc"]["address"] == "9 Oak Ave"
-    (to, subject, body, kw), (to2, subject2, body2, kw2) = sent
+    (to, subject, body, kw), (to2, _subject2, body2, kw2) = sent
     assert to == ["jane@example.org"] and "Bob Member" in subject and "9 Oak Ave" in body and "https://x/roster/changes" in body
     assert to2 == ["bob@example.org"] and "You updated" in body2 and "9 Oak Ave" in body2  # the member is told too
     assert "only_to" in kw and "only_to" in kw2  # email test mode applies
@@ -89,7 +89,7 @@ def test_only_profile_fields_can_be_changed(env):
 
 
 def test_undo_restores_and_refuses_if_changed_again(env):
-    club, sheet, fake, sent = env
+    club, sheet, fake, _sent = env
     e = profile.change(club, "n0cccc", {"address": "9 Oak Ave"}, by="n0cccc", sheet=sheet)
     profile.undo(club, e["id"], by="n0aaaa", sheet=sheet)
     assert fake.rows[2][4] == "" and club.members["n0cccc"].address is None
@@ -154,6 +154,7 @@ def test_monthday_filter():
 
 def test_club_reloads_roster_after_a_sync(tmp_path, monkeypatch):
     import os
+
     from club_minutes import club as club_mod
     cache = tmp_path / "roster.json"
     cache.write_text(json.dumps([{"id": "n0cccc", "first": "Bob", "last": "Member"}]))
@@ -169,6 +170,7 @@ def test_club_reloads_roster_after_a_sync(tmp_path, monkeypatch):
 
 def test_multiline_addresses_keep_their_line_breaks(env, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.store import Archive
     club, sheet, fake, sent = env
@@ -217,13 +219,14 @@ def test_preview_mode_never_sends_or_touches_the_real_sheet(tmp_path, monkeypatc
 
 
 def test_email_change_alerts_old_and_new_address(env):
-    club, sheet, fake, sent = env
+    club, sheet, _fake, sent = env
     profile.change(club, "n0cccc", {"email": "bob@new.example"}, by="n0cccc", sheet=sheet)
     assert sent[-1][0] == ["bob@new.example", "bob@example.org"]
 
 
 def test_admin_mode(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     from club_minutes.store import Archive
@@ -265,6 +268,7 @@ def test_admin_mode(tmp_path, monkeypatch):
 def turn_on_admin_mode(c, monkeypatch):
     """Admin mode asks the admin to confirm it's them first: here (no passkey, not the passkey host) by email."""
     from urllib.parse import urlparse
+
     from club_minutes import web
     sent = []
     monkeypatch.setattr(web.authmod, "send_email", lambda to, subject, body, **kw: sent.append((to, body)))
@@ -282,6 +286,7 @@ def turn_on_admin_mode(c, monkeypatch):
 
 def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     from club_minutes.store import Archive
@@ -346,7 +351,9 @@ def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
 def test_admins_edit_club_links(tmp_path, monkeypatch):
     """Links come from club.yaml until an admin edits them; each shows on the Links page, the minutes, both or neither."""
     from fastapi.testclient import TestClient
-    from club_minutes import club as clubmod, web
+
+    from club_minutes import club as clubmod
+    from club_minutes import web
     from club_minutes.auth import Auth
     from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])

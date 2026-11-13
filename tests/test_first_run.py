@@ -14,7 +14,7 @@ def run(tmp_path, *args):
     env = {**os.environ, "CLUB_MINUTES_DATA": str(tmp_path / "data"), "CLUB_MINUTES_CONFIG": str(tmp_path / "club.yaml"),
            "CLUB_MINUTES_ROOT": str(tmp_path)}
     return subprocess.run([sys.executable, "-c", "from club_minutes import main; main()", *args], env=env,
-                          capture_output=True, text=True, timeout=60)
+                          check=False, capture_output=True, text=True, timeout=60)
 
 
 def test_first_member_starts_the_roster_once_and_prints_their_way_in(tmp_path):
@@ -44,6 +44,7 @@ def test_first_member_not_in_admins_is_told_how_to_fix_it(tmp_path):
 
 def test_without_email_settings_a_page_never_claims_it_emailed(monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import auth, web
     monkeypatch.setattr(auth, "PREVIEW", None)
     monkeypatch.delenv("CLUB_MINUTES_SMTP_USER", raising=False)

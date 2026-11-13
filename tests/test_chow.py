@@ -151,6 +151,7 @@ def test_import_matches_misspelled_names_and_fixes_dates(env, tmp_path):
 
 def test_chow_page_permissions(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club, s, _ = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"}, "2099-01-08": {"member": "bob", "status": "scheduled"}}
@@ -203,8 +204,10 @@ def test_skip_next_turn(env):
 
 def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
     import datetime as dt
+
     from fastapi.testclient import TestClient
     from test_calview import signed_in
+
     from club_minutes import calview, web
     monkeypatch.setattr(chow, "DATA", tmp_path)
     monkeypatch.setattr(calview, "DATA", tmp_path)
@@ -225,6 +228,7 @@ def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
 def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
     """Anyone can print the list; officers email it, and the page tells them when it has changed since."""
     from fastapi.testclient import TestClient
+
     from club_minutes import prefs, web
     club, s, sent = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"},
@@ -250,6 +254,7 @@ def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
     assert "Amy Appleseed" in html[0] and "No chow (Snowed in)" in html[0]
     if len(r.content) > 4:  # a real PDF: its text says the same
         import io
+
         from pypdf import PdfReader
         text = PdfReader(io.BytesIO(r.content)).pages[0].extract_text()
         assert "Amy Appleseed" in text and "No chow (Snowed in)" in text
@@ -279,6 +284,7 @@ def test_the_chow_list_goes_as_a_pdf_or_a_link_as_each_chose(monkeypatch):
 
 def test_with_the_chow_module_off_it_leaves_no_trace(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import calview, prefs, web
     club, s, _ = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"}, "2099-01-08": {"member": "bob", "status": "scheduled"}}
@@ -313,7 +319,7 @@ def test_with_the_chow_module_off_it_leaves_no_trace(env, tmp_path, monkeypatch)
 def test_not_provided_says_the_clubs_real_fee_and_section(env, monkeypatch):
     from club_minutes import treasurer
     club, *_ = env
-    monkeypatch.setattr(treasurer, "load", lambda: {})
+    monkeypatch.setattr(treasurer, "load", dict)
     monkeypatch.setattr(treasurer, "members_see", lambda s: False)
     assert console._missed_note(club, THU) == ""  # dues not tracked: no fee to mention
     monkeypatch.setattr(treasurer, "members_see", lambda s: True)

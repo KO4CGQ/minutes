@@ -1,6 +1,6 @@
+import datetime as dt
 from pathlib import Path
 
-import datetime as dt
 import pytest
 
 from club_minutes.club import Club
@@ -73,6 +73,7 @@ def test_membership_log():
 
 def test_roster_contact_details_follow_sharing(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     c = Club(FIX / "test-club.yaml", roster=[
         {"id": "n0aaaa", "first": "Jane", "last": "Doe", "callsign": "N0AAAA", "email": "jane@example.org",
@@ -111,7 +112,9 @@ def test_roster_contact_details_follow_sharing(tmp_path, monkeypatch):
 def client(tmp_path, monkeypatch):
     """A signed-in test client over a throwaway archive of weekly meetings, 30 in 2024 and 3 in 2025."""
     import datetime as dt
+
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     for i in range(30):
         Meeting(date=dt.date(2024, 1, 4) + dt.timedelta(weeks=i), status="published", in_person=["doe"]).save(tmp_path)
@@ -135,7 +138,7 @@ def test_home_page_and_old_archive_links(client):
 
 def test_archive_periods_pages_and_page_size(client):
     html = client.get("/minutes").text  # this year by default
-    assert rows(html) == 1 and '<option selected>%d</option>' % dt.date.today().year in html
+    assert rows(html) == 1 and f'<option selected>{dt.date.today().year}</option>' in html
     html = client.get("/minutes?period=all").text
     assert rows(html) == 25 and "Page 1 of 2" in html and html.count('class="yearrow"') == 3  # this year, 2025, 2024
     assert rows(client.get("/minutes?period=all&page=2").text) == 8
@@ -161,11 +164,13 @@ def test_stats_periods(client):
     assert html.count('class="bar"') == 30  # the chart has every meeting in the period, not just the table's page
     assert 'class="chart"' not in client.get("/stats?period=12m").text  # one meeting: no chart
     assert "1 meeting in the last 12 months" in client.get("/stats?period=12m").text
-    assert "1 meeting in %d" % dt.date.today().year in client.get("/stats").text  # this year by default
+    assert f"1 meeting in {dt.date.today().year}" in client.get("/stats").text  # this year by default
 
 def test_guests_page_moves_new_members_to_their_own_section(tmp_path, monkeypatch):
     import datetime as dt
+
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.store import Archive
     for d in (dt.date(2026, 10, 1), dt.date(2026, 10, 8)):
@@ -181,6 +186,7 @@ def test_guests_page_moves_new_members_to_their_own_section(tmp_path, monkeypatc
 
 def test_bylaws_page(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     monkeypatch.setattr(web, "DATA", tmp_path)
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
@@ -193,6 +199,7 @@ def test_bylaws_page(tmp_path, monkeypatch):
 
 def test_links_page_lists_club_links(monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     monkeypatch.setattr(web.archive.club, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.example/x"}])
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
@@ -202,6 +209,7 @@ def test_links_page_lists_club_links(monkeypatch):
 
 def test_links_to_pages_of_the_app_stay_relative(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.club import Club
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
@@ -230,6 +238,7 @@ def test_link_icons():
 
 def test_about_page(monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
     c = TestClient(web.app)
@@ -287,10 +296,10 @@ def test_inline_scripts_parse(client, tmp_path):
     if not shutil.which("node"):
         pytest.skip("node isn't installed (GitHub Actions has it)")
     for path in ("/", "/minutes", "/links", "/chow", "/business", "/profile"):
-        for i, js in enumerate(re.findall(r"<script>(.*?)</script>", client.get(path).text, re.S)):
+        for i, js in enumerate(re.findall(r"<script>(.*?)</script>", client.get(path).text, re.DOTALL)):
             f = tmp_path / f"s{i}.js"
             f.write_text(js)
-            r = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True)
+            r = subprocess.run(["node", "--check", str(f)], check=False, capture_output=True, text=True)
             assert r.returncode == 0, f"{path} script {i}: {r.stderr}"
 
 
@@ -315,7 +324,7 @@ def test_the_meeting_day_time_and_zone_are_the_clubs_own(tmp_path, monkeypatch):
         d = Club(FIX / "test-club.yaml")
         d.info[k] = bad
         with pytest.raises(ValueError, match=f"club.yaml club: {k}"):
-            d.meeting_weekday, d.meeting_time, d.timezone
+            _ = d.meeting_weekday, d.meeting_time, d.timezone
     monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/usr/share/zoneinfo/Europe/Berlin")
     bare = Club(FIX / "test-club.yaml")
     bare.info.pop("timezone")

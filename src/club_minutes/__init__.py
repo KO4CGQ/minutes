@@ -59,6 +59,7 @@ def main() -> None:
             raise SystemExit(1)
     elif a.cmd == "restore":
         import getpass
+
         from . import backup
         n = backup.restore(a.file.read_bytes(), os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE") or getpass.getpass("Passphrase: "), a.dest)
         print(f"Restored {n} files into {a.dest}. Stop the app, move them into the data folder (chown minutes), start it.")
@@ -89,7 +90,7 @@ def main() -> None:
         try:
             mid = membership.add_member(club, {"callsign": a.callsign, "first": a.first, "last": a.last, "email": a.email,
                                                "license_class": a.license_class}, by="first-member")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             sheet.path.unlink(missing_ok=True)  # as if never run: fix the details and run it again
             raise SystemExit(str(e)) if isinstance(e, ValueError) else e
         print(f"Started the roster with {club.name(mid)} ({club.members[mid].callsign}).")
@@ -101,6 +102,7 @@ def main() -> None:
     elif a.cmd == "delete-meeting":
         import datetime as dt
         import shutil
+
         from .club import MEETINGS
         d = MEETINGS / dt.date.fromisoformat(a.date).isoformat()
         if not (d / "minutes.md").exists():
@@ -114,6 +116,7 @@ def main() -> None:
         print(f"Deleted {d}. Restart the web service so it drops it from memory.")
     elif a.cmd == "reminders":
         import datetime as dt
+
         from . import auth, business, prefs
         from .club import Club
         club = Club()
@@ -132,7 +135,7 @@ def main() -> None:
                     continue
                 try:
                     auth.send_email(m.email, subject, body, only_to=club.email_only_to())
-                except Exception as e:  # one bad address shouldn't stop the others
+                except Exception as e:  # one bad address shouldn't stop the others  # noqa: BLE001
                     print(f"couldn't email {m.name}: {e}")
                     continue
                 business.mark_reminded(items)
@@ -151,11 +154,11 @@ def main() -> None:
                     auth.send_email(alert[0], alert[1], alert[2], only_to=club.email_only_to())
                     treasurer.save(ts)  # only once it went: a failed send tries again tomorrow
                     print(alert[1])
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     print(f"couldn't send the dues alert: {e}")
         # chow reminders and the meeting-day email, each sent once even if this runs twice
-        from .store import Archive
         from .club import MEETINGS
+        from .store import Archive
         extra = prefs.chow_reminders(club, today, url) + prefs.digest(club, Archive(MEETINGS, club), today, url)
         new, sent = prefs.unsent([k for _, k, _, _ in extra]), []
         for mid, key, subject, body in extra:
@@ -167,7 +170,7 @@ def main() -> None:
                 continue
             try:
                 auth.send_email(m.email, subject, body, only_to=club.email_only_to())
-            except Exception as e:  # one bad address shouldn't stop the others
+            except Exception as e:  # one bad address shouldn't stop the others  # noqa: BLE001
                 print(f"couldn't email {m.name}: {e}")
                 continue
             sent.append(key)
@@ -183,7 +186,7 @@ def main() -> None:
         print(updates.auto(club, f"https://{club.auth.get('rp_id', 'localhost')}"))
     elif a.cmd == "ai-ask-about":
         from . import console
-        from .club import Club, MEETINGS
+        from .club import MEETINGS, Club
         from .store import Archive
         n = console.refresh_ask_about(Archive(MEETINGS, Club()))
         print(f"prompts for {n} members saved")

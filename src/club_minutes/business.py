@@ -350,7 +350,7 @@ def for_meeting(s: dict, date: str, since: str | None = None) -> tuple[list[dict
     old = [x for x in s["items"] if x["opened"] < date and (
         (x["status"] == "open" and (not x["agenda"] or x["agenda"] <= date)) or closed_here(x))]
     new = [x for x in s["items"] if x["opened"] == date]
-    key = lambda x: (x["opened"], s["items"].index(x))  # noqa: E731
+    key = lambda x: (x["opened"], s["items"].index(x))
     return sorted(old, key=key), sorted(new, key=key)
 
 

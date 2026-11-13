@@ -47,10 +47,10 @@ def test_stage_sync_mirrors_prod_but_keeps_stages_own(tmp_path):
         (stage / f).write_text(text)
     env = {**os.environ, "CLUB_MINUTES_DATA": str(stage), "STAGE_SYNC_FROM": f"{prod}/", "STAGE_OWNER": "", "STAGE_RESTART": "true"}
     script = str(Path(__file__).parents[1] / "deploy" / "stage-sync.sh")
-    assert subprocess.run([script], env=env).returncode == 0
+    assert subprocess.run([script], env=env, check=False).returncode == 0
     assert (stage / "roster.json").read_text() == "edited on stage"  # paused: the nightly run did nothing
     (stage / "stage-sync-request").write_text("n0zaaa")  # Sync now still works while paused
-    assert subprocess.run([script], env=env).returncode == 0
+    assert subprocess.run([script], env=env, check=False).returncode == 0
     assert (stage / "roster.json").read_text() == "prod roster" and (stage / "meetings/m.md").read_text() == "prod"
     assert (stage / "auth.sqlite").read_text() == "stage passkeys" and (stage / "email-log.jsonl").read_text() == "stage mail"
     assert not (stage / "update-settings.json").exists() and not (stage / "leftover.json").exists()
@@ -62,6 +62,7 @@ def test_stage_sync_mirrors_prod_but_keeps_stages_own(tmp_path):
 
 def test_stage_page_sync_now_and_pause(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.club import Club
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed"}])
@@ -96,7 +97,7 @@ def test_stage_sync_never_follows_a_link_planted_in_the_data_folder(tmp_path):
     (stage / "stage-sync-status.json").symlink_to(target)
     (stage / "stage-sync-request").symlink_to(secret)
     env = {**os.environ, "CLUB_MINUTES_DATA": str(stage), "STAGE_SYNC_FROM": f"{tmp_path}/nowhere/", "STAGE_OWNER": "", "STAGE_RESTART": "true"}
-    subprocess.run([str(Path(__file__).parents[1] / "deploy" / "stage-sync.sh")], env=env, capture_output=True)
+    subprocess.run([str(Path(__file__).parents[1] / "deploy" / "stage-sync.sh")], env=env, check=False, capture_output=True)
     assert target.read_text() == "system contents" and secret.read_text() == "TOP SECRET"   # neither touched
     st = stage / "stage-sync-status.json"
     assert not st.is_symlink() and "TOP SECRET" not in st.read_text() and json.loads(st.read_text())["ok"] is False
@@ -105,6 +106,7 @@ def test_stage_sync_never_follows_a_link_planted_in_the_data_folder(tmp_path):
 
 def test_stage_banner_says_little_to_the_public(monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     monkeypatch.setitem(web.templates.env.globals, "STAGE", True)
     page = TestClient(web.app).get("/login").text

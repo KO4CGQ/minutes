@@ -1,7 +1,7 @@
 import datetime as dt
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 from club_minutes import console
 from club_minutes.club import Club
@@ -84,7 +84,7 @@ def test_discard_only_drafts(tmp_path):
 
 class FakeSMTP:
     """Stands in for smtplib.SMTP: records messages instead of sending them."""
-    outbox: list = []
+    outbox: list = []  # noqa: RUF012 (shared on purpose: every SMTP the code makes adds to it)
 
     def __init__(self, host, port, timeout=None): pass
     def __enter__(self): return self
@@ -225,6 +225,7 @@ def test_one_console_takes_the_minutes_and_another_can_take_over(tmp_path):
 
 def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = archive_with_prev(tmp_path)
@@ -255,6 +256,7 @@ def test_the_web_console_refuses_saves_and_discards_while_someone_else_holds_it(
 
 def test_top_bar_says_continue_minutes_for_an_open_meeting_from_another_day(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
     a = archive_with_prev(tmp_path)

@@ -95,8 +95,8 @@ def move_meeting(club, since: dt.date, where: str | None, online: str | None, by
     changes and skipped dates from `since` on go if the day moves. Each series (one per earlier change) still running
     from `since` changes from where it starts, so a change already planned for later is changed too, not left behind.
     Returns the first new date."""
-    nearest = lambda d: d + dt.timedelta(days=(club.meeting_weekday - d.weekday()) % 7)  # noqa: E731
-    at = lambda d: dt.datetime.fromisoformat(f"{d}T{club.meeting_time}")  # noqa: E731
+    nearest = lambda d: d + dt.timedelta(days=(club.meeting_weekday - d.weekday()) % 7)
+    at = lambda d: dt.datetime.fromisoformat(f"{d}T{club.meeting_time}")
     with locked():
         evs = load()
         changed, series = [], sorted((x for x in evs if x.get("meeting")), key=lambda x: x["start"])
@@ -240,7 +240,7 @@ def in_zone(o: dict, tz: str | None, club_tz: str) -> dict:
     """An occurrence of an event kept in another time zone (tz), with its start and end in club time."""
     if not tz or tz == club_tz or "T" not in o["start"]:
         return o
-    conv = lambda v: _iso(_dt(v).replace(tzinfo=ZoneInfo(tz)).astimezone(ZoneInfo(club_tz)), True) if v else v  # noqa: E731
+    conv = lambda v: _iso(_dt(v).replace(tzinfo=ZoneInfo(tz)).astimezone(ZoneInfo(club_tz)), True) if v else v
     return {**o, "start": conv(o["start"]), "end": conv(o.get("end"))}
 
 
@@ -330,7 +330,7 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
             raise ValueError("To move one date to another calendar, choose This and following dates or Every date.")
         if "T" in v["start"] and v.get("tz") != e.get("tz"):
             raise ValueError("Unable to change the time zone of a single date in a series; choose This and following dates or Every date.")
-        same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until"), r.get("weeks")) or None  # noqa: E731
+        same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until"), r.get("weeks")) or None
         if same(v.get("repeat")) != same(e["repeat"]):
             raise ValueError("To change how it repeats, choose This and following dates or Every date.")
         e["changes"][d] = {k: v[k] for k in FIELDS if k in v}
@@ -417,11 +417,11 @@ def _text(v: str) -> str:
 
 def _plain(v: str) -> str:
     """Google exports descriptions as HTML: keep the text and the line breaks, drop the tags."""
-    if not re.search(r"<(p|br|a|b|i|u|em|strong|ul|ol|li|div|span)\b", v, re.I):
+    if not re.search(r"<(p|br|a|b|i|u|em|strong|ul|ol|li|div|span)\b", v, re.IGNORECASE):
         return v
-    v = re.sub(r"<a\b[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", lambda m: m.group(2) if m.group(2) == m.group(1) else f"{m.group(2)} ({m.group(1)})", v, flags=re.I | re.S)
-    v = re.sub(r"<br\s*/?>|</(p|div|li)>", "\n", v, flags=re.I)
-    v = re.sub(r"<li\b[^>]*>", "- ", v, flags=re.I)
+    v = re.sub(r"<a\b[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", lambda m: m.group(2) if m.group(2) == m.group(1) else f"{m.group(2)} ({m.group(1)})", v, flags=re.IGNORECASE | re.DOTALL)
+    v = re.sub(r"<br\s*/?>|</(p|div|li)>", "\n", v, flags=re.IGNORECASE)
+    v = re.sub(r"<li\b[^>]*>", "- ", v, flags=re.IGNORECASE)
     v = html.unescape(re.sub(r"<[^>]+>", "", v))
     return re.sub(r"\n{3,}", "\n\n", v).strip()
 
@@ -433,11 +433,11 @@ def _when(value: str, params: dict, tz: ZoneInfo) -> tuple[dt.datetime, bool]:
         return dt.datetime.strptime(v[:8], "%Y%m%d"), False
     d = dt.datetime.strptime(v.rstrip("Z")[:15], "%Y%m%dT%H%M%S")
     if v.endswith("Z"):
-        d = d.replace(tzinfo=dt.timezone.utc)
+        d = d.replace(tzinfo=dt.UTC)
     else:
         try:
             d = d.replace(tzinfo=ZoneInfo(params["TZID"].strip('"'))) if "TZID" in params else d.replace(tzinfo=tz)
-        except Exception:  # an unknown Windows-style TZID: take it as club time
+        except Exception:  # an unknown Windows-style TZID: take it as club time  # noqa: BLE001
             d = d.replace(tzinfo=tz)
     return d.astimezone(tz).replace(tzinfo=None), True
 
@@ -520,7 +520,7 @@ def import_ics(evs: list[dict], text: str, cal: str, by: str, tz_name: str, sinc
             cur = None
         elif cur is not None:
             cur.setdefault(name, []).append((params, value))
-    one = lambda b, k: b[k][0] if k in b else (None, None)  # noqa: E731
+    one = lambda b, k: b[k][0] if k in b else (None, None)
     masters, overrides = [], []
     for b in blocks:
         (overrides if "RECURRENCE-ID" in b else masters).append(b)
