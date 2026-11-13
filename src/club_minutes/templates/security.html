@@ -35,9 +35,19 @@
 {% endif %}
 {% if tab == 'failed' %}
 <p class="muted">An internet address with {{ ban_after }} of these in an hour is banned for {{ ban_hours }} hours. LAN and tailnet addresses are never banned automatically.</p>
-{% if events %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
+{% if events %}{% set banned = bans|map(attribute='ip')|list %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
 {% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td><span class="ip">{{ e.ip }}</span> <span class="muted">{{ e.ip|where }}</span></td>
-<td>{% if e.ip and e.ip != my_ip and e.ip not in bans|map(attribute='ip')|list %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}</td></tr>{% endfor %}
+<td class="evacts"><button type="button" class="btn small ghost" popovertarget="ev{{ loop.index }}">Details</button>
+{% if not e.ip %}{% elif e.ip in banned %}<a class="small" href="/admin/security/bans">Banned</a>{% elif e.ip == my_ip %}<span class="muted small">You</span>{% else %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}
+<div popover id="ev{{ loop.index }}" class="modal" aria-labelledby="ev{{ loop.index }}-t"><button type="button" class="calclose" popovertarget="ev{{ loop.index }}" popovertargetaction="hide" aria-label="Close">{{ emoji('✖️', 'x') }}</button>
+<div class="body"><h2 id="ev{{ loop.index }}-t">{{ event_names.get(e.kind, e.kind) }}</h2><dl class="evinfo">
+<dt>When</dt><dd>{{ e.at|tsfull }}</dd>
+{% if e.member %}<dt>Member</dt><dd>{{ club.name(e.member) }}</dd>{% endif %}
+<dt>From</dt><dd><span class="ip">{{ e.ip or 'unknown' }}</span> <span class="muted">{{ e.ip|where }}{% if e.ip == my_ip %}, you{% endif %}</span></dd>
+<dt>Device</dt><dd>{% if e.agent %}{{ e.agent|device }}<br><span class="muted small agent">{{ e.agent }}</span>{% else %}<span class="muted">not recorded (before 1.0.0)</span>{% endif %}</dd>
+{% if e.detail %}<dt>Detail</dt><dd>{{ e.detail }}</dd>{% endif %}
+{% if e.ip in banned %}{% set b = bans|selectattr('ip', 'equalto', e.ip)|first %}<dt>Banned</dt><dd>{{ 'until lifted' if not b.until else 'until ' ~ (b.until|tsfull) }}: {{ b.reason }}. <a href="/admin/security/bans">Banned addresses</a></dd>{% endif %}
+</dl></div></div></td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">None.</p>{% endif %}
 
 {% endif %}

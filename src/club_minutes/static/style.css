@@ -447,12 +447,16 @@ ul.agenda .caltime { flex: none; width: 4.6rem; font-size: .9rem; } ul.agenda .d
 table.month button.calopen { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; }
 table.month button.calopen:hover { background: var(--accent-soft); }
 /* the details dialog */
-dialog#calmodal, dialog.modal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
-  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop, dialog.modal::backdrop { background: rgba(0,0,0,.45); }
-dialog#calmodal .body, dialog.modal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2, dialog.modal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
+dialog#calmodal, dialog.modal, .modal[popover] { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
+  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop, dialog.modal::backdrop, .modal[popover]::backdrop { background: rgba(0,0,0,.45); }
+dialog#calmodal .body, dialog.modal .body, .modal[popover] .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2, dialog.modal h2, .modal[popover] h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
 dialog#calmodal form, dialog.modal form.x { position: absolute; top: .5rem; right: .5rem; margin: 0; }
 button.calclose { font: inherit; background: none; border: 0; cursor: pointer; min-width: 2.5rem; min-height: 2.5rem; border-radius: 50%; color: var(--muted); }
 button.calclose:hover { background: var(--accent-soft); }
+.modal[popover] > .calclose { position: absolute; top: .5rem; right: .5rem; }  /* popover dialogs: no script needed */
+td.evacts form { display: inline; } .modal[popover] { white-space: normal; text-align: left; }
+dl.evinfo { display: grid; grid-template-columns: auto 1fr; gap: .35rem .9rem; margin: 0; } dl.evinfo dt { font-weight: 600; } dl.evinfo dd { margin: 0; }
+dl.evinfo .agent { overflow-wrap: anywhere; }
 .calcal { margin: 0; font-size: .85rem; color: var(--muted); } .calwhen { font-weight: 600; } .calnotes { white-space: pre-line; overflow-wrap: anywhere; }
 table.month { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
 table.month th { font-size: .75rem; color: var(--muted); padding: .3rem; font-weight: 600; }

@@ -420,7 +420,7 @@ def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""
 
 @app.post("/login/email")
 def login_email(request: Request, email: str = Form(...), next: str = Form("/")):
-    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request))
+    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request), agent=request.headers.get("user-agent", ""))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
@@ -428,7 +428,7 @@ def login_email(request: Request, email: str = Form(...), next: str = Form("/"))
 def login_link(request: Request, t: str = ""):
     used = authn.use_link(t)
     if not used:
-        authn.event("bad_link", client_ip(request))
+        authn.event("bad_link", client_ip(request), agent=request.headers.get("user-agent", ""))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
@@ -1463,7 +1463,7 @@ async def passkey_login_verify(request: Request):
     try:
         member = authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"])
     except Exception as e:  # noqa: BLE001
-        authn.event("passkey_failed", client_ip(request), detail=str(e)[:120])
+        authn.event("passkey_failed", client_ip(request), detail=str(e)[:120], agent=request.headers.get("user-agent", ""))
         raise HTTPException(400, str(e))
     if not authn.is_active(member):
         raise HTTPException(403, "Your roster entry isn't active.")

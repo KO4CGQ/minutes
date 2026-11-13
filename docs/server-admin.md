@@ -101,7 +101,7 @@ systemctl start club-minutes
 Admin mode → Security → **Server** → **Largest upload** (1–100 MB, 10 by default; kept in `limits.json` in the data folder). It covers profile pictures and calendar .ics imports; a bigger request is turned away (413) before the app reads it. A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
 
 ## Server hardening (recommended)
-The app blocks web visitors itself after repeated failed sign-ins (admin **Security** page). For SSH, use fail2ban:
+The app blocks web visitors itself after repeated failed sign-ins (admin **Security** page). On its Failed attempts tab, **Details** shows each attempt's device and browser (user agent) and any note, and an address already banned says **Banned**, linking to the Banned addresses tab. For SSH, use fail2ban:
 
 1. Install it:
 

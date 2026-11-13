@@ -175,6 +175,18 @@ def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, mo
         ["internet", "LAN", "tailnet", "this server"]
 
 
+def test_failed_attempts_from_before_1_0_get_the_browser_column(tmp_path):
+    import sqlite3
+    old = sqlite3.connect(tmp_path / "auth.sqlite")
+    old.execute("create table events (at integer not null, ip text, kind text not null, member text, detail text)")
+    old.execute("insert into events values (1, '203.0.113.9', 'bad_link', null, '')")
+    old.commit()
+    old.close()
+    a = Auth(Club(FIX / "test-club.yaml", roster=[]), tmp_path / "auth.sqlite")
+    a.event("bad_link", "203.0.113.9", agent="Firefox/150")
+    assert [r["agent"] for r in a.events()] == ["Firefox/150", None]
+
+
 def test_sign_in_from_before_the_rename_still_works(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
@@ -210,6 +222,17 @@ def test_security_page_tabs(tmp_path, monkeypatch):
     assert c.get("/admin/security/nope").status_code == 404
     r = c.post("/admin/security/unban", data={"ip": "9.9.9.9"}, follow_redirects=False)
     assert r.headers["location"] == "/admin/security/bans" and not a.banned("9.9.9.9")
+    # failed attempts: the browser is recorded, Details shows it (escaped) and the attempt's note; a banned address
+    # says so and links to the bans; this admin's own address says "You" (it can't be banned from here)
+    c.get("/login/link?t=nope", headers={"user-agent": "Mozilla/5.0 (X11; Linux) Firefox/150 <script>x</script>"}, follow_redirects=False)
+    a.event("passkey_failed", "203.0.113.7", detail="Signature didn't match", agent="Mozilla/5.0 (iPhone) Safari/604.1")
+    a.event("bad_link", "203.0.113.8")  # recorded before the browser was
+    a.ban("203.0.113.7", None, "by hand", "n0admn")
+    f = c.get("/admin/security/failed").text
+    assert "Firefox on Linux" in f and "&lt;script&gt;x&lt;/script&gt;" in f and "<script>x" not in f
+    assert "Signature didn&#39;t match" in f and "Safari on iPhone" in f and "not recorded" in f and ">You<" in f
+    assert 'href="/admin/security/bans">Banned</a>' in f and f.count("popovertarget=") == 6  # Details and its close, per row
+    assert f.count('action="/admin/security/ban"') == 1  # only 203.0.113.8 can still be banned here
     # devices: filter by member, sign out several at once
     other = [a.new_session("n0admn", "Firefox/1", "192.168.1.11"), a.new_session("n0admn", "Firefox/2", "192.168.1.12")]
     assert c.get("/admin/security/devices?member=n0admn").text.count('name="session"') == 3

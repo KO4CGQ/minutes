@@ -73,6 +73,8 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     a.db.execute("insert into passkeys (id, member, public_key, sign_count, transports, label, created) values (?,?,?,?,?,?,?)",
                  ("pk1", "n0admn", b"", 0, "[]", "Google Password Manager", 1794143748))
     a.ban(IPV6, 24, "too many failed sign-ins from this address", "automatic")
+    a.event("passkey_failed", IPV6, "n0admn", detail="The signature didn't match the passkey on file", agent=LONG_AGENT)
+    a.event("bad_link", "203.0.113.7", agent=LONG_AGENT)  # not banned: the row keeps its Ban button
     web._admin_log(type("R", (), {"state": type("S", (), {"real_member": "n0admn"}), "client": type("C", (), {"host": IPV6})})(),
                    on=True, until=1794143748, confirmed_by="passkey")
     c = TestClient(web.app)
@@ -128,6 +130,13 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
         nav_bg = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--nav-bg').trim()")
         colours = (branding.colours()["main"], "Colours saved." in page.content(), f"--nav-bg: {nav_bg}" in tried)
         branding.reset_colours()
+        # Security → Failed attempts: Details opens over the page with the browser's user agent; Esc closes it
+        page.goto("http://testserver/admin/security/failed")
+        page.locator("button[popovertarget=ev1]").first.click()
+        details = (page.locator("#ev1").evaluate("p => p.matches(':popover-open')"), "iPhone" in page.locator("#ev1").inner_text(),
+                   page.evaluate("document.documentElement.scrollWidth") <= 375)
+        page.keyboard.press("Escape")
+        details += (not page.locator("#ev1").evaluate("p => p.matches(':popover-open')"),)
         # dark mode, as a phone set to dark: every page again, any text too faint against its background
         dark = browser.new_page(viewport={"width": 375, "height": 800}, color_scheme="dark")
         dark.route("http://testserver/**", serve)
@@ -141,6 +150,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
         browser.close()
     assert tried != was and cancelled == (True, True, theme.DEFAULT) and colours == ("#4f6f2a", True, True), (cancelled, colours)
     assert not dim, f"dark mode: text too faint for its background: {dim}"
+    assert details == (True, True, True, True), details
     assert lists == [["(nobody)"], ["(nobody)"]], lists
     assert not too_wide, f"pages wider than a 375px phone: {too_wide}"
     assert not blocked, f"blocked by the security policy, or a script error: {blocked}"
