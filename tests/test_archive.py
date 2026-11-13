@@ -235,6 +235,7 @@ def test_about_page(monkeypatch):
     c = TestClient(web.app)
     html = c.get("/about").text
     assert web.version("club-minutes") in html and "James Flattery, KO4CGQ" in html and "AGPL-3.0-or-later" in html
+    assert "About Club Minutes by KO4CGQ" in html and "for amateur radio clubs." in html  # the product, not this club
     assert ">fastapi<" in html.lower() and "What's new" in html
     folds = html.count("<details")  # one per release, only the newest open
     assert folds > 3 and html.count("<details open>") == 1 and html.split('class="changelog"')[1].split("<details")[1].startswith(" open>")
