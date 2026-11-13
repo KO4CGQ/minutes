@@ -25,7 +25,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {% macro crumb(href, label) %}<nav class="crumb" aria-label="Back"><a href="{{ href }}">‹ {{ label }}</a></nav>{% endmacro %}
 {# where a list's links say they came from (?from=..., and a business item's ?item=), so the page's crumb leads back there #}
 {% macro back(href, label) %}{% set q = request.query_params %}{% set item = q.get('item', '') if q.get('item', '').isalnum() else '' %}
-{%- set came = {'stats': ('/stats', 'Attendance'), 'treasurer': ('/treasurer', 'Treasurer'), 'offices': ('/offices', 'Offices'), 'chow': ('/chow', 'Chow'),
+{%- set came = {'stats': ('/stats', 'Attendance'), 'treasurer': ('/treasurer', 'Treasurer'), 'offices': ('/offices', 'Offices'), 'chow': ('/chow', 'Chow'), 'guests': ('/guests', 'Guests'), 'changes': ('/roster/changes', 'Roster changes'),
     'business': ('/business' ~ ('?tab=done' if q.get('tab') == 'done' else ''), 'Business'), 'home': ('/', 'Home')}.get(q.get('from')) %}
 {%- if came and item %}{% set came = (came[0] ~ '#i' ~ item, came[1]) %}{% endif %}{% if came or href %}{{ crumb(*(came or (href, label))) }}{% endif %}{% endmacro %}
 {% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}

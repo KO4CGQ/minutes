@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Edit {{ member.name }}{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}Edit {{ member.name }}{% endblock %}{% block crumb %}{{ crumb('/members/' ~ member.id, member.name) }}{% endblock %}{% block body %}
 <h1>Edit {{ member.name }}{% if member.callsign %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
 <p class="muted">What the roster holds about {{ member.first }}. Each change is written to the roster, listed under <a href="/roster/changes">Roster changes</a> (where an officer can undo it), and emailed to the Secretary and to {{ member.first }}. Birthday and sharing are {{ member.first }}'s own choices, on their profile. <a href="/members/{{ member.id }}">Back to {{ member.first }}'s page</a></p>
 {% if saved and not error %}<p class="msg ok">Saved. The roster is updated.</p>{% endif %}

@@ -267,6 +267,8 @@ def test_breadcrumbs_back(client):
     assert back(f"/members/{mid}?from=home&item=ab12") == ("/#iab12", "Home")
     assert back(f"/members/{mid}?from=business&item=x%22%3E") == ("/business", "Business")  # only a plain id goes in the link
     assert back("/business?from=home") == ("/", "Home") and back(f"/meetings/{slug}?from=home") == ("/", "Home")  # from Home's cards
+    assert back(f"/members/{mid}?from=guests") == ("/guests", "Guests") and back(f"/members/{mid}?from=changes") == ("/roster/changes", "Roster changes")
+    assert back("/offices") == ("/roster", "Roster")
     assert 'href="/business?from=home"' in c.get("/").text and 'class="crumb"' not in c.get("/business").text  # from the menu: none
 
 
