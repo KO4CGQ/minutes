@@ -43,8 +43,8 @@ for key, mid in (("president", me), ("admin", me), ("secretary", club.canonical(
     who[key] = TestClient(web.app)
     who[key].cookies.set(web.COOKIE, web.authn.new_session(mid, "Mozilla/5.0", "127.0.0.1", "passkey"))
 web.authn.set_admin(who["admin"].cookies.get(web.COOKIE), 60)
-CLOCK = dt.datetime.combine(dt.date.today(), dt.time(18, 18))  # the top bar's clock: 6:18 pm today
-_until = web.authn.admin_until  # admin mode "until 6:48 pm", to match that clock (it's on whatever the real time)
+CLOCK = dt.datetime.combine(dt.date.today(), dt.time(18, 18))  # the top bar's clock: 6:18 PM today
+_until = web.authn.admin_until  # admin mode "until 6:48 PM", to match that clock (it's on whatever the real time)
 web.authn.admin_until = lambda token: int((CLOCK + dt.timedelta(minutes=30)).timestamp()) if _until(token) else None
 latest = max(m.date for m in web.archive.meetings)
 SHOTS = [  # file name, page, phone?, dark?, signed in as, height (a phone's is 844)

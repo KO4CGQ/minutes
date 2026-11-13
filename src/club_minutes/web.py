@@ -152,8 +152,7 @@ def monthday(md: str | None) -> str:
 
 
 templates.env.filters["monthday"] = monthday
-templates.env.filters["tsfull"] = lambda t: (dt.datetime.fromtimestamp(t).strftime(DATES["list"] + ", %-I:%M %p")
-                                             .replace("AM", "am").replace("PM", "pm")) if t else ""
+templates.env.filters["tsfull"] = lambda t: dt.datetime.fromtimestamp(t).strftime(DATES["list"] + ", %-I:%M %p") if t else ""  # 7:30 PM, as everywhere
 def _initials(mid: str | None) -> str:
     m = archive.club.members.get(mid or "")
     return ((m.first[:1] + m.last[:1]) if m else (mid or "?")[:2]).upper()

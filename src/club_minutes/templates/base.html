@@ -137,7 +137,7 @@ markTheme();
 (() => { const clock = document.querySelector("nav.top .clock"), start = document.querySelector("nav.top a.start");
   const [day, hh, mm] = (start?.dataset.meets || "").split(/[ :]/).map(Number);
   const tick = () => { const now = new Date();
-    if (clock) clock.textContent = now.toLocaleTimeString([], {weekday: "short", hour: "numeric", minute: "2-digit"}).replace(/AM|PM/, (m) => m.toLowerCase());
+    if (clock) clock.textContent = now.toLocaleTimeString([], {weekday: "short", hour: "numeric", minute: "2-digit"});
     if (start) { const mins = (now.getHours() - hh) * 60 + now.getMinutes() - mm;
       start.classList.toggle("soon", now.getDay() === day && mins >= -30 && mins <= 30); } };
   tick(); setInterval(tick, 10000); })();

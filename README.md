@@ -24,7 +24,7 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md).
 - **Chow schedule** (optional module): the rotation, swaps, reminders before your night, and who provided, missed or covered each night.
 - **Treasurer:** who owes what (dues, fees, missed chow, certificates), payments and expenses, regular bills and bills read at meetings, and funds a committee keeps; each member sees their own figures on Home.
 - **Site** (admins): the club's name, callsign, logo and colours, the meeting night and its place and online link, the agenda's sections, optional features, holidays by country or state, bylaws references and date formats, all in the app.
-- **Email preferences:** each member turns each kind of email on or off, including a meeting-day email (the time, your chow, your business items, the calendar until the next meeting and last meeting's minutes). Every optional email ends with a link to change it. The daily `reminders` timer (8 am) sends business and chow reminders and the meeting-day email.
+- **Email preferences:** each member turns each kind of email on or off, including a meeting-day email (the time, your chow, your business items, the calendar until the next meeting and last meeting's minutes). Every optional email ends with a link to change it. The daily `reminders` timer (8 AM) sends business and chow reminders and the meeting-day email.
 
 ## Install
 On a Debian server or container (tested on Debian 13), as root:
