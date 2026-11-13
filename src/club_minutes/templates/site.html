@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Site{% endblock %}{% block body %}
 <h1>Site</h1>
-{% macro origin(k) %}<span class="muted small">{{ 'Set here' if k in set_here else 'From club.yaml' }}</span>{% endmacro %}
+{% macro origin(k) %}<span class="muted small">{{ 'Set here' if k in set_here or k in here_keys else 'From club.yaml' }}</span>{% endmacro %}
 <nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% if tab == 'club' %}
@@ -53,6 +53,50 @@
 <p class="row"><button class="btn">Save</button></p>
 </form>
 {% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'features' %}
+<p class="muted">Parts of the app the club uses, and what anyone can see without signing in. Each change is in the admin log; changes here win over club.yaml on the server. Turning a part off keeps its data.</p>
+<form method="post" action="/admin/site/features" class="profile sitewide">
+<div class="card sitesec"><h2>Chow {{ origin('modules.chow') }}</h2>
+<label class="check"><input type="checkbox" name="chow" value="1"{{ ' checked' if module('chow') }}> <span><b>A chow rotation</b><br><span class="muted small">Members take turns bringing food to meetings: the Chow page, swaps, reminders, the console's Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.</span></span></label>
+</div>
+<div class="card sitesec"><h2>Public calendars {{ origin('club.public_calendars') }}</h2>
+<p class="hint">Anyone can see these at /calendar/public (and subscribe), signed in or not. Chow and birthdays are never public.</p>
+{% set pub = club.info.get('public_calendars') or [] %}
+{% for k, label in public_cals.items() %}<label class="check"><input type="checkbox" name="public_{{ k }}" value="1"{{ ' checked' if k in pub }}> {{ label }}</label>{% endfor %}
+</div>
+<div class="card sitesec"><h2>Holidays and elections</h2>
+<div class="fmtgrid">
+<label for="f-hol">Holidays</label><select id="f-hol" name="holidays"><option value="">None</option>{% for code, about in regions.holidays.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('holidays') == code }}>{{ about }} ({{ code }})</option>{% endfor %}</select>{{ origin('calendar.holidays') }}
+<label for="f-ele">Election days</label><select id="f-ele" name="elections"><option value="">None</option>{% for code, about in regions.elections.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('elections') == code }}>{{ about }} ({{ code }})</option>{% endfor %}</select>{{ origin('calendar.elections') }}
+</div>
+<p class="hint">Holidays go on their own calendar and mark meeting nights the club may skip; election days go on Club events. Another country or state is one small file in the app (regions/).</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.elections'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'bylaws' %}
+<p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/bylaws" class="profile sitewide">
+<div class="card sitesec"><h2>References {{ origin('bylaws.refs') }}</h2>
+<p class="hint">The section of the bylaws for each, like VII.B; shown as "(bylaws VII.B)". Leave one empty and the sentence reads without it.</p>
+<div class="fmtgrid">{% for k, label in refs.items() %}<label for="r-{{ k }}">{{ label }}</label><input id="r-{{ k }}" name="ref_{{ k }}" value="{{ (club.bylaws.get('refs') or {}).get(k) or '' }}" maxlength="20" size="8"><span></span>{% endfor %}</div>
+</div>
+<div class="card sitesec"><h2>Arrears note {{ origin('bylaws.arrears_note') }}</h2>
+<p class="hint">Added to the arrears email to the Treasurer and the Board: what happens next under the bylaws (who may suspend a member, and how).</p>
+<textarea name="arrears_note" rows="4" maxlength="1000" aria-label="Arrears note">{{ club.bylaws.get('arrears_note') or '' }}</textarea>
+</div>
+<div class="card sitesec sitecert"><h2>Certificate {{ origin('treasurer.certificate') }}</h2>
+{% set cert = club.certificate %}
+<label class="check"><input type="checkbox" name="cert_on" value="1"{{ ' checked' if cert }}> <span><b>Each member buys a certificate once</b><br><span class="muted small">Some clubs call it a bond. The Treasurer pages track who has bought it, and Home reminds those who haven't.</span></span></label>
+<div class="fmtgrid certfields">
+<label for="b-name">Its name</label><input id="b-name" name="cert_name" value="{{ cert.name if cert else '' }}" maxlength="80" placeholder="Certificate of Indebtedness"><span></span>
+<label for="b-short">A short word for sentences</label><input id="b-short" name="cert_short" value="{{ cert.short if cert else '' }}" maxlength="30" placeholder="certificate"><span class="muted small">"Has bought a bond"</span>
+<label for="b-note">A note for the Treasurer pages</label><textarea id="b-note" name="cert_note" rows="4" maxlength="500">{{ cert.note if cert else '' }}</textarea><span></span>
+</div>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if here_keys|select('in', ['bylaws.refs', 'bylaws.arrears_note', 'treasurer.certificate'])|list %}<form method="post" action="/admin/site/bylaws" data-confirm="Go back to club.yaml's bylaws references, arrears note and certificate?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
 {{ 'Set here.' if dates_here else 'From the server (club.yaml) until you save here.' }}</p>

@@ -377,3 +377,36 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
     with _pytest.raises(ValueError, match="invite_after_visits"):
         c._configure({"club": {"invite_after_visits": "three"}})  # club.yaml's too: stops the app at start
     c._configure(c.yaml)
+
+
+def test_site_features_and_bylaws_tabs(app, tmp_path, monkeypatch):
+    """Admin → Site → Features and Bylaws: unchanged keeps nothing; turning off what club.yaml turns on wins over it;
+    a wrong one changes nothing; Back to club.yaml undoes them."""
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"kd8off"})
+    admin, member = app("kd8off"), app("kd8bbb")
+    feats = {"chow": "1", "holidays": "us", "elections": "us-oh"}  # as the test club.yaml has them
+    cert = {"cert_on": "1", "cert_name": "Bond (Certificate of Indebtedness)", "cert_short": "bond", "cert_note": "Each member buys one."}
+    for tab, data in (("features", feats), ("bylaws", cert)):
+        assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data=data).status_code == 404
+        assert "From club.yaml" in admin.get(f"/admin/site/{tab}").text
+        admin.post(f"/admin/site/{tab}", data=data)
+        assert c.site_settings == {}, tab  # unchanged: nothing kept
+    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1", "public_chow": "1"})
+    assert not c.has("chow") and not c.calendar.get("holidays") and c.calendar["elections"] == "us-oh"
+    assert c.info["public_calendars"] == ["events"]  # never chow, even if sent
+    assert c.site_settings == {"modules": {"chow": False}, "calendar": {"holidays": ""}, "club": {"public_calendars": ["events"]}}
+    before = c.site_settings
+    assert "Pick a region" in admin.post("/admin/site/features", data={"holidays": "zz"}).text and c.site_settings == before
+    admin.post("/admin/site/bylaws", data={"ref_dues": "VII", "ref_arrears": "<b>VII.B</b>", "arrears_note": "Only the  Board\nmay suspend."})
+    assert c.certificate is None and c.cite("dues") == " (bylaws VII)" and c.bylaws["arrears_note"] == "Only the Board may suspend."
+    assert "&lt;b&gt;VII.B&lt;/b&gt;" in admin.get("/admin/site/bylaws").text
+    assert "Give the certificate" in admin.post("/admin/site/bylaws", data={"cert_on": "1", "cert_name": " "}).text and c.certificate is None
+    assert "Features: chow, public calendars, holidays" in admin.get("/admin/security/admin").text
+    for tab in ("features", "bylaws"):
+        admin.post(f"/admin/site/{tab}", data={"back": "1"})
+    assert c.site_settings == {} and c.has("chow") and c.certificate["short"] == "bond" and c.cite("dues") == ""

@@ -10,9 +10,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 ### Club rules out of the code
 - **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
 
-- **Club settings on Admin → Site, in tabs** (decided 2026-11-12): the page's value wins over club.yaml's, like the Links page (`site-settings.json`, same names as club.yaml; "Back to club.yaml" on each). Sign-in (`auth:`), `admins:`, email test mode, AI and the roster's source stay server-only. One tab at a time, each tested on stage:
-  - **Features:** chow on or off, which calendars are public, holiday and election regions.
-  - **Bylaws and Treasurer:** the bylaws references, the arrears note, the certificate (bond).
 
 ### A new club can start
 - **Examples clearly fictional everywhere** (code, tests, docs, club.example.yaml): Jane/John Doe, example.com/.org, 555-0100…0199, 123 Main St, Anytown, and callsigns that can't be issued (four-letter suffix: N0CALL, W0DEMO). Replace the older realistic ones (Amy Able, KD8AAA, KD8XYZ…), which follow the real callsign format and may belong to someone.

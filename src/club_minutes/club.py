@@ -176,7 +176,9 @@ class Member:
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
-                                    "invite_after_visits", "remind_days_before")} | {("meeting", "sections")}
+                                    "invite_after_visits", "remind_days_before", "public_calendars")} | {
+    ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "elections"),
+    ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate")}
 
 
 def _overlay(cfg: dict, site: dict) -> dict:

@@ -1843,6 +1843,8 @@ def admin_action(e: dict) -> str:
              "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}",
              "site_club": lambda v: "Club settings back to club.yaml's" if v == "club.yaml" else f"Club settings: {v.replace('_', ' ')}",
              "site_agenda": lambda v: "Agenda back to club.yaml's" if v == "club.yaml" else f"Agenda: {v.replace('_', ' ')}",
+             "site_features": lambda v: "Features back to club.yaml's" if v == "club.yaml" else f"Features: {v.replace('_', ' ')}",
+             "site_bylaws": lambda v: "Bylaws settings back to club.yaml's" if v == "club.yaml" else f"Bylaws: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
              "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
@@ -2064,7 +2066,12 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
-SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("dates", "Dates"))
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("features", "Features"), ("bylaws", "Bylaws"), ("dates", "Dates"))
+PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
+REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
+        "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
+FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "elections"))
+BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
                 "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
@@ -2086,7 +2093,8 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, zones=events.ZONES,
+                agenda=_agenda_rows(club), builtins=SECTIONS, regions=_regions(), public_cals=PUBLIC_CALS, refs=REFS,
+                here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_edit=_meeting_edit(request.query_params.get("meeting", ""), request.query_params.get("d", "")), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
@@ -2118,6 +2126,89 @@ async def site_dates(request: Request):
         return RedirectResponse("/admin/site/dates?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_dates=choice)
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
+
+
+def _regions() -> dict[str, dict[str, str]]:
+    """The region files there are, for holidays and for elections: {"holidays": {code: what it is}, "elections": {...}}."""
+    import importlib
+    from . import regions
+    out = {"holidays": {}, "elections": {}}
+    for f in sorted((Path(regions.__file__).parent).glob("[a-z]*.py")):
+        code, m = f.stem.replace("_", "-"), importlib.import_module(f"club_minutes.regions.{f.stem}")
+        about = (m.__doc__ or code).split(":")[0].split(".")[0].strip()
+        if hasattr(m, "HOLIDAYS") and f.stem == code:  # a state file reuses its country's holidays: list the country
+            out["holidays"][code] = about
+        if hasattr(m, "elections"):
+            out["elections"][code] = about
+    return out
+
+
+OFF = {("modules", "chow"): False, ("club", "public_calendars"): [], ("calendar", "holidays"): "",
+       ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
+
+
+def _keep_changes(club, values: dict) -> dict:
+    """{(section, key): value} with None (back to club.yaml's) where the value is club.yaml's own, so only real changes
+    are kept and later edits to club.yaml still count for the rest. "Off" is an empty value ("", {}, [], False), never
+    None: it has to win over a club.yaml that turns the thing on."""
+    out = {}
+    for (sec, key), v in values.items():
+        base = (club.yaml.get(sec) or {}).get(key)
+        one = lambda x, n=1000: " ".join(str(x or "").split())[:n]  # club.yaml's text as the form sends it back
+        if isinstance(base, str):
+            base = one(base)
+        elif key == "certificate" and base:
+            base = {"name": one(base.get("name"), 80), "short": one(base.get("short"), 30) or "certificate", "note": one(base.get("note"), 500)}
+        elif key == "refs" and base:
+            base = {k: one(v, 20) for k, v in base.items() if one(v)}
+        out[(sec, key)] = None if v == (OFF[(sec, key)] if base is None else base) else v
+    return out
+
+
+@app.post("/admin/site/features")
+async def site_features(request: Request):
+    """Features tab: chow on or off, the public calendars, holiday and election regions."""
+    mid, form, club = _site_admin(request), await request.form(), archive.club
+    regs = _regions()
+    try:
+        if form.get("back"):
+            values = dict.fromkeys(FEATURE_KEYS)
+        else:
+            hol, ele = form.get("holidays") or "", form.get("elections") or ""
+            if hol and hol not in regs["holidays"] or ele and ele not in regs["elections"]:
+                raise ValueError("Pick a region from the list.")
+            values = _keep_changes(club, {("modules", "chow"): bool(form.get("chow")),
+                                          ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
+                                          ("calendar", "holidays"): hol, ("calendar", "elections"): ele})
+        club.save_site_settings(values)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/features?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, site_features="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
+    return RedirectResponse("/admin/site/features?note=" + quote("Saved."), status_code=303)
+
+
+@app.post("/admin/site/bylaws")
+async def site_bylaws(request: Request):
+    """Bylaws tab: the references the app cites, the arrears note, and the certificate (bond) members buy, if any."""
+    mid, form, club = _site_admin(request), await request.form(), archive.club
+    line = lambda k, n: " ".join((form.get(k) or "").split())[:n]
+    try:
+        if form.get("back"):
+            values = dict.fromkeys(BYLAWS_KEYS)
+        else:
+            cert = {}
+            if form.get("cert_on"):
+                if not line("cert_name", 80):
+                    raise ValueError("Give the certificate's name, or untick it.")
+                cert = {"name": line("cert_name", 80), "short": line("cert_short", 30) or "certificate", "note": line("cert_note", 500)}
+            values = _keep_changes(club, {("bylaws", "refs"): {k: line(f"ref_{k}", 20) for k in REFS if line(f"ref_{k}", 20)},
+                                          ("bylaws", "arrears_note"): line("arrears_note", 1000),
+                                          ("treasurer", "certificate"): cert})
+        club.save_site_settings(values)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/bylaws?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, site_bylaws="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
+    return RedirectResponse("/admin/site/bylaws?note=" + quote("Saved."), status_code=303)
 
 
 def _default_agenda() -> list[dict]:

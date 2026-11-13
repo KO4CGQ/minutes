@@ -576,3 +576,6 @@ form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items:
 @media (max-width: 560px) { .agendagrid { grid-template-columns: auto 3.2rem minmax(0, 1fr); } .agendagrid .agh { display: none; }
   .agendagrid input[name^=hint] { grid-column: 2 / -1; margin-bottom: .6rem; } }
 form.siteagenda { max-width: 52rem; } form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }
+form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-sizing: content; min-height: 4lh; }  /* grows with its text where the browser can */
+/* the certificate's fields only while it's ticked (CSS :has; an older browser just always shows them) */
+.sitecert:has(input[name=cert_on]:not(:checked)) .certfields { display: none; }
