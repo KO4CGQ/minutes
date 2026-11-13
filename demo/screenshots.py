@@ -24,6 +24,16 @@ from playwright.sync_api import sync_playwright
 
 from club_minutes import web
 
+sys.path.insert(0, str(HERE))
+import manifest
+
+rendered: set[str] = set()  # the templates the current picture's page rendered
+_respond = web.templates.TemplateResponse
+def _record(request, name, *a, **k):
+    rendered.add(name)
+    return _respond(request, name, *a, **k)
+web.templates.TemplateResponse = _record
+
 club = web.archive.club
 me = club.canonical("n0jane")
 web.updates.available = lambda: None  # the Admin page's "new version" line: never GitHub, and the same each time
@@ -64,6 +74,7 @@ def serve(route):
 
 
 OUT.mkdir(parents=True, exist_ok=True)
+used: dict[str, set[str]] = {}
 with sync_playwright() as p:
     browser = p.chromium.launch()
     for name, path, phone, dark, as_who, height in SHOTS:
@@ -72,9 +83,12 @@ with sync_playwright() as p:
                                 color_scheme="dark" if dark else "light", timezone_id=club.timezone)
         page.clock.set_fixed_time(CLOCK.replace(tzinfo=ZoneInfo(club.timezone)))  # the top bar's clock, in club time
         page.route("http://testserver/**", serve)
+        rendered.clear()
         page.goto("http://testserver" + path)
         page.add_style_tag(content=".preview { display: none !important; }")  # the demo's PREVIEW banner
         page.screenshot(path=str(OUT / f"{name}.png"))
+        used[name] = set(rendered)
         page.close()
     browser.close()
+manifest.write(used)  # for the test that says when a picture is out of date
 print(f"Screenshots in {OUT}")
