@@ -5,8 +5,8 @@ shortcut: rules as of 2026; if the law changes, change them here."""
 import datetime as dt
 
 from . import nth_weekday
-from .us import HOLIDAYS  # noqa: F401  (a state has its country's holidays too, if a club picks it for those)
 
+NAME = "Ohio: primaries and general election"  # how Admin → Site → Features lists it
 NOTES = "Polls are open 6:30 AM to 7:30 PM. Registration closes 30 days before. Your ballot and polling place: voteohio.gov"
 
 

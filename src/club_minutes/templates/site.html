@@ -64,16 +64,40 @@
 {% set pub = club.info.get('public_calendars') or [] %}
 {% for k, label in public_cals.items() %}<label class="check"><input type="checkbox" name="public_{{ k }}" value="1"{{ ' checked' if k in pub }}> {{ label }}</label>{% endfor %}
 </div>
-<div class="card sitesec"><h2>Holidays and elections</h2>
+<div class="card sitesec"><h2>Holidays</h2>
 <div class="fmtgrid">
-<label for="f-hol">Holidays</label><select id="f-hol" name="holidays"><option value="">None</option>{% for code, about in regions.holidays.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('holidays') == code }}>{{ about }} ({{ code }})</option>{% endfor %}</select>{{ origin('calendar.holidays') }}
-<label for="f-ele">Election days</label><select id="f-ele" name="elections"><option value="">None</option>{% for code, about in regions.elections.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('elections') == code }}>{{ about }} ({{ code }})</option>{% endfor %}</select>{{ origin('calendar.elections') }}
+<label for="f-hol">The country's</label><input id="f-hol" name="holidays" list="hol-regions" value="{{ regions.holidays.get(club.calendar.get('holidays') or '', '') }}" placeholder="None: type a country or state" autocomplete="off" spellcheck="false">{{ origin('calendar.holidays') }}
 </div>
-<p class="hint">Holidays go on their own calendar and mark meeting nights the club may skip; election days go on Club events. Another country or state is one small file in the app (regions/).</p>
+<datalist id="hol-regions">{% for code, about in regions.holidays.items() %}<option value="{{ about }}"></option>{% endfor %}</datalist>
+<p class="hint">Official holidays of a country, or of a state, region or nation in it: start typing (United States, Ohio, France, Bayern, Scotland…) and pick from the list; clear the box for none. They come from the python-holidays package, kept up to date with the app.</p>
+<h3>The club's own {{ origin('calendar.extra_holidays') }}</h3>
+{% set own = club.calendar.get('extra_holidays') or [] %}{% set MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'] %}
+{% set NTH = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th', -1: 'last'} %}{% set WD = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+<input type="hidden" name="hol_rows" value="{{ own|length + 10 }}">
+<div class="holrows">
+<div class="hrow head" aria-hidden="true"><span>Name</span><span>Month</span><span>Day</span><span>Days after</span><span></span></div>
+{% macro holrow(i, h) %}<div class="hrow">
+<input name="hol_name{{ i }}" value="{{ h.name or '' }}" maxlength="60" placeholder="Name" aria-label="Holiday name">
+<select name="hol_month{{ i }}" aria-label="Month">{% for m in MONTHS %}<option value="{{ loop.index }}"{{ ' selected' if h.month == loop.index }}>{{ m }}</option>{% endfor %}</select>
+<select name="hol_day{{ i }}" aria-label="Day"><optgroup label="A date">{% for d in range(1, 32) %}<option value="d{{ d }}"{{ ' selected' if h.day == d }}>{{ d }}</option>{% endfor %}</optgroup>
+{% for n, nl in NTH.items() %}<optgroup label="{{ nl|capitalize }} weekday">{% for w in WD %}<option value="w{{ loop.index0 }}:{{ n }}"{{ ' selected' if h.weekday == loop.index0 and h.nth == n }}>{{ nl }} {{ w }}</option>{% endfor %}</optgroup>{% endfor %}</select>
+<label class="after"><input name="hol_after{{ i }}" type="number" min="0" max="30" value="{{ h.after or 0 }}" aria-label="Days after"><span> days after</span></label>
+<label class="btn small ghost rm"><input type="checkbox" name="hol_rm{{ i }}" value="1" aria-label="Remove {{ h.name or 'this holiday' }} when saved"><span class="rm-do">Remove</span><span class="rm-undo">Undo</span></label>
+</div>{% endmacro %}
+{% for h in own %}{{ holrow(loop.index0, h) }}{% endfor %}
+{% for j in range(10) %}<input type="checkbox" class="more" id="more{{ j }}" aria-label="Add a holiday"><label for="more{{ j }}" class="btn small ghost add">+ Add a holiday</label>{{ holrow(own|length + j, {}) }}{% endfor %}
+</div>
+<p class="hint">Days the club keeps that aren't on the country's list, with or without a country above: a date (December 24) or a weekday (the last Friday of June). "Days after" moves it on: Black Friday is November, 4th Thursday, 1 day after. Remove takes one out when you save (Undo, before then, keeps it). All of them go on the Holidays calendar. A meeting night on a holiday still gets chow scheduled; an officer marks it No chow on the Chow page if the club skips it.</p>
+</div>
+<div class="card sitesec"><h2>Election days</h2>
+<div class="fmtgrid">
+<label for="f-ele">Election days</label><select id="f-ele" name="elections"><option value="">None</option>{% for code, about in regions.elections.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('elections') == code }}>{{ about }}</option>{% endfor %}</select>{{ origin('calendar.elections') }}
+</div>
+<p class="hint">On the Community calendar: the US general election (even years), or a state's own (primaries too). For a state that isn't listed, add its primaries as Community events.</p>
 </div>
 <p class="row"><button class="btn">Save</button></p>
 </form>
-{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.elections'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'bylaws' %}
 <p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/bylaws" class="profile sitewide">

@@ -177,7 +177,7 @@ class Member:
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                     "invite_after_visits", "remind_days_before", "public_calendars")} | {
-    ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "elections"),
+    ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate")}
 
 
@@ -262,7 +262,8 @@ class Club:
         self._sections = _agenda((cfg.get("meeting") or {}).get("sections"))  # refs: the sections the app cites; arrears_note: added to the arrears email
         self.calendar = cfg.get("calendar") or {}  # holidays / elections: region codes (regions/), none by default
         for k in ("holidays", "elections"):
-            regions._module(self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
+            regions.check(k, self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
+        regions.parse_extra(self.calendar.get("extra_holidays"))
         self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
 
     @property

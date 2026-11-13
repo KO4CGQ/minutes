@@ -579,3 +579,19 @@ form.siteagenda { max-width: 52rem; } form.profile .sitesec input[type=number] {
 form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-sizing: content; min-height: 4lh; }  /* grows with its text where the browser can */
 /* the certificate's fields only while it's ticked (CSS :has; an older browser just always shows them) */
 .sitecert:has(input[name=cert_on]:not(:checked)) .certfields { display: none; }
+/* Features → the club's own holidays: a row each; "+ Add a holiday" shows the next empty row (CSS only: a checkbox per row) */
+.holrows .hrow { display: grid; grid-template-columns: minmax(8rem, 1fr) 9rem 10rem 5rem 5.5rem; gap: .5rem; margin: .35rem 0; align-items: center; }
+.holrows .hrow.head span { font-size: .85rem; color: var(--muted); }
+.holrows .hrow input[type=number] { width: 5rem; }
+.holrows .more { position: absolute; opacity: 0; width: 1px; height: 1px; }        /* still reachable with Tab */
+.holrows .more:focus-visible + .add { outline: 2px solid var(--accent); }
+.holrows .more:not(:checked) + .add + .hrow, .holrows .more:checked + .add { display: none; }
+.holrows .more:not(:checked) ~ .more + .add { display: none; }                      /* only the first one not used yet */
+.holrows .after span { display: none; }  /* the column heading says it, except on phones */
+@media (max-width: 560px) { .holrows .hrow { grid-template-columns: 1fr 1fr; } .holrows .hrow.head { display: none; } .holrows .after { display: flex; align-items: center; gap: .4rem; white-space: nowrap; grid-column: 1 / -1; } .holrows .after span { display: inline; }
+  .holrows .hrow input[name^=hol_name] { grid-column: 1 / -1; } }
+/* Remove: a checkbox shown as a button; ticked, the row dims and the button says Undo; it goes when the form is saved */
+.holrows .rm { position: relative; } .holrows .rm input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.holrows .rm:has(input:focus-visible) { outline: 2px solid var(--accent); }
+.holrows .rm .rm-undo, .holrows .rm:has(input:checked) .rm-do { display: none; } .holrows .rm:has(input:checked) .rm-undo { display: inline; }
+.holrows .hrow:has(.rm input:checked) > :not(.rm) { opacity: .4; text-decoration: line-through; }

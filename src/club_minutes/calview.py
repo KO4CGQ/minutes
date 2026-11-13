@@ -97,7 +97,7 @@ def _birthdays(club: Club, viewer: str, lo: dt.date, hi: dt.date) -> list[Entry]
 
 def kinds(club: Club) -> dict[str, str]:
     """The calendars this club has: KINDS, less chow unless that module is on, and Holidays if it picked none."""
-    return {k: v for k, v in KINDS.items() if (k != "chow" or club.has("chow")) and (k != "holiday" or club.calendar.get("holidays"))}
+    return {k: v for k, v in KINDS.items() if (k != "chow" or club.has("chow")) and (k != "holiday" or club.calendar.get("holidays") or club.calendar.get("extra_holidays"))}
 
 
 def public_kinds(club: Club) -> list[str]:
@@ -125,7 +125,7 @@ def elections(club: Club, lo: dt.date, hi: dt.date) -> list[Entry]:
 
 def holidays(club: Club, lo: dt.date, hi: dt.date) -> list[Entry]:
     """Holidays of the club's region (club.yaml calendar: holidays), on the Holidays calendar."""
-    return [Entry(d, d, name, "holiday") for d, name in regions.holidays(club.calendar.get("holidays"), lo, hi)]
+    return [Entry(d, d, name, "holiday") for d, name in regions.holidays(club.calendar.get("holidays"), lo, hi, club.calendar.get("extra_holidays"))]
 
 
 def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, public: bool = False) -> tuple[list[Entry], None]:

@@ -24,6 +24,7 @@ from markupsafe import Markup, escape
 
 from . import ai, avatars, branding, theme, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
 from . import auth as authmod
+from . import regions
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
@@ -2070,7 +2071,7 @@ SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("feature
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
-FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "elections"))
+FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
@@ -2093,7 +2094,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, regions=_regions(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_edit=_meeting_edit(request.query_params.get("meeting", ""), request.query_params.get("d", "")), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
@@ -2128,23 +2129,8 @@ async def site_dates(request: Request):
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
 
 
-def _regions() -> dict[str, dict[str, str]]:
-    """The region files there are, for holidays and for elections: {"holidays": {code: what it is}, "elections": {...}}."""
-    import importlib
-    from . import regions
-    out = {"holidays": {}, "elections": {}}
-    for f in sorted((Path(regions.__file__).parent).glob("[a-z]*.py")):
-        code, m = f.stem.replace("_", "-"), importlib.import_module(f"club_minutes.regions.{f.stem}")
-        about = (m.__doc__ or code).split(":")[0].split(".")[0].strip()
-        if hasattr(m, "HOLIDAYS") and f.stem == code:  # a state file reuses its country's holidays: list the country
-            out["holidays"][code] = about
-        if hasattr(m, "elections"):
-            out["elections"][code] = about
-    return out
-
-
 OFF = {("modules", "chow"): False, ("club", "public_calendars"): [], ("calendar", "holidays"): "",
-       ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
+       ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
 
 
 def _keep_changes(club, values: dict) -> dict:
@@ -2159,9 +2145,28 @@ def _keep_changes(club, values: dict) -> dict:
             base = one(base)
         elif key == "certificate" and base:
             base = {"name": one(base.get("name"), 80), "short": one(base.get("short"), 30) or "certificate", "note": one(base.get("note"), 500)}
+        elif key == "extra_holidays" and base:
+            base = regions.parse_extra(base)
         elif key == "refs" and base:
             base = {k: one(v, 20) for k, v in base.items() if one(v)}
         out[(sec, key)] = None if v == (OFF[(sec, key)] if base is None else base) else v
+    return out
+
+
+def _own_holidays(form) -> list[dict]:
+    """The Features tab's rows of the club's own holidays (one ticked Remove, or with no name, is left out).
+    Day is "d24" (a date) or "w3:4" (weekday, Monday 0, and which one; -1 the last)."""
+    out = []
+    for i in range(min(num(form.get("hol_rows")) or 0, 60)):
+        name, day = " ".join((form.get(f"hol_name{i}") or "").split()), form.get(f"hol_day{i}") or ""
+        if not name or form.get(f"hol_rm{i}"):  # removed (or never named)
+            continue
+        h = {"name": name, "month": form.get(f"hol_month{i}"), "after": form.get(f"hol_after{i}") or 0}
+        m = re.fullmatch(r"d(\d{1,2})|w(\d):(-?\d)", day)
+        if not m:
+            raise ValueError(f"The club's own holidays: pick the day for {name}.")
+        h |= {"day": m.group(1)} if m.group(1) else {"weekday": m.group(2), "nth": m.group(3)}
+        out.append(h)
     return out
 
 
@@ -2169,20 +2174,22 @@ def _keep_changes(club, values: dict) -> dict:
 async def site_features(request: Request):
     """Features tab: chow on or off, the public calendars, holiday and election regions."""
     mid, form, club = _site_admin(request), await request.form(), archive.club
-    regs = _regions()
+    regs = regions.choices()
     try:
         if form.get("back"):
             values = dict.fromkeys(FEATURE_KEYS)
         else:
-            hol, ele = form.get("holidays") or "", form.get("elections") or ""
+            typed, ele = " ".join((form.get("holidays") or "").split()), form.get("elections") or ""
+            hol = next((code for code, name in regs["holidays"].items() if typed.lower() in (code, name.lower())), typed.lower())  # a name or a code
             if hol and hol not in regs["holidays"] or ele and ele not in regs["elections"]:
                 raise ValueError("Pick a region from the list.")
             values = _keep_changes(club, {("modules", "chow"): bool(form.get("chow")),
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
-                                          ("calendar", "holidays"): hol, ("calendar", "elections"): ele})
+                                          ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
+                                          ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})
         club.save_site_settings(values)
     except ValueError as e:
-        return RedirectResponse("/admin/site/features?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/site/features?error=" + quote("The club's own holidays: each needs a name, a month and a day." if "extra_holidays" in str(e) else str(e)), status_code=303)
     _admin_log(request, site_features="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
     return RedirectResponse("/admin/site/features?note=" + quote("Saved."), status_code=303)
 

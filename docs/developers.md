@@ -45,5 +45,13 @@ Run on every pull request, every push to main and **every Monday**, so a newly p
 - Actions in the workflows are pinned to a commit, with the version in a comment; Dependabot updates both.
 - **Repository settings** worth having on (Settings → Code security): Dependabot alerts, secret scanning and push protection (blocks a push that contains a key).
 
+## Election days for another state
+Election days are worked out from a state's rules in a small file in `src/club_minutes/regions/`, named for its code: `us_oh.py` is `us-oh`. A file there is listed on Admin → Site → Features by itself; nothing else needs changing. It has:
+- `NAME`: how the list shows it, e.g. `"Ohio: primaries and general election"`.
+- `elections(lo, hi)`: every election day from `lo` to `hi` (dates) as `[(date, name, notes)]`; `notes` is shown with the event (polling hours, where to find your ballot).
+- A docstring citing the law the rules come from, and a `shortcut:` line with the year they were checked.
+
+Copy `us_oh.py` and change its rules; `nth_weekday(year, month, weekday, n)` (Monday 0, n -1 for the last) is there for "the first Tuesday after the first Monday" kinds of rules. Add a test like `test_holidays_and_elections_are_none_unless_club_yaml_picks_a_region`. Holidays need no file: they come from python-holidays, and a club adds its own on the Features tab.
+
 ## Links page icons
 Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos from [Simple Icons](https://simpleicons.org) (CC0). They're stored in the repo (`src/club_minutes/simple_icons.json`), never loaded from a CDN, and drawn in the club's color like the built-in icons. To update them: `python3 deploy/update-simple-icons.py [VERSION]`.

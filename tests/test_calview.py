@@ -473,7 +473,7 @@ def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
     c = club()
     got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
     hol = [(e.start.isoformat(), e.title) for e in got if e.kind == "holiday"]
-    assert hol == [("2026-11-11", "Veterans Day"), ("2026-11-26", "Thanksgiving")]
+    assert hol == [("2026-11-11", "Veterans Day"), ("2026-11-26", "Thanksgiving Day")]
     assert [e.start for e in calview.holidays(club(), dt.date(2027, 1, 1), dt.date(2027, 12, 31)) if e.title in ("Memorial Day", "Labor Day")] == \
         [dt.date(2027, 5, 31), dt.date(2027, 9, 6)]
     assert not any(e.kind == "holiday" for e in calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)[0])
@@ -524,7 +524,7 @@ def test_console_reads_out_the_calendar_until_the_next_meeting(tmp_path):
     got = console.calendar_ahead(Archive(tmp_path, c), dt.date(2026, 11, 12))
     titles = [x["title"] for x in got["calendar"]]
     assert got["next_meeting"] == "2026-11-19"
-    assert {"Fox hunt", "Thanksgiving", "Hamfest", "Budget due"} <= set(titles)
+    assert {"Fox hunt", "Thanksgiving Day", "Hamfest", "Budget due"} <= set(titles)
     assert not {"W0TST meeting", "Board dinner", "Swap meet", "Birthday: Cal Cole"} & set(titles)  # meeting, ticked, already in the minutes, private
     assert next(x for x in got["calendar"] if x["title"] == "Budget due")["cal"] == "planning"
     fox = next(x for x in got["calendar"] if x["title"] == "Fox hunt")
@@ -546,7 +546,7 @@ def test_upcoming_events_go_on_their_calendar_once(tmp_path):
         events.save(evs)
     m = Meeting(date=dt.date(2026, 11, 12), status="draft", sections={"Upcoming Events": [
         Item("Fox hunt, the park", when="2026-11-14T14:00", until="2026-11-14T16:00"),  # added from the console's list
-        Item("Thanksgiving", when="2026-11-26"),                                           # a holiday, added the same way
+        Item("Thanksgiving Day", when="2026-11-26"),                                       # a holiday, added the same way
         Item("Budget meeting", when="2026-11-18T19:00", cal="planning"),
         Item("Road race", when="2026-11-21", cal="community")]})
     assert Meeting.from_markdown(m.to_markdown()).items("Upcoming Events")[2].cal == "planning"  # kept in the file
@@ -555,7 +555,7 @@ def test_upcoming_events_go_on_their_calendar_once(tmp_path):
     c.info["public_calendars"] = ["events"]
     got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
     seen = [(e.kind, e.title) for e in got]
-    assert [t for _, t in seen if t.startswith("Fox hunt")] == ["Fox hunt"] and [t for _, t in seen].count("Thanksgiving") == 1
+    assert [t for _, t in seen if t.startswith("Fox hunt")] == ["Fox hunt"] and [t for _, t in seen].count("Thanksgiving Day") == 1
     assert ("planning", "Budget meeting") in seen and ("community", "Road race") in seen
     pub, _ = calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)
     assert not {"Budget meeting", "Road race"} & {e.title for e in pub}  # Planning and Community aren't public here

@@ -143,7 +143,7 @@ def test_import_matches_misspelled_names_and_fixes_dates(env, tmp_path):
     s, problems = chow.import_xlsx(club, p, ["Able", "Baker", "Carter", "Dunn"], "sec", 2026)
     assert {d: x["member"] for d, x in s["nights"].items()} == {
         "2026-11-05": "amy", "2026-11-12": "bob", "2026-11-26": None, "2026-12-03": "cal"}
-    assert s["nights"]["2026-11-26"] == {"member": None, "status": "none", "note": "Thanksgiving"}
+    assert s["nights"]["2026-11-26"] == {"member": None, "status": "none", "note": "Thanksgiving Day"}
     # Sam wasn't listed: he joins at the end of the round, just before Dee (next after Cal's Dec 3)
     assert s["order"] == ["amy", "bob", "cal", "sec", "dee"] and s["pending"] == []
     assert any("Nov 25" in p for p in problems) and any("Nobody" in p for p in problems)

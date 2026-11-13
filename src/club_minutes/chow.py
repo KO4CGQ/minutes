@@ -373,7 +373,7 @@ def import_xlsx(club: Club, path: Path, order: list[str], by: str, year: int) ->
 
 def holiday(club: Club, d: dt.date) -> str | None:
     """A holiday of the club's region on that night (why a night has no chow), if any."""
-    return next((name for day, name in regions.holidays(club.calendar.get("holidays"), d, d)), None)
+    return next((name for day, name in regions.holidays(club.calendar.get("holidays"), d, d, club.calendar.get("extra_holidays"))), None)
 
 
 def _parse_day(text: str, year: int) -> dt.date | None:
