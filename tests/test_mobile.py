@@ -2,7 +2,8 @@
 The same visit fails on anything the Content Security Policy blocks, or a script error.
 
 New GET pages are picked up automatically from the app's routes. Pages are served to the browser straight from
-the test client, so no server runs. Skipped where Playwright's Chromium isn't installed (`uv run playwright install chromium`).
+the test client, so no server runs. Run in Chromium, Firefox and WebKit; an engine that isn't installed is skipped
+(`uv run playwright install chromium firefox webkit`, then `sudo .venv/bin/playwright install-deps` once).
 """
 import re
 from pathlib import Path
@@ -16,6 +17,7 @@ FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
 EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/kd8adm/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")]
 IPV6 = "2001:db8:85a3:1234:5678:8a2e:370:7334"  # real addresses can be this long
+ENGINES = ["chromium", "firefox", "webkit"]  # Chrome/Edge, Firefox, and Safari's engine (close to Safari, not the same)
 LONG_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
 
@@ -24,7 +26,8 @@ def pages(app) -> list[str]:
             and not r.path.startswith(("/static", "/api", "/docs", "/redoc", "/openapi")) and r.path not in SKIP] + EXTRA
 
 
-def test_every_page_fits_a_phone(tmp_path, monkeypatch):
+@pytest.mark.parametrize("engine", ENGINES)
+def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
     from club_minutes import web
@@ -58,9 +61,9 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
 
     with sync_api.sync_playwright() as p:
         try:
-            browser = p.chromium.launch()
+            browser = getattr(p, engine).launch()
         except Exception as e:  # noqa: BLE001
-            pytest.skip(f"no Chromium for Playwright: {e}")
+            pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_page(viewport={"width": 375, "height": 800})
         page.route("http://testserver/**", serve)
         too_wide, blocked, path = {}, [], ""
@@ -89,7 +92,8 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch):
     assert not blocked, f"blocked by the security policy, or a script error: {blocked}"
 
 
-def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch):
+@pytest.mark.parametrize("engine", ENGINES)
+def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch, engine):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
     from club_minutes import web
@@ -114,9 +118,9 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
 
     with sync_api.sync_playwright() as p:
         try:
-            browser = p.chromium.launch()
+            browser = getattr(p, engine).launch()
         except Exception as e:  # noqa: BLE001
-            pytest.skip(f"no Chromium for Playwright: {e}")
+            pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_page()
         page.route("http://testserver/**", serve)
         page.goto("http://testserver/business?tab=notes")
@@ -128,7 +132,8 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
         browser.close()
 
 
-def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_path, monkeypatch):
+@pytest.mark.parametrize("engine", ENGINES)
+def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_path, monkeypatch, engine):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
     from club_minutes import business, web
@@ -148,9 +153,9 @@ def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_pat
 
     with sync_api.sync_playwright() as p:
         try:
-            browser = p.chromium.launch()
+            browser = getattr(p, engine).launch()
         except Exception as e:  # noqa: BLE001
-            pytest.skip(f"no Chromium for Playwright: {e}")
+            pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_page(viewport={"width": 375, "height": 800})
         page.route("http://testserver/**", serve)
         errors = []

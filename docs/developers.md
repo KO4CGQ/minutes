@@ -9,7 +9,8 @@ uv sync
 uv run club-minutes roster                          # rebuild data/roster.json from data/roster-sheet.json
 uv run club-minutes import archive                  # optional: (re)build data/ from old minutes in archive/ (importer.py)
 uv run club-minutes serve --host 0.0.0.0 --port 8765
-uv run playwright install chromium                  # once: the mobile-first test uses it (skipped without it)
+uv run playwright install chromium firefox webkit   # once: the browser tests run in each (one not installed is skipped)
+sudo .venv/bin/playwright install-deps              # once, on Linux: the libraries Firefox and WebKit need
 uv run pytest -q
 ```
 People come from `data/roster-sheet.json` (the roster's two tabs, Member Roster and Membership Log, as grids of values). Copy it from a backup of the club's server, or start one with `uv run club-minutes first-member YOURCALL --first … --last … --email … --class General` (only when there's none).
@@ -40,7 +41,7 @@ Run on every pull request, every push to main and **every Monday**, so a newly p
 - **Security workflow:** `pip-audit` checks the locked Python packages (`uv.lock`) against the PyPI and OSV advisory databases; `gitleaks` looks for keys, tokens and passwords anywhere in the git history.
 - **CodeQL workflow:** GitHub's code scanner for the Python and JavaScript (injection, script injection (XSS), unsafe redirects...). Findings are under Security → Code scanning.
 - **Dependabot** (`.github/dependabot.yml`): a weekly PR for newer Python packages and GitHub Actions, and one right away for a security fix. Review and merge like any PR.
-- **Tests:** `tests/test_security.py` tries every route signed out (only the public pages answer), officer and admin pages as a member, and members changing what isn't theirs; a new route is covered automatically. The mobile test opens every page in a real browser and fails if the Content Security Policy blocks anything or a script errors. The policy runs scripts only from the app's own files or the `<script>` blocks a page was given a one-time nonce for: no inline `on…=` handlers (use `data-confirm`, `data-autosubmit`, `data-select`, `data-tick` from `base.html`, or a listener in a `<script nonce="{{ csp_nonce }}">`).
+- **Tests:** `tests/test_security.py` tries every route signed out (only the public pages answer), officer and admin pages as a member, and members changing what isn't theirs; a new route is covered automatically. The mobile test opens every page in real browsers (Chromium, Firefox and WebKit, Safari's engine) and fails if the Content Security Policy blocks anything or a script errors. The policy runs scripts only from the app's own files or the `<script>` blocks a page was given a one-time nonce for: no inline `on…=` handlers (use `data-confirm`, `data-autosubmit`, `data-select`, `data-tick` from `base.html`, or a listener in a `<script nonce="{{ csp_nonce }}">`).
 - **Changes only from the app's own pages:** a POST (or PUT, PATCH, DELETE) that a browser marks as from another site or a sibling host (`Sec-Fetch-Site`), or whose `Origin` isn't the address it was sent to, gets a 403 (`same_origin_only` in `web.py`). The sign-in cookie's `SameSite=lax` stops other sites but not sibling hosts on the same domain (other names on the tailnet). New forms and `fetch` calls on the app's own pages need nothing.
 - Actions in the workflows are pinned to a commit, with the version in a comment; Dependabot updates both.
 - **Repository settings** worth having on (Settings → Code security): Dependabot alerts, secret scanning and push protection (blocks a push that contains a key).
