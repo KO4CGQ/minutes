@@ -4,11 +4,13 @@ Builds the demo club in a temporary folder (demo/build.py), then serves the app 
 the test client, as the browser tests do: no server, and never a club's data. Signed in as the demo President.
 The demo runs in preview mode (its email goes nowhere); its PREVIEW banner is hidden from the pictures.
 """
+import datetime as dt
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parent / "docs" / "screenshots"
@@ -25,6 +27,7 @@ club = web.archive.club
 me = club.canonical("n0jane")
 c = TestClient(web.app)
 c.cookies.set(web.COOKIE, web.authn.new_session(me, "Mozilla/5.0", "127.0.0.1", "passkey"))
+CLOCK = dt.datetime.combine(dt.date.today(), dt.time(18, 18))  # the top bar's clock: 6:18 pm today
 latest = max(m.date for m in web.archive.meetings)
 SHOTS = [  # file name, page, phone?, dark?
     ("home", "/", False, False),
@@ -46,7 +49,8 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     for name, path, phone, dark in SHOTS:
         page = browser.new_page(viewport={"width": 390, "height": 844} if phone else {"width": 1280, "height": 860},
-                                device_scale_factor=2 if phone else 1, color_scheme="dark" if dark else "light")
+                                device_scale_factor=2 if phone else 1, color_scheme="dark" if dark else "light", timezone_id=club.timezone)
+        page.clock.set_fixed_time(CLOCK.replace(tzinfo=ZoneInfo(club.timezone)))  # the top bar's clock, in club time
         page.route("http://testserver/**", serve)
         page.goto("http://testserver" + path)
         page.add_style_tag(content=".preview { display: none !important; }")  # the demo's PREVIEW banner
