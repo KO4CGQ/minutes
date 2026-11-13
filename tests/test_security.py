@@ -328,12 +328,31 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         assert new["start"].startswith(str(since + dt.timedelta(days=(1 - since.weekday()) % 7))) and new["where"] == where and new["online"] == online
         tab = admin.get("/admin/site/club").text
         assert tab.count("Set here") == 2 and tab.count("From club.yaml") == 3  # name and day were changed
-        assert 'value="Clubhouse, 123 Main St &lt;b&gt;"' in tab and 'value="https://meet.example.com/abc?pwd=x&amp;y=1"' in tab  # escaped
+        assert 'value=""' in tab.split('id="c-where"')[1][:80]  # the next meeting (still the old Thursday) has no Where yet
         cal = admin.get(f"/calendar?start={since}").text
         assert 'href="https://meet.example.com/abc?pwd=x&amp;y=1" rel="noopener">Join online' in cal and "123 Main St &lt;b&gt;" in cal
         n = len(events.load())
-        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": where, "online": online})
+        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": "", "online": "",
+                                             "shown_where": "", "shown_online": ""})  # as the page sends it, untouched
         assert len(events.load()) == n  # nothing new: the calendar's left alone
+        # from today on, a new time: the Thursdays before `since` and the Tuesdays already planned both change
+        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "meeting_time": "18:00",
+                                             "since": str(today), "where": "Library <b>", "online": online})
+        occ = sorted((events.occurrence(e, d) | {"d": d} for e in events.load() if e.get("meeting")
+                     for d in events.dates(e, today, today + dt.timedelta(days=60))), key=lambda o: o["d"])
+        assert occ and all(o["start"].endswith("T18:00") and o["where"] == "Library <b>" and o["online"] == online and o["d"].weekday() == 1 for o in occ), occ
+        assert len({o["d"] for o in occ}) == len(occ)  # each Tuesday once
+        # a place planned for later stays when only the time changes from today (Where and the link untouched on the page)
+        later = today + dt.timedelta(days=21)
+        new = {**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "meeting_time": "18:00", "online": online, "shown_online": online}
+        admin.post("/admin/site/club", data={**new, "since": str(later), "where": "Hall", "shown_where": "Library <b>"})
+        admin.post("/admin/site/club", data={**new, "meeting_time": "18:30", "since": str(today), "where": "Library <b>", "shown_where": "Library <b>"})
+        occ = sorted((events.occurrence(e, d) | {"d": d} for e in events.load() if e.get("meeting")
+                      for d in events.dates(e, today, today + dt.timedelta(days=60))), key=lambda o: o["d"])
+        assert [o["where"] for o in occ] == ["Library <b>" if o["d"] < later else "Hall" for o in occ] and "Hall" in [o["where"] for o in occ], occ
+        assert all(o["start"].endswith("T18:30") for o in occ) and len({o["d"] for o in occ}) == len(occ)
+        tab = admin.get("/admin/site/club").text
+        assert 'value="Library &lt;b&gt;"' in tab and 'value="https://meet.example.com/abc?pwd=x&amp;y=1"' in tab  # escaped
         assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
         admin.post("/admin/site/club", data={"back": "1"})
         assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay

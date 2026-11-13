@@ -91,7 +91,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
         page.route("http://testserver/**", serve)
         too_wide, blocked, path, seen = {}, [], "", []
         # the security policy runs no inline handlers or unmarked scripts: anything it blocks, or any script error, fails
-        page.on("console", lambda m: m.type == "error" and "Content Security Policy" in m.text and blocked.append((path, m.text[:200])))
+        page.on("console", lambda m: m.type == "error" and ("Content Security Policy" in m.text or "Pattern attribute" in m.text) and blocked.append((path, m.text[:200])))
         page.on("pageerror", lambda e: blocked.append((path, str(e)[:200])))
         for path in pages(web.app):
             r = c.get(path, follow_redirects=False)

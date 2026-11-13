@@ -9,7 +9,7 @@
 <div class="card sitesec"><h2>The club</h2>
 <div class="fmtgrid">
 <label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ origin('name') }}
-<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
+<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9\/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
 <label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}"><span class="muted small">{{ 'Set here' if app_name() != default_name else 'From the callsign' }}</span>
 </div>
 <p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
@@ -20,10 +20,11 @@
 <label for="c-tz">Time zone</label><input id="c-tz" name="timezone" list="zones" value="{{ club.timezone }}" required autocomplete="off" spellcheck="false">{{ origin('timezone') }}
 <label for="c-where">Where</label><input id="c-where" name="where" value="{{ meeting_where[0] }}" maxlength="200" placeholder="123 Main St, Anytown"><span class="muted small">On the calendar</span>
 <label for="c-online">Online link</label><input id="c-online" type="url" name="online" value="{{ meeting_where[1] }}" maxlength="500" placeholder="https://meet.example.com/abc"><span class="muted small">On the calendar</span>
+<input type="hidden" name="shown_where" value="{{ meeting_where[0] }}"><input type="hidden" name="shown_online" value="{{ meeting_where[1] }}">
 <label for="c-since">Starting</label><input id="c-since" type="date" name="since" value="{{ sample }}" min="{{ sample }}" required><span></span>
 </div>
 <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
-<p class="hint">Every week on this day, as the weekly meeting on the Club events calendar. A new day, time, Where or online link changes the meeting there from the Starting date on; earlier dates stay as they were. Where is the place; the online link (Zoom, Meet, Teams…) shows as a Join online button on the calendar and goes to phones' calendars too. One date (a holiday, a new place for a night) is changed on the calendar itself. Chow nights come from the chow schedule on the Chow page: the app says if any are on the old day.</p>
+<p class="hint">Every week on this day, as the weekly meeting on the Club events calendar. A new day, time, Where or online link changes the meeting there from the Starting date on; earlier dates stay as they were. Where and the online link show the next meeting's; only what you change here is applied, so a different place already planned for a later date stays. Where is the place; the online link (Zoom, Meet, Teams…) shows as a Join online button on the calendar and goes to phones' calendars too. One date (a holiday, a new place for a night) is changed on the calendar itself. Chow nights come from the chow schedule on the Chow page: the app says if any are on the old day.</p>
 </div>
 <p class="row"><button class="btn">Save</button></p>
 </form>

@@ -2280,9 +2280,8 @@ async def site_agenda(request: Request):
 
 def _meeting_where(since: dt.date) -> tuple[str, str]:
     """Where the weekly meeting is, and its online link, on its first date from `since` on (from the calendar)."""
-    e = events.meeting(events.load())
-    d = next(iter(events.dates(e, since, since + dt.timedelta(days=400))), None) if e else None
-    o = events.occurrence(e, d) if d else {}
+    found = events.next_meeting(events.load(), since)
+    o = events.occurrence(*found) if found else {}
     return o.get("where", ""), o.get("online", "")
 
 
@@ -2332,10 +2331,12 @@ async def site_club(request: Request):
         branding.set_name(app_name, mid)
         _admin_log(request, site_name=branding.name(club))
     note = "Saved."
-    was = _meeting_where(since)
-    now = (" ".join((form.get("where") or "").split())[:200], online) if "where" in form else was
-    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or now != was:
-        first = events.move_meeting(club, since, *now, mid)
+    # only what was changed on the page: each later date keeps its own place and link otherwise (a change planned for later)
+    where = " ".join((form.get("where") or "").split())[:200]
+    where = where if "where" in form and where != form.get("shown_where", "") else None
+    online = online if "where" in form and online != form.get("shown_online", "") else None
+    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or (where, online) != (None, None):
+        first = events.move_meeting(club, since, where, online, mid)
         note = f"Saved. The weekly meeting on the calendar changes from {show_date(first, 'day_year')}; earlier dates stay as they were."
     late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
                and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0

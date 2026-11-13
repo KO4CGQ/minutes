@@ -83,33 +83,49 @@ def ensure_meeting(club) -> None:
         marker.write_text(e["id"])
 
 
-def meeting(evs: list[dict]) -> dict | None:
-    """The weekly meeting's current series (the one still repeating, if a leader split it)."""
-    ms = [e for e in evs if e.get("meeting")]
-    return max(ms, key=lambda e: e["start"], default=None)
+def next_meeting(evs: list[dict], since: dt.date) -> tuple[dict, dt.date] | None:
+    """The weekly meeting's first date from `since` on, and the series it's in (a series per earlier change)."""
+    d, e = min(((d, e) for e in evs if e.get("meeting") for d in dates(e, since, since + dt.timedelta(days=400))[:1]),
+               key=lambda x: x[0], default=(None, None))
+    return (e, d) if e else None
 
 
-def move_meeting(club, since: dt.date, where: str, online: str, by: str) -> dt.date:
-    """The weekly meeting from `since` on: the club's day and time, at `where` and `online`. Earlier dates keep theirs; one-date
-    changes and skipped dates from `since` on go if the day moves. Returns the first new date."""
-    first = since + dt.timedelta(days=(club.meeting_weekday - since.weekday()) % 7)
-    start = dt.datetime.fromisoformat(f"{first}T{club.meeting_time}")
+def move_meeting(club, since: dt.date, where: str | None, online: str | None, by: str) -> dt.date:
+    """The weekly meeting from `since` on: the club's day and time, at `where` and `online` (None: each date keeps its own). Earlier dates keep theirs; one-date
+    changes and skipped dates from `since` on go if the day moves. Each series (one per earlier change) still running
+    from `since` changes from where it starts, so a change already planned for later is changed too, not left behind.
+    Returns the first new date."""
+    nearest = lambda d: d + dt.timedelta(days=(club.meeting_weekday - d.weekday()) % 7)  # noqa: E731
+    at = lambda d: dt.datetime.fromisoformat(f"{d}T{club.meeting_time}")  # noqa: E731
     with locked():
         evs = load()
-        e = meeting(evs)
-        old = next(iter(dates(e, since, since + dt.timedelta(days=400))), None) if e else None
-        if old is None:  # no meeting on the calendar (deleted, or its dates ended): a new series
-            e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": where, "online": online, "notes": "",
-                                    "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
+        changed, series = [], sorted((x for x in evs if x.get("meeting")), key=lambda x: x["start"])
+        for e, after in zip(series, series[1:] + [None]):
+            old = next(iter(dates(e, since, since + dt.timedelta(days=400))), None)
+            if old is None:
+                continue
+            start = at(nearest(max(since, _dt(e["start"]).date())))
+            # it ends the day before the next series starts, so a new weekday can't put a date in both
+            end = min(filter(None, [e["repeat"].get("until"), after and (_dt(after["start"]).date() - dt.timedelta(days=1)).isoformat()]), default=None)
+            v = {"title": e["title"], "notes": e.get("notes", ""), "where": e.get("where", "") if where is None else where,
+                 "online": e.get("online", "") if online is None else online, "start": _iso(start, True),
+                 "end": _iso(start + (length(e) or dt.timedelta(hours=2)), True), "repeat": {**e["repeat"], "until": end}, "tz": None}
+            n = len(evs)
+            change(evs, e["id"], old.isoformat(), e["cal"], v, "following")
+            moved = evs[-1] if len(evs) > n else e  # the dates from `since` on: split off, or the whole series
+            moved["repeat"] = {**moved["repeat"], "until": end}
+            changed.append(moved)
+        if not changed:  # no meeting on the calendar (deleted, or its dates ended): a new series
+            start = at(nearest(since))
+            e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": where or "", "online": online or "",
+                                    "notes": "", "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
                                     "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, by)
             e["meeting"] = True
-        else:
-            v = {"title": e["title"], "notes": e.get("notes", ""), "where": where, "online": online, "start": _iso(start, True),
-                 "end": _iso(start + (length(e) or dt.timedelta(hours=2)), True), "repeat": e["repeat"], "tz": None}
-            change(evs, e["id"], old.isoformat(), e["cal"], v, "following")
+            changed.append(e)
         save(evs)
-        (DATA / "events-meeting-added").write_text(e["id"])  # ensure_meeting has nothing left to do
-    log(by, "changed this and following dates of", {**e, "start": _iso(start, True)})
+        (DATA / "events-meeting-added").write_text(changed[0]["id"])  # ensure_meeting has nothing left to do
+    first = nearest(since)
+    log(by, "changed this and following dates of", {**changed[0], "start": _iso(at(first), True)})
     return first
 
 

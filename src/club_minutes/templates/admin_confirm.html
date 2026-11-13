@@ -6,7 +6,7 @@
 {% if sent and not email_ready() %}<p class="msg err">This server can't send email yet (no SMTP settings: server admin guide → Login), so the link is in its log: <code>journalctl -u club-minutes</code>. Open it in this browser within 5 minutes.</p>{% elif sent %}<p class="msg ok">We emailed a link to <b>{{ email }}</b>. Open it in this browser within 5 minutes.</p>{% endif %}
 {% if passkey %}
 <p><button class="btn" id="confirm">Confirm with your passkey</button> <span id="pkmsg" class="muted"></span></p>
-<script src="/static/auth.js?v={{ ASSETS }}"></script>
+{% if not pk_offer %}<script src="/static/auth.js?v={{ ASSETS }}"></script>{% endif %}{# base.html loads it for the offer #}
 <script nonce="{{ csp_nonce }}">
 document.getElementById("confirm").onclick = async () => {
   const msg = document.getElementById("pkmsg"); msg.textContent = "";
