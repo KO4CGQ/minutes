@@ -479,3 +479,18 @@ def test_site_features_and_bylaws_tabs(app, tmp_path, monkeypatch):
     for tab in ("features", "bylaws"):
         admin.post(f"/admin/site/{tab}", data={"back": "1"})
     assert c.site_settings == {} and c.has("chow") and c.certificate["short"] == "bond" and c.cite("dues") == ""
+
+
+def test_a_renamed_setting_keeps_working_and_admins_are_told(app, monkeypatch, tmp_path):
+    """docs/developers.md → Compatibility: an old club.yaml name is read as the new one until 2.0, with a line on Admin."""
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "RENAMED", {("club", "old_invite"): ("club", "invite_after_visits")})
+    y = tmp_path / "club.yaml"
+    y.write_text((Path(__file__).parent / "fixtures" / "test-club.yaml").read_text().replace("club: {", "club: {old_invite: 7, ", 1))
+    c = clubmod.Club(y)
+    assert c.info["invite_after_visits"] == 7 and "old_invite" not in c.info
+    assert len(c.renamed) == 1 and "is now called club: invite_after_visits:" in c.renamed[0]
+    monkeypatch.setattr(web.archive.club, "renamed", c.renamed)
+    web.archive.club.admins = {"n0offc"}
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    assert "works until version 2.0" in app("n0offc").get("/admin").text

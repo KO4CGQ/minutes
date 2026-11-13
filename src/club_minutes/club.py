@@ -181,6 +181,23 @@ SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate")}
 
 
+# club.yaml settings renamed since 1.0.0: (section, old name) -> (section, new name). The old name keeps working
+# until 2.0, with a line on the Admin page (docs/developers.md → Compatibility). Never remove an entry before 2.0.
+RENAMED: dict[tuple[str, str], tuple[str, str]] = {}
+
+
+def _renamed(cfg: dict) -> tuple[dict, list[str]]:
+    """club.yaml with renamed settings under their new names (a new name given too wins), and a line for each."""
+    out = {k: dict(v) if isinstance(v, dict) else v for k, v in cfg.items()}
+    notes = []
+    for (sec, old), (nsec, new) in RENAMED.items():
+        if isinstance(out.get(sec), dict) and old in out[sec]:
+            v = out[sec].pop(old)
+            out.setdefault(nsec, {}).setdefault(new, v)
+            notes.append(f"club.yaml: {sec}: {old}: is now called {nsec}: {new}:. The old name works until version 2.0; rename it when you can.")
+    return out, notes
+
+
 def _overlay(cfg: dict, site: dict) -> dict:
     """club.yaml with the Site page's settings on top: a key there replaces club.yaml's, section by section."""
     out = dict(cfg)
@@ -192,7 +209,7 @@ def _overlay(cfg: dict, site: dict) -> dict:
 class Club:
     def __init__(self, path: Path | None = None, roster: list[dict] | None = None):
         path = path or Path(os.environ.get("CLUB_MINUTES_CONFIG", ROOT / "club.yaml"))
-        self.yaml = yaml.safe_load(path.read_text()) or {}
+        self.yaml, self.renamed = _renamed(yaml.safe_load(path.read_text()) or {})
         cfg = _overlay(self.yaml, self.site_settings)
         self._configure(cfg)
 

@@ -38,6 +38,23 @@ PDF generation needs the system Pango library: `sudo apt install libpango-1.0-0 
 - **Changing how data is stored** (a file renamed, a field reshaped): add a step to `STEPS` in `src/club_minutes/upgrade.py` with a test that runs it on data of the old shape, so a 1.x needs no deploy notes. The app runs any steps the data folder hasn't had (`data-version` says which it has) at start, after a copy to `before-upgrade/`; if the new version doesn't start, `update.sh` puts that copy back (`club-minutes data-undo`) before going back. Never change or remove a released step, and make each safe to run twice (it can be stopped part way). An older version refuses data newer than it knows.
 - Every pull request runs the tests (the Tests workflow).
 
+## Compatibility (what a 1.x keeps)
+From 1.0.0 on, a club updates within 1.x without doing anything by hand, so a 1.x may add but never take away or rename. Breaking any of this waits for 2.0 (the first number in the version: see CHANGELOG.md).
+
+What a club relies on:
+- **club.yaml:** every setting's name and meaning, and the values it takes.
+- **The data folder:** what's stored in it, which a newer version may reshape only through an upgrade step (Changes and releases, above); and the backup format, so an older backup can always be restored.
+- **The server:** the folders (`/opt/club-minutes`, `/var/lib/club-minutes`, `/etc/club-minutes`), the service and timer names, the `club-minutes` commands and their options, the `CLUB_MINUTES_*` environment settings, and `setup.sh` and `update.sh`.
+- **Addresses others keep:** members' calendar subscription links (`/calendar/feed/…`, `/calendar/public.ics`) and public calendar page, sign-in links in emails already sent, and any page address in an email or a bookmark (a moved page answers its old address with a redirect, as Backups' does).
+- **The roster API** (`/api/roster`, used by the Discord bot): its token, its fields and what they mean. Fields may be added; none removed or renamed.
+
+The rules:
+- **A new setting has a default** that keeps things as they were, so a club.yaml from 1.0.0 still starts. A setting that must be given is a 2.0 change.
+- **An old name keeps working until 2.0.** To rename a club.yaml setting, add it to `RENAMED` in `src/club_minutes/club.py`: the app reads the old name as the new one and says so on the Admin page. A setting saved on Admin → Site (site-settings.json) is renamed with an upgrade step instead, since the app wrote it. A renamed command, service or address keeps its old name alongside (an alias, a second unit, a redirect).
+- **A name is never reused** for something different, even after the old thing is gone: pick a new one.
+- **Removing a feature is a 2.0 change.** Switching a module off (like chow) is the club's choice, and switching it back on finds its data where it was.
+- When in doubt, a release needs Deploy notes only for something a club chooses to do, never for something it has to.
+
 ## Security checks
 Run on every pull request, every push to main and **every Monday**, so a newly published advisory turns up even in a quiet week. Any of them can also be run by hand: Actions → the workflow → Run workflow.
 - **Security workflow:** `pip-audit` checks the locked Python packages (`uv.lock`) against the PyPI and OSV advisory databases; `gitleaks` looks for keys, tokens and passwords anywhere in the git history.
