@@ -2310,7 +2310,7 @@ async def site_club(request: Request):
             if not name:
                 raise ValueError("Give the club's name.")
             if not re.fullmatch(r"[A-Z0-9/]{3,12}", call):
-                raise ValueError("The callsign is letters and digits, like W1AW.")
+                raise ValueError("The callsign is letters and digits, like N0CALL.")
         except ValueError as e:
             return RedirectResponse("/admin/site/club?error=" + quote(str(e)), status_code=303)
         typed = {"name": name, "callsign": call, "meeting_day": (form.get("meeting_day") or "").strip().title(),

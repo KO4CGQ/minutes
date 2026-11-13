@@ -31,9 +31,9 @@ def test_the_name_comes_from_site_then_club_yaml_then_the_callsign(data):
     assert branding.name(c) == f"{c.info['callsign']} Minutes"
     c.info["app_name"] = "Club Records"
     assert branding.name(c) == "Club Records"
-    branding.set_name("  Our   Club  Minutes ", "kd8aaa")
+    branding.set_name("  Our   Club  Minutes ", "n0aaaa")
     assert branding.name(c) == "Our Club Minutes"  # Site wins; spaces tidied
-    branding.set_name("", "kd8aaa")
+    branding.set_name("", "n0aaaa")
     assert branding.name(c) == "Club Records"     # empty: back to the next one
     c.info.pop("app_name"), c.info.pop("callsign", None)
     assert branding.name(c) == "Club Minutes"
@@ -74,11 +74,11 @@ def test_each_picture_is_uploaded_and_reset_on_its_own(data):
 
 
 def test_site_page_is_for_admins_in_admin_mode_and_the_pictures_are_public(data, tmp_path, monkeypatch):
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"},
-                                                 {"id": "kd8bbb", "first": "Bob", "last": "Baker"}])
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed"},
+                                                 {"id": "n0bbbb", "first": "Bob", "last": "Bloggs"}])
     from club_minutes import club as clubmod
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
-    club.save_app_admins({"kd8adm"})  # (a Club tab save reloads the settings: an admin set by hand wouldn't last)
+    club.save_app_admins({"n0admn"})  # (a Club tab save reloads the settings: an admin set by hand wouldn't last)
     monkeypatch.setattr(web.archive, "club", club)
     monkeypatch.setattr(web, "DATA", tmp_path)
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -88,11 +88,11 @@ def test_site_page_is_for_admins_in_admin_mode_and_the_pictures_are_public(data,
         t = TestClient(web.app)
         t.cookies.set(web.COOKIE, a.new_session(who))
         return t
-    bob, amy = as_("kd8bbb"), as_("kd8adm")
+    bob, amy = as_("n0bbbb"), as_("n0admn")
     assert bob.get("/admin/site").status_code == 404 and bob.post("/admin/site/club", data={"app_name": "X"}).status_code == 404
     assert amy.get("/admin/site", follow_redirects=False).headers["location"].startswith("/admin/confirm")  # admin mode first
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
-    same = {"name": "Test Club", "callsign": "W0TST", "meeting_day": "Thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
+    same = {"name": "Test Club", "callsign": "W0TEST", "meeting_day": "Thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
     amy.post("/admin/site/club", data={**same, "app_name": "Test Club Minutes"})
     assert "Test Club Minutes" in bob.get("/links").text  # every page's top bar
     amy.post("/admin/site/club", data={**same, "callsign": "<b>", "app_name": "Other Minutes"})  # a refused save changes nothing
@@ -140,7 +140,7 @@ def test_damaged_pictures_are_refused_and_a_damaged_logo_on_disk_never_stops_a_p
     from club_minutes import avatars
     monkeypatch.setattr(avatars, "DATA", data)
     with pytest.raises(ValueError):
-        avatars.save("kd8aaa", png()[:200])                             # profile pictures too
+        avatars.save("n0aaaa", png()[:200])                             # profile pictures too
     branding.save("logo", png())
     (data / "branding" / "logo.png").write_bytes(b"damaged")            # disk trouble, a bad restore
     assert branding.backing() == "none"                                 # every page asks this

@@ -54,7 +54,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 - **Email** needs `CLUB_MINUTES_SMTP_USER` / `CLUB_MINUTES_SMTP_PASSWORD` (a Gmail app password) in `/etc/club-minutes/env`.
   Without them, links are written to the server log instead.
 - **AI** (optional) needs `CLUB_MINUTES_OPENROUTER_KEY` in `/etc/club-minutes/env` and `ai: {model: ...}` in club.yaml. Each call is logged to `ai-log.jsonl` in the data folder (time, model, size, cost; never the text).
-- **Recovery:** an admin on the server can print a one-time link for a member: `club-minutes login-link KD8XYZ`
+- **Recovery:** an admin on the server can print a one-time link for a member: `club-minutes login-link N0CALL`
 
 In admin mode, the name menu's **Admin** (`/admin`) lists the admin tools, each with a line of how things stand: Security (failed sign-ins today, bans), Backups (the last one), Updates (what's running, what's available), Site, the Email log (anything held back this week) and, on a staging server, Stage sync.
 

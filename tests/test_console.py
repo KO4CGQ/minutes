@@ -39,27 +39,27 @@ def test_start_carries_business_forward(tmp_path):
 
 
 def test_past_guests_exclude_members_and_sort_recent_first(tmp_path):
-    for d, guests in ((dt.date(2026, 10, 1), [{"name": "Pat Guest", "callsign": "KE8ABC"}, {"name": "Rick Roe"}]),
+    for d, guests in ((dt.date(2026, 10, 1), [{"name": "Pat Guest", "callsign": "N0YABC"}, {"name": "Rick Roe"}]),
                       (dt.date(2026, 10, 8), [{"name": "Lee Visitor"}])):
         Meeting(date=d, status="published", in_person=["roe"] if d.day == 8 else [], guests=guests).save(tmp_path)
     a = Archive(tmp_path, club)
     m = console.start(a, dt.date(2026, 11, 12), "doe")
     past = console.context(a, m)["past_guests"]
     assert [g["name"] for g in past] == ["Lee Visitor", "Pat Guest"]  # Rick Roe became a member
-    assert past[1] == {"name": "Pat Guest", "callsign": "KE8ABC", "visits": 1, "last": "2026-10-01"}
+    assert past[1] == {"name": "Pat Guest", "callsign": "N0YABC", "visits": 1, "last": "2026-10-01"}
 
 
 def test_apply_saves_and_drops_never_record_guests(tmp_path):
     a = archive_with_prev(tmp_path)
     console.start(a, dt.date(2026, 11, 12), "doe")
     data = {"meeting": {"in_person": ["doe", "kim"], "remote": ["kim", "roe"],
-                        "guests": [{"name": "Pat Guest", "callsign": "KE8ABC", "online": True}, {"name": "Tiny Visitor"}],
+                        "guests": [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}, {"name": "Tiny Visitor"}],
                         "visitors": 1,
                         "sections": {"Community Reports": [{"text": "Sam got on HF", "member": "kim"}, {"text": " "}]}},
             "state": {"done": ["kim"]}}
     m = console.apply(a, "2026-11-12", data)
     assert m.in_person == ["doe", "kim"] and m.remote == ["roe"]  # can't be both
-    assert m.guests == [{"name": "Pat Guest", "callsign": "KE8ABC", "online": True}]  # an online guest stays online
+    assert m.guests == [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}]  # an online guest stays online
     assert m.visitors == 1
     assert [(i.text, i.member) for i in m.items("Community Reports")] == [("Sam got on HF", "kim")]
     console.submit(a, "2026-11-12")
@@ -104,7 +104,7 @@ def mail_archive(tmp_path, monkeypatch, only_to):
         {"id": "doe", "first": "Jane", "last": "Doe", "email": "jane@example.org", "minutes_editor": True},
         {"id": "kim", "first": "Sam", "last": "Kim", "email": "sam@example.org"},
         {"id": "roe", "first": "Rick", "last": "Roe", "email": "rick@example.org", "status": "Silent Key"},
-        {"id": "dunn", "first": "Jane", "last": "Dunn"}])
+        {"id": "dummy", "first": "Jane", "last": "Dummy"}])
     c.email = {"only_to": only_to} if only_to is not None else {}
     Meeting(date=dt.date(2026, 11, 12), status="published", leader="doe").save(tmp_path)
     return Archive(tmp_path, c)
@@ -164,12 +164,12 @@ def test_email_minutes_as_pdf_or_link_per_member(tmp_path, monkeypatch):
 
 def test_celebrations_the_week_up_to_tonight_shared_birthdays_only():
     c = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
-        {"id": "amy", "first": "Amy", "last": "Able", "birthday": "11-10", "share": ["birthday"], "member_since": "2020-11-06"},
-        {"id": "bob", "first": "Bob", "last": "Baker", "birthday": "11-12", "share": []},  # not shared: never shown
-        {"id": "cal", "first": "Cal", "last": "Cole", "birthday": "12", "share": ["birthday"], "member_since": "2026-11-01"},
-        {"id": "dee", "first": "Dee", "last": "Dunn", "birthday": "11-13", "share": ["birthday"]}])  # tomorrow: next week
-    assert console.celebrations(c, dt.date(2026, 11, 12)) == ["Amy Able: 6 years as a member", "Happy birthday, Amy Able!"]
-    assert console.celebrations(c, dt.date(2026, 12, 3)) == ["Happy birthday, Cal Cole! (December)"]  # first meeting of the month
+        {"id": "amy", "first": "Amy", "last": "Appleseed", "birthday": "11-10", "share": ["birthday"], "member_since": "2020-11-06"},
+        {"id": "bob", "first": "Bob", "last": "Bloggs", "birthday": "11-12", "share": []},  # not shared: never shown
+        {"id": "cal", "first": "Cal", "last": "Customer", "birthday": "12", "share": ["birthday"], "member_since": "2026-11-01"},
+        {"id": "dee", "first": "Dee", "last": "Dummy", "birthday": "11-13", "share": ["birthday"]}])  # tomorrow: next week
+    assert console.celebrations(c, dt.date(2026, 11, 12)) == ["Amy Appleseed: 6 years as a member", "Happy birthday, Amy Appleseed!"]
+    assert console.celebrations(c, dt.date(2026, 12, 3)) == ["Happy birthday, Cal Customer! (December)"]  # first meeting of the month
     assert console.celebrations(c, dt.date(2026, 12, 10)) == []
     assert console.celebrations(c, dt.date(2027, 1, 2)) == []  # the week crosses New Year
 

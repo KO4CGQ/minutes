@@ -15,7 +15,7 @@ from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
-EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/kd8adm/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")]
+EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")]
 IPV6 = "2001:db8:85a3:1234:5678:8a2e:370:7334"  # real addresses can be this long
 ENGINES = ["chromium", "firefox", "webkit"]  # Chrome/Edge, Firefox, and Safari's engine (close to Safari, not the same)
 # Text whose contrast with what's behind it is under 3:1 (WCAG's floor for large text; body text wants 4.5):
@@ -52,27 +52,27 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
     from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True}])
-    club.admins = {"kd8adm"}
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
+    club.admins = {"n0admn"}
     from club_minutes import branding, theme, treasurer
     monkeypatch.setattr(branding, "DATA", tmp_path)  # the colours saved below stay in this test
     ts = treasurer.load()
-    treasurer.set_general(ts, "kd8adm", "preview", "2026-01-01", 4, 2, True)  # so Who owes what has rows
-    treasurer.set_fund(ts, "kd8adm", "Drinks fund", "Cash", ["kd8adm"])
+    treasurer.set_general(ts, "n0admn", "preview", "2026-01-01", 4, 2, True)  # so Who owes what has rows
+    treasurer.set_fund(ts, "n0admn", "Drinks fund", "Cash", ["n0admn"])
     import datetime as _dt
     for cents_, note in (("81", "Gas bill"), ("2884", "Paid insurance"), ("10", "Pizza for the fox hunt")):  # so Spending has a chart
-        treasurer.record(club, ts, "kd8adm", "expense", cents_, _dt.date.today().isoformat(), "Checking", note=note)
+        treasurer.record(club, ts, "n0admn", "expense", cents_, _dt.date.today().isoformat(), "Checking", note=note)
     treasurer.save(ts)
     club._yaml_links = [{"label": "Constitution and Bylaws of the club, the long version", "url": "https://example.org/a/very/long/address/bylaws.pdf"}]
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
-    tok = a.new_session("kd8adm", LONG_AGENT, IPV6, "passkey")
+    tok = a.new_session("n0admn", LONG_AGENT, IPV6, "passkey")
     a.set_admin(tok, 60)
     a.db.execute("insert into passkeys (id, member, public_key, sign_count, transports, label, created) values (?,?,?,?,?,?,?)",
-                 ("pk1", "kd8adm", b"", 0, "[]", "Google Password Manager", 1794143748))
+                 ("pk1", "n0admn", b"", 0, "[]", "Google Password Manager", 1794143748))
     a.ban(IPV6, 24, "too many failed sign-ins from this address", "automatic")
-    web._admin_log(type("R", (), {"state": type("S", (), {"real_member": "kd8adm"}), "client": type("C", (), {"host": IPV6})})(),
+    web._admin_log(type("R", (), {"state": type("S", (), {"real_member": "n0admn"}), "client": type("C", (), {"host": IPV6})})(),
                    on=True, until=1794143748, confirmed_by="passkey")
     c = TestClient(web.app)
     c.cookies.set(web.COOKIE, tok)
@@ -106,7 +106,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
         page.goto("http://testserver/business?tab=motions")
         lists = []
         for picked, other in (("mover", "seconder"), ("seconder", "mover")):
-            page.fill(f"input[name={picked}] >> nth=-1", "Amy Able")
+            page.fill(f"input[name={picked}] >> nth=-1", "Amy Appleseed")
             page.focus(f"input[name={other}] >> nth=-1")
             lists.append(page.locator(f"input[name={other}] >> nth=-1 >> xpath=.. >> li").all_inner_texts())
             page.fill(f"input[name={picked}] >> nth=-1", "")
@@ -150,15 +150,15 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
     from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True},
-                                               {"id": "kd8bbb", "first": "Bob", "last": "Baker", "email": "bob@example.org"}])
-    club.admins = {"kd8adm"}
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True},
+                                               {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"}])
+    club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
-    tok = a.new_session("kd8adm")
+    tok = a.new_session("n0admn")
     a.set_admin(tok, 60)
-    a.set_view_as(tok, "kd8bbb")
+    a.set_view_as(tok, "n0bbbb")
     c = TestClient(web.app)
     c.cookies.set(web.COOKIE, tok)
     posts = []
@@ -179,7 +179,7 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
         page.goto("http://testserver/business?tab=notes")
         page.fill("textarea[name=text]", "Away this week")
         page.click("text=Send note")
-        assert page.is_visible("#readonly") and "Bob Baker" in page.inner_text("#readonly") and not posts
+        assert page.is_visible("#readonly") and "Bob Bloggs" in page.inner_text("#readonly") and not posts
         page.click("#readonly >> text=OK")
         assert not page.is_visible("#readonly")
         browser.close()
@@ -190,15 +190,15 @@ def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_pat
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
     from club_minutes import business, web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True}])
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
     s = business.load()
-    x = business.add(s, "Fix the tower light", "kd8adm", owner="kd8adm")
+    x = business.add(s, "Fix the tower light", "n0admn", owner="n0admn")
     business.save(s)
     c = TestClient(web.app)
-    c.cookies.set(web.COOKIE, a.new_session("kd8adm"))
+    c.cookies.set(web.COOKIE, a.new_session("n0admn"))
 
     def serve(route):
         r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), follow_redirects=False)

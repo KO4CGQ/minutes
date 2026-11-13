@@ -23,7 +23,7 @@ NASTY = ['"', "'", "*", "^", ":", "(", ")", "-", "+", "\\", "/", "//", "/\\", "%
          "\x7f", "<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "javascript:alert(1)", "NEAR", "AND", "OR",
          "NOT", "NEAR(a b, 2)", "{col}", "docs:", "text:", "slug:", "é", "ß", "İ", "🙂", "\U0001f468\u200d\U0001f469\u200d\U0001f467", "\u202e", "\ufeff",
          "a" * 300, "x" * 3, " ", "=1+1", "@SUM(1)", "${7*7}", "{{7*7}}", "../../etc/passwd", "https://evil.example",
-         "Bob", "bob", "Baker", "Extra", "net"]
+         "Bob", "bob", "Bloggs", "Extra", "net"]
 
 
 def junk(n: int = 8) -> str:
@@ -45,8 +45,8 @@ def member(tmp_path, monkeypatch):
     root = tmp_path / "meetings"
     Meeting(date=__import__("datetime").date(2026, 10, 1), status="published",
             sections={"Community Reports": [Item("Bobby Bakker passed his Extra exam <b>tonight</b>")]}).save(root)
-    m, club, a = signed_in(tmp_path, monkeypatch, "kd8aaa")
-    club.members["kd8bbb"].aliases = ["Bobby", "Bakker", junk(), junk()]  # aliases are typed by roster keepers
+    m, club, a = signed_in(tmp_path, monkeypatch, "n0aaaa")
+    club.members["n0bbbb"].aliases = ["Bobby", "Bakker", junk(), junk()]  # aliases are typed by roster keepers
     monkeypatch.setattr(web, "archive", Archive(root, club))
     return m, club, a
 
@@ -99,12 +99,12 @@ def test_roster_file_keeps_every_value_exactly(tmp_path, monkeypatch):
     monkeypatch.setattr(roster, "CACHE", tmp_path / "roster.json")
     monkeypatch.setattr(roster, "PREVIEW", None)
     header = ["callsign", "full_name", "email", "Phone", "Address", "aliases", "Title(s)"]
-    roster.LocalSheet(tmp_path / "roster-sheet.json").save({"Member Roster": [header, ["KD8AAA", "Amy Able", "", "", "", "", ""]],
+    roster.LocalSheet(tmp_path / "roster-sheet.json").save({"Member Roster": [header, ["N0AAAA", "Amy Appleseed", "", "", "", "", ""]],
                                                              "Membership Log": [["callsign", "full_name", "date", "event", "note"]]})
     sheet = roster.Sheet()
     for _ in range(300):
         new = {f: junk(6) for f in R.sample(["email", "phone", "address", "aliases", "title(s)"], 2)}
-        sheet.update_member("KD8AAA", "Amy Able", new)
+        sheet.update_member("N0AAAA", "Amy Appleseed", new)
         row = dict(zip([h.lower() for h in sheet.read()[0]], sheet.read()[1]))
         assert all(row[f] == v for f, v in new.items())  # as typed: "=1+1" stays text, nothing is parsed
     json.loads((tmp_path / "roster-sheet.json").read_text())  # still valid after every write

@@ -1,6 +1,6 @@
 // A dropdown you can also type into: click (or ▾) to see every name, type to narrow the list,
 // arrow keys + Enter or a click to pick. The input keeps the chosen name; the server matches it to a member.
-//   makeCombo(input, [{value: "Amy Able", note: "KD8AMY"}, ...], {empty: "(nobody)", exclude: () => "Bob Baker"})
+//   makeCombo(input, [{value: "Amy Appleseed", note: "N0AMYA"}, ...], {empty: "(nobody)", exclude: () => "Bob Bloggs"})
 // On the Business page, <input data-combo="ID"> takes its names from <datalist id="ID">;
 // data-combo-exclude="mover" leaves out the name in the form's "mover" box (motions: each box leaves out the other's name).
 function makeCombo(input, options, { empty = "(nobody)", exclude = () => "" } = {}) {

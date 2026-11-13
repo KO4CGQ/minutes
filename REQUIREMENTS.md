@@ -24,7 +24,7 @@ The minutes follow a fixed template. The system should generate exactly this str
 | Header | Club logo, `Date: 5 Nov 2026` | |
 | Members Present | Fixed list of surnames, each marked `_T_` (Teams) or `_x_` (in person) | Surname spellings drift from week to week. Take names from the roster. |
 | Teams link | Static URL plus the legend "T=Teams attendance X= in person" | Configurable |
-| Guests | Name and callsign (`Jane Doe KD8XYZ`) | Prompt the leader to add guests to the roster as prospects. |
+| Guests | Name and callsign (`Jane Doe N0CALL`) | Prompt the leader to add guests to the roster as prospects. |
 | Bills and Communications | Short items with amounts (`Gas Bill $81`) | Pull out amounts as structured data. |
 | Financial Report | Always the empty template (Checking, Emergency, Maintenance, Cash, Beverage Savings/Checking) | **[Q]** Should the treasurer enter figures in the UI, or should the section be dropped? |
 | Committee Reports | One short paragraph per person: the go-around-the-room community reports | This is the main transcription and summary target. |

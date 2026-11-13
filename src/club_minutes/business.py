@@ -126,7 +126,7 @@ RESULTS = ("Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second
 
 
 def motion_text(club: Club, m: dict) -> str:
-    """The line in the minutes: "Motion: Amy Able moved to buy a new antenna, seconded by Bob Baker. Passed." """
+    """The line in the minutes: "Motion: Amy Appleseed moved to buy a new antenna, seconded by Bob Bloggs. Passed." """
     what = m["what"]
     if m["result"] == "Died for lack of a second":
         return f"Motion: {club.name(m['mover'])} moved to {what}. The motion died for lack of a second."

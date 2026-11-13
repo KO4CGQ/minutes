@@ -15,10 +15,10 @@ TZ = "America/New_York"
 
 def club():
     return Club(FIX / "test-club.yaml", roster=[
-        {"id": "kd8aaa", "first": "Amy", "last": "Able", "officer": True},
-        {"id": "kd8bbb", "first": "Bob", "last": "Baker", "birthday": "11-05", "share": ["birthday"]},
-        {"id": "kd8ccc", "first": "Cal", "last": "Cole", "birthday": "11-20"},           # not shared
-        {"id": "kd8ddd", "first": "Dee", "last": "Dunn", "birthday": "11", "share": ["birthday"]}])  # month only
+        {"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "officer": True},
+        {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "birthday": "11-05", "share": ["birthday"]},
+        {"id": "n0cccc", "first": "Cal", "last": "Customer", "birthday": "11-20"},           # not shared
+        {"id": "n0dddd", "first": "Dee", "last": "Dummy", "birthday": "11", "share": ["birthday"]}])  # month only
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +33,7 @@ def form(**kw):
 
 def net(evs=None, **kw):
     evs = [] if evs is None else evs
-    return evs, events.add(evs, "events", form(repeat="weekly", **kw), "kd8aaa")
+    return evs, events.add(evs, "events", form(repeat="weekly", **kw), "n0aaaa")
 
 
 def days(e, lo=NOV[0], hi=dt.date(2027, 3, 31)):
@@ -89,7 +89,7 @@ def test_change_this_following_every_date():
     with events.locked():  # one date moved to another day shows there, even in a range without its original date
         events.save([moved])
     c = club()
-    got = calview.entries(c, Archive(events.DATA, c), "kd8bbb", dt.date(2026, 11, 20), dt.date(2026, 11, 30))[0]
+    got = calview.entries(c, Archive(events.DATA, c), "n0bbbb", dt.date(2026, 11, 20), dt.date(2026, 11, 30))[0]
     assert sorted(x.start.isoformat() for x in got if x.id == e["id"]) == ["2026-11-24", "2026-11-27"] and events.occurrence(e, dt.date(2026, 11, 24))["title"] == "Weekly net"
     evs, e = net()
     events.change(evs, e["id"], "2026-11-17", "events", form(date="2026-11-18", time="19:00", end_time="20:00", repeat="weekly"), "all")
@@ -120,22 +120,22 @@ def test_page_merges_events_minutes_chow_and_birthdays(tmp_path):
         events.add(evs, "events", events.from_form({"title": "VE testing", "date": "2026-11-14", "time": "10:00"}), "x")
         events.save(evs)
     s = chow.load()
-    s["nights"] = {"2026-11-12": {"member": "kd8aaa"}, "2026-11-26": {"status": "none"}}
+    s["nights"] = {"2026-11-12": {"member": "n0aaaa"}, "2026-11-26": {"status": "none"}}
     chow.save(s)
     Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Upcoming Events": [
         Item("VE testing", when="2026-11-14T10:00"), Item("Hamfest", when="2026-11-21", until="2026-11-22")]}).save(tmp_path)
     c = club()
-    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
+    got, _ = calview.entries(c, Archive(tmp_path, c), "n0bbbb", *NOV)
     seen = [(e.start.isoformat(), e.kind, e.title) for e in got]
     assert [t for d, k, t in seen if t == "Weekly net"] == ["Weekly net"] * 3 and ("2026-11-19", "planning", "Annual meeting") in seen
-    assert ("2026-11-12", "chow", "Chow: Amy Able") in seen and ("2026-11-01", "birthday", "November birthday: Dee Dunn") in seen
+    assert ("2026-11-12", "chow", "Chow: Amy Appleseed") in seen and ("2026-11-01", "birthday", "November birthday: Dee Dummy") in seen
     assert [t for _, _, t in seen].count("VE testing") == 1  # on the calendar and in the minutes: shown once
     ham = next(e for e in got if e.title == "Hamfest")
     assert ham.from_minutes and ham.end.day == 22
     net_ = next(e for e in got if e.title == "Weekly net")
     assert (net_.time, net_.repeats, net_.occ, net_.ends.hour) == ("8:00 PM", True, "2026-11-10", 21)
-    assert not any("Cal Cole" in t for _, _, t in seen)  # private stays private, even for officers
-    assert any(e.title == "Birthday: Cal Cole" for e in calview.entries(c, Archive(tmp_path, c), "kd8ccc", *NOV)[0])  # your own
+    assert not any("Cal Customer" in t for _, _, t in seen)  # private stays private, even for officers
+    assert any(e.title == "Birthday: Cal Customer" for e in calview.entries(c, Archive(tmp_path, c), "n0cccc", *NOV)[0])  # your own
     c.info["public_calendars"] = ["events", "chow"]
     pub, _ = calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)
     assert {e.kind for e in pub} == {"events"}  # no chow, birthdays or Planning in public
@@ -205,7 +205,7 @@ END:VCALENDAR\r
 
 def test_import_ics():
     evs = []
-    r = events.import_ics(evs, ICS, "events", "kd8aaa", TZ, dt.date(2025, 11, 8))
+    r = events.import_ics(evs, ICS, "events", "n0aaaa", TZ, dt.date(2025, 11, 8))
     assert r["added"] == ["Weekly net, all welcome", "Winter Field Day", "Fox hunt", "Tue and Thu net", "Tue and Thu net"]
     assert [t for t, _ in r["skipped"]] == ["Hourly check"]
     tt = [e for e in evs if e["title"] == "Tue and Thu net"]  # one weekly event per day
@@ -224,10 +224,10 @@ def test_import_ics():
     assert days(hunt) == ["2026-11-21", "2026-12-19", "2027-01-16"]  # third Saturdays, 3 times
     # again: updated, not doubled; an event typed in by hand with the same title and day is left alone
     evs2 = [*evs]
-    r2 = events.import_ics(evs2, ICS, "events", "kd8aaa", TZ, dt.date(2025, 11, 8))
+    r2 = events.import_ics(evs2, ICS, "events", "n0aaaa", TZ, dt.date(2025, 11, 8))
     assert len(evs2) == 5 and len(r2["updated"]) == 5 and r2["added"] == []
     hand = [{"id": "h", "cal": "events", "title": "winter field day", "start": "2027-01-30", "end": None, "repeat": None}]
-    r3 = events.import_ics(hand, ICS, "events", "kd8aaa", TZ, dt.date(2025, 11, 8))
+    r3 = events.import_ics(hand, ICS, "events", "n0aaaa", TZ, dt.date(2025, 11, 8))
     assert r3["already"] == ["Winter Field Day"]
 
 
@@ -251,14 +251,14 @@ def test_import_turns_html_descriptions_into_text():
            'DESCRIPTION:<p dir="auto">Fee <strong>$15</strong> &amp\\; walk-ins.</p><a href="https://example.org">https://example.org</a>\r\n'
            "END:VEVENT\r\nEND:VCALENDAR\r\n")
     evs = []
-    events.import_ics(evs, ics, "events", "KD8AAA", "America/New_York", dt.date(2029, 1, 1))
+    events.import_ics(evs, ics, "events", "N0AAAA", "America/New_York", dt.date(2029, 1, 1))
     assert evs[0]["notes"] == "Fee $15 & walk-ins.\nhttps://example.org"
 
 
 def test_leaders_add_change_delete_and_import_on_the_page(tmp_path, monkeypatch):
-    t, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    t, c, a = signed_in(tmp_path, monkeypatch, "n0bbbb")
     assert "Add an event" not in t.get("/calendar").text and t.get("/calendar/edit").status_code == 403  # members see; leaders edit
-    t.cookies.set(web_cookie(), a.new_session("kd8aaa"))  # an officer
+    t.cookies.set(web_cookie(), a.new_session("n0aaaa"))  # an officer
     r = t.post("/calendar/save", data={"cal": "events", "title": "Fox hunt", "date": "2026-11-21", "time": "14:00", "end_time": "13:00"})
     assert r.status_code == 400 and "before the start" in r.text and 'value="Fox hunt"' in r.text  # what was typed stays
     r = t.post("/calendar/save", data={"cal": "events", "title": "Weekly net", "date": "2026-11-10", "time": "20:00",
@@ -288,7 +288,7 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     from club_minutes import web
     today = dt.date.today()
     s = chow.load()
-    s["nights"] = {(today + dt.timedelta(days=2)).isoformat(): {"member": "kd8aaa"}}
+    s["nights"] = {(today + dt.timedelta(days=2)).isoformat(): {"member": "n0aaaa"}}
     chow.save(s)
     with events.locked():
         evs = []
@@ -297,21 +297,21 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
         events.add(evs, "planning", events.from_form({"title": "Board dinner", "date": (today + dt.timedelta(days=4)).isoformat(),
                                                       "end_date": (today + dt.timedelta(days=5)).isoformat()}), "x")
         events.save(evs)
-    m, c, a = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    m, c, a = signed_in(tmp_path, monkeypatch, "n0bbbb")
     anon = TestClient(web.app)
     assert anon.get("/calendar/public", follow_redirects=False).status_code == 404  # nothing public yet
-    tok = calview.feed_token("kd8bbb")
+    tok = calview.feed_token("n0bbbb")
     body = anon.get(f"/calendar/feed/{tok}.ics").text
     assert anon.get("/calendar/feed/%E0%A3%8E.ics").status_code == 404  # not ASCII: no one's, not a server error
     assert "SUMMARY:Fox hunt\; bring a radio\\, and snacks" in body and "LOCATION:City park" in body
     assert "URL:https://meet.example.com/fox" in body and "DESCRIPTION:Join online: https://meet.example.com/fox" in body
-    assert "DTSTART;TZID=America/New_York:" in body and "SUMMARY:Chow: Amy Able" in body
+    assert "DTSTART;TZID=America/New_York:" in body and "SUMMARY:Chow: Amy Appleseed" in body
     assert f"DTEND;VALUE=DATE:{(today + dt.timedelta(days=6)):%Y%m%d}" in body  # Board dinner: two days, end is the day after
     assert all(len(line.encode()) <= 75 for line in body.split("\r\n"))
     only = anon.get(f"/calendar/feed/{tok}.ics?show=chow").text
-    assert "Chow: Amy Able" in only and "Fox hunt" not in only and "X-WR-CALNAME:W0TST Chow" in only
+    assert "Chow: Amy Appleseed" in only and "Fox hunt" not in only and "X-WR-CALNAME:W0TEST Chow" in only
     assert anon.get("/calendar/feed/wrong.ics").status_code == 404
-    assert calview.feed_token("kd8bbb", reset=True) != tok and anon.get(f"/calendar/feed/{tok}.ics").status_code == 404
+    assert calview.feed_token("n0bbbb", reset=True) != tok and anon.get(f"/calendar/feed/{tok}.ics").status_code == 404
     c.info["public_calendars"] = ["events", "chow"]  # chow is never public, even if listed
     page = anon.get("/calendar/public")
     assert page.status_code == 200 and "Fox hunt" in page.text and "Chow" not in page.text and "Board dinner" not in page.text
@@ -320,7 +320,7 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     assert anon.get("/calendar", follow_redirects=False).status_code in (302, 303, 307)  # the members' page needs sign-in
     home = m.get("/").text  # Home's "Coming up" is the calendar's next two weeks, chow left to its own card
     coming = home[home.index("Coming up"):]
-    assert "Fox hunt" in coming and "Board dinner" in coming and "Chow: Amy Able" not in coming
+    assert "Fox hunt" in coming and "Board dinner" in coming and "Chow: Amy Appleseed" not in coming
     (tmp_path / "meetings").mkdir()
     Meeting(date=today - dt.timedelta(days=3), status="published",
             sections={"Upcoming Events": [Item("Winter Field Day coming in Jan")]}).save(tmp_path / "meetings")
@@ -328,7 +328,7 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     coming = (h := m.get("/").text)[h.index("Coming up"):]
     assert "From the last minutes" in coming and "Winter Field Day coming in Jan" in coming  # undated, as written
     sub = m.get("/calendar/subscribe").text
-    assert calview.feed_token("kd8bbb") in sub and "/calendar/public.ics" in sub
+    assert calview.feed_token("n0bbbb") in sub and "/calendar/public.ics" in sub
 
 
 def test_the_weekly_meeting_is_on_the_calendar_from_the_start(tmp_path):
@@ -336,14 +336,14 @@ def test_the_weekly_meeting_is_on_the_calendar_from_the_start(tmp_path):
     c = club()
     c.info.update(meeting_day="Thursday", meeting_time="19:30")
     today = dt.date.today()
-    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", today, today + dt.timedelta(days=20))
-    meets = [e for e in got if e.title == "W0TST meeting"]
+    got, _ = calview.entries(c, Archive(tmp_path, c), "n0bbbb", today, today + dt.timedelta(days=20))
+    meets = [e for e in got if e.title == "W0TEST meeting"]
     assert len(meets) == 3 and all(e.start.weekday() == 3 and e.time == "7:30 PM" for e in meets) and meets[0].repeats
     with events.locked():  # a leader deletes it: it isn't put back
         evs = events.load()
         events.delete(evs, evs[0]["id"], None)
         events.save(evs)
-    assert not any(e.title == "W0TST meeting" for e in calview.entries(c, Archive(tmp_path, c), "kd8bbb", today, today + dt.timedelta(days=20))[0])
+    assert not any(e.title == "W0TEST meeting" for e in calview.entries(c, Archive(tmp_path, c), "n0bbbb", today, today + dt.timedelta(days=20))[0])
 
 
 def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
@@ -360,7 +360,7 @@ def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
         events.save(evs)
     assert events.form_values(e, None)["tz"] == "UTC"
     c = club()
-    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))
+    got, _ = calview.entries(c, Archive(tmp_path, c), "n0bbbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))
     fd = next(x for x in got if x.title == "Field Day")
     assert (fd.starts, fd.ends) == (dt.datetime(2027, 6, 26, 14, 0), dt.datetime(2027, 6, 27, 16, 59)) and fd.time == "2:00 PM"
     assert fd.zone == "Sat Jun 26 18:00 – Sun Jun 27 20:59 UTC"
@@ -376,7 +376,7 @@ def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
     late = events.add([], "events", events.from_form({"title": "Late", "date": "2027-07-01", "time": "01:00", "tz": "UTC"}, TZ), "x")
     with events.locked():
         events.save([late])
-    assert [x.start for x in calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))[0]
+    assert [x.start for x in calview.entries(c, Archive(tmp_path, c), "n0bbbb", dt.date(2027, 6, 1), dt.date(2027, 6, 30))[0]
             if x.title == "Late"] == [dt.date(2027, 6, 30)]
 
 
@@ -389,7 +389,7 @@ def test_search_finds_calendar_events_and_the_agenda_can_show_more_weeks(tmp_pat
         events.save(evs)
     (tmp_path / "meetings").mkdir()
     monkeypatch.setattr(web, "archive", Archive(tmp_path / "meetings", club()))
-    m, *_ = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    m, *_ = signed_in(tmp_path, monkeypatch, "n0bbbb")
     found = m.get("/search?q=city+PARK").text
     assert "Fox hunt" in found and f"/calendar?start={today + dt.timedelta(days=80)}" in found
     assert "Fox hunt" not in m.get("/search?q=park+bench").text
@@ -407,7 +407,7 @@ def test_imported_minutes_offer_the_original_and_new_ones_the_pdf(tmp_path, monk
     old.save(root), new.save(root), fixed.save(root)
     (root / old.slug / "original.pdf").write_bytes(b"%PDF")
     (root / new.slug / "original.pdf").write_bytes(b"%PDF")  # a stray file doesn't make it "imported"
-    m, c, _ = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    m, c, _ = signed_in(tmp_path, monkeypatch, "n0bbbb")
     monkeypatch.setattr(web, "archive", Archive(root, c))
     o, n = m.get(f"/meetings/{old.slug}").text, m.get(f"/meetings/{new.slug}").text
     assert "View original" in o and "Download PDF" not in o
@@ -436,7 +436,7 @@ def test_odd_edits_found_by_poking_at_the_calendar():
 
 
 def test_odd_addresses_are_not_found_rather_than_errors(tmp_path, monkeypatch):
-    m, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    m, *_ = signed_in(tmp_path, monkeypatch, "n0aaaa")
     with events.locked():
         evs, e = net()
         events.save(evs)
@@ -472,7 +472,7 @@ def test_daily_and_several_weeks_of_the_month():
 def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
     from club_minutes import business, web
     c = club()
-    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
+    got, _ = calview.entries(c, Archive(tmp_path, c), "n0bbbb", *NOV)
     hol = [(e.start.isoformat(), e.title) for e in got if e.kind == "holiday"]
     assert hol == [("2026-11-11", "Veterans Day"), ("2026-11-26", "Thanksgiving Day")]
     assert [e.start for e in calview.holidays(club(), dt.date(2027, 1, 1), dt.date(2027, 12, 31)) if e.title in ("Memorial Day", "Labor Day")] == \
@@ -481,22 +481,22 @@ def test_holidays_due_dates_editors_and_the_change_log(tmp_path, monkeypatch):
     c.info["public_calendars"] = ["holiday"]
     assert any(e.kind == "holiday" for e in calview.entries(c, Archive(tmp_path, c), None, *NOV, public=True)[0])
     s = business.load()
-    business.add(s, "Order the Field Day banner", "kd8aaa", owner="kd8bbb", due="2026-11-20")
-    business.add(s, "No date on this one", "kd8aaa")
+    business.add(s, "Order the Field Day banner", "n0aaaa", owner="n0bbbb", due="2026-11-20")
+    business.add(s, "No date on this one", "n0aaaa")
     business.save(s)
-    due = [e for e in calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)[0] if e.title.startswith("Due:")]
+    due = [e for e in calview.entries(c, Archive(tmp_path, c), "n0bbbb", *NOV)[0] if e.title.startswith("Due:")]
     assert [(e.start.isoformat(), e.kind, e.title) for e in due] == [("2026-11-20", "planning", "Due: Order the Field Day banner")]
-    assert "Bob Baker" in due[0].notes
+    assert "Bob Bloggs" in due[0].notes
     # calendar editors: a member ticked calendar_editor may change events; others may not
-    m, c2, _ = signed_in(tmp_path, monkeypatch, "kd8bbb")
+    m, c2, _ = signed_in(tmp_path, monkeypatch, "n0bbbb")
     assert m.get("/calendar/edit").status_code == 403
-    c2.members["kd8bbb"].calendar_editor = True
+    c2.members["n0bbbb"].calendar_editor = True
     assert m.get("/calendar/edit").status_code == 200 and "+ Add an event" in m.get("/calendar").text
     m.post("/calendar/save", data={"cal": "events", "title": "Fox hunt", "date": "2026-11-21"})
     assert m.get("/calendar/changes").status_code == 403  # the log is for officers
-    o, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    o, *_ = signed_in(tmp_path, monkeypatch, "n0aaaa")
     log = o.get("/calendar/changes").text
-    assert "Fox hunt" in log and "Bob Baker" in log and "Who changed what" in o.get("/calendar").text
+    assert "Fox hunt" in log and "Bob Bloggs" in log and "Who changed what" in o.get("/calendar").text
 
 
 def test_ohio_election_days_on_community():
@@ -505,14 +505,14 @@ def test_ohio_election_days_on_community():
                    ("2025-05-06", "Ohio primary election"), ("2025-11-04", "Election Day (Ohio general election)"),
                    ("2026-05-05", "Ohio primary election"), ("2026-11-03", "Election Day (Ohio general election)")]
     c = club()
-    nov = calview.entries(c, Archive(events.DATA, c), "kd8bbb", *NOV)[0]
+    nov = calview.entries(c, Archive(events.DATA, c), "n0bbbb", *NOV)[0]
     assert [(e.kind, e.start.day) for e in nov if e.title.startswith("Election Day")] == [("community", 3)]
 
 
 def test_console_reads_out_the_calendar_until_the_next_meeting(tmp_path):
     from club_minutes import console
     with events.locked():
-        evs, meet = net(title="W0TST meeting", date="2026-11-12", time="19:30", end_time="21:30")
+        evs, meet = net(title="W0TEST meeting", date="2026-11-12", time="19:30", end_time="21:30")
         meet["meeting"] = True  # the weekly meeting, as ensure_meeting makes it: left out unless unticked
         del meet["quiet"]
         events.add(evs, "events", form(title="Fox hunt", date="2026-11-14", time="14:00", end_time="16:00", where="the park"), "x")
@@ -526,7 +526,7 @@ def test_console_reads_out_the_calendar_until_the_next_meeting(tmp_path):
     titles = [x["title"] for x in got["calendar"]]
     assert got["next_meeting"] == "2026-11-19"
     assert {"Fox hunt", "Thanksgiving Day", "Hamfest", "Budget due"} <= set(titles)
-    assert not {"W0TST meeting", "Board dinner", "Swap meet", "Birthday: Cal Cole"} & set(titles)  # meeting, ticked, already in the minutes, private
+    assert not {"W0TEST meeting", "Board dinner", "Swap meet", "Birthday: Cal Customer"} & set(titles)  # meeting, ticked, already in the minutes, private
     assert next(x for x in got["calendar"] if x["title"] == "Budget due")["cal"] == "planning"
     fox = next(x for x in got["calendar"] if x["title"] == "Fox hunt")
     assert (fox["when"], fox["until"], fox["where"], fox["kind"]) == ("2026-11-14T14:00", "2026-11-14T16:00", "the park", "Club events")
@@ -537,7 +537,7 @@ def test_console_reads_out_the_calendar_until_the_next_meeting(tmp_path):
         evs = events.load()
         events.change(evs, meet["id"], None, "events", events.from_form({**events.form_values(meet, None), "quiet": ""}))
         events.save(evs)
-    assert "W0TST meeting" in [x["title"] for x in console.calendar_ahead(Archive(tmp_path, c), dt.date(2026, 11, 12))["calendar"]]
+    assert "W0TEST meeting" in [x["title"] for x in console.calendar_ahead(Archive(tmp_path, c), dt.date(2026, 11, 12))["calendar"]]
 
 
 def test_upcoming_events_go_on_their_calendar_once(tmp_path):
@@ -554,7 +554,7 @@ def test_upcoming_events_go_on_their_calendar_once(tmp_path):
     m.save(tmp_path)
     c = club()
     c.info["public_calendars"] = ["events"]
-    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
+    got, _ = calview.entries(c, Archive(tmp_path, c), "n0bbbb", *NOV)
     seen = [(e.kind, e.title) for e in got]
     assert [t for _, t in seen if t.startswith("Fox hunt")] == ["Fox hunt"] and [t for _, t in seen].count("Thanksgiving Day") == 1
     assert ("planning", "Budget meeting") in seen and ("community", "Road race") in seen
@@ -571,7 +571,7 @@ def test_look_alike_events_the_same_day_are_flagged_not_hidden(tmp_path):
         events.add(evs, "events", form(title="Fox hunt", date="2026-11-21"), "x")  # another day: not flagged
         events.save(evs)
     c = club()
-    got, _ = calview.entries(c, Archive(tmp_path, c), "kd8bbb", *NOV)
+    got, _ = calview.entries(c, Archive(tmp_path, c), "n0bbbb", *NOV)
     flagged = {(e.start.day, e.title, e.dup) for e in got if e.dup}
     assert flagged == {(14, "Fox hunt at Osborn Park", "Osborn park fox hunt"), (14, "Osborn park fox hunt", "Fox hunt at Osborn Park")}
     assert len([e for e in got if "fox hunt" in e.title.lower()]) == 3  # nothing hidden
@@ -582,7 +582,7 @@ def test_holidays_and_elections_are_none_unless_club_yaml_picks_a_region(tmp_pat
     from club_minutes import regions
     c = club()
     c.calendar = {}  # a new club: no region picked
-    got = calview.entries(c, Archive(tmp_path, c), "kd8bbb", dt.date(2026, 1, 1), dt.date(2026, 12, 31))[0]
+    got = calview.entries(c, Archive(tmp_path, c), "n0bbbb", dt.date(2026, 1, 1), dt.date(2026, 12, 31))[0]
     assert not [e for e in got if e.kind == "holiday" or (e.id or "").startswith("election-")] and "holiday" not in calview.kinds(c)
     c.calendar = {"holidays": "us"}  # a state's file carries its country's holidays, so a club can pick either
     assert "holiday" in calview.kinds(c) and regions.holidays("us-oh", dt.date(2026, 7, 4), dt.date(2026, 7, 4)) == \

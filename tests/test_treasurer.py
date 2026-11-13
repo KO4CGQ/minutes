@@ -12,10 +12,10 @@ from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [
-    {"id": "amy", "first": "Amy", "last": "Able", "member_since": "2020-03-05", "email": "amy@example.org"},
-    {"id": "bob", "first": "Bob", "last": "Baker", "member_since": "2026-11-12"},  # joined after tracking began
+    {"id": "amy", "first": "Amy", "last": "Appleseed", "member_since": "2020-03-05", "email": "amy@example.org"},
+    {"id": "bob", "first": "Bob", "last": "Bloggs", "member_since": "2026-11-12"},  # joined after tracking began
     {"id": "old", "first": "Old", "last": "Timer", "status": "Silent Key"},
-    {"id": "tre", "first": "Tess", "last": "Teller", "role": "Treasurer", "officer": True, "board": True,
+    {"id": "tre", "first": "Tess", "last": "Taxpayer", "role": "Treasurer", "officer": True, "board": True,
      "member_since": "2019-01-03", "email": "tre@example.org"},
     {"id": "pres", "first": "Pat", "last": "Prez", "role": "President", "officer": True, "board": True, "email": "pres@example.org"},
 ]
@@ -152,7 +152,7 @@ def test_arrears_alert_once_each_time_and_never_in_preview(club, monkeypatch):
     assert treasurer.arrears_alert(club, s, today) is None  # preview: no emails
     s["settings"]["mode"] = "on"
     to, subject, body = treasurer.arrears_alert(club, s, today)
-    assert to == ["pres@example.org", "tre@example.org"] and "Amy Able" in body and "behind on dues:" in body
+    assert to == ["pres@example.org", "tre@example.org"] and "Amy Appleseed" in body and "behind on dues:" in body
     assert "bylaws" not in body and "The app never suspends" in body  # no club rules unless club.yaml gives them
     assert treasurer.arrears_alert(club, s, today) is None  # once
     s["alerted"] = {}
@@ -184,11 +184,11 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
     assert pres.post("/treasurer/settings", data=on).status_code == 403
     assert tre.post("/treasurer/settings", data=on, follow_redirects=False).status_code == 303
     assert "Preview:" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text  # members don't see a preview
-    form = {"kind": "dues", "amount": "7", "date": "2026-11-12", "account": "Cash", "member": "Amy Able"}
+    form = {"kind": "dues", "amount": "7", "date": "2026-11-12", "account": "Cash", "member": "Amy Appleseed"}
     assert pres.post("/treasurer/record", data=form).status_code == 403
     assert tre.post("/treasurer/record", data=form, follow_redirects=False).status_code == 303
     assert treasurer.load()["entries"][0]["member"] == "amy"
-    assert "Record</button>" not in pres.get("/treasurer?tab=money").text and "Amy Able" in pres.get("/treasurer?tab=money").text
+    assert "Record</button>" not in pres.get("/treasurer?tab=money").text and "Amy Appleseed" in pres.get("/treasurer?tab=money").text
     assert tre.post("/treasurer/settings/rate", data={"kind": "dues_weekly", "start": "2027-01-07", "amount": "4"}).status_code == 200
     assert tre.post("/treasurer/settings/account", data={"name": "Emergency Fund"}).status_code == 200
     assert "Emergency Fund" in tre.get("/treasurer?tab=settings").text and "$4.00" in pres.get("/treasurer?tab=settings").text
@@ -210,7 +210,7 @@ def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
     tre = TestClient(web.app)
     tre.cookies.set(web.COOKIE, a.new_session("tre"))
     tre.post("/treasurer/settings/account", data={"name": "Drinks Checking"})
-    tre.post("/treasurer/settings/fund", data={"name": "Drinks fund", "account": "Drinks Checking", "keepers": "Bob Baker"})
+    tre.post("/treasurer/settings/fund", data={"name": "Drinks fund", "account": "Drinks Checking", "keepers": "Bob Bloggs"})
     s = treasurer.load()
     assert treasurer.kept_accounts(club, s, "bob") == ["Drinks Checking"]
     bob = TestClient(web.app)
@@ -218,7 +218,7 @@ def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
     sale = {"kind": "income", "amount": "42", "date": "2026-11-12", "account": "Drinks Checking", "note": "can sales"}
     assert bob.post("/treasurer/record", data=sale, follow_redirects=False).status_code == 303
     assert bob.post("/treasurer/record", data={**sale, "account": "Checking"}).status_code == 403
-    assert bob.post("/treasurer/record", data={**sale, "kind": "dues", "member": "Amy Able"}).status_code == 403
+    assert bob.post("/treasurer/record", data={**sale, "kind": "dues", "member": "Amy Appleseed"}).status_code == 403
     assert bob.post("/treasurer/settings/account", data={"name": "Mine"}).status_code == 403
     with treasurer.locked():
         s = treasurer.load()
@@ -278,7 +278,7 @@ def test_spending_page_members_once_on_officers_in_preview(club, tmp_path, monke
         s = treasurer.load()
         s["settings"]["mode"] = "on"
         treasurer.save(s)
-    assert "$81.00" in amy.get("/spending").text and "Amy Able" not in amy.get("/spending").text
+    assert "$81.00" in amy.get("/spending").text and "Amy Appleseed" not in amy.get("/spending").text
 
 
 def test_cost_per_member_follows_people_joining_and_leaving(club):
@@ -443,9 +443,9 @@ def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, 
         e = treasurer.record(club, s, "tre", "dues", "7", "2026-11-12", "Cash", "amy")
         treasurer.save(s)
     before = treasurer.load()
-    every = {"kind": "dues", "amount": "5", "date": "2026-11-12", "account": "Cash", "member": "Amy Able", "key": "2026-11-05:abcdef12:0",
+    every = {"kind": "dues", "amount": "5", "date": "2026-11-12", "account": "Cash", "member": "Amy Appleseed", "key": "2026-11-05:abcdef12:0",
              "payee": "Gas", "every": "month", "mode": "on", "start": "2026-11-05", "name": "X", "label": "X", "note": "x",
-             "category": "other", "keepers": "Bob Baker"}
+             "category": "other", "keepers": "Bob Bloggs"}
     posts = [r.path.replace("{eid}", e["id"]).replace("{rid}", "x") for r in web.app.routes
              if r.path.startswith("/treasurer") and "POST" in getattr(r, "methods", ())]
     assert len(posts) >= 11

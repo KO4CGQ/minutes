@@ -110,7 +110,7 @@ def _agenda(raw) -> list[dict]:
 # Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
 # chow: a rotation of members bringing food to meetings (the Chow page, reminders, the console's step, a missed-night fee).
 MODULES = {"chow": False}
-CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,3}$", re.I)
+CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,4}$", re.I)  # 4 letters: some countries issue them, and examples like N0CALL can't be anyone's
 
 
 def num(v) -> int | None:
@@ -120,7 +120,7 @@ def num(v) -> int | None:
 
 
 def valid_email(s: str) -> bool:
-    """name@domain.tld, no spaces, at most 254 characters. No regex: a crafted address can't make it slow."""
+    """name@example.org, no spaces, at most 254 characters. No regex: a crafted address can't make it slow."""
     if not s or len(s) > 254 or any(ch.isspace() for ch in s) or s.count("@") != 1:
         return False
     local, domain = s.split("@")

@@ -11,8 +11,8 @@ from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True},
-          {"id": "amy", "first": "Amy", "last": "Able"},
-          {"id": "bob", "first": "Bob", "last": "Baker"}]
+          {"id": "amy", "first": "Amy", "last": "Appleseed"},
+          {"id": "bob", "first": "Bob", "last": "Bloggs"}]
 
 
 @pytest.fixture
@@ -167,11 +167,11 @@ def test_owner_typed_by_name(env, monkeypatch):
     c = TestClient(web.app)
     c.get("/business")
     iid = business.load()["items"][0]["id"]
-    for typed, want in (("Amy Able", "amy"), ("  bob  baker ", "bob"), ("", None)):
+    for typed, want in (("Amy Appleseed", "amy"), ("  bob  bloggs ", "bob"), ("", None)):
         c.post(f"/business/{iid}/edit", data={"owner": typed})
         assert business.get(business.load(), iid)["owner"] == want
     assert "No member called" in c.post(f"/business/{iid}/edit", data={"owner": "Nobody Here"}).text
-    c.post("/business/add", data={"text": "Book the pavilion", "owner": "Amy Able"})
+    c.post("/business/add", data={"text": "Book the pavilion", "owner": "Amy Appleseed"})
     assert business.load()["items"][-1]["owner"] == "amy"
 
 
@@ -204,17 +204,17 @@ def test_motions_are_records(env, monkeypatch):
     who = {"id": "amy"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
     c = TestClient(web.app)
-    form = {"mover": "Amy Able", "seconder": "Bob Baker", "what": "to buy a new antenna.", "result": "Passed"}
+    form = {"mover": "Amy Appleseed", "seconder": "Bob Bloggs", "what": "to buy a new antenna.", "result": "Passed"}
     assert c.post("/business/motion", data={**form, "meeting": "2026-11-05"}).status_code == 403  # not leading
     who["id"] = "sec"
     console.start(a, dt.date(2026, 11, 5), "sec")
     r = c.post("/business/motion", data={**form, "meeting": "2026-11-05"}, headers={"Accept": "application/json"})
-    assert r.json()["new"][0]["text"] == "Motion: Amy Able moved to buy a new antenna, seconded by Bob Baker. Passed."
-    assert a.by_slug["2026-11-05"].items("New Business")[0].text.startswith("Motion: Amy Able")  # in the draft
+    assert r.json()["new"][0]["text"] == "Motion: Amy Appleseed moved to buy a new antenna, seconded by Bob Bloggs. Passed."
+    assert a.by_slug["2026-11-05"].items("New Business")[0].text.startswith("Motion: Amy Appleseed")  # in the draft
     x = business.motions(business.load())[0]
     assert x["motion"] == {"mover": "amy", "seconder": "bob", "what": "buy a new antenna", "result": "Passed"}
     # problems are refused, not stored
-    for bad in ({**form, "result": "Maybe"}, {**form, "seconder": "Amy Able"}, {**form, "mover": "Nobody Here"}):
+    for bad in ({**form, "result": "Maybe"}, {**form, "seconder": "Amy Appleseed"}, {**form, "mover": "Nobody Here"}):
         assert c.post("/business/motion", data={**bad, "meeting": "2026-11-05"},
                       headers={"Accept": "application/json"}).status_code == 409
     # a past motion, from old minutes: filed under its date, closed, so it never comes up in Old Business
@@ -233,7 +233,7 @@ def test_motions_are_records(env, monkeypatch):
     # a tabled motion's later result; a died motion drops its seconder
     c.post(f"/business/{old['id']}/motion", data={**form, "what": "open the books", "result": "Died for lack of a second"})
     old = business.get(business.load(), old["id"])
-    assert old["text"] == "Motion: Amy Able moved to open the books. The motion died for lack of a second."
+    assert old["text"] == "Motion: Amy Appleseed moved to open the books. The motion died for lack of a second."
     assert old["motion"]["seconder"] is None and "result" in old["history"][-1]["changes"]
     page = c.get("/business?tab=motions&result=Passed").text
     assert "buy a new antenna" in page and "open the books" not in page and "Record a past motion" in page

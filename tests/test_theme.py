@@ -57,9 +57,9 @@ def test_bad_colours_are_refused_or_ignored(data):
     assert theme.valid(" #2D5F9A ") == "#2d5f9a" and not any(map(theme.valid, ("red", "#fff", "#12345g", "url(x)", None)))
     assert theme.palette("not a colour") == theme.palette(theme.DEFAULT)
     with pytest.raises(ValueError):
-        branding.set_colours("red", None, "kd8adm")
+        branding.set_colours("red", None, "n0admn")
     with pytest.raises(ValueError):
-        branding.set_colours("#123456", "};body{display:none", "kd8adm")
+        branding.set_colours("#123456", "};body{display:none", "n0admn")
     assert branding.colours() == {"main": theme.DEFAULT, "bar": None}
 
 
@@ -78,8 +78,8 @@ def test_site_sets_the_colours_every_page_and_pdf_follows(data, tmp_path, monkey
     from fastapi.testclient import TestClient
     from club_minutes import web
     from club_minutes.auth import Auth
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"}, {"id": "kd8bbb", "first": "Bob", "last": "Baker"}])
-    club.admins = {"kd8adm"}
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed"}, {"id": "n0bbbb", "first": "Bob", "last": "Bloggs"}])
+    club.admins = {"n0admn"}
     monkeypatch.setattr(web.archive, "club", club)
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
@@ -88,7 +88,7 @@ def test_site_sets_the_colours_every_page_and_pdf_follows(data, tmp_path, monkey
         t = TestClient(web.app)
         t.cookies.set(web.COOKIE, a.new_session(who))
         return t
-    bob, amy, anon = as_("kd8bbb"), as_("kd8adm"), TestClient(web.app)
+    bob, amy, anon = as_("n0bbbb"), as_("n0admn"), TestClient(web.app)
     assert anon.get("/brand/theme.css").text == theme.css(theme.DEFAULT)  # public: the sign-in page uses it
     assert bob.get("/admin/site/colours/preview?main=%23ff0000").status_code == 404
     assert bob.post("/admin/site/colours", data={"main": "#ff0000"}).status_code == 404

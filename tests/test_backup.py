@@ -76,8 +76,8 @@ class FakeDrive:
 
 
 def test_nightly_run_keeps_sends_and_reports(data, monkeypatch):
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org"}])
-    club.admins = {"kd8adm"}
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org"}])
+    club.admins = {"n0admn"}
     backup.save_settings({"s3_on": "1", "s3_endpoint": "https://s3.us-west-004.backblazeb2.com", "s3_bucket": "club-backups",
                           "s3_region": "us-west-004", "s3_prefix": "minutes/", "s3_key_id": "keyid", "s3_secret": "secret",
                           "drive_on": "1", "drive_folder": "https://drive.google.com/drive/folders/0ABcd-123?usp=sharing", "drive_keep": "3"})
@@ -144,11 +144,11 @@ def test_schedule_and_page(data, tmp_path, monkeypatch):
     monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "correct horse battery")
     backup.save_settings({"every": "off"})
     assert backup.data_size() > 0
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"}])
-    club.admins = {"kd8adm"}
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed"}])
+    club.admins = {"n0admn"}
     monkeypatch.setattr(web.archive, "club", club)
     monkeypatch.setattr(web, "DATA", tmp_path)
-    monkeypatch.setattr(web.authn, "member_for", lambda token: "kd8adm")
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "n0admn")
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     c = TestClient(web.app)
     page = c.get("/admin/backups").text

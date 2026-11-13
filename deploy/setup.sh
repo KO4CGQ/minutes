@@ -31,7 +31,7 @@ if [ ! -d "$APP/.git" ]; then
   sudo -u minutes git clone -q "$REPO" "$APP"
 fi
 
-# Admin command on the server, e.g. `club-minutes login-link KD8XYZ` or `club-minutes roster`
+# Admin command on the server, e.g. `club-minutes login-link N0CALL` or `club-minutes roster`
 cat > /usr/local/bin/club-minutes <<'WRAP'
 #!/bin/sh
 exec sudo -u minutes env CLUB_MINUTES_CONFIG=/etc/club-minutes/club.yaml CLUB_MINUTES_DATA=/var/lib/club-minutes \

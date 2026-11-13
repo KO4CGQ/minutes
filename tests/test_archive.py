@@ -21,7 +21,7 @@ def test_parse(m):
     assert str(m.date) == "2026-11-05"
     assert sorted(m.in_person) == ["doe", "kim"]
     assert m.remote == ["roe"]  # "Rowe" alias resolved
-    assert m.guests == [{"name": "Pat Guest", "callsign": "KE8ABC", "notes": "2nd meeting"}]
+    assert m.guests == [{"name": "Pat Guest", "callsign": "N0YABC", "notes": "2nd meeting"}]
     assert m.items("Financial Report") == []  # empty template dropped
     assert m.items("Upcoming Chow") == []  # "See attached list" dropped
     reports = m.items("Community Reports")
@@ -38,7 +38,7 @@ def test_markdown_round_trip(m):
 
 
 def test_ambiguous_first_name():
-    assert club.speaker_of("Jane nothing.", ["doe", "dunn"]) is None
+    assert club.speaker_of("Jane nothing.", ["doe", "dummy"]) is None
     assert club.speaker_of("Jane D was busy") == "doe"
 
 
@@ -54,7 +54,7 @@ def test_permissions_and_possessives():
 
 def test_former_callsign_maps_to_member(tmp_path, m):
     from club_minutes.store import Archive
-    m.in_person = ["doe", "kd8old"]  # stored before Sam's callsign change
+    m.in_person = ["doe", "n0oldc"]  # stored before Sam's callsign change
     m.save(tmp_path)
     a = Archive(tmp_path, club)
     assert a.meetings[0].in_person == ["doe", "kim"]
@@ -63,9 +63,9 @@ def test_former_callsign_maps_to_member(tmp_path, m):
 
 def test_membership_log():
     from club_minutes.roster import attach_log, to_members
-    ms = to_members([{"full_name": "Sam Kim", "callsign": "KD8NEW", "is_officer": "True"},
+    ms = to_members([{"full_name": "Sam Kim", "callsign": "N0NEWC", "is_officer": "True"},
                      {"full_name": "Old Timer", "status": "Silent Key"}])
-    attach_log(ms, [{"callsign": "KD8NEW", "date": "46043", "event": "Joined"},
+    attach_log(ms, [{"callsign": "N0NEWC", "date": "46043", "event": "Joined"},
                     {"callsign": "", "full_name": "Old Timer", "date": "", "event": "Silent Key"}])
     assert ms[0]["officer"] and ms[0]["member_since"] == "2026-01-21"
     assert ms[1]["id"] == "old-timer" and ms[1]["events"][0]["event"] == "Silent Key"
@@ -75,34 +75,34 @@ def test_roster_contact_details_follow_sharing(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from club_minutes import web
     c = Club(FIX / "test-club.yaml", roster=[
-        {"id": "kd8aaa", "first": "Jane", "last": "Doe", "callsign": "KD8AAA", "email": "jane@example.org",
+        {"id": "n0aaaa", "first": "Jane", "last": "Doe", "callsign": "N0AAAA", "email": "jane@example.org",
          "phone": "419-555-0101", "address": "1 Elm St", "birthday": "07-04", "share": ["phone", "birthday"],
          "license_class": "Extra", "role": "Secretary", "officer": True, "member_since": "2024-03-07"},
-        {"id": "kd8ccc", "first": "Bob", "last": "Member", "callsign": "KD8CCC", "email": "bob@example.org",
+        {"id": "n0cccc", "first": "Bob", "last": "Member", "callsign": "N0CCCC", "email": "bob@example.org",
          "phone": "419-555-0199", "address": "9 Oak Ave"},
-        {"id": "kd8bbb", "first": "Old", "last": "Timer", "status": "Silent Key", "member_since": "not a date"}])
+        {"id": "n0bbbb", "first": "Old", "last": "Timer", "status": "Silent Key", "member_since": "not a date"}])
     monkeypatch.setattr(web, "archive", Archive(tmp_path, c))
     monkeypatch.setattr(web.templates.env, "globals", {**web.templates.env.globals, "club": c})
-    viewer = {"id": "kd8ccc"}
+    viewer = {"id": "n0cccc"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: viewer["id"])
     client = TestClient(web.app)
 
     html = client.get("/roster?status=all").text  # Bob, a regular member
-    assert "KD8AAA" in html and "Secretary" in html and "Mar 7, 2024" in html and "badge\">Silent Key" in html
+    assert "N0AAAA" in html and "Secretary" in html and "Mar 7, 2024" in html and "badge\">Silent Key" in html
     assert "419-555" not in html and "@example.org" not in html  # contact details live on member pages
     assert html.index("Doe") < html.index("Old Timer")
     assert "badge\">Silent Key" not in client.get("/roster").text  # Active only by default
     assert client.get("/roster/changes").status_code == 403     # officers only
 
-    jane = client.get("/members/kd8aaa").text
+    jane = client.get("/members/n0aaaa").text
     assert "419-555-0101" in jane and "July 4" in jane              # Jane shared these
     assert "jane@example.org" not in jane and "1 Elm St" not in jane  # but not these
-    own = client.get("/members/kd8ccc").text
+    own = client.get("/members/n0cccc").text
     assert "bob@example.org" in own and "9 Oak Ave" in own and 'href="/profile"' in own  # Bob sees his own
-    assert "Contact" not in client.get("/members/kd8bbb").text      # nothing to show: no section
+    assert "Contact" not in client.get("/members/n0bbbb").text      # nothing to show: no section
 
-    viewer["id"] = "kd8aaa"  # Jane, an officer, sees everything, with unshared details marked
-    bob = client.get("/members/kd8ccc").text
+    viewer["id"] = "n0aaaa"  # Jane, an officer, sees everything, with unshared details marked
+    bob = client.get("/members/n0cccc").text
     assert "bob@example.org" in bob and "9 Oak Ave" in bob and "Only officers can see this" in bob
     assert client.get("/roster/changes").status_code == 200
 

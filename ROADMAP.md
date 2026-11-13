@@ -11,9 +11,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 - **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
 
 
-### A new club can start
-- **Examples clearly fictional everywhere** (code, tests, docs, club.example.yaml): Jane/John Doe, example.com/.org, 555-0100…0199, 123 Main St, Anytown, and callsigns that can't be issued (four-letter suffix: N0CALL, W0DEMO). Replace the older realistic ones (Amy Able, KD8AAA, KD8XYZ…), which follow the real callsign format and may belong to someone.
-
 ### Docs and repo
 - **README made presentable:** what it is in a paragraph, screenshots (taken from the demo club, never real data: phone and desktop, light and dark), the feature list, install in three lines, links to the guides.
 - **Drop REQUIREMENTS.md and ROADMAP.md** from the repo; fix every link to them (README, CHANGELOG, docs). Both are copied to the maintainer's private notes first, kept until whatever is still wanted is opened as GitHub Issues.
