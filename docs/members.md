@@ -8,7 +8,9 @@ Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or a
 > [!TIP]
 > Stuck signing in? Ask an admin.
 
-🔐 New to passkeys? The EFF's [What is a passkey?](https://www.eff.org/deeplinks/2023/10/what-passkey) explains them in plain terms. For your other sites, a password manager creates and remembers a different strong password for each one: see the EFF's [Creating Strong Passwords](https://ssd.eff.org/module/creating-strong-passwords). Most password managers keep passkeys too.
+🔐 **A password manager makes this easier.** It can keep your passkey for this app and offer it on every phone and computer where you use it, so signing in is one tap wherever you are. It does the same for the rest of your online life: it keeps your other sites' passkeys too, and for sites that still use passwords it creates a different strong one for each, remembers it and fills it in. You remember just one.
+
+New to these? The EFF explains [what a passkey is](https://www.eff.org/deeplinks/2023/10/what-passkey) (from 2023: since then, passkeys sync across Apple, Google and Windows devices through most password managers, and can be moved from one password manager to another) and [how to choose a password manager](https://ssd.eff.org/module/choosing-the-password-manager-that-s-right-for-you), from the ones built into your phone or browser to apps like Bitwarden or 1Password.
 
 ## 🏠 Home
 What's next for you: the next meeting (and, on meeting night, a link to follow the minutes live), your chow night and any swap requests to answer, your business items, your dues, the latest minutes and the next two weeks of the calendar.
