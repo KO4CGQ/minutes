@@ -1,6 +1,6 @@
 # Server admin guide
 
-For whoever runs the server: install, configure, back up and secure the app. Back to the [README](../README.md).
+For whoever runs the server: install, configure, back up and secure the app. It's in the app too, for the version that's running: Admin → Server admin guide. Back to the [README](../README.md).
 
 ## Getting started (a new club)
 1. **Install** (below): `setup.sh` on a Debian container.

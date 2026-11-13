@@ -251,6 +251,26 @@ def test_about_page(monkeypatch):
     assert 'href="/about"' in c.get("/links").text  # in the name menu on every page
 
 
+def test_help_pages_show_the_guides(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "doe")
+    monkeypatch.setattr(web.archive.club, "can_lead", lambda mid: False)
+    monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: False)
+    c = TestClient(web.app)
+    html = c.get("/help").text
+    assert "<h1>Members guide</h1>" in html and 'aria-label="Guide"' not in html  # a member: just their guide
+    assert 'href="https://github.com/KO4CGQ/minutes/blob/main/README.md"' in html and 'href="/help"' in c.get("/links").text
+    off = c.get("/help/officers").text  # every guide is public anyway; the link to the next stays in the app
+    assert 'href="/help/server-admin"' in off and "Server admin</a>" not in off
+    admin = c.get("/help/server-admin").text
+    assert "<pre><code" in admin and "Server admin</a>" in admin
+    assert c.get("/help/developers").status_code == 404 and c.get("/help/..%2Fsecrets").status_code == 404
+    monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: True)
+    assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin"))
+
+
 def test_top_bar_links_everyone_to_tonights_live_meeting(client, monkeypatch):
     from club_minutes import web
     assert "Live meeting" not in client.get("/").text

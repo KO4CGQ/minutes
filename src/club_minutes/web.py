@@ -1807,6 +1807,27 @@ def dependencies() -> list[dict]:
     return sorted(out, key=lambda d: d["name"].lower())
 
 
+GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin"}  # docs/<name>.md; not developers.md
+
+
+@app.get("/help", response_class=HTMLResponse)
+@app.get("/help/{guide}", response_class=HTMLResponse)
+def help_page(request: Request, guide: str = "members"):
+    """A guide from docs/, as of the running version. Open to every member (they're public on GitHub anyway); the
+    tabs offer each one to whoever it's for."""
+    import markdown
+    if guide not in GUIDES:
+        raise HTTPException(404)
+    text = (Path(__file__).resolve().parents[2] / "docs" / f"{guide}.md").read_text()
+    text = re.sub(r"\]\(([\w-]+)\.md\)", r"](/help/\1)", text)  # links between guides stay in the app
+    text = text.replace("](../", "](https://github.com/KO4CGQ/minutes/blob/main/")  # the README and friends
+    mid, admin = request.state.member, archive.club.is_admin(real_me(request))
+    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or guide == "officers",
+            "server-admin": admin or guide == "server-admin"}  # admins' setup steps are in the officers guide too
+    return page(request, "help.html", guide=guide, guides={g: t for g, t in GUIDES.items() if show[g]},
+                html=Markup(markdown.markdown(text, extensions=["fenced_code"])))
+
+
 @app.get("/about", response_class=HTMLResponse)
 def about(request: Request):
     import markdown

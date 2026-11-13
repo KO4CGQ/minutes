@@ -12,6 +12,8 @@
   <span class="small">{{ app_name() }}</span></a>
 <a class="card" href="/admin/email"><b>Email log</b><span class="muted small">Every email the app sent{{ ', or held back' if PREVIEW or STAGE or club.email_only_to() is not none }}.</span>
   <span class="small">{% if held %}{{ held }} held back this week{% else %}Nothing held back this week{% endif %}</span></a>
+<a class="card" href="/help/server-admin"><b>Server admin guide</b><span class="muted small">Install, settings, backups, updates and security, step by step.</span>
+  <span class="small">For {{ VERSION }}</span></a>
 {% if STAGE %}<a class="card" href="/admin/stage"><b>Stage sync</b><span class="muted small">Pull the live data now, or pause the nightly sync.</span>
   <span class="small">{% if stage_last %}Last: {{ 'done' if stage_last.ok else 'failed' }}, {{ stage_last.finished|ts }}{% else %}No sync yet{% endif %}</span></a>{% endif %}
 </div>

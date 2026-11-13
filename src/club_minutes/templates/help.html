@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}{{ guides[guide] }} guide{% endblock %}{% block body %}
+{% if guides|length > 1 %}<nav class="tabs" aria-label="Guide">{% for g, t in guides.items() %}<a href="/help/{{ g }}" class="{{ 'on' if g == guide }}"{% if g == guide %} aria-current="page"{% endif %}>{{ t }}</a>{% endfor %}</nav>{% endif %}
+<article class="minutes guide">{{ html }}</article>
+{% endblock %}
