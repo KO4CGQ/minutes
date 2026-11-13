@@ -292,7 +292,7 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     chow.save(s)
     with events.locked():
         evs = []
-        events.add(evs, "events", events.from_form({"title": "Fox hunt; bring a radio, and snacks", "where": "City park",
+        events.add(evs, "events", events.from_form({"title": "Fox hunt; bring a radio, and snacks", "where": "City park", "online": "https://meet.example.com/fox",
                                                     "date": (today + dt.timedelta(days=3)).isoformat(), "time": "14:00", "end_time": "16:00"}), "x")
         events.add(evs, "planning", events.from_form({"title": "Board dinner", "date": (today + dt.timedelta(days=4)).isoformat(),
                                                       "end_date": (today + dt.timedelta(days=5)).isoformat()}), "x")
@@ -304,6 +304,7 @@ def test_feeds_and_public_calendar(tmp_path, monkeypatch):
     body = anon.get(f"/calendar/feed/{tok}.ics").text
     assert anon.get("/calendar/feed/%E0%A3%8E.ics").status_code == 404  # not ASCII: no one's, not a server error
     assert "SUMMARY:Fox hunt\; bring a radio\\, and snacks" in body and "LOCATION:City park" in body
+    assert "URL:https://meet.example.com/fox" in body and "DESCRIPTION:Join online: https://meet.example.com/fox" in body
     assert "DTSTART;TZID=America/New_York:" in body and "SUMMARY:Chow: Amy Able" in body
     assert f"DTEND;VALUE=DATE:{(today + dt.timedelta(days=6)):%Y%m%d}" in body  # Board dinner: two days, end is the day after
     assert all(len(line.encode()) <= 75 for line in body.split("\r\n"))

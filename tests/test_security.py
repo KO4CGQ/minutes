@@ -313,21 +313,26 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         before = events.load()
         assert "msg err" in admin.post("/admin/site/club", data={**same, "since": "soon"}).text and events.load() == before
         since = nxt_thu + dt.timedelta(days=1)  # the Thursday chow night stays a meeting; the Tuesdays start after it
-        where = "123 Main St · https://meet.example.com/abc <b>"
+        where, online = "Clubhouse, 123 Main St <b>", "https://meet.example.com/abc?pwd=x&y=1"
+        for bad in ("javascript:alert(1)", 'https://x.example.com/"><b>', "meet.example.com/abc"):
+            r = admin.post("/admin/site/club", data={**same, "meeting_day": "Tuesday", "since": str(since), "where": where, "online": bad})
+            assert "starts with https://" in r.text and events.load() == before and c.meeting_weekday == 3, bad
         r = admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since),
-                                                 "where": where}, follow_redirects=False)
+                                                 "where": where, "online": online}, follow_redirects=False)
         loc = unquote(r.headers["location"])
         assert "weekly meeting on the calendar changes from" in loc and "1 chow night is still on the old day" in loc
         assert c.site_settings["club"] == {"date_formats": {"list": "%-d %b %Y"}, "name": "Test Radio Club", "meeting_day": "Tuesday"}
         assert c.meeting_weekday == 1 and c.info["name"] == "Test Radio Club"
         old, new = sorted((e for e in events.load() if e.get("meeting")), key=lambda e: e["start"])
         assert not events.dates(old, since, since + dt.timedelta(days=60)) and nxt_thu in events.dates(old, today, since) and old.get("where", "") == ""
-        assert new["start"].startswith(str(since + dt.timedelta(days=(1 - since.weekday()) % 7))) and new["where"] == where
+        assert new["start"].startswith(str(since + dt.timedelta(days=(1 - since.weekday()) % 7))) and new["where"] == where and new["online"] == online
         tab = admin.get("/admin/site/club").text
         assert tab.count("Set here") == 2 and tab.count("From club.yaml") == 3  # name and day were changed
-        assert 'value="123 Main St · https://meet.example.com/abc &lt;b&gt;"' in tab  # typed text escaped
+        assert 'value="Clubhouse, 123 Main St &lt;b&gt;"' in tab and 'value="https://meet.example.com/abc?pwd=x&amp;y=1"' in tab  # escaped
+        cal = admin.get(f"/calendar?start={since}").text
+        assert 'href="https://meet.example.com/abc?pwd=x&amp;y=1" rel="noopener">Join online' in cal and "123 Main St &lt;b&gt;" in cal
         n = len(events.load())
-        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": where})
+        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": where, "online": online})
         assert len(events.load()) == n  # nothing new: the calendar's left alone
         assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
         admin.post("/admin/site/club", data={"back": "1"})

@@ -43,6 +43,7 @@
 {% else %}{{ e.start|date('weekday') }}, all day{% endif %}</p>
 {% if e.repeats and repeats.get(e.id) %}<p class="muted">{{ emoji('🔁', 'repeat') }} {{ repeats[e.id] }}</p>{% endif %}
 {% if e.where %}<p><b>Where</b><br>{{ e.where|linkify }}</p>{% endif %}
+{% if e.online %}<p><a class="btn small" href="{{ e.online }}" rel="noopener">Join online</a></p>{% endif %}
 {% if e.notes %}<p class="calnotes">{{ e.notes|linkify }}</p>{% endif %}
 {% if e.from_minutes %}<p class="muted small">From the last meeting's Upcoming Events{% if can_edit %}; change it in the leader console{% endif %}.</p>{% endif %}
 {% if can_edit and e.id %}<p class="row"><a class="btn small" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}">{{ emoji('✏️', 'pencil') }} Edit</a></p>{% endif %}

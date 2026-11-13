@@ -1,7 +1,7 @@
 """The club calendars, kept by the app: events on the Club events, Planning and Community calendars.
 
 events.json in the data folder: {"events": [event, ...]}. An event:
-    id, cal ("events" | "planning" | "community"), title, where, notes,
+    id, cal ("events" | "planning" | "community"), title, where, online (a meeting link, http(s) only), notes,
     start: "YYYY-MM-DD" (all day) or "YYYY-MM-DDTHH:MM", end: the same forms or None (the first date's end),
     repeat: None or {"freq": "daily" | "weekly" | "monthly" | "monthly_weekday" | "yearly" | "yearly_weekday", "interval": 1,
                      "last": False, "until": "YYYY-MM-DD" or None, "weeks": [1, 3] (monthly_weekday on several weeks:
@@ -31,7 +31,8 @@ REPEATS = ("", "daily", "weekly", "biweekly", "monthly", "monthly_weekday", "mon
            "yearly_weekday")  # the form's choices
 SCOPES = {"this": "This date only", "following": "This and following dates", "all": "Every date"}
 ORDINAL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
-FIELDS = ("title", "where", "notes", "start", "end")
+ONLINE_RE = re.compile(r"https?://[^\s<>\"']+")  # only a web link: it becomes a link's href
+FIELDS = ("title", "where", "online", "notes", "start", "end")
 
 
 # ---------------- storage ----------------
@@ -88,8 +89,8 @@ def meeting(evs: list[dict]) -> dict | None:
     return max(ms, key=lambda e: e["start"], default=None)
 
 
-def move_meeting(club, since: dt.date, where: str, by: str) -> dt.date:
-    """The weekly meeting from `since` on: the club's day and time, at `where`. Earlier dates keep theirs; one-date
+def move_meeting(club, since: dt.date, where: str, online: str, by: str) -> dt.date:
+    """The weekly meeting from `since` on: the club's day and time, at `where` and `online`. Earlier dates keep theirs; one-date
     changes and skipped dates from `since` on go if the day moves. Returns the first new date."""
     first = since + dt.timedelta(days=(club.meeting_weekday - since.weekday()) % 7)
     start = dt.datetime.fromisoformat(f"{first}T{club.meeting_time}")
@@ -98,12 +99,12 @@ def move_meeting(club, since: dt.date, where: str, by: str) -> dt.date:
         e = meeting(evs)
         old = next(iter(dates(e, since, since + dt.timedelta(days=400))), None) if e else None
         if old is None:  # no meeting on the calendar (deleted, or its dates ended): a new series
-            e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": where, "notes": "",
+            e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": where, "online": online, "notes": "",
                                     "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
                                     "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, by)
             e["meeting"] = True
         else:
-            v = {"title": e["title"], "notes": e.get("notes", ""), "where": where, "start": _iso(start, True),
+            v = {"title": e["title"], "notes": e.get("notes", ""), "where": where, "online": online, "start": _iso(start, True),
                  "end": _iso(start + (length(e) or dt.timedelta(hours=2)), True), "repeat": e["repeat"], "tz": None}
             change(evs, e["id"], old.isoformat(), e["cal"], v, "following")
         save(evs)
@@ -214,7 +215,7 @@ def occurrence(e: dict, d: dt.date) -> dict:
     start = _dt(e["start"])
     timed = "T" in e["start"]
     moved = dt.datetime.combine(d, start.time())
-    o = {"title": e["title"], "where": e.get("where", ""), "notes": e.get("notes", ""),
+    o = {"title": e["title"], "where": e.get("where", ""), "online": e.get("online", ""), "notes": e.get("notes", ""),
          "start": _iso(moved, timed), "end": _iso(moved + length(e), timed) if e.get("end") else None}
     return {**o, **e.get("changes", {}).get(d.isoformat(), {})}
 
@@ -274,7 +275,10 @@ def from_form(f: dict, club_tz: str = "") -> dict:
             if nth not in weeks and not (last and is_last):
                 raise ValueError(f"It starts on the {'last' if is_last else ORDINAL[nth]} {day:%A}: tick that week too.")
             repeat.update(weeks=weeks, last=last)
-    return {"title": title, "where": " ".join((f.get("where") or "").split())[:200],
+    online = (f.get("online") or "").strip()[:500]
+    if online and not ONLINE_RE.fullmatch(online):
+        raise ValueError("The online link starts with https:// (copy it from the meeting app's invite).")
+    return {"title": title, "where": " ".join((f.get("where") or "").split())[:200], "online": online,
             "notes": (f.get("notes") or "").strip()[:2000], "start": start, "end": end, "repeat": repeat,
             "tz": tz if t and tz != club_tz else None, "quiet": bool(f.get("quiet"))}
 
@@ -287,7 +291,7 @@ def form_values(e: dict, d: str | None) -> dict:
            else "monthly_last" if r.get("last") and r["freq"] == "monthly_weekday" else r["freq"])
     weeks = {f"week{k}": k in (r or {}).get("weeks", []) for k in (1, 2, 3, 4)} | {"week_last": bool(r and r.get("weeks") and r.get("last"))}
     end = o.get("end") or ""
-    return {"title": o["title"], "where": o.get("where", ""), "notes": o.get("notes", ""), "cal": e["cal"],
+    return {"title": o["title"], "where": o.get("where", ""), "online": o.get("online", ""), "notes": o.get("notes", ""), "cal": e["cal"],
             "date": o["start"][:10], "time": o["start"][11:16], "end_date": end[:10] if end[:10] != o["start"][:10] else "",
             "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or "", "quiet": quiet(e), **weeks}
 
@@ -313,7 +317,7 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
         same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until"), r.get("weeks")) or None  # noqa: E731
         if same(v.get("repeat")) != same(e["repeat"]):
             raise ValueError("To change how it repeats, choose This and following dates or Every date.")
-        e["changes"][d] = {k: v[k] for k in FIELDS}
+        e["changes"][d] = {k: v[k] for k in FIELDS if k in v}
         e["quiet"] = v.get("quiet", quiet(e))  # the whole series: it's about the event, not one date
         return
     # every date (or following from the first date): the series moves by as much as this date moved

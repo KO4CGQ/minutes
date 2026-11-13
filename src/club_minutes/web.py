@@ -2278,11 +2278,12 @@ async def site_agenda(request: Request):
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
-def _meeting_where(since: dt.date) -> str:
-    """Where the weekly meeting is on its first date from `since` on (the calendar's Where)."""
+def _meeting_where(since: dt.date) -> tuple[str, str]:
+    """Where the weekly meeting is, and its online link, on its first date from `since` on (from the calendar)."""
     e = events.meeting(events.load())
     d = next(iter(events.dates(e, since, since + dt.timedelta(days=400))), None) if e else None
-    return events.occurrence(e, d)["where"] if d else ""
+    o = events.occurrence(e, d) if d else {}
+    return o.get("where", ""), o.get("online", "")
 
 
 
@@ -2299,6 +2300,9 @@ async def site_club(request: Request):
         since = None
     if since is None or since < today:
         return RedirectResponse("/admin/site/club?error=" + quote("Starting: today or a later date."), status_code=303)
+    online = (form.get("online") or "").strip()[:500]
+    if online and not events.ONLINE_RE.fullmatch(online):
+        return RedirectResponse("/admin/site/club?error=" + quote("The online link starts with https:// (copy it from the meeting app's invite)."), status_code=303)
     if form.get("back"):
         values = dict.fromkeys(CLUB_KEYS)
     else:
@@ -2329,9 +2333,9 @@ async def site_club(request: Request):
         _admin_log(request, site_name=branding.name(club))
     note = "Saved."
     was = _meeting_where(since)
-    where = " ".join((form.get("where") or "").split())[:200] if "where" in form else was
-    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or where != was:
-        first = events.move_meeting(club, since, where, mid)
+    now = (" ".join((form.get("where") or "").split())[:200], online) if "where" in form else was
+    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or now != was:
+        first = events.move_meeting(club, since, *now, mid)
         note = f"Saved. The weekly meeting on the calendar changes from {show_date(first, 'day_year')}; earlier dates stay as they were."
     late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
                and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0
