@@ -18,6 +18,27 @@ SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
 EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/kd8adm/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")]
 IPV6 = "2001:db8:85a3:1234:5678:8a2e:370:7334"  # real addresses can be this long
 ENGINES = ["chromium", "firefox", "webkit"]  # Chrome/Edge, Firefox, and Safari's engine (close to Safari, not the same)
+# Text whose contrast with what's behind it is under 3:1 (WCAG's floor for large text; body text wants 4.5):
+# a colour left at its light-mode value shows up here in dark mode. Site's colour previews are meant to differ.
+LOW_CONTRAST = """() => {
+  const rgb = (s) => { const n = s.match(/[\\d.]+/g).map(Number);
+    return s.startsWith("color(") ? [n[0] * 255, n[1] * 255, n[2] * 255, n[3] ?? 1] : [n[0], n[1], n[2], n[3] ?? 1]; };
+  const lum = ([r, g, b]) => [r, g, b].map((v) => (v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+    .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const behind = (el) => { for (; el; el = el.parentElement) { const c = rgb(getComputedStyle(el).backgroundColor); if (c[3] > 0.5) return c; }
+    return rgb(getComputedStyle(document.documentElement).backgroundColor); };
+  const out = [];
+  for (const el of document.body.querySelectorAll("*")) {
+    if (el.closest(".tp, svg, [hidden]") || !el.getClientRects().length) continue;
+    const text = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+    const st = getComputedStyle(el);
+    if (!text || st.visibility === "hidden" || +st.opacity === 0) continue;
+    const [a, b] = [lum(rgb(st.color)), lum(behind(el))];
+    const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    if (ratio < 3) out.push(`${el.tagName.toLowerCase()}.${el.className} "${text.slice(0, 30)}" ${ratio.toFixed(1)}:1`);
+  }
+  return out;
+}"""
 LONG_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
 
@@ -33,7 +54,8 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     from club_minutes import web
     club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able", "email": "amy@example.org", "officer": True}])
     club.admins = {"kd8adm"}
-    from club_minutes import treasurer
+    from club_minutes import branding, theme, treasurer
+    monkeypatch.setattr(branding, "DATA", tmp_path)  # the colours saved below stay in this test
     ts = treasurer.load()
     treasurer.set_general(ts, "kd8adm", "preview", "2026-01-01", 4, 2, True)  # so Who owes what has rows
     treasurer.set_fund(ts, "kd8adm", "Drinks fund", "Cash", ["kd8adm"])
@@ -56,7 +78,8 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     c.cookies.set(web.COOKIE, tok)
 
     def serve(route):
-        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), follow_redirects=False)
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), follow_redirects=route.request.method == "POST",  # Chromium won't take a redirect handed back here
+                      content=route.request.post_data_buffer, headers={"content-type": route.request.headers.get("content-type", "")})
         route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
 
     with sync_api.sync_playwright() as p:
@@ -66,7 +89,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
             pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_page(viewport={"width": 375, "height": 800})
         page.route("http://testserver/**", serve)
-        too_wide, blocked, path = {}, [], ""
+        too_wide, blocked, path, seen = {}, [], "", []
         # the security policy runs no inline handlers or unmarked scripts: anything it blocks, or any script error, fails
         page.on("console", lambda m: m.type == "error" and "Content Security Policy" in m.text and blocked.append((path, m.text[:200])))
         page.on("pageerror", lambda e: blocked.append((path, str(e)[:200])))
@@ -75,6 +98,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
             if r.status_code != 200 or "text/html" not in r.headers.get("content-type", ""):
                 continue
             page.goto("http://testserver" + path)
+            seen.append(path)
             w = page.evaluate("document.documentElement.scrollWidth")
             if w > 375:
                 too_wide[path] = w
@@ -86,7 +110,36 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
             page.focus(f"input[name={other}] >> nth=-1")
             lists.append(page.locator(f"input[name={other}] >> nth=-1 >> xpath=.. >> li").all_inner_texts())
             page.fill(f"input[name={picked}] >> nth=-1", "")
+        # Site → Colours: a colour shows in the two previews only; Cancel puts back what was saved; Save keeps it,
+        # and the whole site then uses the palette the preview showed
+        page.goto("http://testserver/admin/site#colours")
+        form, light = page.locator("form[data-colours]"), page.locator(".tp[data-mode=light]")
+        was = light.get_attribute("style")
+        form.locator("input[name=main]").fill("#4f6f2a")
+        form.locator(".unsaved").wait_for(state="visible")
+        tried = light.get_attribute("style")
+        form.locator("[data-cancel]").click()
+        cancelled = (form.locator(".unsaved").is_hidden(), light.get_attribute("style") == was, form.locator("input[name=main]").input_value())
+        form.locator("input[name=main]").fill("#4f6f2a")
+        form.locator(".unsaved").wait_for(state="visible")
+        with page.expect_navigation():
+            form.locator("button.btn:not([type=button])").click()
+        nav_bg = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--nav-bg').trim()")
+        colours = (branding.colours()["main"], "Colours saved." in page.content(), f"--nav-bg: {nav_bg}" in tried)
+        branding.reset_colours()
+        # dark mode, as a phone set to dark: every page again, any text too faint against its background
+        dark = browser.new_page(viewport={"width": 375, "height": 800}, color_scheme="dark")
+        dark.route("http://testserver/**", serve)
+        dim = {}
+        for path in seen:
+            dark.goto("http://testserver" + path)
+            if low := dark.evaluate(LOW_CONTRAST):
+                dim[path] = low[:4]
+            if dark.evaluate("getComputedStyle(document.body).backgroundColor.match(/[\\d.]+/g).slice(0, 3).some((v) => +v > 80)"):
+                dim[path] = ["the page isn't dark"]
         browser.close()
+    assert tried != was and cancelled == (True, True, theme.DEFAULT) and colours == ("#4f6f2a", True, True), (cancelled, colours)
+    assert not dim, f"dark mode: text too faint for its background: {dim}"
     assert lists == [["(nobody)"], ["(nobody)"]], lists
     assert not too_wide, f"pages wider than a 375px phone: {too_wide}"
     assert not blocked, f"blocked by the security policy, or a script error: {blocked}"
