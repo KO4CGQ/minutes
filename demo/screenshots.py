@@ -27,8 +27,9 @@ from club_minutes import web
 club = web.archive.club
 me = club.canonical("n0jane")
 web.updates.available = lambda: None  # the Admin page's "new version" line: never GitHub, and the same each time
-who = {}  # who's signed in for each picture: the President, the President in admin mode, the Secretary (keeps the roster)
-for key, mid in (("president", me), ("admin", me), ("secretary", club.canonical("w0alex"))):
+who = {}  # who's signed in for each picture: the President (also in admin mode), the Secretary (keeps the roster), the Treasurer, a member
+for key, mid in (("president", me), ("admin", me), ("secretary", club.canonical("w0alex")),
+                 ("treasurer", club.canonical("n0sams")), ("member", club.canonical("k0pats"))):  # Pat is behind on dues
     who[key] = TestClient(web.app)
     who[key].cookies.set(web.COOKIE, web.authn.new_session(mid, "Mozilla/5.0", "127.0.0.1", "passkey"))
 web.authn.set_admin(who["admin"].cookies.get(web.COOKIE), 60)
@@ -48,6 +49,11 @@ SHOTS = [  # file name, page, phone?, dark?, signed in as, height (a phone's is 
     ("admin", "/admin", False, False, "admin", 560),
     ("backups", "/admin/backups", False, True, "admin", 640),
     ("site-look", "/admin/site/look", False, False, "admin", 640),
+    ("home-dues", "/", False, False, "member", 520),
+    ("spending", "/spending", False, False, "member", 720),
+    ("treasurer", "/treasurer", False, False, "treasurer", 680),
+    ("treasurer-bills", "/treasurer?tab=bills", False, True, "treasurer", 640),
+    ("treasurer-settings", "/treasurer?tab=settings", False, False, "treasurer", 680),
 ]
 client = who["president"]
 

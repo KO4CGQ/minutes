@@ -72,7 +72,14 @@ Only if the club has the chow module (an admin turns it on under Admin → Site 
 - **Arrears:** how many weeks behind counts (4 by default), and whether the Treasurer and Board get an email when someone gets there.
 - **Accounts, funds** and **spending categories** (up to 8, each keeps its chart colour).
 
+![Treasurer → Settings](screenshots/treasurer-settings.png)
+
 🧾 **Who owes what** is worked out, never typed: dues for every meeting night (holidays too; 52 × $3.50 is $182 a year), initiation, missed chow nights and adjustments, less payments. Members may pay weekly, monthly or yearly; paying ahead shows as "paid through" a date. Members in arrears show in red.
+
+> [!NOTE]
+> **An example:** dues are $3.50 a meeting night and tracking started 26 weeks ago, so a long-time member owes $91.00 so far. Pat has paid $66.50: Pat owes **$24.50**, 7 weeks, in red (4 weeks or more). Max joined 8 weeks ago: the $25.00 initiation fee plus 8 nights ($28.00), less what he's paid.
+
+![Who owes what](screenshots/treasurer.png)
 
 **The bond** (only if the club has one): who still owes it and by when. A bond bought before the app: **Record a bond bought before…** at the top of Who owes what. It's kept on file, not counted as money now.
 
@@ -87,9 +94,13 @@ Only if the club has the chow module (an admin turns it on under Admin → Site 
 - **Bills read at meetings:** each amount under Bills and Communications in the minutes gets its own card ("Gas Bill $81"). Mark each **Paid** (an expense), **Not a bill**, or match it to a regular bill so it isn't counted twice. Nothing counts until it's marked. **Look in older minutes** finds bills from before the start date.
 - At the meeting, the console's Bills step lists what was paid since the last one; **Add to tonight's bills** puts it in the minutes.
 
+![Treasurer → Bills: the regular bills, each paid this month or year](screenshots/treasurer-bills.png)
+
 🥤 **Funds** run by a committee (the drinks fund, say): their keepers see only their fund's account and record its money.
 
 📊 **Spending** (in the menu): the last 12 months by category, and the cost per member each month next to what dues bring in. Every member sees it once tracking is On. It never shows anyone's dues.
+
+![Spending: a year of the club's bills by category](screenshots/spending.png)
 
 > [!NOTE]
 > Not a bookkeeping system: no account balances or transfers yet.

@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Treasurer{% endblock %}{% block body %}
 <h1>Treasurer</h1>
-{% if full %}<p class="muted">Dues, fees and the club's bills{{ cite('dues') }}. Officers can look; {{ 'you' if edit else 'the Treasurer' }} records the money. Members see only their own figures, on Home.</p>
+{% if full %}<p class="muted">Dues, fees and the club's bills{{ cite('dues') }}. Officers can look; {{ 'you record' if edit else 'the Treasurer records' }} the money. Members see only their own figures, on Home.</p>
 {% if certificate_note %}<p class="muted small">{{ certificate_note }}</p>{% endif %}
 {% else %}<p class="muted">The money in and out of {{ kept|join(' and ') }}, which you look after.</p>{% endif %}
 <nav class="tabs">{% for t, label in (('standing', 'Who owes what'), ('money', 'Money in and out'), ('bills', 'Bills'), ('settings', 'Settings')) if full or t == 'money' %}<a href="/treasurer?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>

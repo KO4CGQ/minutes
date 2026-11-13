@@ -1861,6 +1861,7 @@ def help_page(request: Request, guide: str = "members"):
                 f'<div popover id="shot{i}" class="modal shotbig"><button type="button" class="calclose" popovertarget="shot{i}" '
                 f'popovertargetaction="hide" aria-label="Close">✕</button><img alt="{alt}" src="{src}"></div>')
     html = re.sub(r'(?:<p>)?<img alt="([^"]*)" src="([^"]*)" />(?:</p>)?', thumbnail, html)  # a popover can't sit in a <p>
+    html = html.replace('<a href="http', '<a target="_blank" rel="noopener" href="http')  # other sites: a new tab
     toc = "".join(f'<a href="#{t["id"]}">{t["name"]}</a>' for t in md.toc_tokens)  # names come escaped
     if toc:  # after the title and the line under it
         html = html.replace("</p>", f'</p><nav class="toc" aria-label="On this page">{toc}</nav>', 1)

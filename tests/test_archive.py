@@ -263,6 +263,7 @@ def test_help_pages_show_the_guides(monkeypatch):
     html = c.get("/help").text
     assert ">Members guide</h1>" in html and 'aria-label="Guide"' not in html  # a member: just their guide
     assert 'href="/help"' in c.get("/links").text
+    assert '<a target="_blank" rel="noopener" href="https://www.eff.org/' in html  # other sites open in a new tab
     for g in web.GUIDES:  # every link in a guide works in the app: another guide, or a full address
         body = c.get(f"/help/{g}").text.split('class="minutes guide"')[1]
         assert all(h.startswith(("/help", "https://", "#")) for h in re.findall(r'href="([^"]*)"', body)), g
