@@ -278,9 +278,9 @@ def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkey
         clubmod.set_dates(None)
 
 
-def test_site_club_tab_keeps_only_changes_checks_them_and_says_what_isnt_moved(app, tmp_path, monkeypatch):
+def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app, tmp_path, monkeypatch):
     """Admin → Site → Club: only what differs from club.yaml is kept; a wrong value changes nothing; a new meeting day
-    says what's already planned (the calendar's weekly meeting, chow nights) and links to the meeting."""
+    moves the calendar's weekly meeting from the Starting date on (earlier dates stay) and says which chow nights aren't moved."""
     import datetime as dt
     from urllib.parse import unquote
     from club_minutes import club as clubmod, events
@@ -308,15 +308,27 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_says_what_isnt_moved(a
         monkeypatch.setattr(chow, "DATA", tmp_path)
         nxt_thu = dt.date.today() + dt.timedelta(days=(3 - dt.date.today().weekday()) % 7 or 7)
         chow.save({"nights": {nxt_thu.isoformat(): {"member": "kd8aaa", "status": "scheduled"}}})
-        r = admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday"}, follow_redirects=False)
+        today = dt.date.today()
+        assert "Starting: today" in admin.post("/admin/site/club", data={**same, "since": str(today - dt.timedelta(days=1))}).text
+        before = events.load()
+        assert "msg err" in admin.post("/admin/site/club", data={**same, "since": "soon"}).text and events.load() == before
+        since = nxt_thu + dt.timedelta(days=1)  # the Thursday chow night stays a meeting; the Tuesdays start after it
+        where = "123 Main St · https://meet.example.com/abc <b>"
+        r = admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since),
+                                                 "where": where}, follow_redirects=False)
         loc = unquote(r.headers["location"])
-        assert "weekly meeting on the calendar" in loc and "1 chow night on the old day" in loc and "&meeting=" in loc
+        assert "weekly meeting on the calendar changes from" in loc and "1 chow night is still on the old day" in loc
         assert c.site_settings["club"] == {"date_formats": {"list": "%-d %b %Y"}, "name": "Test Radio Club", "meeting_day": "Tuesday"}
         assert c.meeting_weekday == 1 and c.info["name"] == "Test Radio Club"
-        assert 'href="/calendar/edit?id=' in admin.get(r.headers["location"]).text
+        old, new = sorted((e for e in events.load() if e.get("meeting")), key=lambda e: e["start"])
+        assert not events.dates(old, since, since + dt.timedelta(days=60)) and nxt_thu in events.dates(old, today, since) and old.get("where", "") == ""
+        assert new["start"].startswith(str(since + dt.timedelta(days=(1 - since.weekday()) % 7))) and new["where"] == where
         tab = admin.get("/admin/site/club").text
         assert tab.count("Set here") == 2 and tab.count("From club.yaml") == 3  # name and day were changed
-        assert admin.get("/admin/site/club?meeting=../x&d=2026-01-01").text.count("/calendar/edit") == 0  # only a real id
+        assert 'value="123 Main St · https://meet.example.com/abc &lt;b&gt;"' in tab  # typed text escaped
+        n = len(events.load())
+        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": where})
+        assert len(events.load()) == n  # nothing new: the calendar's left alone
         assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
         admin.post("/admin/site/club", data={"back": "1"})
         assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay

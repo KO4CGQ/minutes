@@ -4,7 +4,6 @@
 <nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% if tab == 'club' %}
-{% if meeting_edit %}<p class="msg"><a class="btn small" href="{{ meeting_edit }}">Change the weekly meeting on the calendar</a></p>{% endif %}
 <p class="muted">The club's name and callsign, and when it meets. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
 <form method="post" action="/admin/site/club" class="profile siteclub">
 <div class="card sitesec"><h2>The club</h2>
@@ -19,9 +18,11 @@
 <label for="c-day">Day</label><select id="c-day" name="meeting_day">{% for d in weekdays %}<option{{ ' selected' if d|lower == (club.info.meeting_day or '')|lower }}>{{ d }}</option>{% endfor %}</select>{{ origin('meeting_day') }}
 <label for="c-time">Starts at</label><input id="c-time" type="time" name="meeting_time" value="{{ club.meeting_time }}" required>{{ origin('meeting_time') }}
 <label for="c-tz">Time zone</label><input id="c-tz" name="timezone" list="zones" value="{{ club.timezone }}" required autocomplete="off" spellcheck="false">{{ origin('timezone') }}
+<label for="c-where">Where</label><input id="c-where" name="where" value="{{ meeting_where }}" maxlength="200" placeholder="123 Main St, or https://meet.example.com/abc"><span class="muted small">On the calendar</span>
+<label for="c-since">Starting</label><input id="c-since" type="date" name="since" value="{{ sample }}" min="{{ sample }}" required><span></span>
 </div>
 <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
-<p class="hint">Every week on this day. A new day or time doesn't change what's already on the calendar: the weekly meeting there is an ordinary event (added once, the first time the calendar was opened), and chow nights come from the chow schedule an officer makes on the Chow page. After you save, the app says what's on the old day and links the meeting to change.</p>
+<p class="hint">Every week on this day, as the weekly meeting on the Club events calendar. A new day, time or Where changes the meeting there from the Starting date on; earlier dates stay as they were. Where can hold the address, the online meeting link, or both: a link is clickable on the calendar and goes to phones' calendars too. One date (a holiday, a new place for a night) is changed on the calendar itself. Chow nights come from the chow schedule on the Chow page: the app says if any are on the old day.</p>
 </div>
 <p class="row"><button class="btn">Save</button></p>
 </form>

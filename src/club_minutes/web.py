@@ -2096,7 +2096,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
                 agenda=_agenda_rows(club), builtins=SECTIONS, regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
-                meeting_edit=_meeting_edit(request.query_params.get("meeting", ""), request.query_params.get("d", "")), weekdays=[d.title() for d in WEEKDAYS],
+                meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb(),
@@ -2278,12 +2278,12 @@ async def site_agenda(request: Request):
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
-def _meeting_edit(eid: str, d: str) -> str | None:
-    """The calendar's page for changing the weekly meeting from date d on (after a new meeting day or time)."""
-    try:
-        return f"/calendar/edit?id={eid}&d={dt.date.fromisoformat(d)}" if re.fullmatch(r"[0-9a-f]{6,20}", eid) else None
-    except ValueError:
-        return None
+def _meeting_where(since: dt.date) -> str:
+    """Where the weekly meeting is on its first date from `since` on (the calendar's Where)."""
+    e = events.meeting(events.load())
+    d = next(iter(events.dates(e, since, since + dt.timedelta(days=400))), None) if e else None
+    return events.occurrence(e, d)["where"] if d else ""
+
 
 
 @app.post("/admin/site/club")
@@ -2292,6 +2292,13 @@ async def site_club(request: Request):
     Only what differs from club.yaml is kept, so later changes there still count for the rest."""
     mid, form, club = _site_admin(request), await request.form(), archive.club
     old_day, old_time = club.meeting_weekday, club.meeting_time
+    today = dt.date.today()
+    try:
+        since = dt.date.fromisoformat(form.get("since") or today.isoformat())
+    except ValueError:
+        since = None
+    if since is None or since < today:
+        return RedirectResponse("/admin/site/club?error=" + quote("Starting: today or a later date."), status_code=303)
     if form.get("back"):
         values = dict.fromkeys(CLUB_KEYS)
     else:
@@ -2321,18 +2328,15 @@ async def site_club(request: Request):
         branding.set_name(app_name, mid)
         _admin_log(request, site_name=branding.name(club))
     note = "Saved."
-    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time):
-        today = dt.date.today()
-        evs = events.load()
-        e = next((x for x in evs if x.get("meeting")), None)
-        nxt = next(iter(events.dates(e, today, today + dt.timedelta(days=60))), None) if e else None
-        late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
-                   and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0
-        note = ("Saved. Already planned, and not moved: the weekly meeting on the calendar"
-                + (f" (change it there: This and following dates)" if e else "")
-                + (f", and {late} chow night{'s' if late != 1 else ''} on the old day (the Chow page)" if late else "") + ".")
-        if e and nxt:
-            return RedirectResponse("/admin/site/club?note=" + quote(note) + f"&meeting={e['id']}&d={nxt}", status_code=303)
+    was = _meeting_where(since)
+    where = " ".join((form.get("where") or "").split())[:200] if "where" in form else was
+    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or where != was:
+        first = events.move_meeting(club, since, where, mid)
+        note = f"Saved. The weekly meeting on the calendar changes from {show_date(first, 'day_year')}; earlier dates stay as they were."
+    late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
+               and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0
+    if late:
+        note += f" {late} chow night{'s are' if late != 1 else ' is'} still on the old day: move {'them' if late != 1 else 'it'} on the Chow page."
     return RedirectResponse("/admin/site/club?note=" + quote(note), status_code=303)
 
 

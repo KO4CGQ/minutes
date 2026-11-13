@@ -82,6 +82,36 @@ def ensure_meeting(club) -> None:
         marker.write_text(e["id"])
 
 
+def meeting(evs: list[dict]) -> dict | None:
+    """The weekly meeting's current series (the one still repeating, if a leader split it)."""
+    ms = [e for e in evs if e.get("meeting")]
+    return max(ms, key=lambda e: e["start"], default=None)
+
+
+def move_meeting(club, since: dt.date, where: str, by: str) -> dt.date:
+    """The weekly meeting from `since` on: the club's day and time, at `where`. Earlier dates keep theirs; one-date
+    changes and skipped dates from `since` on go if the day moves. Returns the first new date."""
+    first = since + dt.timedelta(days=(club.meeting_weekday - since.weekday()) % 7)
+    start = dt.datetime.fromisoformat(f"{first}T{club.meeting_time}")
+    with locked():
+        evs = load()
+        e = meeting(evs)
+        old = next(iter(dates(e, since, since + dt.timedelta(days=400))), None) if e else None
+        if old is None:  # no meeting on the calendar (deleted, or its dates ended): a new series
+            e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": where, "notes": "",
+                                    "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
+                                    "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, by)
+            e["meeting"] = True
+        else:
+            v = {"title": e["title"], "notes": e.get("notes", ""), "where": where, "start": _iso(start, True),
+                 "end": _iso(start + (length(e) or dt.timedelta(hours=2)), True), "repeat": e["repeat"], "tz": None}
+            change(evs, e["id"], old.isoformat(), e["cal"], v, "following")
+        save(evs)
+        (DATA / "events-meeting-added").write_text(e["id"])  # ensure_meeting has nothing left to do
+    log(by, "changed this and following dates of", {**e, "start": _iso(start, True)})
+    return first
+
+
 def quiet(e: dict) -> bool:
     """Left out of the console's read-out: ticked on the event, or the weekly meeting unless unticked."""
     return e.get("quiet", bool(e.get("meeting")))
