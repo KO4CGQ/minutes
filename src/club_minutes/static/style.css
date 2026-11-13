@@ -59,7 +59,9 @@ body { margin: 0; font: 15.5px/1.5 system-ui, -apple-system, "Segoe UI", Roboto,
 main { max-width: 68rem; margin: 1.8rem auto 3rem; padding: 0 1.1rem; }
 h1 { font-size: 1.75rem; letter-spacing: -.015em; margin: .2rem 0 .8rem; }
 h2 { font-size: 1.2rem; letter-spacing: -.01em; margin: 1.6rem 0 .6rem; } h3 { font-size: 1.02rem; }
-a { color: var(--accent-text); } a:hover { color: var(--accent); }
+a { color: var(--accent-text); text-decoration-thickness: 1px; text-underline-offset: .22em;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }  /* a soft underline: still clearly a link */
+a:hover { color: var(--accent); text-decoration-color: currentColor; }
 .muted { color: var(--muted); } .small { font-size: .85rem; } .hint { color: var(--muted); font-size: .88rem; }
 .cs { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
 mark { background: var(--mark); color: inherit; border-radius: .2rem; padding: 0 .1rem; }
