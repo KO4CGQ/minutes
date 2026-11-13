@@ -115,9 +115,10 @@ def test_nicknames_find_each_other_for_names_on_the_roster(tmp_path, monkeypatch
     assert "passed his" in _minutes(m, "Rich Extra")             # what's typed still matches as a prefix too
 
 
-def test_no_nicknames_without_someone_of_that_name(tmp_path, monkeypatch):
-    m, _ = _nick_env(tmp_path, monkeypatch, {}, ["Rich passed his Extra exam"])
-    assert "No minutes found." in _minutes(m, "Richard Extra")   # no Richard on the roster: no guessing
+def test_nicknames_without_someone_of_that_name(tmp_path, monkeypatch):
+    m, _ = _nick_env(tmp_path, monkeypatch, {}, ["Rich passed his Extra exam", "Paid the electric bill"])
+    assert "passed his" in _minutes(m, "Richard Extra")          # a guest or speaker, not on the roster
+    assert "No minutes found." in _minutes(m, "William electric")  # everyday words still left out
 
 
 def test_nicknames_that_are_everyday_words_are_left_out(tmp_path, monkeypatch):

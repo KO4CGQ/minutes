@@ -15,7 +15,7 @@ Your name menu → **Your profile**:
 - **Settings:** how the app shows things to you, like the first day of the week.
 
 ## Minutes and search
-**Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights and calendar events. A member's name also finds its other spellings and common nicknames (Richard, Rich, Rick and Dick find each other when a Richard is a member); a typo is caught when nothing else is found.
+**Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights and calendar events. A name also finds its common nicknames (Richard, Rich, Rick and Dick find each other, member or not), and a member's name its other spellings from the roster; a typo is caught when nothing else is found.
 
 ## Chow
 **Chow** shows the schedule and your nights. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
