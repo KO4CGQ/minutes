@@ -5,6 +5,8 @@ For every member: what the app does for you, and where to find it. Back to the [
 ## Signing in
 Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or ask for a one-time link by email to the address the club has for you. After an emailed link, the app offers to add a passkey on your device (or add one any time under Profile → Sign-in & passkeys), so next time is one tap. Stuck? Ask an admin.
 
+New to passkeys? The EFF's [What is a passkey?](https://www.eff.org/deeplinks/2023/10/what-passkey) explains them in plain terms. For your other sites, a password manager creates and remembers a different strong password for each one: see the EFF's [Creating Strong Passwords](https://ssd.eff.org/module/creating-strong-passwords). Most password managers keep passkeys too.
+
 ## Home
 What's next for you: the next meeting (and, on meeting night, a link to follow the minutes live), your chow night and any swap requests to answer, your business items, your dues, the latest minutes and the next two weeks of the calendar.
 
