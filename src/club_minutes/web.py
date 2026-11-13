@@ -2127,7 +2127,7 @@ def security_backup_check(request: Request, passphrase: str = Form("")):
     _security_admin(request)
     ok, msg = backup.check(passphrase)
     _admin_log(request, backup="checked a passphrase")
-    return RedirectResponse("/admin/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
+    return RedirectResponse("/admin/backups?" + ("note=" if ok else "error=") + quote(msg), status_code=303)  # the answer shows at the top
 
 
 @app.post("/admin/backups/download")
