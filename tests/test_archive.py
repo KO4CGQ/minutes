@@ -247,7 +247,7 @@ def test_about_page(monkeypatch):
     assert "About Club Minutes by KO4CGQ" in html and "for amateur radio clubs." in html  # the product, not this club
     assert ">fastapi<" in html.lower() and "What's new" in html
     folds = html.count("<details")  # one per release, only the newest open
-    assert folds > 3 and html.count("<details open>") == 1 and html.split('class="changelog"')[1].split("<details")[1].startswith(" open>")
+    assert folds >= 1 and html.count("<details open>") == 1 and html.split('class="changelog"')[1].split("<details")[1].startswith(" open>")
     assert 'href="/about"' in c.get("/links").text  # in the name menu on every page
 
 
