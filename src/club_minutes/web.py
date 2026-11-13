@@ -305,7 +305,21 @@ async def http_error(request: Request, exc: StarletteHTTPException):
     return await http_exception_handler(request, exc)
 
 
+def new_tabs(html: str, host: str) -> str:
+    """Links to other sites open in a new tab: club links, Join online, links typed into events, the guides'.
+    One place for every page, so a link typed in by a member is covered too."""
+    own = re.escape(host)
+    return re.sub(rf'<a (?![^>]*\btarget=)(?=[^>]*\bhref="https?://(?!{own}[/"]))', '<a target="_blank" rel="noopener" ', html)
+
+
 def page(request: Request, name: str, **ctx) -> HTMLResponse:
+    r = _page(request, name, **ctx)
+    r.body = new_tabs(r.body.decode(), request.url.netloc).encode()
+    r.headers["content-length"] = str(len(r.body))
+    return r
+
+
+def _page(request: Request, name: str, **ctx) -> HTMLResponse:
     mid = getattr(request.state, "member", None)
     return templates.TemplateResponse(request, name, {
         "club": archive.club,
@@ -1861,7 +1875,6 @@ def help_page(request: Request, guide: str = "members"):
                 f'<div popover id="shot{i}" class="modal shotbig"><button type="button" class="calclose" popovertarget="shot{i}" '
                 f'popovertargetaction="hide" aria-label="Close">✕</button><img alt="{alt}" src="{src}"></div>')
     html = re.sub(r'(?:<p>)?<img alt="([^"]*)" src="([^"]*)" />(?:</p>)?', thumbnail, html)  # a popover can't sit in a <p>
-    html = html.replace('<a href="http', '<a target="_blank" rel="noopener" href="http')  # other sites: a new tab
     toc = "".join(f'<a href="#{t["id"]}">{t["name"]}</a>' for t in md.toc_tokens)  # names come escaped
     if toc:  # after the title and the line under it
         html = html.replace("</p>", f'</p><nav class="toc" aria-label="On this page">{toc}</nav>', 1)

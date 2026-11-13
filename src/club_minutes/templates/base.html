@@ -27,7 +27,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {% macro back(href, label) %}{% set q = request.query_params %}{% set item = q.get('item', '') if q.get('item', '').isalnum() else '' %}
 {%- set came = {'stats': ('/stats', 'Attendance'), 'treasurer': ('/treasurer', 'Treasurer'), 'offices': ('/offices', 'Offices'), 'chow': ('/chow', 'Chow'),
     'business': ('/business' ~ ('?tab=done' if q.get('tab') == 'done' else ''), 'Business'), 'home': ('/', 'Home')}.get(q.get('from')) %}
-{%- if came and item %}{% set came = (came[0] ~ '#i' ~ item, came[1]) %}{% endif %}{{ crumb(*(came or (href, label))) }}{% endmacro %}
+{%- if came and item %}{% set came = (came[0] ~ '#i' ~ item, came[1]) %}{% endif %}{% if came or href %}{{ crumb(*(came or (href, label))) }}{% endif %}{% endmacro %}
 {% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
 <nav class="top">
   {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
@@ -96,7 +96,7 @@ document.addEventListener("submit", (e) => {
   };
 })();
 </script>{% endif %}
-<main>{% block crumb %}{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% endif %}{% endblock %}{% block body %}{% endblock %}</main>
+<main>{% block crumb %}{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% else %}{{ back(None, None) }}{% endif %}{% endblock %}{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
 <script nonce="{{ csp_nonce }}">  // what inline on…= handlers did, as data- attributes: the security policy runs no inline handlers
 document.addEventListener("submit", (e) => {

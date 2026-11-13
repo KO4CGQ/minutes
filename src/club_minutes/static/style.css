@@ -202,7 +202,7 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .changelog details { border-bottom: 1px solid var(--border, #dde); padding: .4rem 0; } .changelog summary { cursor: pointer; }
 .changelog pre, .deploynotes pre, .guide pre { overflow-x: auto; max-width: 100%; }  /* a long command scrolls inside its box on a phone */
 .guide { overflow-wrap: break-word; } .guide code, .minutes.guide a { overflow-wrap: anywhere; word-break: normal; }  /* long paths and inline code wrap; words only if they must */
-.guide a[target="_blank"]::after { content: " ↗"; content: " ↗" / " (opens in a new tab)"; }  /* says so, to screen readers too */
+a[target="_blank"]:not([class])::after { content: " ↗"; content: " ↗" / " (opens in a new tab)"; }  /* another site, in a new tab: says so, to screen readers too */
 .guide pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem .8rem; } .guide pre code { background: none; padding: 0; }
 .guide img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: block; }
 .guide .shot { border: 0; padding: 0; background: none; cursor: zoom-in; width: min(100%, 24rem); margin: .4rem 0; }  /* a thumbnail; tap for full size */

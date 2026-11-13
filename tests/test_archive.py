@@ -266,6 +266,16 @@ def test_breadcrumbs_back(client):
     assert back(f"/members/{mid}?from=business&item=ab12&tab=done") == ("/business?tab=done#iab12", "Business")
     assert back(f"/members/{mid}?from=home&item=ab12") == ("/#iab12", "Home")
     assert back(f"/members/{mid}?from=business&item=x%22%3E") == ("/business", "Business")  # only a plain id goes in the link
+    assert back("/business?from=home") == ("/", "Home") and back(f"/meetings/{slug}?from=home") == ("/", "Home")  # from Home's cards
+    assert 'href="/business?from=home"' in c.get("/").text and 'class="crumb"' not in c.get("/business").text  # from the menu: none
+
+
+def test_other_sites_open_in_a_new_tab():
+    from club_minutes.web import new_tabs
+    html = ('<a href="https://www.eff.org/x">a</a><a class="btn" href="https://meet.example.org/club">b</a><a href="/calendar">c</a>'
+            '<a href="https://minutes.example.net/x">d</a><a href="mailto:jane@example.org">e</a><a target="_self" href="https://example.org">f</a>')
+    out = new_tabs(html, "minutes.example.net")
+    assert out.count('target="_blank" rel="noopener"') == 2 and '<a href="/calendar">' in out and '<a href="https://minutes.example.net/x">' in out
 
 
 def test_help_pages_show_the_guides(monkeypatch):
