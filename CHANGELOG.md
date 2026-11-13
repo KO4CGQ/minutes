@@ -1,6 +1,6 @@
 # Changelog
 
-What changed in each version of Club Minutes. Planned work is in [ROADMAP.md](ROADMAP.md).
+What changed in each version of Club Minutes. Ideas and requests: the repository's [Issues](https://github.com/KO4CGQ/minutes/issues).
 
 Versions follow [semantic versioning](https://semver.org): while the app is 0.x, the middle number goes up for new features and the last for fixes. Each version is a git tag (`v0.2.0`), and the app's footer shows the version that's running.
 
@@ -10,6 +10,7 @@ Versions follow [semantic versioning](https://semver.org): while the app is 0.x,
 - **Admin → Site → Agenda:** the meeting's sections (tick the ones used, a number for the order, the console hint for each, and new ones of the club's own) and the two reminders: invite a guest to apply after so many visits, and remind business item owners so many days ahead. Only changes from club.yaml are kept; a wrong one is refused, saying why. Past minutes keep their sections. The two reminders in club.yaml are now checked at start too (a whole number), like the other settings.
 - **Admin → Site → Club changes the weekly meeting on the calendar:** a new meeting day, time, Where or online link applies from the Starting date picked there; earlier dates keep their calendar entries. Before, the calendar had to be changed by hand. **Online link on events:** any calendar event can have one beside Where (the clubhouse and the Zoom link, say), shown as a Join online button and sent in the calendar feeds (URL, and in the description for the apps that ignore URL); only https:// and http:// links are taken.
 - **About page:** headed "About Club Minutes by KO4CGQ", describing the app for amateur radio clubs rather than naming this club.
+- **ROADMAP.md and REQUIREMENTS.md left the repo:** plans are kept privately by the maintainer; ideas and requests go in the repository's Issues. Links to them fixed (CHANGELOG, the developers and officers guides).
 - **More checks:** shellcheck on the server scripts and zizmor on the GitHub workflows, with the tests (both pinned, updated by Dependabot with ruff); a warning when a newer gitleaks is out; SECURITY.md (report a vulnerability privately). Fixed what they found: the preview script split a setting with a space in it (such as a backup passphrase), and the workflows left a GitHub token on the runner and pasted the version into scripts.
 - **Security → Failed attempts:** each row has **Details** (the device and browser it came from, the full user agent, the attempt's note such as why a passkey failed, and the ban if any), in a box over the page that needs no script. An address already banned says **Banned** with a link to Banned addresses, and your own address says You, instead of an empty space where Ban was. Failed attempts now record the browser; older ones say not recorded.
 - **Lint:** the code passes ruff (pinned in uv.lock, its default rules), checked with the tests here and on GitHub; GitHub also tries the newest ruff as a warning, and Dependabot proposes ruff updates in a pull request of their own. GitHub's tests now run the browser tests in Firefox and WebKit too.

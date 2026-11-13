@@ -47,4 +47,4 @@ An optional module: on only when the server's club.yaml has `modules: {chow: tru
 - **In the leader console:** the Bills step lists what the Treasurer recorded as paid since the last meeting, for the leader to read out; **Add to tonight's bills** puts those lines in the minutes. Nothing is added on its own, and taking the minutes doesn't change: whatever is typed under Bills shows up on the Treasurer's Bills tab once the minutes are submitted.
 - **Home** shows each member their own figures (when tracking is On), never anyone else's.
 
-Not a bookkeeping system: there are no account balances or transfers yet (ROADMAP → Treasurer).
+Not a bookkeeping system: there are no account balances or transfers yet.
