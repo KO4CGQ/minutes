@@ -1,4 +1,5 @@
 import datetime as dt
+import re
 from pathlib import Path
 
 import pytest
@@ -261,7 +262,10 @@ def test_help_pages_show_the_guides(monkeypatch):
     c = TestClient(web.app)
     html = c.get("/help").text
     assert "<h1>Members guide</h1>" in html and 'aria-label="Guide"' not in html  # a member: just their guide
-    assert 'href="https://github.com/KO4CGQ/minutes/blob/main/README.md"' in html and 'href="/help"' in c.get("/links").text
+    assert 'href="/help"' in c.get("/links").text
+    for g in web.GUIDES:  # every link in a guide works in the app: another guide, or a full address
+        body = c.get(f"/help/{g}").text.split('class="minutes guide"')[1]
+        assert all(h.startswith(("/help", "https://", "#")) for h in re.findall(r'href="([^"]*)"', body)), g
     off = c.get("/help/officers").text  # every guide is public anyway; the link to the next stays in the app
     assert 'href="/help/members"' in off and "Server admin</a>" not in off
     admin = c.get("/help/server-admin").text
