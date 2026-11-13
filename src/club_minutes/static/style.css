@@ -571,3 +571,8 @@ form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items:
 .sitesec label.check input { margin-top: .25rem; }
 .fmtgrid { display: grid; grid-template-columns: max-content minmax(8rem, 20rem) 1fr; gap: .5rem .8rem; align-items: center; }
 @media (max-width: 560px) { .fmtgrid { grid-template-columns: 1fr; } .fmtgrid span { margin-bottom: .4rem; } }
+.agendagrid { display: grid; grid-template-columns: auto 3.5rem minmax(10rem, 16rem) 1fr; gap: .45rem .7rem; align-items: center; }
+.agendagrid input[name^=pos] { width: 3.2rem; text-align: center; }
+@media (max-width: 560px) { .agendagrid { grid-template-columns: auto 3.2rem minmax(0, 1fr); } .agendagrid .agh { display: none; }
+  .agendagrid input[name^=hint] { grid-column: 2 / -1; margin-bottom: .6rem; } }
+form.siteagenda { max-width: 52rem; } form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }

@@ -27,11 +27,12 @@ from . import auth as authmod
 from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, DATES, PREVIEW, STAGE, WEEKDAYS, _server_timezone, num, one_line, show_date, valid_email
+from .club import DATA, DATES, PREVIEW, STAGE, WEEKDAYS, _agenda, _server_timezone, num, one_line, show_date, valid_email
 from .backup import KEY_FILE
 from .roster import COLUMNS, SHAREABLE, SheetError
 
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
+from .meeting import SECTIONS
 from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
@@ -1841,6 +1842,7 @@ def admin_action(e: dict) -> str:
              "links": lambda v: f"Saved the club links ({len(v)})", "site_name": lambda v: f"Named the app {v}",
              "site_picture": lambda v: f"Site picture, {v}", "site_backing": lambda v: f"Behind the logo: {v.lower()}",
              "site_club": lambda v: "Club settings back to club.yaml's" if v == "club.yaml" else f"Club settings: {v.replace('_', ' ')}",
+             "site_agenda": lambda v: "Agenda back to club.yaml's" if v == "club.yaml" else f"Agenda: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
              "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
@@ -2062,7 +2064,7 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
-SITE_TABS = (("look", "Look"), ("club", "Club"), ("dates", "Dates"))
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("dates", "Dates"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
                 "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
@@ -2083,7 +2085,8 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
-                set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS], zones=events.ZONES,
+                set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
+                agenda=_agenda_rows(club), builtins=SECTIONS, zones=events.ZONES,
                 meeting_edit=_meeting_edit(request.query_params.get("meeting", ""), request.query_params.get("d", "")), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
@@ -2110,11 +2113,71 @@ async def site_dates(request: Request):
     try:
         if value == "?":
             raise ValueError("Pick how dates are written.")
-        archive.club.save_site_settings("club", {"date_formats": value})
+        archive.club.save_site_settings({("club", "date_formats"): value})
     except ValueError as e:
         return RedirectResponse("/admin/site/dates?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_dates=choice)
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
+
+
+def _default_agenda() -> list[dict]:
+    """The built-ins the app uses when no agenda is set (Club.sections)."""
+    return [{"name": n, "hint": ""} for n in SECTIONS if n not in ("Winners", "Upcoming Chow")]
+
+
+def _agenda_now(club) -> list[dict]:
+    """The agenda as it stands: club.yaml's or the page's list, else the default."""
+    return club._sections or _default_agenda()
+
+
+def _agenda_rows(club) -> list[dict]:
+    """Agenda tab rows: the sections in use (in order), then the unused built-ins, then two empty rows to add one."""
+    now = _agenda_now(club)
+    used = {x["name"] for x in now}
+    return ([{**x, "use": True, "builtin": x["name"] in SECTIONS} for x in now]
+            + [{"name": n, "hint": "", "use": False, "builtin": True} for n in SECTIONS if n not in used]
+            + [{"name": "", "hint": "", "use": False, "builtin": False}] * 2)
+
+
+@app.post("/admin/site/agenda")
+async def site_agenda(request: Request):
+    """Agenda tab: the sections in order (tick to use, a number for the place) with their console hints, and the two
+    reminders. Only what differs from club.yaml is kept."""
+    mid, form, club = _site_admin(request), await request.form(), archive.club
+    keys = (("meeting", "sections"), ("club", "invite_after_visits"), ("club", "remind_days_before"))
+    try:
+        if form.get("back"):
+            values = dict.fromkeys(keys)
+        else:
+            rows = []
+            for i in range(min(num(form.get("rows")) or 0, 60)):
+                name, hint = " ".join((form.get(f"name{i}") or "").split()), " ".join((form.get(f"hint{i}") or "").split())[:200]
+                if name and (form.get(f"use{i}") or not form.get(f"was{i}")):  # a new row is used once it has a name
+                    try:
+                        place = float(form.get(f"pos{i}") or 999)
+                    except ValueError:
+                        raise ValueError(f"The place for {name} isn't a number.") from None
+                    rows.append((place, i, {"name": name, "hint": hint}))
+            if not rows:
+                raise ValueError("Keep at least one section.")
+            sections = [x for *_, x in sorted(rows)]
+            numbers = {}
+            for k, lo, hi in (("invite_after_visits", 1, 50), ("remind_days_before", 0, 60)):
+                v = num(form.get(k))
+                if v is None or not lo <= v <= hi:
+                    raise ValueError(f"{'Invite a guest after' if k == 'invite_after_visits' else 'Remind owners'}: a whole number from {lo} to {hi}.")
+                numbers[k] = v
+            yc, ym = club.yaml.get("club") or {}, club.yaml.get("meeting") or {}
+            yaml_sections = _agenda(ym.get("sections")) or _default_agenda()
+            values = {("meeting", "sections"): None if sections == yaml_sections else sections,
+                      **{("club", k): None if v == int(yc.get(k) or {"invite_after_visits": 3, "remind_days_before": 3}[k]) else v
+                         for k, v in numbers.items()}}
+        club.save_site_settings(values)
+    except ValueError as e:
+        msg = str(e).replace("club.yaml meeting: sections: ", "Section ")
+        return RedirectResponse("/admin/site/agenda?error=" + quote(msg), status_code=303)
+    _admin_log(request, site_agenda="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
+    return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
 def _meeting_edit(eid: str, d: str) -> str | None:
@@ -2148,7 +2211,7 @@ async def site_club(request: Request):
         base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone()}
         values = {k: None if v.lower() == base[k].lower() else v for k, v in typed.items()}  # only what differs is kept
     try:
-        club.save_site_settings("club", values)
+        club.save_site_settings({("club", k): v for k, v in values.items()})
     except ValueError as e:  # the start-up checks' words, for this page
         msg = str(e).replace("club.yaml club: ", "").replace(" (24-hour, in quotes)", "")
         for k, label in (("meeting_day: ", "Meeting day: "), ("meeting_time: ", "Start time: "), ("timezone: ", "Time zone: ")):

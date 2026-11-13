@@ -273,7 +273,7 @@ def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkey
         admin.post("/admin/site/dates", data={"preset": "yaml"})
         assert show_date(d) == "Nov 5, 2026" and c.site_settings == {}
         with pytest.raises(ValueError):
-            c.save_site_settings("auth", {"rp_id": "evil.example"})
+            c.save_site_settings({("auth", "rp_id"): "evil.example"})
     finally:
         clubmod.set_dates(None)
 
@@ -300,7 +300,7 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_says_what_isnt_moved(a
                          ({"meeting_time": "25:99"}, "start time: &#39;25:99&#39;"), ({"meeting_day": "Caturday"}, "meeting day: &#39;caturday&#39;")):
             r = admin.post("/admin/site/club", data={**same, **bad})
             assert "msg err" in r.text and why in r.text.lower() and "club.yaml club" not in r.text and c.site_settings == {}, bad
-        c.save_site_settings("club", {"date_formats": {"list": "%-d %b %Y"}})
+        c.save_site_settings({("club", "date_formats"): {"list": "%-d %b %Y"}})
         (tmp_path / "x").mkdir(exist_ok=True)
         (events.DATA / "events-meeting-added").unlink()
         events.ensure_meeting(c)
@@ -322,3 +322,58 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_says_what_isnt_moved(a
         assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay
     finally:
         clubmod.set_dates(None)
+
+
+def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path, monkeypatch):
+    """Admin → Site → Agenda: tick, place and hint each section, add one, and the two reminders; only changes from
+    club.yaml are kept; a wrong one changes nothing."""
+    import pytest as _pytest
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"kd8off"})
+    admin, member = app("kd8off"), app("kd8bbb")
+
+    def form(change=lambda rows: rows, **extra):
+        rows = change([dict(r) for r in web._agenda_rows(c)])
+        f = {"rows": str(len(rows)), "invite_after_visits": "3", "remind_days_before": "3"}
+        for i, r in enumerate(rows):
+            f |= {f"name{i}": r["name"], f"hint{i}": r["hint"], f"pos{i}": str(r.get("pos", i + 1))}
+            f |= {f"was{i}": "1"} if r.get("was", bool(r["name"])) else {}
+            f |= {f"use{i}": "1"} if r["use"] else {}
+        return f | extra
+
+    assert member.get("/admin/site/agenda").status_code == 404 and member.post("/admin/site/agenda", data=form()).status_code == 404
+    page_ = admin.get("/admin/site/agenda").text
+    assert "Old Business" in page_ and "Winners" in page_ and page_.count("From club.yaml") == 3
+    assert 'name="remind_days_before" min="0" max="60" value="3"' in page_ and 'name="invite_after_visits" min="1" max="50" value="3"' in page_
+    admin.post("/admin/site/agenda", data=form())
+    assert c.site_settings == {}  # nothing changed: nothing kept
+
+    def moved(rows):  # New Business before Old Business, a new section with a hint, Financial Report dropped
+        for r in rows:
+            r["pos"] = {"New Business": 3.5, "Financial Report": 1}.get(r["name"], rows.index(r) + 1)
+            r["use"] = r["use"] and r["name"] != "Financial Report"
+        rows[-1] |= {"name": "Net Report", "hint": "Who checked in", "was": False, "pos": 2}
+        return rows
+    assert "Saved" in admin.post("/admin/site/agenda", data=form(moved, invite_after_visits="5")).text
+    names = c.sections()
+    assert names.index("Net Report") < names.index("New Business") < names.index("Old Business") and "Financial Report" not in names
+    assert c.section_hints() == {"Net Report": "Who checked in"} and c.info["invite_after_visits"] == 5
+    assert set(c.site_settings["club"]) == {"invite_after_visits"} and "sections" in c.site_settings["meeting"]
+    before = c.site_settings
+    for bad, why in ((form(lambda r: r[:-1] + [{**r[-1], "name": "Old Business", "was": False}]), "isn&#39;t a usable section name"),
+                     (form(lambda r: r[:-1] + [{**r[-1], "name": "Attendance", "was": False}]), "isn&#39;t a usable section name"),
+                     (form(lambda r: [{**r[0], "pos": "first"}] + r[1:]), "isn&#39;t a number"),
+                     (form(lambda r: [{**x, "use": False} for x in r]), "at least one section"),
+                     (form(invite_after_visits="0"), "from 1 to 50"), (form(remind_days_before="soon"), "from 0 to 60")):
+        r = admin.post("/admin/site/agenda", data=bad)
+        assert "msg err" in r.text and why in r.text and c.site_settings == before, why
+    assert "Agenda: sections, invite after visits" in admin.get("/admin/security/admin").text
+    admin.post("/admin/site/agenda", data={"back": "1"})
+    assert c.site_settings == {} and "Financial Report" in c.sections() and c.info.get("invite_after_visits") is None
+    with _pytest.raises(ValueError, match="invite_after_visits"):
+        c._configure({"club": {"invite_after_visits": "three"}})  # club.yaml's too: stops the app at start
+    c._configure(c.yaml)

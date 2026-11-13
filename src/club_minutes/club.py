@@ -175,7 +175,8 @@ class Member:
 
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
-SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone")}
+SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
+                                    "invite_after_visits", "remind_days_before")} | {("meeting", "sections")}
 
 
 def _overlay(cfg: dict, site: dict) -> dict:
@@ -207,13 +208,13 @@ class Club:
         p = DATA / "site-settings.json"
         return json.loads(p.read_text()) if p.exists() else {}
 
-    def save_site_settings(self, section: str, values: dict) -> None:
-        """Set Site page settings together ({key: value}; None: back to club.yaml's). Checked as the app checks
-        club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
-        if bad := [k for k in values if (section, k) not in SITE_KEYS]:
-            raise ValueError(f"{section}: {', '.join(bad)} can't be changed here.")
+    def save_site_settings(self, values: dict) -> None:
+        """Set Site page settings together ({(section, key): value}; None: back to club.yaml's). Checked as the app
+        checks club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
+        if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS]:
+            raise ValueError(f"{', '.join(bad)} can't be changed here.")
         site = self.site_settings
-        for key, value in values.items():
+        for (section, key), value in values.items():
             if value is None:
                 site.get(section, {}).pop(key, None)
             else:
@@ -236,6 +237,10 @@ class Club:
     def _configure(self, cfg: dict) -> None:
         """The settings, from club.yaml with the Site page's on top. Raises ValueError for a wrong one."""
         self.info = cfg.get("club", {})
+        for k, lo, hi in (("invite_after_visits", 1, 50), ("remind_days_before", 0, 60)):  # read later, so checked now
+            v = self.info.get(k)
+            if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi):
+                raise ValueError(f"club.yaml club: {k}: {v!r} isn't a whole number from {lo} to {hi}")
         set_dates(self.info.get("date_formats"))  # one club per process: the last Club loaded sets them
         self._yaml_links = cfg.get("links", [])  # until an admin edits them on the Links page (links.json)
         self.auth = cfg.get("auth") or {}

@@ -1,24 +1,24 @@
 {% extends "base.html" %}{% block title %}Site{% endblock %}{% block body %}
 <h1>Site</h1>
+{% macro origin(k) %}<span class="muted small">{{ 'Set here' if k in set_here else 'From club.yaml' }}</span>{% endmacro %}
 <nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% if tab == 'club' %}
 {% if meeting_edit %}<p class="msg"><a class="btn small" href="{{ meeting_edit }}">Change the weekly meeting on the calendar</a></p>{% endif %}
 <p class="muted">The club's name and callsign, and when it meets. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
-{% macro source(k) %}<span class="muted small">{{ 'Set here' if k in set_here else 'From club.yaml' }}</span>{% endmacro %}
 <form method="post" action="/admin/site/club" class="profile siteclub">
 <div class="card sitesec"><h2>The club</h2>
 <div class="fmtgrid">
-<label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ source('name') }}
-<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9/]{3,12}" autocapitalize="characters" spellcheck="false">{{ source('callsign') }}
+<label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ origin('name') }}
+<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
 <label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}"><span class="muted small">{{ 'Set here' if app_name() != default_name else 'From the callsign' }}</span>
 </div>
 <p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
 <div class="card sitesec"><h2>Meetings</h2>
 <div class="fmtgrid">
-<label for="c-day">Day</label><select id="c-day" name="meeting_day">{% for d in weekdays %}<option{{ ' selected' if d|lower == (club.info.meeting_day or '')|lower }}>{{ d }}</option>{% endfor %}</select>{{ source('meeting_day') }}
-<label for="c-time">Starts at</label><input id="c-time" type="time" name="meeting_time" value="{{ club.meeting_time }}" required>{{ source('meeting_time') }}
-<label for="c-tz">Time zone</label><input id="c-tz" name="timezone" list="zones" value="{{ club.timezone }}" required autocomplete="off" spellcheck="false">{{ source('timezone') }}
+<label for="c-day">Day</label><select id="c-day" name="meeting_day">{% for d in weekdays %}<option{{ ' selected' if d|lower == (club.info.meeting_day or '')|lower }}>{{ d }}</option>{% endfor %}</select>{{ origin('meeting_day') }}
+<label for="c-time">Starts at</label><input id="c-time" type="time" name="meeting_time" value="{{ club.meeting_time }}" required>{{ origin('meeting_time') }}
+<label for="c-tz">Time zone</label><input id="c-tz" name="timezone" list="zones" value="{{ club.timezone }}" required autocomplete="off" spellcheck="false">{{ origin('timezone') }}
 </div>
 <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
 <p class="hint">Every week on this day. A new day or time doesn't change what's already on the calendar: the weekly meeting there is an ordinary event (added once, the first time the calendar was opened), and chow nights come from the chow schedule an officer makes on the Chow page. After you save, the app says what's on the old day and links the meeting to change.</p>
@@ -26,6 +26,33 @@
 <p class="row"><button class="btn">Save</button></p>
 </form>
 {% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'agenda' %}
+<p class="muted">The meeting's sections, in order, as the leader console and the minutes show them, and two reminders. Each change is in the admin log. Changes here win over club.yaml on the server. Past minutes keep the sections they have.</p>
+<form method="post" action="/admin/site/agenda" class="profile siteagenda">
+<input type="hidden" name="rows" value="{{ agenda|length }}">
+<div class="card sitesec"><h2>Sections {{ origin('sections') }}</h2>
+<p class="hint">Tick the ones the meeting uses; the numbers set the order (lowest first). A hint is shown to the leader in the console under that section. Attendance always comes first.</p>
+<div class="agendagrid">
+<span class="muted small agh">Use</span><span class="muted small agh">Place</span><span class="muted small agh">Section</span><span class="muted small agh">Hint for the console</span>
+{% for r in agenda %}{% set i = loop.index0 %}
+{% if r.name %}<input type="checkbox" name="use{{ i }}" value="1" aria-label="Use {{ r.name }}"{{ ' checked' if r.use }}>{% else %}<span></span>{% endif %}
+<input name="pos{{ i }}" value="{{ loop.index if r.use or not r.name else '' }}" inputmode="decimal" size="3" aria-label="Place of {{ r.name or 'a new section' }}">
+{% if r.builtin %}<span>{{ r.name }}<input type="hidden" name="name{{ i }}" value="{{ r.name }}">{% if r.name == 'Upcoming Chow' %} <span class="muted small">(only while chow is on)</span>{% endif %}</span>
+{% else %}<input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="{{ 'A new section' if not r.name }}" aria-label="Section name">{% endif %}
+{% if r.name %}<input type="hidden" name="was{{ i }}" value="1">{% endif %}
+<input name="hint{{ i }}" value="{{ r.hint }}" maxlength="200" aria-label="Hint for {{ r.name or 'the new section' }}" placeholder="Hint for the console (optional)">
+{% endfor %}
+</div></div>
+<div class="card sitesec"><h2>Reminders</h2>
+<div class="fmtgrid">
+<label for="a-inv">Invite a guest to apply after</label><span><input id="a-inv" type="number" name="invite_after_visits" min="1" max="50" value="{{ club.info.get('invite_after_visits', 3) }}" required> visits</span>{{ origin('invite_after_visits') }}
+<label for="a-rem">Remind owners of business items</label><span><input id="a-rem" type="number" name="remind_days_before" min="0" max="60" value="{{ club.info.get('remind_days_before', 3) }}" required> days before the due date</span>{{ origin('remind_days_before') }}
+</div>
+<p class="hint">The leader console reminds the leader when a guest reaches that many visits; item owners get an email that many days before the due date (and once if it's overdue).</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
 {{ 'Set here.' if dates_here else 'From the server (club.yaml) until you save here.' }}</p>

@@ -11,7 +11,6 @@ The rename becomes 1.0.0: from then on the settings, folders, services and comma
 - **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
 
 - **Club settings on Admin → Site, in tabs** (decided 2026-11-12): the page's value wins over club.yaml's, like the Links page (`site-settings.json`, same names as club.yaml; "Back to club.yaml" on each). Sign-in (`auth:`), `admins:`, email test mode, AI and the roster's source stay server-only. One tab at a time, each tested on stage:
-  - **Meetings:** the agenda's sections and hints, the guest invite reminder (`invite_after_visits`), business reminder days (`remind_days_before`).
   - **Features:** chow on or off, which calendars are public, holiday and election regions.
   - **Bylaws and Treasurer:** the bylaws references, the arrears note, the certificate (bond).
 
