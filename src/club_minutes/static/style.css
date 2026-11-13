@@ -67,7 +67,7 @@ code { background: var(--surface-3); border-radius: .3rem; padding: .05rem .35re
 hr { border: 0; border-top: 1px solid var(--border); }
 
 /* form fields everywhere */
-input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
+input[type=text], input[type=search], input[type=email], input[type=tel], input[type=url], input[type=date], input[type=time], input[type=number], input:not([type]),
 select, textarea {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm); padding: .45rem .65rem; }
@@ -201,7 +201,7 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .changelog pre, .deploynotes pre { overflow-x: auto; max-width: 100%; }  /* a long command scrolls inside its box on a phone */
 form.profile { max-width: 36rem; } form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
-form.profile input[type=email], form.profile input[type=tel], form.profile textarea { width: 100%; }
+form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }
 form.profile input[type=checkbox] { display: inline-block; margin: 0 .3rem 0 0; }
 form.profile .hint { display: block; font-weight: normal; }
 form.profile fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 1rem 0; padding: .7rem 1rem; background: var(--surface); }
@@ -336,7 +336,7 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
 /* ---------- phones ---------- */
 @media (max-width: 760px) {
   /* iOS zooms the page into any field under 16px */
-  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
+  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=url], input[type=date], input[type=time], input[type=number], input:not([type]),
   select, textarea { font-size: 16px; }
   main { margin-top: 1.1rem; padding: 0 .8rem; }
   .pagesearch { display: block; margin-bottom: .6rem; }
