@@ -125,3 +125,20 @@ Also worth doing: SSH with keys only (`PasswordAuthentication no` in `/etc/ssh/s
 
 ## Bylaws
 `/bylaws` shows the club's constitution and bylaws from `bylaws.md` in the data directory (`/var/lib/club-minutes/bylaws.md` on the server). It's kept out of this public repo.
+
+## Roster API
+For the club's other tools on the same server (the Discord bot): `GET /api/roster` returns active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON.
+- Off until `CLUB_MINUTES_ROSTER_API_TOKEN=...` (a long random string) is in `/etc/club-minutes/env`.
+- Then it answers only `Authorization: Bearer <token>` requests from the server itself or an address in `CLUB_MINUTES_ROSTER_API_ALLOW` (comma-separated; the bot's container), never through the web proxy. E.g. from the bot's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`.
+- Give the bot's container a fixed IP, and ideally limit port 8000 to it with the Proxmox firewall. Every call, allowed or not, is logged in `api-log.jsonl` in the data directory.
+
+## Who keeps the roster
+`roster_keepers:` in club.yaml lists the titles that may edit the roster (`[Secretary, Treasurer]` by default). Admins in admin mode always can.
+
+## Importing a chow spreadsheet
+Once, for a club moving its chow list into the app: `club-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
+
+## Where things are kept
+All in the data folder (`/var/lib/club-minutes`):
+- State: the roster (`roster-sheet.json`), `events.json` (calendars), `chow.json`, `business.json`, `treasurer.json`, `email-prefs.json`, `settings.json` (each member's display choices), `site-settings.json`.
+- Logs, each change with who made it: `profile-changes.jsonl` (roster), `calendar-log.jsonl`, `chow-log.jsonl`, `treasurer-log.jsonl`, `api-log.jsonl`, `email-log.jsonl`.

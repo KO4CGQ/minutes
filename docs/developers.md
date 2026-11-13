@@ -58,3 +58,6 @@ Copy `us_oh.py` and change its rules; `nth_weekday(year, month, weekday, n)` (Mo
 
 ## Links page icons
 Besides the 21 built-in icons, the icon picker searches about 3,400 brand logos from [Simple Icons](https://simpleicons.org) (CC0). They're stored in the repo (`src/club_minutes/simple_icons.json`), never loaded from a CDN, and drawn in the club's color like the built-in icons. To update them: `python3 deploy/update-simple-icons.py [VERSION]`.
+
+## Callsign changes
+The callsign is the member's id across the data folder, so **New callsign** renames it everywhere (`callsign.py`): current state (`chow.json`, `business.json`, `events.json`, `calendar-feeds.json`, `ask-about.json`, `email-prefs.json`, `settings.json`, `treasurer.json`, `admins.json`, drafts' `console.json`), the minutes' front matter and report tags (never their text), the sign-in database and the picture. Logs (`*.jsonl`) keep the old id as history. It needs the backup passphrase (a backup is taken first and kept as `…-before-NEWCALL.tar.gz.enc`); the old call goes into the member's `aliases` on the roster, so `Club.canonical` maps it to the member (club.yaml's `admins:` and `email.only_to` included).
