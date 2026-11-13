@@ -7,10 +7,6 @@ Finished work moves to [CHANGELOG.md](CHANGELOG.md).
 ## 1.0.0: Club Minutes for any club
 The rename becomes 1.0.0: from then on the settings, folders, services and command names stay put (a change to them is a 2.0). Built on the `rename` branch, released once, then the history is squashed in place. In order:
 
-### Club rules out of the code
-- **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Later, if a club asks.
-
-
 ### Docs and repo
 - **Drop REQUIREMENTS.md and ROADMAP.md** from the repo; fix every link to them (README, CHANGELOG, docs). Both are copied to the maintainer's private notes first, kept until whatever is still wanted is opened as GitHub Issues.
 - **CHANGELOG starts at 1.0.0:** one section describing what the app does, instead of the 0.x history.
@@ -48,6 +44,7 @@ Built (server admin guide → Backups): encrypted, scheduled and configured from
 - **A restore drill:** a periodic test restore onto a scratch container, beyond the check that each backup opens.
 
 ## Admin tools
+- **Renaming a built-in section** (e.g. Committee Reports for Community Reports): the built-ins are known by name in the minutes files and the code, so a rename needs a label kept apart from the name. Moved out of 1.0.0 (2026-11-12): an added Site → Agenda setting (a display name per built-in section), so it can come in any 1.x; about a day's work, mostly making every place a section name shows (minutes, PDF, emails, the console, Home, search, AI prompts) use the display name.
 - **Release Dependabot security fixes by themselves** (decided 2026-11-09: security fixes only, patch or minor versions, every check green): Dependabot's security PRs auto-merge; a workflow then opens a "Release X.Y.Z" PR (patch bump, a changelog line naming the advisory) that auto-merges once its checks pass and is tagged; the nightly auto-update installs it. Needs a token as an Actions secret (a fine-grained token for this repo, contents and pull requests read/write, or a small GitHub App), because changes made with the built-in token don't start other workflows (the required checks, the Release workflow), and "Allow auto-merge" in the repo settings. Then revisit installing **security** releases within the hour instead of at the nightly hour (never on meeting night or while minutes are being taken: one built-in rule, no settings); decided 2026-11-09 not to add an "immediately" mode or blackout windows before that, since the nightly hour and Update now cover it.
 - **Moving the app to a new address** (e.g. members.example.org): change `auth.rp_id` in club.yaml and the proxy; club links to the app's pages already follow. Passkeys are tied to the address, so every member signs in once by emailed link and adds a new one (the offer after a link sign-in does this); old feed and sign-in links stop working. **A sub-path** (example.org/members) is a bigger job: every page links to `/…` from the site's root, so the app would need a path prefix throughout (FastAPI `root_path`, and the templates, scripts and redirects).
 - **SSH bans on the Security page:** fail2ban's SSH bans listed with Unban, through a small root-owned helper (like the update unit), since the app itself can't run fail2ban-client.
