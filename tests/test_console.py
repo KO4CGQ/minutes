@@ -298,10 +298,10 @@ def test_the_meeting_follows_the_clubs_agenda(tmp_path):
     assert c.sections() == ["Old Business", "Treasurer's corner", "New Business"]
     assert c.section_hints() == {"Treasurer's corner": "Balances only."}
     # an older meeting with a section the agenda has since dropped: it still shows and still saves
-    Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Winners": [Item("50/50: Amy A $7")]}).save(tmp_path)
+    Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Winners": [Item("50/50: Jane D $7")]}).save(tmp_path)
     a = Archive(tmp_path, c)
     old = a.by_slug["2026-11-05"]
-    assert old.section_order(c.sections())[-1] == "Winners" and "50/50: Amy A $7" in templates.get_template("_minutes.html").render(m=old, pdf=False, club=c)
+    assert old.section_order(c.sections())[-1] == "Winners" and "50/50: Jane D $7" in templates.get_template("_minutes.html").render(m=old, pdf=False, club=c)
     m = console.start(a, dt.date(2026, 11, 12), "doe")
     ctx = console.context(a, m)
     assert ctx["sections"] == c.sections() and ctx["hints"] == {"Treasurer's corner": "Balances only."}

@@ -377,7 +377,7 @@ class Club:
         return self.former_ids.get(mid, mid)
 
     def _auto_short_names(self) -> None:
-        """'Amy A' / 'Amy B' style names when a first name is shared."""
+        """'Jane D' / 'Jane S' style names when a first name is shared."""
         by_first: dict[str, list[Member]] = {}
         for m in self.members.values():
             by_first.setdefault(m.first.lower(), []).append(m)
@@ -482,7 +482,7 @@ class Club:
                 continue
             firsts.setdefault(m.first.lower(), []).append(m.id)
             pats.append((rf"{m.first}(?:'?s)?\s+{m.last}", m.id))
-            pats.append((rf"{m.first}(?:'s)?\s+{m.last[0]}\b\.?", m.id))  # "Amy A", "Amy's A"
+            pats.append((rf"{m.first}(?:'s)?\s+{m.last[0]}\b\.?", m.id))  # "Jane D", "Jane's D"
             for a in m.aliases:
                 pats.append((rf"{a}\b", m.id))
         for first, ids in firsts.items():

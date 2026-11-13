@@ -54,6 +54,7 @@ The rules:
 - **A name is never reused** for something different, even after the old thing is gone: pick a new one.
 - **Removing a feature is a 2.0 change.** Switching a module off (like chow) is the club's choice, and switching it back on finds its data where it was.
 - When in doubt, a release needs Deploy notes only for something a club chooses to do, never for something it has to.
+- **The guards:** `tests/test_compat.py` (in every PR's tests) fails if a 1.0.0 club.yaml with every setting no longer starts (`tests/fixtures/club-1.0.0.yaml`: never edit it), a setting the code reads isn't in `club.example.yaml`, a 1.0.0 setting is no longer read or renamed, or a command, address, roster API field, systemd unit or `CLUB_MINUTES_*` setting from 1.0.0 is gone. Don't edit its lists to make it pass: keep the old name working. Adding is always fine.
 
 ## Security checks
 Run on every pull request, every push to main and **every Monday**, so a newly published advisory turns up even in a quiet week. Any of them can also be run by hand: Actions → the workflow → Run workflow.
