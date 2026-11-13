@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}{{ 'Change' if id else 'Add' }} an event{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}{{ 'Change' if id else 'Add' }} an event{% endblock %}{% block crumb %}{{ back('/calendar', 'Calendar') }}{% endblock %}{% block body %}
 <h1>{{ 'Change' if id else 'Add' }} an event</h1>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 <form method="post" action="/calendar/save" class="profile">

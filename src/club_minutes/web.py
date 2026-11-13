@@ -125,6 +125,20 @@ templates.env.filters["linkify"] = linkify
 templates.env.filters["date"] = show_date  # {{ d|date("weekday") }}: club.show_date
 templates.env.filters["longdate"] = lambda d: show_date(d, "document")
 templates.env.filters["listdate"] = show_date
+
+
+def anydate(v):
+    """An ISO date (or the date part of "2026-11-05T19:30") in the club's format; anything else, like a value typed
+    into the roster, as it is."""
+    if isinstance(v, dt.date):
+        return show_date(v)
+    try:
+        return show_date(v[:10]) if isinstance(v, str) and re.fullmatch(r"\d{4}-\d\d-\d\d(T[\d:]+)?", v) else (v or "")
+    except ValueError:
+        return v
+
+
+templates.env.filters["anydate"] = anydate
 templates.env.filters["by_last_name"] = by_last_name
 templates.env.filters["clock"] = lambda t: dt.datetime.fromtimestamp(t).strftime("%-I:%M %p")
 def monthday(md: str | None) -> str:
@@ -145,6 +159,7 @@ def _initials(mid: str | None) -> str:
     return ((m.first[:1] + m.last[:1]) if m else (mid or "?")[:2]).upper()
 
 
+templates.env.globals["is_meeting"] = lambda d: d in archive.by_slug  # a date with minutes: a link to them
 templates.env.globals.update(avatar_url=avatars.url, avatar_hue=avatars.hue, initials=_initials)
 def _md(text: str | None) -> Markup:
     """Markdown to HTML for release notes (from our own CHANGELOG via GitHub). Raw HTML is escaped first."""

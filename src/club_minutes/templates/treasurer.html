@@ -9,7 +9,7 @@
 {% elif full and cfg.mode == 'preview' %}<p class="msg ok">Preview: officers see everything here; members don't see their figures yet, and no emails go out. Switch it on under <a href="/treasurer?tab=settings">Settings</a> when it looks right.</p>{% endif %}
 
 {% if tab == 'standing' %}
-{% if edit and cfg.start and cert() %}<details class="card"><summary>Record a {{ cert().short }} bought before {{ cfg.start|isodate }}</summary>
+{% if edit and cfg.start and cert() %}<details class="card"><summary>Record a {{ cert().short }} bought before {{ cfg.start|listdate }}</summary>
   <form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="certificate"><input type="hidden" name="account" value="">
     <p class="hint">For members who bought their {{ cert().short }} years ago: it's kept on file so they show as bought, and it doesn't count as money received now. Use the date and amount if you know them; otherwise the year they joined and the price then ({{ money(rate(cfg, 'certificate', '2000-01-01')) }}).</p>
     <div class="formrow"><label>Member<input name="member" data-combo="no-certificate-names" required placeholder="Type a name…"></label>
@@ -44,7 +44,7 @@
   <div class="formrow"><button class="btn small">Record</button></div>
 </form>{% endif %}
 <table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th></tr></thead>
-<tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ e.date|isodate }}{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" style="display:block" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form>{% endif %}</td><td>{{ labels[e.kind] }}{% if e.kind == 'expense' %}{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/category" class="inline"><select name="category" data-autosubmit aria-label="Category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if e.category == k }}>{{ v }}</option>{% endfor %}</select></form>{% elif e.category %}<br><span class="muted small">{{ cats[e.category] }}</span>{% endif %}{% endif %}</td>
+<tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ e.date|listdate }}{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" style="display:block" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form>{% endif %}</td><td>{{ labels[e.kind] }}{% if e.kind == 'expense' %}{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/category" class="inline"><select name="category" data-autosubmit aria-label="Category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if e.category == k }}>{{ v }}</option>{% endfor %}</select></form>{% elif e.category %}<br><span class="muted small">{{ cats[e.category] }}</span>{% endif %}{% endif %}</td>
   <td>{% if e.member %}<a href="/members/{{ e.member }}?from=treasurer">{{ club.name(e.member) }}</a>{% endif %}</td>
   <td class="n" data-sort="{{ -e.cents if e.kind == 'expense' else e.cents }}">{{ money(-e.cents) if e.kind == 'expense' else money(e.cents) }}</td>
   <td class="opt">{{ e.account or 'on file' }}</td><td class="opt">{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/note" class="inline"><input name="note" value="{{ e.note }}" maxlength="300" data-autosubmit aria-label="Name or note" class="cellinput"></form>{% else %}{{ e.note }}{% endif %}</td>
@@ -79,12 +79,12 @@
 </details>{% endif %}
 <h2>Read at meetings</h2>
 
-<p class="hint">Each amount read under Bills and Communications{% if bills_from %} since {{ bills_from|isodate }}{% endif %} gets its own card; a bullet with several amounts is split. Nothing counts until you mark it paid (it becomes an expense) or not a bill.</p>
-{% if edit and cfg.start %}<details class="card"><summary>{% if bills_from and bills_from < cfg.start %}Reading minutes from {{ bills_from|isodate }}, before tracking started{% else %}Look in older minutes{% endif %}</summary>
-  <form method="post" action="/treasurer/bills/from" class="modern"><p class="hint">Bills read before {{ cfg.start|isodate }} aren't listed unless you ask: pick how far back to look. Going back to the start date hides the older ones again; any you already marked paid stay recorded.</p>
+<p class="hint">Each amount read under Bills and Communications{% if bills_from %} since {{ bills_from|listdate }}{% endif %} gets its own card; a bullet with several amounts is split. Nothing counts until you mark it paid (it becomes an expense) or not a bill.</p>
+{% if edit and cfg.start %}<details class="card"><summary>{% if bills_from and bills_from < cfg.start %}Reading minutes from {{ bills_from|listdate }}, before tracking started{% else %}Look in older minutes{% endif %}</summary>
+  <form method="post" action="/treasurer/bills/from" class="modern"><p class="hint">Bills read before {{ cfg.start|listdate }} aren't listed unless you ask: pick how far back to look. Going back to the start date hides the older ones again; any you already marked paid stay recorded.</p>
     <div class="formrow"><label>Read bills from<input type="date" name="date" max="{{ cfg.start }}" value="{{ bills_from if bills_from and bills_from < cfg.start else '' }}"></label>
       <button class="btn small">Look back</button></div></form>
-  {% if bills_from and bills_from < cfg.start %}<form method="post" action="/treasurer/bills/from" class="inline"><button class="btn small ghost">Back to {{ cfg.start|isodate }} only</button></form>{% endif %}
+  {% if bills_from and bills_from < cfg.start %}<form method="post" action="/treasurer/bills/from" class="inline"><button class="btn small ghost">Back to {{ cfg.start|listdate }} only</button></form>{% endif %}
 </details>{% endif %}
 <nav class="tabs small">{% for k, label in (('waiting', 'Waiting'), ('paid', 'Paid'), ('dismissed', 'Not a bill'), ('all', 'All')) %}<a href="/treasurer?tab=bills&show={{ k }}" class="{{ 'on' if show == k }}">{{ label }} ({{ bills|length if k == 'all' else bills|selectattr('status', 'equalto', k)|list|length }})</a>{% endfor %}</nav>
 <div class="cards">{% for b in bills if show == 'all' or b.status == show %}<article class="card{{ ' done' if b.status != 'waiting' }}">

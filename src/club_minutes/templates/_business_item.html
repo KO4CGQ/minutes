@@ -7,7 +7,7 @@
 {% if comments %}{% for c in x.comments or [] %}{% set _ = ev.append({'at': c.at, 'c': c}) %}{% endfor %}{% endif %}
 <ul class="timeline">{% for t in ev|sort(attribute='at', reverse=True) %}<li>
   <div class="tl-head">{% set who = (t.e or t.c).by %}{% if who %}<span class="chip">{{ avatar(who, 'xs') }}<a href="/members/{{ who }}{{ from_item(x) }}">{{ club.short(who) }}</a></span>{% endif %}
-    <span class="muted small">{{ t.at|tsfull }}{% if t.e and t.e.meeting %} · at the <a href="/meetings/{{ t.e.meeting }}">{{ fmt(t.e.meeting) }}</a> meeting{% endif %}</span></div>
+    <span class="muted small">{{ t.at|tsfull }}{% if t.e and t.e.meeting and is_meeting(t.e.meeting) %} · at the <a href="/meetings/{{ t.e.meeting }}">{{ fmt(t.e.meeting) }}</a> meeting{% endif %}</span></div>
   {% if t.c %}<div class="tl-comment">{{ emoji('💬', 'chat') }} {{ t.c.text }}</div>
   {% else %}<div>{{ t.e.what|capitalize }}</div>{% for f, ov in (t.e.changes or {}).items() %}<div class="change small"><b>{{ f }}:</b> <s class="muted">{{ ov[0] or '(none)' }}</s> → {{ ov[1] or '(none)' }}</div>{% endfor %}{% endif %}
 </li>{% endfor %}</ul>
@@ -23,7 +23,7 @@
     {% if x.due %}<span class="chip{{ ' late' if x.overdue }}">{{ emoji('⏰', 'clock') }} due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}
     {% if x.agenda and x.agenda > today|string %}<span class="chip">{{ emoji('⏸️', 'pause') }} on the agenda for {{ fmt(x.agenda) }}</span>{% endif %}
     {% if x.quiet %}<span class="chip warn" title="Nothing has changed on it for weeks">quiet for a while: still on?</span>{% endif %}
-    {% if full %}<span class="chip">{{ emoji('📅', 'calendar') }} first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>{% endif %}
+    {% if full %}<span class="chip">{{ emoji('📅', 'calendar') }} {% if is_meeting(x.opened) %}first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a>{% else %}added {{ fmt(x.opened) }}{% endif %}</span>{% endif %}
 {% endmacro %}
 
 {# An open item: details, Edit and Mark done (for its owner, or a leader), comments, history. back: "/" from Home. #}

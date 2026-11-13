@@ -3,7 +3,7 @@
 <p class="muted">Who added, changed or deleted what on the club calendars, newest first. Only officers see this page.</p>
 {% if pg.total %}<table class="list"><thead><tr><th>When</th><th>Who</th><th>What</th><th class="opt">Calendar</th></tr></thead>
 <tbody>{% for x in pg.rows %}<tr><td>{{ x.at|tsfull }}</td><td>{{ club.name(x.by) if x.by in club.members else x.by }}</td>
-<td>{{ x.action|capitalize }} <b>{{ x.title }}</b>{% if x.start %} <span class="muted">({{ x.start[:10] }})</span>{% endif %}</td><td class="opt">{{ cals.get(x.calendar, x.calendar or '') }}</td></tr>{% endfor %}</tbody></table>
+<td>{{ x.action|capitalize }} <b>{{ x.title }}</b>{% if x.start %} <span class="muted">({{ x.start|anydate }})</span>{% endif %}</td><td class="opt">{{ cals.get(x.calendar, x.calendar or '') }}</td></tr>{% endfor %}</tbody></table>
 {{ pager.links(pg, request) }}{% else %}<p class="muted">No changes yet.</p>{% endif %}
 <p><a href="/calendar">← Calendar</a></p>
 {% endblock %}

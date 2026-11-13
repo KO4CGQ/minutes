@@ -414,3 +414,14 @@ def test_dates_in_the_clubs_format():
     set_dates({"list": "%-d %b %Y"})  # one alone is fine; the rest keep their defaults
     assert (show_date(d), show_date(d, "short")) == ("5 Nov 2026", "Nov 5")
     set_dates(None)
+
+
+def test_anydate_formats_dates_and_leaves_typed_text():
+    """Dates in roster values, logs and calendar changes show in the club's format; anything else as typed."""
+    import datetime as dt
+
+    from club_minutes.web import anydate
+    assert anydate("2025-07-25") == anydate(dt.date(2025, 7, 25)) and "2025" in anydate("2025-07-25")
+    assert anydate("2025-07-25") != "2025-07-25"
+    assert anydate("2026-11-05T19:30") == anydate("2026-11-05")
+    assert anydate("spring 2019") == "spring 2019" and anydate("2025-13-45") == "2025-13-45" and anydate(None) == ""

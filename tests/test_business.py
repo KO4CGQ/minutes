@@ -271,3 +271,20 @@ def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch
     who["id"] = "amy"
     r = c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}, follow_redirects=False)
     assert r.headers["location"] == "/" and business.get(business.load(), iid)["status"] == "done"
+
+
+def test_an_item_added_between_meetings_links_no_missing_meeting(monkeypatch):
+    """An item added on the Business page on a day with no meeting says "added <date>"; one from a meeting links to it."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web.archive, "by_slug", {"2026-11-05": object()})
+    s = business.load()
+    business.add(s, "Between meetings", "n0offc", opened="2026-11-10")
+    business.add(s, "At a meeting", "n0offc", opened="2026-11-05")
+    business.save(s)
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, web.authn.new_session(next(iter(web.archive.club.members))))
+    html = t.get("/business").text
+    assert 'href="/meetings/2026-11-10"' not in html and "added" in html
+    assert 'href="/meetings/2026-11-05"' in html

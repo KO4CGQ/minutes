@@ -39,8 +39,8 @@
 </form>
 
 <h2 id="log">Membership Log</h2>
-<p class="muted">Member since {{ member.member_since or '(not recorded)' }}: the latest Joined or Rejoined.</p>
-<ul class="plain">{% for e in member.events %}<li>{{ e.date or '?' }}: {{ e.event }}{% if e.note %} <span class="muted">({{ e.note }})</span>{% endif %}</li>{% else %}<li class="muted">Nothing yet.</li>{% endfor %}</ul>
+<p class="muted">Member since {{ member.member_since|anydate or '(not recorded)' }}: the latest Joined or Rejoined.</p>
+<ul class="plain">{% for e in member.events %}<li>{{ e.date|anydate or '?' }}: {{ e.event }}{% if e.note %} <span class="muted">({{ e.note }})</span>{% endif %}</li>{% else %}<li class="muted">Nothing yet.</li>{% endfor %}</ul>
 <form method="post" action="/members/{{ member.id }}/log" class="modern card">
   <div class="formrow">
     <label>What happened<select name="event" required><option value="" disabled selected>Pick one…</option>{% for e in events %}<option>{{ e }}</option>{% endfor %}</select></label>
