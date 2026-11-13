@@ -24,7 +24,7 @@ Your name menu → **Your profile**:
 **Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting) and the leader reads it out.
 
 ## Calendar
-**Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google.
+**Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
 
 ## Your dues
 Once the Treasurer has turned tracking on, Home shows what you owe (or that you're paid up, and through which date) and, if your club has a certificate each member buys once (some clubs call it a bond), whether you still need to buy it. Only you and the officers see your figures. Pay the Treasurer at a meeting.

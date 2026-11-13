@@ -180,7 +180,8 @@ Members share personal news in their reports (health, jobs, family), and **those
 - **NFR-4 Retention.** Audio is deleted N days after submit (**[Q]** 30?). Transcripts are kept for **[Q]**. Minutes are kept forever.
 - **NFR-5 Operable by volunteers.** Installed with a setup script and systemd (`deploy/`), and updated from the app. There is a runbook for "the bot didn't join" and "the browser stopped recording".
 - **NFR-6 Login.** Members sign in with a **passkey**, or an **emailed one-time link** sent from the club Gmail to their address in the roster, and sessions last a long time. There are no shared passwords and no extra accounts.
-- **NFR-7 Mobile first.** Every page works on a phone (375px wide) with no sideways scrolling: tables hide less important columns (`opt`) or wrap, forms stack. `tests/test_mobile.py` loads every page in a real browser at that width and fails if one is too wide; new pages are covered automatically.
+- **NFR-7 Mobile first.** Every page works on a phone (375px wide) with no sideways scrolling: tables hide less important columns (`opt`) or wrap, forms stack. `tests/test_mobile.py` loads every page in a real browser at that width (Chromium, Firefox and WebKit, and again in dark mode for faint text) and fails if one is too wide; new pages are covered automatically.
+- **NFR-8 Checked on every change.** The tests include lint (ruff, shellcheck on the server scripts, zizmor on the workflows, each pinned and updated by Dependabot); CodeQL, pip-audit and gitleaks run on every pull request and weekly. Vulnerabilities are reported privately (SECURITY.md).
 
 ## 6. Building blocks
 
