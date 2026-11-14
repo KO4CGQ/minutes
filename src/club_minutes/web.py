@@ -1885,7 +1885,9 @@ def help_page(request: Request, guide: str = "members"):
 
 @app.get("/help/screenshots/{name}")
 def help_picture(name: str):
-    if not re.fullmatch(r"[\w-]+\.png", name) or not (DOCS / "screenshots" / name).is_file():
+    stem = name.removesuffix(".png")  # letters, digits, - and _ only (no regex: nothing a long name can slow down)
+    if stem == name or not 0 < len(stem) <= 80 or not stem.replace("-", "").replace("_", "").isalnum() or not stem.isascii() \
+            or not (DOCS / "screenshots" / name).is_file():
         raise HTTPException(404)
     return FileResponse(DOCS / "screenshots" / name, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
