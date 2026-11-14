@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The checks GitHub runs on a pull request, here, before a push (docs/developers.md → Checks before a push):
-#   1. the tests (with ruff, shellcheck, zizmor and the browser tests), as tests.yml;
+#   1. the tests (with ruff, shellcheck, zizmor and the browser tests) and the upgrade from the last release, as tests.yml;
 #   2. pip-audit on the locked packages, as security.yml;
 #   3. gitleaks at the version security.yml pins, checked against its checksum, on every branch and tag (as GitHub);
 #   4. CodeQL with the security-extended queries, Python and JavaScript, as codeql.yml, on the committed files.
@@ -17,6 +17,8 @@ step() { printf '\n== %s\n' "$1"; }
 if [ "${1:-}" != "--quick" ]; then
   step "tests"
   uv run pytest -q || fail=1
+  step "upgrade from the last release"
+  dev/upgrade-check.sh || fail=1
 fi
 
 step "pip-audit (the locked packages)"
