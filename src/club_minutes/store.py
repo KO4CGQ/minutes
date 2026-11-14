@@ -20,8 +20,8 @@ def _norm(s: str) -> str:
 SEARCH_WORDS = 12  # words of a search that count: enough for any real search, and a cap on the work one can cause
 
 
-# Common English given names and their nicknames, one group per line. Used only for the first names of people on
-# the roster: with a Richard on it, "Richard", "Rich", "Rick" and "Dick" find each other; without one, nothing changes.
+# Common English given names and their nicknames, one group per line: "Richard", "Rich", "Rick" and "Dick" find each
+# other, whether the Richard is a member, a guest or a speaker.
 NICKNAMES = """richard rich rick ricky dick | robert rob bob bobby robbie bert | william bill billy will willy liam
 james jim jimmy jamie | john jack johnny jon | jonathan jon jonny | joseph joe joey | michael mike mikey mick
 thomas tom tommy | charles charlie chuck | edward ed eddie ted ned | theodore ted teddy theo | david dave davey
@@ -41,15 +41,18 @@ dorothy dot dottie | virginia ginny | victoria vicky tori | cynthia cindy | pame
 judith judy | alexandra alex sandy | samantha sam | abigail abby | jacqueline jackie | nancy nan"""
 NICK_GROUPS = [set(g.split()) for g in NICKNAMES.replace("\n", " | ").split("|")]
 # Nicknames that are everyday words in minutes ("will", a "bill" to pay, "don't" read as "don", an antenna "jack"):
-# never added for someone else's name. A member's own name always counts, and Other spellings can add any of them.
+# never searched for or found as a name. A member's own name always counts, and Other spellings can add any of them.
 COMMON_WORDS = {"will", "bill", "don", "art", "frank", "ray", "sue", "max", "jack", "kit", "dot", "drew", "norm", "herb"}
 
 
 def spellings(club: Club) -> dict[str, set[str]]:
-    """Each member's first and last name with their other spellings from the roster (aliases) and, for the first
-    name, its common nicknames (NICKNAMES), lowercase: word -> every spelling of that name. An alias goes with
-    whichever of first or last it's closer to."""
+    """Every name in NICKNAMES with its nicknames (less COMMON_WORDS), then each member's first and last name with
+    their other spellings from the roster (aliases) and, for the first name, its nicknames, lowercase: word -> every
+    spelling of that name. An alias goes with whichever of first or last it's closer to."""
     out: dict[str, set[str]] = {}
+    for g in NICK_GROUPS:
+        for w in g - COMMON_WORDS:
+            out.setdefault(w, {w}).update(g - COMMON_WORDS)
     sim = lambda a, b: difflib.SequenceMatcher(None, a, b).ratio()
     for m in club.members.values():
         first, last = m.first.lower(), m.last.lower()
@@ -117,8 +120,8 @@ class Archive:
             "select slug, section, member, snippet(docs, 3, char(1), char(2), ' … ', 24) "
             "from docs where docs match ? order by slug desc limit ?", (fts, limit))
         # the text is escaped (it's typed by members); only the highlight marks are HTML
-        mark = lambda t: html.escape(t).replace("\x01", "<mark>").replace("\x02", "</mark>")  # noqa: E731
-        return [dict(slug=s, section=sec, member=mem, snippet=mark(snip)) for s, sec, mem, snip in cur]
+        mark = lambda t: html.escape(t).replace("\x01", "<mark>").replace("\x02", "</mark>")
+        return [{"slug": s, "section": sec, "member": mem, "snippet": mark(snip)} for s, sec, mem, snip in cur]
 
     def member_history(self, mid: str) -> dict:
         present = [(m, "in person" if mid in m.in_person else "online")

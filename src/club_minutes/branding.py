@@ -38,7 +38,7 @@ def name(club) -> str:
     """What the app calls itself: page titles, the top bar, emails, the passkey's name on phones."""
     # one line, always: it goes into email subjects
     return " ".join(str(_settings().get("name") or club.info.get("app_name") or "").split())[:60] \
-        or f"{club.info.get('callsign') or 'Club'} Minutes"
+        or f"{club.label} Minutes"
 
 
 def set_name(text: str, by: str) -> None:
@@ -115,7 +115,7 @@ def auto_backing() -> str:
         _auto.clear()
         try:
             _auto[key] = _pick(p)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _auto[key] = "none"
     return _auto[key]
 

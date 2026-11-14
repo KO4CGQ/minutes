@@ -11,7 +11,7 @@ from club_minutes.meeting import Item, Meeting
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True},
-          {"id": "amy", "first": "Amy", "last": "Able", "callsign": "KD8AMY"}]
+          {"id": "amy", "first": "Amy", "last": "Appleseed", "callsign": "N0AMYA"}]
 
 
 class Reply:
@@ -54,7 +54,7 @@ def test_followups_sent_and_checked(env):
     found = ai.suggest_followups(club, m, [{"id": "x1", "text": "Club patches", "owner": None, "due": None}], post=post)
     prompt = sent["messages"][1]["content"]
     assert "Secret Name" not in prompt and "Amy will call the park" in prompt and "x1 | Club patches" in prompt
-    assert "amy: Amy Able (KD8AMY)" in prompt and sent["model"] == "test/model"
+    assert "amy: Amy Appleseed (N0AMYA)" in prompt and sent["model"] == "test/model"
     assert found == [{"kind": "new", "item": None, "text": "Call the park about Field Day", "owner": "amy",
                       "due": "2026-12-01", "why": "Amy will call"},
                      {"kind": "new", "item": None, "text": "Order a new feedline", "owner": None, "due": None, "why": ""}]
@@ -93,6 +93,7 @@ def test_suggestions_wait_for_a_person(tmp_path, monkeypatch):
 
 def test_business_page_suggestions_for_leaders_only(env, monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.store import Archive
     club, m, _ = env

@@ -14,6 +14,7 @@ from .club import DATA, inside
 
 SIZE = 256
 from . import limits  # the largest upload: an admin's setting (Security -> Server)
+
 FORMATS = {"JPEG", "PNG", "WEBP", "MPO"}  # MPO: some phone cameras
 
 

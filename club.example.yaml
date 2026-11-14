@@ -1,8 +1,10 @@
-# Copy to club.yaml (local only, git-ignored) and fill in.
+# Every setting, with what it does. To start a server, club.minimal.yaml is enough: most of this is also set in the app
+# (Admin → Site), and whatever is left out has a default.
 
 club:
   name: Example Radio Club
-  callsign: W0XYZ
+  callsign: W0CLUB
+  # app_name: Example Club Minutes   # the app's name in pages and emails; default "<callsign> Minutes" (Admin → Site sets it too)
   meeting_day: Thursday     # required, with meeting_time
   meeting_time: "19:30"     # 24-hour; the "Start meeting" button pulses from 30 minutes before
   invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit
@@ -21,13 +23,15 @@ auth:
   rp_id: minutes.example-tailnet.ts.net   # passkeys only work on this exact HTTPS hostname
   # rp_name: Example Club Minutes   # the name phones show for a passkey; default: the app's name (admin → Site)
   session_days: 180                      # "remember this device"
+  # origins: [https://minutes.example-tailnet.ts.net]   # addresses passkeys are accepted from; default https://<rp_id>
+  # base_url: https://minutes.example-tailnet.ts.net    # the start of links in emails; default the first origin
 
-admins: [KD8XYZ]   # callsigns that may turn on admin mode (name menu) for an hour at a time; more can be added in the app (Admin → Security → Admins)
+admins: [N0CALL]   # callsigns that may turn on admin mode (name menu) for an hour at a time; more can be added in the app (Admin → Security → Admins)
 
 email:
   # TEST MODE: while this list is present, email only goes to these callsigns or addresses.
   # Everything else is withheld and logged. Remove only_to to email members for real.
-  only_to: [KD8XYZ]
+  only_to: [N0CALL]
 
 links:  # shown in the "Club Links" footer of the minutes and on the Links page
   # The starting list: once an admin edits the links on the Links page, links.json in the data folder is used instead.
@@ -61,7 +65,7 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #     - Old Business
 #     - New Business
 #     - name: Winners
-#       hint: e.g. “50/50 drawing – Amy A $7.50”.
+#       hint: e.g. “50/50 drawing – Jane D $7.50”.
 #     - Upcoming Events
 
 # A certificate each member buys once (some clubs call it a bond), on the Treasurer pages: who has bought it, who
@@ -88,12 +92,12 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 # modules:
 #   chow: true
 
-# Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer).
+# Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer). Also on Admin → Site → Offices.
 # roster_keepers: [Secretary, Treasurer]
 
 # The club's offices, from the bylaws, for the Offices page (who holds each, and who held them when).
 # A plain title is an officer's office with one seat; officer: false is a board seat that isn't an officer.
-# Left out: President, Vice President, Secretary, Treasurer.
+# Left out: President, Vice President, Secretary, Treasurer. Also on Admin → Site → Offices.
 offices:
   - President
   - Vice President
@@ -108,6 +112,9 @@ offices:
 #   enabled: true
 
 privacy:
-  never_record: []  # names never shown in minutes or the archive
+  never_record: []  # names never recorded in the minutes (also on Admin → Site → Privacy)
 
 # People come only from the roster the app keeps (roster-sheet.json in the data folder).
+# Secrets aren't kept here but in /etc/club-minutes/env (the server admin guide has them all), e.g. CLUB_MINUTES_SMTP_HOST, _PORT, _USER,
+# _PASSWORD, _FROM, _REPLY_TO (email); CLUB_MINUTES_BACKUP_PASSPHRASE; CLUB_MINUTES_ROSTER_API_TOKEN (the Discord bot);
+# CLUB_MINUTES_OPENROUTER_KEY (AI).

@@ -1,7 +1,7 @@
 """The club calendars, kept by the app: events on the Club events, Planning and Community calendars.
 
 events.json in the data folder: {"events": [event, ...]}. An event:
-    id, cal ("events" | "planning" | "community"), title, where, notes,
+    id, cal ("events" | "planning" | "community"), title, where, online (a meeting link, http(s) only), notes,
     start: "YYYY-MM-DD" (all day) or "YYYY-MM-DDTHH:MM", end: the same forms or None (the first date's end),
     repeat: None or {"freq": "daily" | "weekly" | "monthly" | "monthly_weekday" | "yearly" | "yearly_weekday", "interval": 1,
                      "last": False, "until": "YYYY-MM-DD" or None, "weeks": [1, 3] (monthly_weekday on several weeks:
@@ -31,7 +31,8 @@ REPEATS = ("", "daily", "weekly", "biweekly", "monthly", "monthly_weekday", "mon
            "yearly_weekday")  # the form's choices
 SCOPES = {"this": "This date only", "following": "This and following dates", "all": "Every date"}
 ORDINAL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
-FIELDS = ("title", "where", "notes", "start", "end")
+ONLINE_RE = re.compile(r"https?://[^\s<>\"']+")  # only a web link: it becomes a link's href
+FIELDS = ("title", "where", "online", "notes", "start", "end")
 
 
 # ---------------- storage ----------------
@@ -74,12 +75,58 @@ def ensure_meeting(club) -> None:
         at = club.meeting_time
         start = dt.datetime.fromisoformat(f"{first}T{at}")
         evs = load()
-        e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": "", "notes": "",
+        e = add(evs, "events", {"title": f"{club.label} meeting", "where": "", "notes": "",
                                 "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
                                 "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, "the app")
         e["meeting"] = True
         save(evs)
         marker.write_text(e["id"])
+
+
+def next_meeting(evs: list[dict], since: dt.date) -> tuple[dict, dt.date] | None:
+    """The weekly meeting's first date from `since` on, and the series it's in (a series per earlier change)."""
+    d, e = min(((d, e) for e in evs if e.get("meeting") for d in dates(e, since, since + dt.timedelta(days=400))[:1]),
+               key=lambda x: x[0], default=(None, None))
+    return (e, d) if e else None
+
+
+def move_meeting(club, since: dt.date, where: str | None, online: str | None, by: str) -> dt.date:
+    """The weekly meeting from `since` on: the club's day and time, at `where` and `online` (None: each date keeps its own). Earlier dates keep theirs; one-date
+    changes and skipped dates from `since` on go if the day moves. Each series (one per earlier change) still running
+    from `since` changes from where it starts, so a change already planned for later is changed too, not left behind.
+    Returns the first new date."""
+    nearest = lambda d: d + dt.timedelta(days=(club.meeting_weekday - d.weekday()) % 7)
+    at = lambda d: dt.datetime.fromisoformat(f"{d}T{club.meeting_time}")
+    with locked():
+        evs = load()
+        changed, series = [], sorted((x for x in evs if x.get("meeting")), key=lambda x: x["start"])
+        for e, after in zip(series, series[1:] + [None]):
+            old = next(iter(dates(e, since, since + dt.timedelta(days=400))), None)
+            if old is None:
+                continue
+            start = at(nearest(max(since, _dt(e["start"]).date())))
+            # it ends the day before the next series starts, so a new weekday can't put a date in both
+            end = min(filter(None, [e["repeat"].get("until"), after and (_dt(after["start"]).date() - dt.timedelta(days=1)).isoformat()]), default=None)
+            v = {"title": e["title"], "notes": e.get("notes", ""), "where": e.get("where", "") if where is None else where,
+                 "online": e.get("online", "") if online is None else online, "start": _iso(start, True),
+                 "end": _iso(start + (length(e) or dt.timedelta(hours=2)), True), "repeat": {**e["repeat"], "until": end}, "tz": None}
+            n = len(evs)
+            change(evs, e["id"], old.isoformat(), e["cal"], v, "following")
+            moved = evs[-1] if len(evs) > n else e  # the dates from `since` on: split off, or the whole series
+            moved["repeat"] = {**moved["repeat"], "until": end}
+            changed.append(moved)
+        if not changed:  # no meeting on the calendar (deleted, or its dates ended): a new series
+            start = at(nearest(since))
+            e = add(evs, "events", {"title": f"{club.label} meeting", "where": where or "", "online": online or "",
+                                    "notes": "", "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
+                                    "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, by)
+            e["meeting"] = True
+            changed.append(e)
+        save(evs)
+        (DATA / "events-meeting-added").write_text(changed[0]["id"])  # ensure_meeting has nothing left to do
+    first = nearest(since)
+    log(by, "changed this and following dates of", {**changed[0], "start": _iso(at(first), True)})
+    return first
 
 
 def quiet(e: dict) -> bool:
@@ -184,7 +231,7 @@ def occurrence(e: dict, d: dt.date) -> dict:
     start = _dt(e["start"])
     timed = "T" in e["start"]
     moved = dt.datetime.combine(d, start.time())
-    o = {"title": e["title"], "where": e.get("where", ""), "notes": e.get("notes", ""),
+    o = {"title": e["title"], "where": e.get("where", ""), "online": e.get("online", ""), "notes": e.get("notes", ""),
          "start": _iso(moved, timed), "end": _iso(moved + length(e), timed) if e.get("end") else None}
     return {**o, **e.get("changes", {}).get(d.isoformat(), {})}
 
@@ -193,7 +240,7 @@ def in_zone(o: dict, tz: str | None, club_tz: str) -> dict:
     """An occurrence of an event kept in another time zone (tz), with its start and end in club time."""
     if not tz or tz == club_tz or "T" not in o["start"]:
         return o
-    conv = lambda v: _iso(_dt(v).replace(tzinfo=ZoneInfo(tz)).astimezone(ZoneInfo(club_tz)), True) if v else v  # noqa: E731
+    conv = lambda v: _iso(_dt(v).replace(tzinfo=ZoneInfo(tz)).astimezone(ZoneInfo(club_tz)), True) if v else v
     return {**o, "start": conv(o["start"]), "end": conv(o.get("end"))}
 
 
@@ -244,7 +291,10 @@ def from_form(f: dict, club_tz: str = "") -> dict:
             if nth not in weeks and not (last and is_last):
                 raise ValueError(f"It starts on the {'last' if is_last else ORDINAL[nth]} {day:%A}: tick that week too.")
             repeat.update(weeks=weeks, last=last)
-    return {"title": title, "where": " ".join((f.get("where") or "").split())[:200],
+    online = (f.get("online") or "").strip()[:500]
+    if online and not ONLINE_RE.fullmatch(online):
+        raise ValueError("The online link starts with https:// (copy it from the meeting app's invite).")
+    return {"title": title, "where": " ".join((f.get("where") or "").split())[:200], "online": online,
             "notes": (f.get("notes") or "").strip()[:2000], "start": start, "end": end, "repeat": repeat,
             "tz": tz if t and tz != club_tz else None, "quiet": bool(f.get("quiet"))}
 
@@ -257,7 +307,7 @@ def form_values(e: dict, d: str | None) -> dict:
            else "monthly_last" if r.get("last") and r["freq"] == "monthly_weekday" else r["freq"])
     weeks = {f"week{k}": k in (r or {}).get("weeks", []) for k in (1, 2, 3, 4)} | {"week_last": bool(r and r.get("weeks") and r.get("last"))}
     end = o.get("end") or ""
-    return {"title": o["title"], "where": o.get("where", ""), "notes": o.get("notes", ""), "cal": e["cal"],
+    return {"title": o["title"], "where": o.get("where", ""), "online": o.get("online", ""), "notes": o.get("notes", ""), "cal": e["cal"],
             "date": o["start"][:10], "time": o["start"][11:16], "end_date": end[:10] if end[:10] != o["start"][:10] else "",
             "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or "", "quiet": quiet(e), **weeks}
 
@@ -280,10 +330,10 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
             raise ValueError("To move one date to another calendar, choose This and following dates or Every date.")
         if "T" in v["start"] and v.get("tz") != e.get("tz"):
             raise ValueError("Unable to change the time zone of a single date in a series; choose This and following dates or Every date.")
-        same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until"), r.get("weeks")) or None  # noqa: E731
+        same = lambda r: r and (r["freq"], r.get("interval", 1), r.get("until"), r.get("weeks")) or None
         if same(v.get("repeat")) != same(e["repeat"]):
             raise ValueError("To change how it repeats, choose This and following dates or Every date.")
-        e["changes"][d] = {k: v[k] for k in FIELDS}
+        e["changes"][d] = {k: v[k] for k in FIELDS if k in v}
         e["quiet"] = v.get("quiet", quiet(e))  # the whole series: it's about the event, not one date
         return
     # every date (or following from the first date): the series moves by as much as this date moved
@@ -367,11 +417,11 @@ def _text(v: str) -> str:
 
 def _plain(v: str) -> str:
     """Google exports descriptions as HTML: keep the text and the line breaks, drop the tags."""
-    if not re.search(r"<(p|br|a|b|i|u|em|strong|ul|ol|li|div|span)\b", v, re.I):
+    if not re.search(r"<(p|br|a|b|i|u|em|strong|ul|ol|li|div|span)\b", v, re.IGNORECASE):
         return v
-    v = re.sub(r"<a\b[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", lambda m: m.group(2) if m.group(2) == m.group(1) else f"{m.group(2)} ({m.group(1)})", v, flags=re.I | re.S)
-    v = re.sub(r"<br\s*/?>|</(p|div|li)>", "\n", v, flags=re.I)
-    v = re.sub(r"<li\b[^>]*>", "- ", v, flags=re.I)
+    v = re.sub(r"<a\b[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", lambda m: m.group(2) if m.group(2) == m.group(1) else f"{m.group(2)} ({m.group(1)})", v, flags=re.IGNORECASE | re.DOTALL)
+    v = re.sub(r"<br\s*/?>|</(p|div|li)>", "\n", v, flags=re.IGNORECASE)
+    v = re.sub(r"<li\b[^>]*>", "- ", v, flags=re.IGNORECASE)
     v = html.unescape(re.sub(r"<[^>]+>", "", v))
     return re.sub(r"\n{3,}", "\n\n", v).strip()
 
@@ -383,11 +433,11 @@ def _when(value: str, params: dict, tz: ZoneInfo) -> tuple[dt.datetime, bool]:
         return dt.datetime.strptime(v[:8], "%Y%m%d"), False
     d = dt.datetime.strptime(v.rstrip("Z")[:15], "%Y%m%dT%H%M%S")
     if v.endswith("Z"):
-        d = d.replace(tzinfo=dt.timezone.utc)
+        d = d.replace(tzinfo=dt.UTC)
     else:
         try:
             d = d.replace(tzinfo=ZoneInfo(params["TZID"].strip('"'))) if "TZID" in params else d.replace(tzinfo=tz)
-        except Exception:  # an unknown Windows-style TZID: take it as club time
+        except Exception:  # an unknown Windows-style TZID: take it as club time  # noqa: BLE001
             d = d.replace(tzinfo=tz)
     return d.astimezone(tz).replace(tzinfo=None), True
 
@@ -470,7 +520,7 @@ def import_ics(evs: list[dict], text: str, cal: str, by: str, tz_name: str, sinc
             cur = None
         elif cur is not None:
             cur.setdefault(name, []).append((params, value))
-    one = lambda b, k: b[k][0] if k in b else (None, None)  # noqa: E731
+    one = lambda b, k: b[k][0] if k in b else (None, None)
     masters, overrides = [], []
     for b in blocks:
         (overrides if "RECURRENCE-ID" in b else masters).append(b)

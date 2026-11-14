@@ -61,7 +61,7 @@ def roster_locked(fn):
             f = None
             if _depth == 0:
                 DATA.mkdir(parents=True, exist_ok=True)
-                f = open(DATA / "roster.lock", "w")
+                f = open(DATA / "roster.lock", "w")  # noqa: SIM115 (held until the lock is released, then closed)
                 try:
                     fcntl.flock(f, fcntl.LOCK_EX)
                 except BaseException:
@@ -110,7 +110,7 @@ def _agenda(raw) -> list[dict]:
 # Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
 # chow: a rotation of members bringing food to meetings (the Chow page, reminders, the console's step, a missed-night fee).
 MODULES = {"chow": False}
-CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,3}$", re.I)
+CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,4}$", re.IGNORECASE)  # 4 letters: some countries issue them, and examples like N0CALL can't be anyone's
 
 
 def num(v) -> int | None:
@@ -120,7 +120,7 @@ def num(v) -> int | None:
 
 
 def valid_email(s: str) -> bool:
-    """name@domain.tld, no spaces, at most 254 characters. No regex: a crafted address can't make it slow."""
+    """name@example.org, no spaces, at most 254 characters. No regex: a crafted address can't make it slow."""
     if not s or len(s) > 254 or any(ch.isspace() for ch in s) or s.count("@") != 1:
         return False
     local, domain = s.split("@")
@@ -157,8 +157,8 @@ class Member:
     officer: bool = False
     board: bool = False
     license_class: str | None = None
-    minutes_editor: bool = False  # may lead meetings and edit minutes (officers always may)
-    calendar_editor: bool = False  # may change the club calendars (leaders always may)
+    minutes_editor: bool = False  # given the Minutes editor role (roles.json; before it, the roster's tick)
+    calendar_editor: bool = False  # given the Calendar editor role (the same)
     status: str = "Active"
     aliases: list[str] = field(default_factory=list)
     events: list[dict] = field(default_factory=list)  # from the Membership Log tab
@@ -173,26 +173,72 @@ class Member:
         return f"{self.first} {self.last}".strip()
 
 
+# What a member may do, and the roles that allow it (Admin → Site → Roles). Each check in the app asks Club.may(member,
+# permission); admins, in admin mode, may do everything. In 1.0 the roles and what each allows are fixed; who has a
+# role comes from the offices they hold, or (Minutes editor, Calendar editor) from roles.json, set on Site → Roles.
+PERMISSIONS = {
+    "lead": "lead meetings and edit the minutes",
+    "calendar": "change the club calendars",
+    "chow": "change the chow schedule",
+    "contacts": "see every member's contact details",
+    "oversee": "see Roster changes and undo them, the calendar change log and business suggestions; change any business item; take down a picture",
+    "treasurer": "look at the Treasurer pages",
+    "money": "record money and change the Treasurer settings",
+    "members": "add members and change their details",
+}
+# key: (name, who has it, permissions)
+ROLES: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "officer": ("Officer", "Holders of an officer's office", ("lead", "calendar", "chow", "contacts", "oversee", "treasurer")),
+    "board": ("Board", "Holders of any office", ()),
+    "treasurer": ("Treasurer", "Holders of an office named Treasurer", ("money",)),
+    "roster_keeper": ("Roster keeper", "Holders of an office that adds members", ("members",)),
+    "minutes_editor": ("Minutes editor", "Members picked here", ("lead", "calendar")),
+    "calendar_editor": ("Calendar editor", "Members picked here", ("calendar",)),
+}
+PICKED = ("minutes_editor", "calendar_editor")  # roles given to members by hand (roles.json), not by an office
+
+
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                     "invite_after_visits", "remind_days_before", "public_calendars")} | {
     ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
-    ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate")}
+    ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
+    ("", "offices"), ("", "roster_keepers")}  # "": a top-level club.yaml setting
+
+
+# club.yaml settings renamed since 1.0.0: (section, old name) -> (section, new name). The old name keeps working
+# until 2.0, with a line on the Admin page (docs/developers.md → Compatibility). Never remove an entry before 2.0.
+RENAMED: dict[tuple[str, str], tuple[str, str]] = {}
+
+
+def _renamed(cfg: dict) -> tuple[dict, list[str]]:
+    """club.yaml with renamed settings under their new names (a new name given too wins), and a line for each."""
+    out = {k: dict(v) if isinstance(v, dict) else v for k, v in cfg.items()}
+    notes = []
+    for (sec, old), (nsec, new) in RENAMED.items():
+        if isinstance(out.get(sec), dict) and old in out[sec]:
+            v = out[sec].pop(old)
+            out.setdefault(nsec, {}).setdefault(new, v)
+            notes.append(f"club.yaml: {sec}: {old}: is now called {nsec}: {new}:. The old name works until version 2.0; rename it when you can.")
+    return out, notes
 
 
 def _overlay(cfg: dict, site: dict) -> dict:
     """club.yaml with the Site page's settings on top: a key there replaces club.yaml's, section by section."""
     out = dict(cfg)
     for sec, keys in site.items():
-        out[sec] = {**(cfg.get(sec) or {}), **keys}
+        if sec == "":  # top-level settings (offices:, roster_keepers:) replace club.yaml's as a whole
+            out.update(keys)
+        else:
+            out[sec] = {**(cfg.get(sec) or {}), **keys}
     return out
 
 
 class Club:
     def __init__(self, path: Path | None = None, roster: list[dict] | None = None):
         path = path or Path(os.environ.get("CLUB_MINUTES_CONFIG", ROOT / "club.yaml"))
-        self.yaml = yaml.safe_load(path.read_text()) or {}
+        self.yaml, self.renamed = _renamed(yaml.safe_load(path.read_text()) or {})
         cfg = _overlay(self.yaml, self.site_settings)
         self._configure(cfg)
 
@@ -247,7 +293,8 @@ class Club:
         self._yaml_links = cfg.get("links", [])  # until an admin edits them on the Links page (links.json)
         self.auth = cfg.get("auth") or {}
         self.email = cfg.get("email") or {}
-        self.redact = [_n(x) for x in (cfg.get("privacy") or {}).get("never_record", [])]
+        self.never_record = [" ".join(str(x).split()) for x in (cfg.get("privacy") or {}).get("never_record") or [] if str(x).strip()]
+        self.redact = [_n(x) for x in self.never_record]
         self.ai = cfg.get("ai") or {}  # AI assistance (ai.py): model, and whether it's on
         self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
         # Offices whose holders add new members to the roster (the Secretary keeps it, usually).
@@ -315,6 +362,12 @@ class Club:
         ref = " ".join(str((self.bylaws.get("refs") or {}).get(rule) or "").split())[:20]
         return f" (bylaws {ref})" if ref else ""
 
+    @property
+    def label(self) -> str:
+        """What the club is called in subjects, titles and sign-offs: its callsign, else its name, else "Club"
+        (a new server before Site is filled in)."""
+        return " ".join(str(self.info.get("callsign") or self.info.get("name") or "Club").split())
+
     def has(self, module: str) -> bool:
         """Whether an optional part of the app is turned on in club.yaml (`modules:`)."""
         return self.modules.get(module, False)
@@ -342,6 +395,10 @@ class Club:
                            for a in m.aliases if CALLSIGN.match(a)}
         for m in self.members.values():  # callsign aliases aren't name spellings
             m.aliases = [a for a in m.aliases if not CALLSIGN.match(a)]
+        if (picked := self._picked()) is not None:  # roles.json, once there is one, over the roster's old ticks
+            for m in self.members.values():
+                for k in PICKED:
+                    setattr(m, k, m.id in picked.get(k, []))
         self.__dict__.pop("_speaker_patterns", None)  # cached; rebuilt from the new names
 
     def refresh(self) -> bool:
@@ -360,7 +417,7 @@ class Club:
         return self.former_ids.get(mid, mid)
 
     def _auto_short_names(self) -> None:
-        """'Amy A' / 'Amy B' style names when a first name is shared."""
+        """'Jane D' / 'Jane S' style names when a first name is shared."""
         by_first: dict[str, list[Member]] = {}
         for m in self.members.values():
             by_first.setdefault(m.first.lower(), []).append(m)
@@ -383,17 +440,47 @@ class Club:
         return out
 
     # ---- permissions ----
+    @staticmethod
+    def _picked() -> dict[str, list[str]] | None:
+        p = DATA / "roles.json"
+        return json.loads(p.read_text()) if p.exists() else None
+
+    def save_roles(self, picked: dict[str, list[str]]) -> None:
+        """Who has the roles given by hand (PICKED): {role: [member ids]}. Used at once."""
+        out = {k: sorted({self.canonical(i) for i in picked.get(k, []) if self.canonical(i) in self.members}) for k in PICKED}
+        p = DATA / "roles.json"
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(out, indent=1))
+        tmp.replace(p)
+        for m in self.members.values():
+            for k in PICKED:
+                setattr(m, k, m.id in out[k])
+
+    def roles(self, mid: str | None) -> list[str]:
+        """The member's roles (ROLES keys), in ROLES order. Admin isn't one: it's admin mode."""
+        m = self.members.get(mid or "")
+        if not m:
+            return []
+        has = {"officer": m.officer, "board": m.board, "treasurer": bool(m.role and "treasurer" in m.role.lower()),
+               "roster_keeper": bool(m.role and any(k in m.role.lower() for k in self.roster_keepers)),
+               "minutes_editor": m.minutes_editor, "calendar_editor": m.calendar_editor}
+        return [k for k in ROLES if has[k]]
+
+    def may(self, mid: str | None, perm: str) -> bool:
+        """Whether a member's roles allow `perm` (PERMISSIONS). The web app adds admins in admin mode."""
+        if perm not in PERMISSIONS:
+            raise KeyError(perm)
+        return any(perm in ROLES[k][2] for k in self.roles(mid))
+
     def can_lead(self, mid: str) -> bool:
-        """Officers and members ticked minutes_editor may lead a meeting and edit minutes."""
-        m = self.members.get(mid)
-        return bool(m and (m.officer or m.minutes_editor))
+        """Officers and minutes editors may lead a meeting and edit minutes."""
+        return self.may(mid, "lead")
 
     can_edit = can_lead
 
     def can_edit_calendar(self, mid: str) -> bool:
-        """Leaders, and members ticked calendar_editor (say, the net manager), may change the club calendars."""
-        m = self.members.get(mid)
-        return bool(m and (self.can_lead(mid) or m.calendar_editor))
+        """Officers, minutes editors and calendar editors (say, the net manager) may change the club calendars."""
+        return self.may(mid, "calendar")
 
     @property
     def app_admins(self) -> set[str]:
@@ -418,11 +505,10 @@ class Club:
     def can_see(self, viewer: str | None, mid: str, fld: str, elevated: bool = False) -> bool:
         """Contact details: officers, admins in admin mode, and the member always; others only what was shared."""
         v, m = self.members.get(viewer or ""), self.members.get(mid)
-        return bool(m and v and (v.officer or elevated or v.id == m.id or fld in m.share))
+        return bool(m and v and (self.may(v.id, "contacts") or elevated or v.id == m.id or fld in m.share))
 
     def keeps_roster(self, mid: str | None) -> bool:
-        m = self.members.get(mid or "")
-        return bool(m and m.role and any(k in m.role.lower() for k in self.roster_keepers))
+        return self.may(mid, "members")
 
     @property
     def secretaries(self) -> list[str]:
@@ -465,13 +551,13 @@ class Club:
                 continue
             firsts.setdefault(m.first.lower(), []).append(m.id)
             pats.append((rf"{m.first}(?:'?s)?\s+{m.last}", m.id))
-            pats.append((rf"{m.first}(?:'s)?\s+{m.last[0]}\b\.?", m.id))  # "Amy A", "Amy's A"
+            pats.append((rf"{m.first}(?:'s)?\s+{m.last[0]}\b\.?", m.id))  # "Jane D", "Jane's D"
             for a in m.aliases:
                 pats.append((rf"{a}\b", m.id))
         for first, ids in firsts.items():
             if len(ids) == 1:
                 pats.append((rf"{first}(?:'?s)?\b", ids[0]))  # "Amy", "Amys", "Amy's"
-        return [(re.compile(rf"^\s*{p}", re.I), mid) for p, mid in pats]
+        return [(re.compile(rf"^\s*{p}", re.IGNORECASE), mid) for p, mid in pats]
 
     def speaker_of(self, text: str, present: list[str] | None = None) -> str | None:
         """Guess which member a report is about from its first words.

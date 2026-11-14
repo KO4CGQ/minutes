@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}{{ club.info.callsign ~ ' events' if public else 'Calendar' }}{% endblock %}{% block body %}
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}{{ club.label ~ ' events' if public else 'Calendar' }}{% endblock %}{% block body %}
 <div class="headrow"><h1>{{ club.info.name ~ ' events' if public else 'Calendar' }}</h1>{% if can_edit %}<p class="row"><a class="btn small" href="/calendar/edit">+ Add an event</a><a class="btn small ghost" href="/calendar/import">Import .ics</a></p>{% endif %}</div>
 <nav class="tabs" aria-label="View">{% for v, label in (('agenda', 'Agenda'), ('month', 'Month')) %}<a href="{{ base }}?view={{ v }}{% if v == 'month' %}&month={{ first.strftime('%Y-%m') }}{% endif %}" class="{{ 'on' if view == v }}"{% if view == v %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 <p class="callegend">{% for k, label in kinds.items() %}<button type="button" class="calkind" data-kind="{{ k }}" aria-pressed="true" title="Show or hide {{ label }}"><i class="dot k-{{ k }}"></i>{{ label }}</button>{% endfor %}<span class="muted small">tap to show or hide</span></p>
@@ -43,6 +43,7 @@
 {% else %}{{ e.start|date('weekday') }}, all day{% endif %}</p>
 {% if e.repeats and repeats.get(e.id) %}<p class="muted">{{ emoji('🔁', 'repeat') }} {{ repeats[e.id] }}</p>{% endif %}
 {% if e.where %}<p><b>Where</b><br>{{ e.where|linkify }}</p>{% endif %}
+{% if e.online %}<p><a class="btn small" href="{{ e.online }}" rel="noopener">Join online</a></p>{% endif %}
 {% if e.notes %}<p class="calnotes">{{ e.notes|linkify }}</p>{% endif %}
 {% if e.from_minutes %}<p class="muted small">From the last meeting's Upcoming Events{% if can_edit %}; change it in the leader console{% endif %}.</p>{% endif %}
 {% if can_edit and e.id %}<p class="row"><a class="btn small" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}">{{ emoji('✏️', 'pencil') }} Edit</a></p>{% endif %}

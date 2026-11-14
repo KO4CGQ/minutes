@@ -10,10 +10,10 @@
 .minutes .att { display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; margin: 0; }
 .minutes .att dt { font-weight: bold; } .minutes .att dd { margin: 0; }
 .minutes ul.items { margin: 0; padding-left: 1.2rem; } .minutes ul.items li { margin: .3rem 0; }
-.minutes .who { font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }
+.minutes .who { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }
 .minutes .cs { font-family: monospace; }
 .minutes .links ul { padding-left: 1.2rem; font-size: .9rem; } .minutes .ver { font-size: .8rem; color: var(--muted, #667); }
-.minutes a { color: var(--accent-text, #1a4fa0); word-break: break-all; }
+.minutes a { color: var(--accent-text, #1a4fa0); overflow-wrap: anywhere; }  /* a long web address wraps; words break only if they must */
 .muted { color: var(--muted, #667); }
 body.pdf { margin: 0; } @page { size: letter; margin: .7in; }
 body.pdf .minutes h2 { break-after: avoid; }

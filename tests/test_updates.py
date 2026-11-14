@@ -46,22 +46,22 @@ def test_check_and_deploy_notes(env):
 def test_request(env, monkeypatch):
     monkeypatch.setattr(updates, "latest", lambda *a, **k: {"version": "0.7.0", "notes": NOTES, "deploy_notes": ["x"]})
     with pytest.raises(ValueError):
-        updates.request("kd8adm", "0.7.0", notes_confirmed=False)       # steps by hand come first
-    updates.request("kd8adm", "0.7.0", notes_confirmed=True)
+        updates.request("n0admn", "0.7.0", notes_confirmed=False)       # steps by hand come first
+    updates.request("n0admn", "0.7.0", notes_confirmed=True)
     req = json.loads((env / "update-request.json").read_text())
-    assert req["by"] == "kd8adm" and req["from"] == "0.6.0" and req["to"] == "0.7.0"
+    assert req["by"] == "n0admn" and req["from"] == "0.6.0" and req["to"] == "0.7.0"
     assert "requested" in updates.status()
     with pytest.raises(ValueError):
-        updates.request("kd8adm", "0.7.0", True)                          # one at a time
+        updates.request("n0admn", "0.7.0", True)                          # one at a time
     req["at"] -= 3600                                                      # an hour later, nothing picked it up
     (env / "update-request.json").write_text(json.dumps(req))
     assert updates.status()["stuck"]
     assert updates.cancel() and "requested" not in updates.status()
-    updates.request("kd8adm", "0.7.0", True)
+    updates.request("n0admn", "0.7.0", True)
     monkeypatch.setattr(updates, "PREVIEW", "branch")
     (env / "update-request.json").unlink()
     with pytest.raises(ValueError):
-        updates.request("kd8adm", "0.7.0", True)                          # previews never update themselves
+        updates.request("n0admn", "0.7.0", True)                          # previews never update themselves
 
 
 def test_admin_page(env, tmp_path, monkeypatch):
@@ -74,8 +74,8 @@ def test_admin_page(env, tmp_path, monkeypatch):
     from club_minutes.club import Club
     from club_minutes.store import Archive
     club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml",
-                roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "callsign": "KD8ADM"}, {"id": "bob", "first": "Bob", "last": "B"}])
-    club.admins = {"kd8adm"}
+                roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN"}, {"id": "bob", "first": "Bob", "last": "B"}])
+    club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
     monkeypatch.setattr(web, "authn", a)
@@ -83,7 +83,7 @@ def test_admin_page(env, tmp_path, monkeypatch):
     monkeypatch.setattr(updates, "latest", lambda *a, **k: {"version": "0.7.0", "notes": NOTES, "url": "u",
                                                               "deploy_notes": updates.deploy_notes(NOTES)})
     c = TestClient(web.app)
-    token = a.new_session("kd8adm")
+    token = a.new_session("n0admn")
     c.cookies.set(web.COOKIE, token)
     assert c.get("/admin/updates", follow_redirects=False).headers["location"].startswith("/admin/confirm")
     page = c.get("/links").text                                                  # admins hear about it outside admin mode too
@@ -116,8 +116,8 @@ def test_backup_before_update(env, tmp_path, monkeypatch):
     from club_minutes.auth import Auth
     from club_minutes.club import Club
     from club_minutes.store import Archive
-    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin"}])
-    club.admins = {"kd8adm"}
+    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin"}])
+    club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
     monkeypatch.setattr(web, "authn", a)
@@ -125,7 +125,7 @@ def test_backup_before_update(env, tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "DATA", tmp_path)
     monkeypatch.setattr(updates, "latest", lambda *a, **k: {"version": "0.7.0", "notes": "", "url": "u", "deploy_notes": ""})
     c = TestClient(web.app)
-    token = a.new_session("kd8adm")
+    token = a.new_session("n0admn")
     a.set_admin(token, 60)
     c.cookies.set(web.COOKIE, token)
     monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "a long test passphrase")
@@ -152,8 +152,8 @@ def test_nightly_auto_update(env, tmp_path, monkeypatch):
 
     from club_minutes import backup
     from club_minutes.club import Club
-    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])
-    club.admins = {"kd8adm"}
+    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "email": "ann@example.org"}])
+    club.admins = {"n0admn"}
     sent, ran = [], []
     monkeypatch.setattr(updates, "_tell_admins", lambda c, subject, body: sent.append(subject))
     monkeypatch.setattr(backup, "run", lambda c, url="": ran.append(1) or {"ok": True, "name": "b.tar.gz.enc"})
@@ -211,15 +211,15 @@ def test_auto_update_switch(env, tmp_path, monkeypatch):
     from club_minutes.auth import Auth
     from club_minutes.club import Club
     from club_minutes.store import Archive
-    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Ann", "last": "Admin"}, {"id": "bob", "first": "Bob", "last": "B"}])
-    club.admins = {"kd8adm"}
+    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin"}, {"id": "bob", "first": "Bob", "last": "B"}])
+    club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web, "DATA", tmp_path)
     monkeypatch.setattr(updates, "latest", lambda *a, **k: None)
     c = TestClient(web.app)
-    token = a.new_session("kd8adm")
+    token = a.new_session("n0admn")
     c.cookies.set(web.COOKIE, token)
     assert c.post("/admin/updates/auto", data={"on": 1}).status_code == 403  # admin mode first
     a.set_admin(token, 60)

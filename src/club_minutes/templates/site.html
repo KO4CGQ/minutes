@@ -4,13 +4,12 @@
 <nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% if tab == 'club' %}
-{% if meeting_edit %}<p class="msg"><a class="btn small" href="{{ meeting_edit }}">Change the weekly meeting on the calendar</a></p>{% endif %}
 <p class="muted">The club's name and callsign, and when it meets. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
 <form method="post" action="/admin/site/club" class="profile siteclub">
 <div class="card sitesec"><h2>The club</h2>
 <div class="fmtgrid">
 <label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ origin('name') }}
-<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
+<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9\/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
 <label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}"><span class="muted small">{{ 'Set here' if app_name() != default_name else 'From the callsign' }}</span>
 </div>
 <p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
@@ -19,9 +18,13 @@
 <label for="c-day">Day</label><select id="c-day" name="meeting_day">{% for d in weekdays %}<option{{ ' selected' if d|lower == (club.info.meeting_day or '')|lower }}>{{ d }}</option>{% endfor %}</select>{{ origin('meeting_day') }}
 <label for="c-time">Starts at</label><input id="c-time" type="time" name="meeting_time" value="{{ club.meeting_time }}" required>{{ origin('meeting_time') }}
 <label for="c-tz">Time zone</label><input id="c-tz" name="timezone" list="zones" value="{{ club.timezone }}" required autocomplete="off" spellcheck="false">{{ origin('timezone') }}
+<label for="c-where">Where</label><input id="c-where" name="where" value="{{ meeting_where[0] }}" maxlength="200" placeholder="123 Main St, Anytown"><span class="muted small">On the calendar</span>
+<label for="c-online">Online link</label><input id="c-online" type="url" name="online" value="{{ meeting_where[1] }}" maxlength="500" placeholder="https://meet.example.com/abc"><span class="muted small">On the calendar</span>
+<input type="hidden" name="shown_where" value="{{ meeting_where[0] }}"><input type="hidden" name="shown_online" value="{{ meeting_where[1] }}">
+<label for="c-since">Starting</label><input id="c-since" type="date" name="since" value="{{ sample }}" min="{{ sample }}" required><span></span>
 </div>
 <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
-<p class="hint">Every week on this day. A new day or time doesn't change what's already on the calendar: the weekly meeting there is an ordinary event (added once, the first time the calendar was opened), and chow nights come from the chow schedule an officer makes on the Chow page. After you save, the app says what's on the old day and links the meeting to change.</p>
+<p class="hint">Every week on this day, as the weekly meeting on the Club events calendar. A new day, time, Where or online link changes the meeting there from the Starting date on; earlier dates stay as they were. Where and the online link show the next meeting's; only what you change here is applied, so a different place already planned for a later date stays. Where is the place; the online link (Zoom, Meet, Teams…) shows as a Join online button on the calendar and goes to phones' calendars too. One date (a holiday, a new place for a night) is changed on the calendar itself. Chow nights come from the chow schedule on the Chow page: the app says if any are on the old day.</p>
 </div>
 <p class="row"><button class="btn">Save</button></p>
 </form>
@@ -53,6 +56,60 @@
 <p class="row"><button class="btn">Save</button></p>
 </form>
 {% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'roles' %}
+<p class="muted">Roles say what a member may do in the app; most come from the offices a member holds. Below: the club's offices, from its bylaws, then each role, what it allows and who has it. Who holds each office is on the <a href="/offices">Offices</a> page (Roster → Offices). Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/offices" class="profile siteoffices">
+<input type="hidden" name="rows" value="{{ office_rows|length }}">
+<div class="card sitesec"><h2>Offices {{ origin('.offices') }}</h2>
+<p class="hint"><b>Officer</b>: its holders are officers (they lead meetings, edit the minutes and calendars, see the Treasurer pages). Untick it for a board seat that isn't an officer, like a trustee. Every office is on the board. An office someone holds can't be removed or renamed here; hand it over on the Offices page first.</p>
+<div class="officegrid">
+<span class="muted small agh">Office</span><span class="muted small agh">Officer</span><span class="muted small agh">Seats</span><span class="muted small agh">Adds<br>members</span>
+{% for r in office_rows %}{% set i = loop.index0 %}
+<input name="title{{ i }}" value="{{ r.title }}" maxlength="60" placeholder="{{ 'A new office' if not r.title }}" aria-label="Office"{{ ' readonly title="Held: hand it over on the Offices page to rename it"' if r.held }}>
+<input type="checkbox" name="officer{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }} is an officer's office"{{ ' checked' if r.officer }}>
+<input type="number" name="seats{{ i }}" value="{{ r.seats }}" min="1" max="20" aria-label="Seats for {{ r.title or 'the new office' }}">
+<input type="checkbox" name="keeper{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }}: adds members"{{ ' checked' if r.keeper }}>
+{% endfor %}
+</div>
+<p class="hint"><b>Adds members</b>: the holders can add members on the Roster page and change their details (usually the Secretary and the Treasurer). Admins, in admin mode, always can. Clear an office's name to remove it. Two empty rows are for new offices; Save, and two more appear. {{ origin('.roster_keepers') }}</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices, and who adds members?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+<div class="card sitesec" id="roles"><h2>Roles</h2>
+<p class="hint">What each role allows, and who has it. A member with several roles may do everything any of them allows. Admins, in admin mode, may do everything; they're added on <a href="/admin">Admin</a> → Security.</p>
+<form method="post" action="/admin/site/roles" class="profile">
+<div class="rolelist">{% for r in role_rows %}
+<section class="role"><h3>{{ r.name }}</h3>
+  {% if r.can %}<p class="small"><b>Allows:</b></p><ul class="small allows">{% for c in r.can %}<li>{{ c[:1]|upper ~ c[1:] }}</li>{% endfor %}</ul>
+  {% else %}<p class="small"><b>Allows:</b> nothing yet; it marks who is on the board.</p>{% endif %}
+  {% if r.picked %}<p class="small"><b>Who:</b> members picked here{{ ' (officers have it already)' if r.key == 'minutes_editor' else ' (officers and minutes editors have it already)' }}.</p>
+  <details class="multi"><summary data-none="Nobody">{% for i in r.who %}{{ club.name(i) }}{{ ', ' if not loop.last }}{% else %}Nobody{% endfor %}</summary><div class="multi-list">
+    {% if r.choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter members…" aria-label="Filter members" hidden>{% endif %}
+    <div class="multi-opts">{% for i in r.choices %}<label class="check"><input type="checkbox" name="{{ r.key }}" value="{{ i }}" data-label="{{ club.name(i) }}" {{ 'checked' if i in r.who }}> {{ club.name(i) }}</label>{% endfor %}</div>
+  </div></details>
+  {% else %}<p class="small"><b>Given by:</b> {{ r.how[:1]|lower ~ r.how[1:] }}{% if r.offices %} ({{ r.offices|join(', ') }}){% else %}: none at the moment{% endif %}.</p>
+  <p class="small"><b>Who:</b> {% for i in r.who %}<span class="chip"><a href="/members/{{ i }}">{{ club.name(i) }}</a></span> {% else %}<span class="muted">nobody</span>{% endfor %}</p>{% endif %}
+</section>{% endfor %}</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+</div>
+<div class="card sitesec"><h2>What each permission is</h2>
+<table class="permtable"><thead><tr><th>Permission</th><th>Roles that allow it</th></tr></thead><tbody>
+{% for label, names in perm_rows %}<tr><td>{{ label[:1]|upper ~ label[1:] }}</td><td>{{ (names + ['Admin'])|join(', ') }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+{% include "_multi.html" %}
+{% elif tab == 'privacy' %}
+<p class="muted">Names that are never recorded. Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/privacy" class="profile">
+<div class="card sitesec"><h2>Never recorded {{ origin('privacy.never_record') }}</h2>
+<p class="hint">One name a line: someone who asked not to be in the minutes (a guest, say). A guest with one of these names is left out each time the console saves, a line with one is left out of imported minutes, and the AI never sees one. Minutes already saved keep what they have: edit those by hand.</p>
+<textarea name="names" rows="6" maxlength="10000" aria-label="Names never recorded, one a line">{{ club.never_record|join('\n') }}</textarea>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if 'privacy.never_record' in here_keys %}<form method="post" action="/admin/site/privacy" data-confirm="Go back to club.yaml's list of names never recorded?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'features' %}
 <p class="muted">Parts of the app the club uses, and what anyone can see without signing in. Each change is in the admin log; changes here win over club.yaml on the server. Turning a part off keeps its data.</p>
 <form method="post" action="/admin/site/features" class="profile sitewide">

@@ -11,7 +11,7 @@
   --info-soft: #e3e8f3; --ai: #6b5fb5; --ai-soft: #f1effb;
   --nav-bg: #15283e; --nav-text: #e0edf6; --nav-hover: rgba(255, 255, 255, .12); --nav-on: rgba(255, 255, 255, .2);
   --focus: rgba(39, 85, 130, .28); --mark: #fbe58a; --sheet-h: #95c0dc;
-  --inperson-bg: #c0d9ef; --inperson-edge: #4177a9; --online-bg: #d6e4f7; --online-edge: #5a86c4;
+  --inperson-bg: #dcebc4; --inperson-edge: #7da04a; --online-bg: #d6e4f7; --online-edge: #5a86c4;
   --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a; --chart-4: #eda100; --chart-5: #e87ba4; --chart-6: #008300; --chart-7: #6250d6; --chart-8: #e34948;  /* chart series, checked for colour blindness */
   --shadow: 0 1px 2px rgba(20, 30, 10, .06), 0 4px 16px rgba(20, 30, 10, .05);
   --shadow-pop: 0 10px 30px rgba(20, 30, 10, .18);
@@ -28,7 +28,7 @@
   --info-soft: #23304a; --ai: #a99cf0; --ai-soft: #262237;
   --nav-bg: #11151c; --nav-text: #d4e1ec; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
   --focus: rgba(95, 149, 206, .3); --mark: #6b5a12; --sheet-h: #1d314880;
-  --inperson-bg: #182941; --inperson-edge: #4177a9; --online-bg: #1e2f47; --online-edge: #5a86c4;
+  --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
   --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
@@ -45,7 +45,7 @@
     --info-soft: #23304a; --ai: #a99cf0; --ai-soft: #262237;
     --nav-bg: #11151c; --nav-text: #d4e1ec; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
     --focus: rgba(95, 149, 206, .3); --mark: #6b5a12; --sheet-h: #1d314880;
-    --inperson-bg: #182941; --inperson-edge: #4177a9; --online-bg: #1e2f47; --online-edge: #5a86c4;
+    --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
     --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
@@ -59,7 +59,9 @@ body { margin: 0; font: 15.5px/1.5 system-ui, -apple-system, "Segoe UI", Roboto,
 main { max-width: 68rem; margin: 1.8rem auto 3rem; padding: 0 1.1rem; }
 h1 { font-size: 1.75rem; letter-spacing: -.015em; margin: .2rem 0 .8rem; }
 h2 { font-size: 1.2rem; letter-spacing: -.01em; margin: 1.6rem 0 .6rem; } h3 { font-size: 1.02rem; }
-a { color: var(--accent-text); } a:hover { color: var(--accent); }
+a { color: var(--accent-text); text-decoration-thickness: 1px; text-underline-offset: .22em;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }  /* a soft underline: still clearly a link */
+a:hover { color: var(--accent); text-decoration-color: currentColor; }
 .muted { color: var(--muted); } .small { font-size: .85rem; } .hint { color: var(--muted); font-size: .88rem; }
 .cs { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
 mark { background: var(--mark); color: inherit; border-radius: .2rem; padding: 0 .1rem; }
@@ -67,7 +69,7 @@ code { background: var(--surface-3); border-radius: .3rem; padding: .05rem .35re
 hr { border: 0; border-top: 1px solid var(--border); }
 
 /* form fields everywhere */
-input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
+input[type=text], input[type=search], input[type=email], input[type=tel], input[type=url], input[type=date], input[type=time], input[type=number], input[type=password], input:not([type]),
 select, textarea {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm); padding: .45rem .65rem; }
@@ -145,7 +147,7 @@ table.list { width: 100%; border-collapse: separate; border-spacing: 0; backgrou
 .list tbody tr:nth-child(even) td { background: var(--surface-2); }
 .list tbody tr:hover td { background: var(--accent-soft); }
 .list tbody tr:last-child td { border-bottom: 0; }
-.list .nw { white-space: nowrap; }
+.list .nw { white-space: nowrap; } .list td.wrap { overflow-wrap: anywhere; }
 .list .n { text-align: right; font-variant-numeric: tabular-nums; }
 .list td a { text-decoration: none; font-weight: 500; } .list td a:hover { text-decoration: underline; }
 th.asc::after { content: " ▲"; } th.desc::after { content: " ▼"; } .list thead th { cursor: pointer; user-select: none; }
@@ -198,10 +200,30 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .about dt, .contactcard dt { color: var(--muted); } .about dd, .contactcard dd { margin: 0; min-width: 0; overflow-wrap: anywhere; } .contactcard dd.address { white-space: pre-line; }
 .changelog h2, .changelog h3 { font-size: 1rem; margin: .8rem 0 .3rem; } .changelog li { margin: .2rem 0; }
 .changelog details { border-bottom: 1px solid var(--border, #dde); padding: .4rem 0; } .changelog summary { cursor: pointer; }
-.changelog pre, .deploynotes pre { overflow-x: auto; max-width: 100%; }  /* a long command scrolls inside its box on a phone */
+.changelog pre, .deploynotes pre, .guide pre { overflow-x: auto; max-width: 100%; }  /* a long command scrolls inside its box on a phone */
+.guide { overflow-wrap: break-word; } .guide code, .minutes.guide a { overflow-wrap: anywhere; word-break: normal; }  /* long paths and inline code wrap; words only if they must */
+a[target="_blank"]:not([class])::after { content: " ↗"; content: " ↗" / " (opens in a new tab)"; }  /* another site, in a new tab: says so, to screen readers too */
+.guide pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem .8rem; } .guide pre code { background: none; padding: 0; }
+.guide img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: block; }
+.guide .shot { border: 0; padding: 0; background: none; cursor: zoom-in; width: min(100%, 24rem); margin: .4rem 0; }  /* a thumbnail; tap for full size */
+.guide .shot:hover img, .guide .shot:focus-visible img { outline: 2px solid var(--accent); outline-offset: 2px; }
+.modal.shotbig[popover] { width: auto; max-width: calc(100vw - 2rem); padding: 0; background: none; box-shadow: none; overflow: visible; }
+.shotbig img { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); border: 0; }
+.modal.shotbig > .calclose { background: var(--surface); border-radius: 50%; width: 2rem; height: 2rem; }
+.guide table { display: block; overflow-x: auto; border-collapse: collapse; } .guide th, .guide td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; vertical-align: top; }
+.guide h2 { scroll-margin-top: 4rem; } .guide h2 + p, .guide h2 + ul { margin-top: .4rem; }
+.toc { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 1.4rem; }  /* the guide's sections, as chips */
+.toc a { background: var(--accent-soft); color: var(--accent-text); border-radius: 1rem; padding: .2rem .75rem; font-size: .88rem; text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+.callout { margin: 1rem 0; padding: .6rem .9rem; border-left: 4px solid var(--accent); border-radius: var(--radius-sm); background: var(--info-soft); }
+.callout p { margin: .3rem 0; } .calloutlabel { font-weight: 700; }
+.callout.tip { background: var(--accent-soft); }
+.callout.warning, .callout.important { background: var(--warn-soft); color: var(--warn-text); border-left-color: var(--warn-edge); }
+.callout.caution { background: var(--danger-soft); color: var(--danger-text); border-left-color: var(--danger); }
+.callout.warning a, .callout.important a, .callout.caution a, .callout.warning code, .callout.caution code { color: inherit; }
 form.profile { max-width: 36rem; } form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
-form.profile input[type=email], form.profile input[type=tel], form.profile textarea { width: 100%; }
+form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }
 form.profile input[type=checkbox] { display: inline-block; margin: 0 .3rem 0 0; }
 form.profile .hint { display: block; font-weight: normal; }
 form.profile fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 1rem 0; padding: .7rem 1rem; background: var(--surface); }
@@ -209,7 +231,7 @@ form.profile legend { font-weight: 600; float: left; width: 100%; padding: 0; ma
 form.profile legend + * { clear: both; } form.profile label.check { display: inline-flex; align-items: center; margin-right: 1.2rem; font-weight: normal; }
 svg.lock { width: .85em; height: .85em; vertical-align: -.05em; fill: var(--faint); stroke: var(--faint); stroke-width: 2.2; } svg.lock rect { stroke: none; }
 div.change { white-space: pre-line; }
-article.mail { border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; margin: .8rem 0; background: var(--surface); box-shadow: var(--shadow); }
+article.mail { overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; margin: .8rem 0; background: var(--surface); box-shadow: var(--shadow); }
 article.mail h3 { margin: .2rem 0; } article.mail pre { white-space: pre-wrap; font: inherit; font-size: .9rem; margin: .5rem 0 0; }
 pre.relnotes { white-space: pre-wrap; background: var(--surface-2); border-radius: var(--radius-sm); padding: .6rem .8rem; font-size: .88rem; max-height: 20rem; overflow-y: auto; }
 
@@ -296,6 +318,9 @@ nav.top .drop .ico { display: inline-block; width: 1.3rem; }
 .avatar { display: inline-grid; place-items: center; border-radius: 50%; object-fit: cover; flex-shrink: 0; vertical-align: middle;
   background: var(--surface-3); color: #fff; font-weight: 600; overflow: hidden; }
 .avatar.initials { background: hsl(var(--h) 38% 42%); letter-spacing: .02em; }
+/* the letters out of the flow, so a link's underline (on hover) never runs under them: browsers carry it into the
+   circle otherwise, even though it's its own box */
+.avatar.initials { position: relative; } .avatar .ini { position: absolute; inset: 0; display: grid; place-items: center; }
 .avatar.xs { width: 1.15rem; height: 1.15rem; font-size: .55rem; margin-right: .1rem; }
 .avatar.sm { width: 1.75rem; height: 1.75rem; font-size: .72rem; }
 .avatar.md { width: 1.5rem; height: 1.5rem; font-size: .62rem; margin-right: .4rem; }
@@ -321,6 +346,17 @@ form.filter { width: 100%; }
 .mc-name { font-weight: 600; font-size: 1.05rem; } .mc-call { color: var(--muted); font-size: .88rem; }
 .mc-meta { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: center; margin: .2rem 0; }
 form.profile fieldset.fixed { background: var(--surface-2); }
+/* a multi-select: the ticked items in the summary, the list (filterable when long) under it */
+details.multi { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin: .3rem 0; }
+details.multi > summary { padding: .5rem .7rem; cursor: pointer; list-style: none; }
+details.multi > summary::-webkit-details-marker { display: none; }
+details.multi > summary::after { content: " ▾"; color: var(--muted); } details.multi[open] > summary::after { content: " ▴"; }
+details.multi[open] > summary { border-bottom: 1px solid var(--border); }
+.multi-list { display: grid; gap: .4rem; padding: .5rem .7rem; }
+/* only a long list of titles scrolls (and shows its scrollbar); the filter and Add a title stay in full view */
+.multi-opts { display: grid; gap: .2rem; max-height: 14rem; overflow-y: auto; scrollbar-gutter: stable; }
+form.profile .multi-list label.check { margin: 0; } fieldset.roles label.check .hint { display: inline; margin-left: .3rem; } .multi-list label.new { margin-top: .4rem; font-weight: normal; }
+.multi-list label[hidden] { display: none; }
 form.profile .fixedrow { display: flex; flex-wrap: wrap; gap: .8rem; }
 form.profile .fixedrow label { flex: 1 1 9rem; margin: .2rem 0 .5rem; font-weight: 600; font-size: .9rem; }
 form.profile input[readonly] { width: 100%; background: var(--surface-3); color: var(--muted); border-style: dashed; cursor: default; }
@@ -336,7 +372,7 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
 /* ---------- phones ---------- */
 @media (max-width: 760px) {
   /* iOS zooms the page into any field under 16px */
-  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], input:not([type]),
+  input[type=text], input[type=search], input[type=email], input[type=tel], input[type=url], input[type=date], input[type=time], input[type=number], input[type=password], input:not([type]),
   select, textarea { font-size: 16px; }
   main { margin-top: 1.1rem; padding: 0 .8rem; }
   .pagesearch { display: block; margin-bottom: .6rem; }
@@ -419,14 +455,18 @@ ul.checklist li::before { content: ""; position: absolute; left: 0; top: .55rem;
 ul.checklist li.late::before { border-color: var(--danger); }
 /* Home's business items: each opens the item on the Business page. Pointing at one shows a faint tick in its box
    (what you can do there); a phone has no pointing, so the › says it opens */
-ul.checklist.open li a { color: inherit; text-decoration: none; display: block; }
+ul.checklist.open li a { color: inherit; text-decoration: none; display: block; margin-left: -1.7rem; padding-left: 1.7rem; }  /* the box is part of the link: a tap on it opens the item */
+ul.checklist.open li::before { pointer-events: none; }
 ul.checklist.open li a::after { content: " ›"; color: var(--muted); }
 /* the tick is a drawing laid over the box (same place and size), not a "✓" in some font: every browser centres it */
 ul.checklist.open li::after { content: ""; position: absolute; left: 0; top: .55rem; width: calc(1rem + 4px); height: calc(1rem + 4px);
   background: var(--accent-text); opacity: 0; transition: opacity .15s; pointer-events: none;
   --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   -webkit-mask: var(--tick) center / 75% no-repeat; mask: var(--tick) center / 75% no-repeat; }
-ul.checklist.open li:hover::after, ul.checklist.open li:focus-within::after { opacity: .5; }
+/* the faint tick: on hover only where there's real pointing (a phone keeps "hover" on the last thing tapped, which looked
+   ticked), while a finger is down on a phone, and for the keyboard */
+@media (hover: hover) { ul.checklist.open li:hover::after { opacity: .5; } }
+ul.checklist.open li:active::after, ul.checklist.open li:has(a:focus-visible)::after { opacity: .5; }
 ul.checklist.open li a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }  /* the keyboard still shows where it is */
 form.linkedit table.list { overflow: visible; }
 /* calendar page */
@@ -447,12 +487,16 @@ ul.agenda .caltime { flex: none; width: 4.6rem; font-size: .9rem; } ul.agenda .d
 table.month button.calopen { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 3px; }
 table.month button.calopen:hover { background: var(--accent-soft); }
 /* the details dialog */
-dialog#calmodal, dialog.modal { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
-  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop, dialog.modal::backdrop { background: rgba(0,0,0,.45); }
-dialog#calmodal .body, dialog.modal .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2, dialog.modal h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
+dialog#calmodal, dialog.modal, .modal[popover] { border: 0; border-radius: var(--radius); padding: 0; width: min(28rem, calc(100vw - 2rem)); background: var(--surface); color: var(--text);
+  box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: calc(100dvh - 2rem); overflow: auto; } dialog#calmodal::backdrop, dialog.modal::backdrop, .modal[popover]::backdrop { background: rgba(0,0,0,.45); }
+dialog#calmodal .body, dialog.modal .body, .modal[popover] .body { padding: 1.1rem 1.25rem 1rem; } dialog#calmodal h2, dialog.modal h2, .modal[popover] h2 { margin: .1rem 2rem .6rem 0; font-size: 1.25rem; }
 dialog#calmodal form, dialog.modal form.x { position: absolute; top: .5rem; right: .5rem; margin: 0; }
 button.calclose { font: inherit; background: none; border: 0; cursor: pointer; min-width: 2.5rem; min-height: 2.5rem; border-radius: 50%; color: var(--muted); }
 button.calclose:hover { background: var(--accent-soft); }
+.modal[popover] > .calclose { position: absolute; top: .5rem; right: .5rem; }  /* popover dialogs: no script needed */
+td.evacts form { display: inline; } .modal[popover] { white-space: normal; text-align: left; }
+dl.evinfo { display: grid; grid-template-columns: auto 1fr; gap: .35rem .9rem; margin: 0; } dl.evinfo dt { font-weight: 600; } dl.evinfo dd { margin: 0; }
+dl.evinfo .agent { overflow-wrap: anywhere; }
 .calcal { margin: 0; font-size: .85rem; color: var(--muted); } .calwhen { font-weight: 600; } .calnotes { white-space: pre-line; overflow-wrap: anywhere; }
 table.month { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
 table.month th { font-size: .75rem; color: var(--muted); padding: .3rem; font-weight: 600; }
@@ -495,6 +539,7 @@ table.month li.extra { display: none; }
 .chart .bar i { flex-basis: 0; min-height: 2px; } .chart .bar:hover, .chart .bar:focus-visible { opacity: .75; }
 .chart figcaption { display: flex; justify-content: space-between; font-size: .75rem; color: var(--faint); margin-top: .3rem; }
 table.list td select { max-width: 7.5rem; font-size: .8rem; display: block; margin-top: .2rem; }
+@media (max-width: 760px) { table.list td select { max-width: 6.5rem; } }  /* Treasurer → Money fits 375px in Firefox too */
 .swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem; vertical-align: -.05rem; } .swatch.k1 { background: var(--chart-1); } .swatch.k2 { background: var(--chart-2); } .swatch.k3 { background: var(--chart-3); } .swatch.k4 { background: var(--chart-4); } .swatch.k5 { background: var(--chart-5); } .swatch.k6 { background: var(--chart-6); } .swatch.k7 { background: var(--chart-7); } .swatch.k8 { background: var(--chart-8); }
 input.cellinput { font: inherit; font-size: .9rem; width: 100%; min-width: 10rem; border: 1px solid transparent; background: transparent; color: inherit; padding: .15rem .3rem; border-radius: .3rem; } input.cellinput:hover, input.cellinput:focus { border-color: var(--border-strong); background: var(--surface); }
 /* Business items: a small card that opens a dialog with the details, comments, history and actions */
@@ -544,7 +589,12 @@ img.logo.bg-square { background: #fff; border-radius: 14%; padding: 6%; box-sizi
 .admintools a.card { display: flex; flex-direction: column; gap: .3rem; text-decoration: none; color: inherit; padding: .9rem 1rem; }
 .admintools a.card:hover { border-color: var(--accent); } .admintools a.card b { font-size: 1.05rem; }
 /* ‹ Admin, above each admin tool's page */
-nav.crumb { margin: -.6rem 0 .6rem; font-size: .9rem; } nav.crumb a { text-decoration: none; }
+nav.crumb { margin: -.5rem 0 .8rem; font-size: .88rem; }
+nav.crumb a { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .8rem .22rem .6rem; border: 1px solid var(--border);
+  border-radius: 999px; background: var(--surface); color: var(--accent-text); text-decoration: none; font-weight: 500; line-height: 1.3;
+  transition: background .15s, border-color .15s; }
+nav.crumb a:hover { background: var(--accent-soft); border-color: var(--accent); }
+nav.crumb a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---------- Site → Colours: two small previews, each drawn with the palette set on it ---------- */
 form.colours .row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; margin: .4rem 0; }
@@ -573,6 +623,10 @@ form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items:
 @media (max-width: 560px) { .fmtgrid { grid-template-columns: 1fr; } .fmtgrid span { margin-bottom: .4rem; } }
 .agendagrid { display: grid; grid-template-columns: auto 3.5rem minmax(10rem, 16rem) 1fr; gap: .45rem .7rem; align-items: center; }
 .agendagrid input[name^=pos] { width: 3.2rem; text-align: center; }
+.officegrid { display: grid; grid-template-columns: minmax(0, 18rem) auto 4.2rem auto; gap: .45rem 1rem; align-items: center; justify-items: start; }
+.officegrid input[name^=title] { width: 100%; min-width: 0; box-sizing: border-box; }
+.officegrid input[type=number] { width: 4rem; } .officegrid input[readonly] { background: var(--surface-2); }
+@media (max-width: 560px) { .officegrid { gap: .45rem .6rem; } .officegrid .agh { font-size: .7rem; line-height: 1.2; } }
 @media (max-width: 560px) { .agendagrid { grid-template-columns: auto 3.2rem minmax(0, 1fr); } .agendagrid .agh { display: none; }
   .agendagrid input[name^=hint] { grid-column: 2 / -1; margin-bottom: .6rem; } }
 form.siteagenda { max-width: 52rem; } form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }
@@ -595,3 +649,41 @@ form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-
 .holrows .rm:has(input:focus-visible) { outline: 2px solid var(--accent); }
 .holrows .rm .rm-undo, .holrows .rm:has(input:checked) .rm-do { display: none; } .holrows .rm:has(input:checked) .rm-undo { display: inline; }
 .holrows .hrow:has(.rm input:checked) > :not(.rm) { opacity: .4; text-decoration: line-through; }
+.rolelist { display: grid; gap: .8rem; } .rolelist .role { border-top: 1px solid var(--border); padding-top: .6rem; }
+.rolelist .role h3 { margin: 0 0 .2rem; font-size: 1rem; } .rolelist .role p { margin: .2rem 0; }
+.permtable { width: 100%; border-collapse: collapse; font-size: .9rem; } .permtable th, .permtable td { text-align: left; vertical-align: top; padding: .35rem .5rem; border-bottom: 1px solid var(--border); }
+.rolelist ul.allows { margin: .1rem 0 .3rem; padding-left: 1.2rem; } .rolelist ul.allows li { margin: .05rem 0; }
+/* fields.js: a round ✕ inside the right edge of an optional date or time box, while it has a value (an iPhone fills a
+   box in when tapped and its picker can't empty it) */
+.clearwrap { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
+.clearwrap.block { display: flex; width: 100%; } .clearwrap > input { flex: 1 1 auto; min-width: 0; }
+.clearwrap:has(> button.clearbox:not([hidden])) > input { padding-right: 2.7rem; }
+/* the circle is small, but the button is the box's whole right end, full height and 2.6rem wide: easy to hit with a thumb */
+button.clearbox { position: absolute; right: 0; top: 0; bottom: 0; width: 2.6rem; padding: 0; border: 0; border-radius: 0 var(--radius-sm, .4rem) var(--radius-sm, .4rem) 0;
+  background: radial-gradient(circle, var(--surface-3) 0 .68rem, transparent .72rem); color: var(--muted); font-size: .75rem; line-height: 1;
+  display: grid; place-items: center; cursor: pointer; touch-action: manipulation; }
+button.clearbox:hover, button.clearbox:focus-visible { background: radial-gradient(circle, var(--border-strong) 0 .68rem, transparent .72rem); color: var(--text); }
+button.clearbox:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+button.clearbox[hidden] { display: none; }
+/* an empty date or time box keeps its size on iPhones, which otherwise shrink it to nothing */
+input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
+/* a date and a time side by side (the calendar event form): equal halves, the boxes lined up along the bottom */
+.pairgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem .8rem; align-items: end; max-width: 26rem; }
+.pairgrid > label { margin: 0; min-width: 0; } .pairgrid input, .pairgrid .clearwrap { width: 100%; min-width: 0; box-sizing: border-box; }
+.pairgrid .clearwrap { display: flex; }
+/* iPhones and iPads (the only browsers with -webkit-touch-callout): their own date and time box won't shrink to fit
+   its space (it spilled into the next box) and centres its value; plain boxes size like the rest and read from the left */
+@supports (-webkit-touch-callout: none) {
+  input:is([type=date], [type=time]) { -webkit-appearance: none; appearance: none; min-width: 0; }
+  input:is([type=date], [type=time])::-webkit-date-and-time-value { text-align: left; }
+}
+/* Lead a meeting → Start a new meeting: each label above its box, the button after with room to breathe; on a phone the
+   date and the leader side by side, the button on its own line, full width */
+.startform { display: flex; flex-wrap: wrap; gap: .9rem 1rem; align-items: flex-end; margin: .4rem 0 1.2rem; }
+.startform label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; font-weight: 600; margin: 0; }
+.startform select { min-width: 12rem; } .startform label > :is(input, select) { font-weight: normal; }
+@media (max-width: 560px) {
+  .startform { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .startform label > * { width: 100%; min-width: 0; box-sizing: border-box; }
+  .startform .btn { grid-column: 1 / -1; margin-top: .3rem; padding-block: .7rem; justify-content: center; text-align: center; }
+}

@@ -3,7 +3,7 @@ Sheet in 0.13.0; same tabs and columns). data/roster.json, what the rest of the 
 
 Reads columns by header name, so adding or reordering columns doesn't break it.
 Columns used: callsign, full_name, email, Title(s), is_officer, is_board, Class,
-minutes_editor (may lead meetings and edit minutes), calendar_editor (may change the club calendars), Status (Active / Inactive /
+minutes_editor and calendar_editor (read only until data/roles.json exists: Admin → Site → Roles), Status (Active / Inactive /
 Silent Key / Prospect) and aliases (comma-separated spellings seen in old minutes).
 
 Also phone, address, birthday (MM-DD, or MM for a month only) and share (which of email, phone, address,
@@ -18,7 +18,8 @@ import json
 import re
 from pathlib import Path
 
-from .club import DATA, PREVIEW, ROSTER_CACHE as CACHE, roster_locked
+from .club import DATA, PREVIEW, roster_locked
+from .club import ROSTER_CACHE as CACHE
 
 
 def _truthy(v: str) -> bool:
@@ -167,9 +168,9 @@ class LocalSheet:
 class PreviewSheet(LocalSheet):
     """Preview mode's copy (preview-sheet.json), built from the roster cache, so roster edits can be tried without
     touching the real roster."""
-    HEADER = ["callsign", "full_name", "email", "Phone", "Address", "Class", "Title(s)", "Status", "birthday", "share",
+    HEADER = ["callsign", "full_name", "email", "Phone", "Address", "Class", "Title(s)", "Status", "birthday", "share",  # noqa: RUF012 (read only)
               "is_officer", "is_board", "minutes_editor", "calendar_editor", "aliases"]
-    LOG_HEADER = ["callsign", "full_name", "date", "event", "note"]
+    LOG_HEADER = ["callsign", "full_name", "date", "event", "note"]  # noqa: RUF012 (read only)
 
     def __init__(self):
         super().__init__(DATA / "preview-sheet.json")
@@ -274,7 +275,7 @@ def sync() -> list[dict]:
     members = to_members(fetch_rows())
     try:
         attach_log(members, fetch_rows("Membership Log"))
-    except Exception as e:  # the log is optional
+    except Exception as e:  # the log is optional  # noqa: BLE001
         print(f"Membership Log not read: {e}")
     CACHE.parent.mkdir(parents=True, exist_ok=True)
     tmp = CACHE.with_suffix(".tmp")

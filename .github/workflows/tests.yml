@@ -11,7 +11,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false  # no token left on the runner for later steps
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       - run: uv sync --frozen
-      - run: uv run playwright install --with-deps chromium   # for the mobile-first test
-      - run: uv run pytest -q
+      - run: uv run playwright install --with-deps chromium firefox webkit   # the browser tests run in each
+      - run: uv run pytest -q   # includes ruff (tests/test_lint.py), the version pinned in uv.lock
+
+  # Warn only: the newest ruff, to see what the next version would flag before Dependabot's "bump ruff" pull request.
+  # A red mark here doesn't fail the check; fix what it finds when the pin moves (or sooner).
+  ruff-latest:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false  # no token left on the runner for later steps
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - run: uvx ruff@latest --version && uvx ruff@latest check --output-format github .

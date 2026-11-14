@@ -12,10 +12,10 @@ from club_minutes.store import Archive
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [
     {"id": "sec", "first": "Sam", "last": "Scribe", "email": "sec@example.org", "role": "Secretary", "officer": True},
-    {"id": "amy", "first": "Amy", "last": "Able", "email": "amy@example.org"},
-    {"id": "bob", "first": "Bob", "last": "Baker", "email": "bob@example.org"},
-    {"id": "cal", "first": "Cal", "last": "Carter", "email": "cal@example.org"},
-    {"id": "dee", "first": "Dee", "last": "Dunn", "email": "dee@example.org"},
+    {"id": "amy", "first": "Amy", "last": "Appleseed", "email": "amy@example.org"},
+    {"id": "bob", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"},
+    {"id": "cal", "first": "Cal", "last": "Citizen", "email": "cal@example.org"},
+    {"id": "dee", "first": "Dee", "last": "Dummy", "email": "dee@example.org"},
     {"id": "old", "first": "Old", "last": "Timer", "status": "Silent Key"},
 ]
 
@@ -95,17 +95,17 @@ def test_meeting_night_record_and_minutes(env, tmp_path, monkeypatch):
     s["nights"] = {d[0]: {"member": "amy", "status": "scheduled"}, d[1]: {"member": "bob", "status": "scheduled"},
                    d[2]: {"member": "cal", "status": "scheduled"}, d[3]: {"member": "dee", "status": "scheduled"}}
     chow.record(club, s, d[0], "provided", "sec", note="brownies")
-    assert chow.tonight_line(club, d[0], s["nights"][d[0]]) == "Chow tonight provided by Amy Able (brownies)."
+    assert chow.tonight_line(club, d[0], s["nights"][d[0]]) == "Chow tonight provided by Amy Appleseed (brownies)."
     chow.record(club, s, d[0], "missed", "sec", note="ignored")
-    assert chow.tonight_line(club, d[0], s["nights"][d[0]]) == "Chow tonight: Amy Able did not provide chow."
+    assert chow.tonight_line(club, d[0], s["nights"][d[0]]) == "Chow tonight: Amy Appleseed did not provide chow."
     chow.record(club, s, d[0], "covered", "sec", covered_by="dee", note="pizza delivered")
     assert s["nights"][d[0]] == {"member": "amy", "status": "covered", "covered_by": "dee", "note": "pizza delivered"}
     chow.swap(club, s, d[1], d[2], "sec")
     chow.save(s)
     # Changes are logged with today's date, and the meeting is today: only the latest record counts.
     lines = chow.minutes_section(club, s, chow.history(), d[0])
-    assert lines[0] == "Chow tonight provided by Dee Dunn for Amy Able (pizza delivered)."
-    assert lines[1].startswith("Chow swap: Bob Baker now has")
+    assert lines[0] == "Chow tonight provided by Dee Dummy for Amy Appleseed (pizza delivered)."
+    assert lines[1].startswith("Chow swap: Bob Bloggs now has")
     assert lines[2:] == [chow.describe(club, x, s["nights"][x]) for x in d[1:]]
 
     meetings = tmp_path / "meetings"
@@ -133,14 +133,14 @@ def test_import_matches_misspelled_names_and_fixes_dates(env, tmp_path):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(["", "26 Chow List"])
-    ws.append(["Able, Amy", dt.datetime(2026, 11, 5)])
-    ws.append(["Bob Bakker", dt.datetime(2026, 11, 12)])     # misspelled
+    ws.append(["Appleseed, Amy", dt.datetime(2026, 11, 5)])
+    ws.append(["Bob Blogs", dt.datetime(2026, 11, 12)])     # misspelled
     ws.append(["", dt.datetime(2026, 11, 25)])               # a Wednesday, and blank: no chow
-    ws.append(["Carter", None, "3-Dec"])                     # date typed as text, in column C
+    ws.append(["Citizen", None, "3-Dec"])                     # date typed as text, in column C
     ws.append(["Nobody, Atall", dt.datetime(2026, 12, 10)])
     p = tmp_path / "chow.xlsx"
     wb.save(p)
-    s, problems = chow.import_xlsx(club, p, ["Able", "Baker", "Carter", "Dunn"], "sec", 2026)
+    s, problems = chow.import_xlsx(club, p, ["Appleseed", "Bloggs", "Citizen", "Dummy"], "sec", 2026)
     assert {d: x["member"] for d, x in s["nights"].items()} == {
         "2026-11-05": "amy", "2026-11-12": "bob", "2026-11-26": None, "2026-12-03": "cal"}
     assert s["nights"]["2026-11-26"] == {"member": None, "status": "none", "note": "Thanksgiving Day"}
@@ -151,6 +151,7 @@ def test_import_matches_misspelled_names_and_fixes_dates(env, tmp_path):
 
 def test_chow_page_permissions(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     club, s, _ = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"}, "2099-01-08": {"member": "bob", "status": "scheduled"}}
@@ -160,7 +161,7 @@ def test_chow_page_permissions(env, tmp_path, monkeypatch):
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
     c = TestClient(web.app)
     page = c.get("/chow").text
-    assert "Amy Able" in page and "Ask to swap" in page and "Fill the schedule" not in page  # a member
+    assert "Amy Appleseed" in page and "Ask to swap" in page and "Fill the schedule" not in page  # a member
     assert c.post("/chow/assign", data={"date": "2099-01-01", "member": "bob"}).status_code == 403
     assert c.post("/chow/swap", data={"a": "2099-01-01", "b": "2099-01-08"}).status_code == 403
     c.post("/chow/request", data={"mine": "2099-01-01", "theirs": "2099-01-08"})
@@ -203,18 +204,20 @@ def test_skip_next_turn(env):
 
 def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
     import datetime as dt
+
     from fastapi.testclient import TestClient
     from test_calview import signed_in
+
     from club_minutes import calview, web
     monkeypatch.setattr(chow, "DATA", tmp_path)
     monkeypatch.setattr(calview, "DATA", tmp_path)
-    m, *_ = signed_in(tmp_path, monkeypatch, "kd8aaa")
+    m, *_ = signed_in(tmp_path, monkeypatch, "n0aaaa")
     t = TestClient(web.app, raise_server_exceptions=False, cookies=m.cookies)
-    assert t.post("/chow/assign", data={"date": "junk", "member": "kd8bbb"}).status_code == 400
+    assert t.post("/chow/assign", data={"date": "junk", "member": "n0bbbb"}).status_code == 400
     assert t.post("/chow/none", data={"date": "junk"}).status_code == 400
     d = (dt.date.today() + dt.timedelta(days=7)).isoformat()
     s = chow.load()
-    s["nights"], s["order"] = {d: {"member": "kd8bbb"}}, ["kd8aaa", "kd8bbb"]
+    s["nights"], s["order"] = {d: {"member": "n0bbbb"}}, ["n0aaaa", "n0bbbb"]
     chow.save(s)
     r = t.post("/chow/swap", data={"a": d, "b": d}, follow_redirects=False)
     assert "different%20nights" in r.headers["location"] and not chow.history(5)  # no swap logged, nobody emailed
@@ -225,6 +228,7 @@ def test_odd_chow_requests_are_refused_not_errors(tmp_path, monkeypatch):
 def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
     """Anyone can print the list; officers email it, and the page tells them when it has changed since."""
     from fastapi.testclient import TestClient
+
     from club_minutes import prefs, web
     club, s, sent = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"},
@@ -247,12 +251,13 @@ def test_chow_list_pdf_and_email(env, tmp_path, monkeypatch):
     c = TestClient(web.app)
     r = c.get("/chow/list.pdf")
     assert r.status_code == 200 and r.content.startswith(b"%PDF")
-    assert "Amy Able" in html[0] and "No chow (Snowed in)" in html[0]
+    assert "Amy Appleseed" in html[0] and "No chow (Snowed in)" in html[0]
     if len(r.content) > 4:  # a real PDF: its text says the same
         import io
+
         from pypdf import PdfReader
         text = PdfReader(io.BytesIO(r.content)).pages[0].extract_text()
-        assert "Amy Able" in text and "No chow (Snowed in)" in text
+        assert "Amy Appleseed" in text and "No chow (Snowed in)" in text
     assert c.post("/chow/email").status_code == 403 and "Email the list" not in c.get("/chow").text
     who["id"] = "sec"
     assert "Not emailed yet" in c.get("/chow").text
@@ -272,13 +277,14 @@ def test_the_chow_list_goes_as_a_pdf_or_a_link_as_each_chose(monkeypatch):
     monkeypatch.setattr(auth, "send_email", lambda to, subject, body, attachments=(), **kw: sent.append((list(to), body, len(attachments))) or len(to))
     s = chow.load()
     n = chow.email_list(Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[]), s, ("list.pdf", b"%PDF", ), ["amy@example.org"],
-                        "kd8aaa", "https://minutes.example.org", ["bob@example.org"])
+                        "n0aaaa", "https://minutes.example.org", ["bob@example.org"])
     assert n == 2 and sent[0][0] == ["amy@example.org"] and sent[0][2] == 1
     assert sent[1][0] == ["bob@example.org"] and sent[1][2] == 0 and "https://minutes.example.org/chow" in sent[1][1]
 
 
 def test_with_the_chow_module_off_it_leaves_no_trace(env, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import calview, prefs, web
     club, s, _ = env
     s["nights"] = {"2099-01-01": {"member": "amy", "status": "scheduled"}, "2099-01-08": {"member": "bob", "status": "scheduled"}}
@@ -313,7 +319,7 @@ def test_with_the_chow_module_off_it_leaves_no_trace(env, tmp_path, monkeypatch)
 def test_not_provided_says_the_clubs_real_fee_and_section(env, monkeypatch):
     from club_minutes import treasurer
     club, *_ = env
-    monkeypatch.setattr(treasurer, "load", lambda: {})
+    monkeypatch.setattr(treasurer, "load", dict)
     monkeypatch.setattr(treasurer, "members_see", lambda s: False)
     assert console._missed_note(club, THU) == ""  # dues not tracked: no fee to mention
     monkeypatch.setattr(treasurer, "members_see", lambda s: True)

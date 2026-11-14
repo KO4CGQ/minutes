@@ -25,7 +25,6 @@ textarea { resize: vertical; min-height: 2.4rem; }
 .past { background: var(--warn-soft); border-left: 3px solid var(--warn-edge); border-radius: .3rem; padding: .4rem .7rem; margin: .5rem 0; font-size: .9rem; }
 .past b { color: var(--warn-text); }
 .counter { display: inline-flex; align-items: center; gap: .4rem; }
-.startform { display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; } .startform label { display: flex; flex-direction: column; font-size: .9rem; }
 .floor textarea { width: 100%; margin: .5rem 0; }
 .invite { display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: .6rem; background: var(--warn-soft); color: var(--warn-text); font-size: .75rem; }
 .mbtn .invite { margin: .2rem 0 0; }
@@ -49,3 +48,14 @@ textarea { resize: vertical; min-height: 2.4rem; }
 .bizitem .evlabel { min-width: 3.2rem; align-self: center; }
 .bizitem input[type=time] { padding: .25rem .45rem; min-height: 2rem; }
 .bizitem.motion { display: flex; flex-direction: column; gap: .5rem; } .bizitem.motion textarea { width: 100%; }
+/* an event's Starts and Ends: label, date, "at", time, each row centred on one line, the boxes sharing what's left */
+.bizitem .when { display: grid; grid-template-columns: auto minmax(0, 1.5fr) auto minmax(0, 1fr); align-items: center; gap: .45rem .4rem; margin: .5rem 0 .2rem; }
+.bizitem .when > input, .bizitem .when > .clearwrap, .bizitem .when .clearwrap > input { width: 100%; min-width: 0; }
+.bizitem .when .hint { margin: 0; } .bizitem .when input { padding-left: .55rem; padding-right: .4rem; }
+.bizitem .when .clearwrap:has(> button.clearbox:not([hidden])) > input { padding-right: 2.3rem; } .bizitem .when button.clearbox { width: 2.3rem; } .bizitem .row.meta { align-items: center; }
+/* a phone: "Starts" / "Ends" on a line of their own, the date and the time side by side under it, each half the width */
+@media (max-width: 560px) {
+  .bizitem .when { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .3rem .5rem; }
+  .bizitem .when .evlabel { grid-column: 1 / -1; margin-top: .2rem; font-weight: 600; } .bizitem .when .hint { display: none; }
+}
+.bizitem label.due .clearwrap > input[type=date] { min-width: 11.5rem; }  /* a business item's Due: room for the date beside the ✕ */

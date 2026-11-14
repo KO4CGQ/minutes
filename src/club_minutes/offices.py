@@ -15,7 +15,7 @@ import logging
 import secrets
 import time
 
-from . import branding, auth, profile
+from . import auth, branding, profile
 from .club import ROSTER_CACHE, Club, roster_locked, show_date
 from .membership import LOG_TAB
 from .roster import Sheet
@@ -171,7 +171,7 @@ def _tell(club: Club, title: str, out_mid: str | None, in_mid: str | None, date:
     if not to:
         return
     try:
-        auth.send_email(to, f"{club.info.get('callsign') or 'Club'} offices: {what}",
+        auth.send_email(to, f"{club.label} offices: {what}",
                         f"{what}, as of {day}. {club.name(by)} recorded it in the app; the roster sheet and its "
                         f"Membership Log are updated.\n\nThe offices: {url}/offices\n\n73,\n{branding.name(club)}",
                         only_to=club.email_only_to())

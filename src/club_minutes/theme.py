@@ -5,7 +5,8 @@ The pages use about 20 colour variables (style.css), each in a light and a dark 
 step: page, card, border, text, link, button, top bar) and gives it the picked colour's hue and strength. Fed the
 colour that palette was tuned from, it gives that palette back exactly. Every pair of text and background is then
 checked for readability (WCAG contrast) and darkened or lightened until it passes, so no pick makes pages unreadable.
-Semantic colours (danger, warnings, charts, attendance) never change.
+Semantic colours (danger, warnings, charts, attendance: in person green, online blue) never change, so they
+mean the same whatever colour a club picks.
 """
 from __future__ import annotations
 
@@ -18,12 +19,12 @@ LIGHT = {"--bg": "#f5f6f0", "--surface-2": "#f3f5ee", "--surface-3": "#e9eee0", 
          "--border-strong": "#cdd2c1", "--text": "#1b1f17", "--muted": "#5f6656", "--faint": "#858c7b",
          "--accent": "#4f6f2a", "--accent-strong": "#2f3d1c", "--accent-soft": "#e6efd9", "--accent-text": "#2f5a1f",
          "--btn-bg": "#2f3d1c", "--btn-hover": "#445a28", "--nav-bg": "#2b3a19", "--nav-text": "#eef4e2",
-         "--focus": "rgba(91, 122, 47, .28)", "--sheet-h": "#c3d69b", "--inperson-bg": "#dcebc4", "--inperson-edge": "#7da04a"}
+         "--focus": "rgba(91, 122, 47, .28)", "--sheet-h": "#c3d69b"}
 DARK = {"--bg": "#111410", "--surface": "#1a1e17", "--surface-2": "#20251d", "--surface-3": "#2a3125",
         "--border": "#2e3529", "--border-strong": "#414a39", "--text": "#e5eadc", "--muted": "#a2ab96", "--faint": "#7d8673",
         "--accent": "#9cc469", "--accent-strong": "#b5d98a", "--accent-soft": "#263219", "--accent-text": "#b5d98a",
         "--btn-bg": "#9cc469", "--btn-text": "#12160d", "--btn-hover": "#b2d688", "--nav-bg": "#161b12", "--nav-text": "#e2ead6",
-        "--focus": "rgba(156, 196, 105, .3)", "--sheet-h": "#34442180", "--inperson-bg": "#2c3d1c", "--inperson-edge": "#7da04a"}
+        "--focus": "rgba(156, 196, 105, .3)", "--sheet-h": "#34442180"}
 DEFAULT = "#2d5f9a"  # the app's own colour: a blue (a club picks its own on Site)
 
 # (text, background, least contrast): each checked after recolouring; the second is moved until it passes.
@@ -136,7 +137,7 @@ def from_logo(path) -> list[str]:
     opaque.paste(img, mask=img.split()[3])
     out = []
     for count, rgb in sorted(opaque.quantize(12).convert("RGB").getcolors(96 * 96) or [], reverse=True):
-        hue, light, s = colorsys.rgb_to_hls(*(c / 255 for c in rgb))
+        _hue, light, s = colorsys.rgb_to_hls(*(c / 255 for c in rgb))
         h = _hex(*(c / 255 for c in rgb))
         if 0.1 < light < 0.9 and s > 0.2 and all(contrast(h, o) > 1.4 for o in out):
             out.append(h)

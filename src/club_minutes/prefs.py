@@ -113,9 +113,9 @@ def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str,
         m = club.members[mid]
         when = "tomorrow" if days == 1 else f"in {days} days"
         out.append((mid, f"chow:{date}:{mid}:{days}", f"Your chow night is {when}: {show_date(date, 'weekday')}",
-                    f"Hi {m.first},\n\nA reminder that you're bringing chow on {show_date(date, 'weekday')}.\n\n"
-                    f"Can't make it? Ask someone to swap on the chow page: {url}/chow\n\n"
-                    f"To change how many days ahead you're reminded, or stop these reminders: {url}/profile/email\n\n{_sign(club)}"))
+                    (f"Hi {m.first},\n\nA reminder that you're bringing chow on {show_date(date, 'weekday')}.\n\n"
+                     f"Can't make it? Ask someone to swap on the chow page: {url}/chow\n\n"
+                     f"To change how many days ahead you're reminded, or stop these reminders: {url}/profile/email\n\n{_sign(club)}")))
     return out
 
 
@@ -149,7 +149,7 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
             lines.append("Coming up this week:\n" + "\n".join(f"  - {e}" for e in events) + f"\n  The calendar: {url}/calendar")
         if latest:
             lines.append(f"Last meeting's minutes ({show_date(latest.date, 'long')}): {url}/meetings/{latest.slug}")
-        out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign') or 'Club'} meeting tonight",
+        out.append((m.id, f"digest:{today}:{m.id}", f"{club.label} meeting tonight",
                     f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nTo stop this email, or choose which others you get: {url}/profile/email\n\n{_sign(club)}"))
     return out
 

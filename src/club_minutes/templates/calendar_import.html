@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Import events{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}Import events{% endblock %}{% block crumb %}{{ crumb('/calendar', 'Calendar') }}{% endblock %}{% block body %}
 <h1>Import events</h1>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 {% if report %}

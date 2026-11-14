@@ -126,7 +126,7 @@ RESULTS = ("Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second
 
 
 def motion_text(club: Club, m: dict) -> str:
-    """The line in the minutes: "Motion: Amy Able moved to buy a new antenna, seconded by Bob Baker. Passed." """
+    """The line in the minutes: "Motion: Amy Appleseed moved to buy a new antenna, seconded by Bob Bloggs. Passed." """
     what = m["what"]
     if m["result"] == "Died for lack of a second":
         return f"Motion: {club.name(m['mover'])} moved to {what}. The motion died for lack of a second."
@@ -350,7 +350,7 @@ def for_meeting(s: dict, date: str, since: str | None = None) -> tuple[list[dict
     old = [x for x in s["items"] if x["opened"] < date and (
         (x["status"] == "open" and (not x["agenda"] or x["agenda"] <= date)) or closed_here(x))]
     new = [x for x in s["items"] if x["opened"] == date]
-    key = lambda x: (x["opened"], s["items"].index(x))  # noqa: E731
+    key = lambda x: (x["opened"], s["items"].index(x))
     return sorted(old, key=key), sorted(new, key=key)
 
 
@@ -410,7 +410,7 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
         return f"due {show_date(due, 'weekday')}" + (" (today)" if days == 0 else " (tomorrow)" if days == 1 else "")
     late = any(k == "overdue" for _, k in items)
     lines = "\n".join(f"- {x['text']}\n  {when(x, k)}" for x, k in items)
-    subject = f"{club.info.get('callsign') or 'Club'} club business: " + ("past due" if late else "coming due")
+    subject = f"{club.label} club business: " + ("past due" if late else "coming due")
     body = (f"Hi {m.first},\n\nA reminder about club business you're looking after:\n\n{lines}\n\n"
             f"If it's finished, mark it done (or change the date) here: {url}/business\n"
             f"Or just bring it up at the next meeting.\n\n"

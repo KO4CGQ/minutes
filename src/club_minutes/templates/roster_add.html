@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Add a member{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}Add a member{% endblock %}{% block crumb %}{{ back('/roster', 'Roster') }}{% endblock %}{% block body %}
 <h1>Add a member</h1>
 <p class="muted">Adds the member to the club roster, with a "Joined" entry in its Membership Log, and the new member shows up in the app right away{% if module('chow') %}, at the end of the current chow round{% endif %}. The Secretary gets an email, and it's listed under Recent changes with who added them. Their sharing choices start off: they set those on their own profile.</p>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}

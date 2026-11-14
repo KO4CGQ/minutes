@@ -20,7 +20,6 @@ from functools import lru_cache
 import holidays as _lib
 
 
-
 def _split(code: str) -> tuple[str, str | None]:
     country, _, sub = code.partition("-")
     return country.upper(), (sub.upper() or None)

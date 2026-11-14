@@ -7,6 +7,8 @@ updates:
     schedule:
       interval: weekly
     groups:
+      lint:  # their own pull request: a new version can flag new things, fixed in that PR (Tests → ruff-latest shows ruff's first)
+        patterns: [ruff, shellcheck-py, zizmor]
       python:
         update-types: [minor, patch]
   - package-ecosystem: github-actions

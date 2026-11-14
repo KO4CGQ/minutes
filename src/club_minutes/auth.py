@@ -17,11 +17,20 @@ import time
 from email.message import EmailMessage
 from pathlib import Path
 
-from webauthn import (generate_authentication_options, generate_registration_options, options_to_json,
-                      verify_authentication_response, verify_registration_response)
+from webauthn import (
+    generate_authentication_options,
+    generate_registration_options,
+    options_to_json,
+    verify_authentication_response,
+    verify_registration_response,
+)
 from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
-from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
-                                      ResidentKeyRequirement, UserVerificationRequirement)
+from webauthn.helpers.structs import (
+    AuthenticatorSelectionCriteria,
+    PublicKeyCredentialDescriptor,
+    ResidentKeyRequirement,
+    UserVerificationRequirement,
+)
 
 from . import branding
 from .club import DATA, PREVIEW, STAGE, Club, one_line, valid_email
@@ -64,7 +73,7 @@ create table if not exists email_changes (token_hash text primary key, member te
 create table if not exists challenges (id text primary key, challenge blob not null, member text,
   kind text not null, expires integer not null);
 create table if not exists signins (at integer not null, member text not null, method text, ip text, agent text);
-create table if not exists events (at integer not null, ip text, kind text not null, member text, detail text);
+create table if not exists events (at integer not null, ip text, kind text not null, member text, detail text, agent text);
 create table if not exists bans (ip text primary key, at integer not null, until integer, reason text, by text);
 """
 BAN_AFTER = 10          # failed sign-in attempts from one internet address in an hour...
@@ -112,6 +121,8 @@ class Auth:
         for col in ("ip", "method"):
             if col not in session_cols:
                 self.db.execute(f"alter table sessions add column {col} text")
+        if "agent" not in {r["name"] for r in self.db.execute("pragma table_info(events)")}:  # added in 1.0.0
+            self.db.execute("alter table events add column agent text")
         os.chmod(path, 0o600)
 
     # ---------------- sessions ----------------
@@ -125,10 +136,12 @@ class Auth:
         return token
 
     # ---------------- security log and bans (the admin Security page) ----------------
-    def event(self, kind: str, ip: str | None, member: str | None = None, detail: str = "") -> None:
-        """Record a failed or suspicious sign-in attempt; ban an internet address after BAN_AFTER in an hour."""
+    def event(self, kind: str, ip: str | None, member: str | None = None, detail: str = "", agent: str = "") -> None:
+        """Record a failed or suspicious sign-in attempt (and the browser's user agent); ban an internet address
+        after BAN_AFTER in an hour."""
         now = int(time.time())
-        self.db.execute("insert into events values (?,?,?,?,?)", (now, ip, kind, member, detail[:200]))
+        self.db.execute("insert into events (at, ip, kind, member, detail, agent) values (?,?,?,?,?,?)",
+                        (now, ip, kind, member, detail[:200], (agent or "")[:300]))
         if ip and _public(ip) and not self.banned(ip):
             n = self.db.execute("select count(*) from events where ip=? and at>?", (ip, now - 3600)).fetchone()[0]
             if n >= BAN_AFTER:
@@ -238,19 +251,19 @@ class Auth:
                 return m.id
         return None
 
-    def send_link(self, email: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None) -> None:
+    def send_link(self, email: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None, agent: str = "") -> None:
         """Email a one-time login link. Silent if the address isn't on the roster (no account probing)."""
         member = self.member_by_email(email)
         if not member:
             log.info("login link requested for an address not on the roster")
-            self.event("unknown_email", ip)  # the address itself isn't kept
+            self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
             return
         now = int(time.time())
         recent = self.db.execute("select count(*) from links where member=? and created>?",
                                  (member, now - 3600)).fetchone()[0]
         if recent >= EMAILS_PER_HOUR:
             log.warning("login link rate limit hit for %s", member)
-            self.event("link_limit", ip, member)
+            self.event("link_limit", ip, member, agent=agent)
             return
         url = self.create_link(member, next_url, base_url)
         send_email(self.club.members[member].email, f"Your {branding.name(self.club)} sign-in link", only_to=self.club.email_only_to(), to_self=True,
@@ -490,7 +503,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
 def _smtp_send(recipients, subject, body, attachments, reply_to, user, password) -> int:
     reply_to = reply_to or os.environ.get("CLUB_MINUTES_SMTP_REPLY_TO")
     host, port = os.environ.get("CLUB_MINUTES_SMTP_HOST", "smtp.gmail.com"), int(os.environ.get("CLUB_MINUTES_SMTP_PORT", "587"))
-    sender = Club().info.get("callsign") or "Club Minutes"  # the From name, unless CLUB_MINUTES_SMTP_FROM sets it all
+    sender = Club().label  # the From name, unless CLUB_MINUTES_SMTP_FROM sets it all
     with smtplib.SMTP(host, port, timeout=30) as s:
         s.starttls()
         s.login(user, password)

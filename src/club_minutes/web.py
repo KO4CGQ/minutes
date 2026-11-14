@@ -3,36 +3,88 @@ from __future__ import annotations
 
 import datetime as dt
 import functools
+import itertools
 import json
 import logging
 import os
 import re
-import threading
 import string
+import threading
 import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
-from fastapi.staticfiles import StaticFiles
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+)
 from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from markupsafe import Markup, escape
+from starlette.concurrency import (
+    run_in_threadpool,  # async routes hand slow work (the roster sheet, email, S3) to a thread
+)
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import ai, avatars, branding, theme, limits, backup, business, calview, chow, console, events, membership, offices, prefs, profile, treasurer, updates
+from . import (
+    ai,
+    avatars,
+    backup,
+    branding,
+    business,
+    calview,
+    chow,
+    console,
+    events,
+    limits,
+    membership,
+    offices,
+    prefs,
+    profile,
+    regions,
+    theme,
+    treasurer,
+    updates,
+    upgrade,
+)
 from . import auth as authmod
-from . import regions
-from starlette.concurrency import run_in_threadpool  # async routes hand slow work (the roster sheet, email, S3) to a thread
 from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
-from .club import DATA, DATES, PREVIEW, STAGE, WEEKDAYS, _agenda, _server_timezone, num, one_line, show_date, valid_email
 from .backup import KEY_FILE
+from .club import (
+    DATA,
+    DATES,
+    PERMISSIONS,
+    PICKED,
+    PREVIEW,
+    ROLES,
+    STAGE,
+    WEEKDAYS,
+    _agenda,
+    _server_timezone,
+    num,
+    one_line,
+    show_date,
+    valid_email,
+)
 from .roster import COLUMNS, SHAREABLE, SheetError
 
-KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
+# Not birthday and share (the member's own choice), nor the role ticks (Admin → Site → Roles, roles.json)
+KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share", "minutes_editor", "calendar_editor"))
 from .meeting import SECTIONS
 from .store import SEARCH_WORDS, Archive, spellings
 
@@ -40,6 +92,8 @@ HERE = Path(__file__).parent
 app = FastAPI(title="Club minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
+for _what in upgrade.run():  # before anything reads the data (club-minutes serve has done it already)
+    logging.getLogger("club_minutes").warning("Data upgraded: %s", _what)
 archive = Archive()
 _ = (archive.club.meeting_weekday, archive.club.meeting_time, archive.club.timezone)  # a club.yaml mistake stops the start, saying which
 authn = Auth(archive.club)
@@ -75,6 +129,20 @@ templates.env.filters["linkify"] = linkify
 templates.env.filters["date"] = show_date  # {{ d|date("weekday") }}: club.show_date
 templates.env.filters["longdate"] = lambda d: show_date(d, "document")
 templates.env.filters["listdate"] = show_date
+
+
+def anydate(v):
+    """An ISO date (or the date part of "2026-11-05T19:30") in the club's format; anything else, like a value typed
+    into the roster, as it is."""
+    if isinstance(v, dt.date):
+        return show_date(v)
+    try:
+        return show_date(v[:10]) if isinstance(v, str) and re.fullmatch(r"\d{4}-\d\d-\d\d(T[\d:]+)?", v) else (v or "")
+    except ValueError:
+        return v
+
+
+templates.env.filters["anydate"] = anydate
 templates.env.filters["by_last_name"] = by_last_name
 templates.env.filters["clock"] = lambda t: dt.datetime.fromtimestamp(t).strftime("%-I:%M %p")
 def monthday(md: str | None) -> str:
@@ -88,13 +156,13 @@ def monthday(md: str | None) -> str:
 
 
 templates.env.filters["monthday"] = monthday
-templates.env.filters["tsfull"] = lambda t: (dt.datetime.fromtimestamp(t).strftime(DATES["list"] + ", %-I:%M %p")
-                                             .replace("AM", "am").replace("PM", "pm")) if t else ""
+templates.env.filters["tsfull"] = lambda t: dt.datetime.fromtimestamp(t).strftime(DATES["list"] + ", %-I:%M %p") if t else ""  # 7:30 PM, as everywhere
 def _initials(mid: str | None) -> str:
     m = archive.club.members.get(mid or "")
     return ((m.first[:1] + m.last[:1]) if m else (mid or "?")[:2]).upper()
 
 
+templates.env.globals["is_meeting"] = lambda d: d in archive.by_slug  # a date with minutes: a link to them
 templates.env.globals.update(avatar_url=avatars.url, avatar_hue=avatars.hue, initials=_initials)
 def _md(text: str | None) -> Markup:
     """Markdown to HTML for release notes (from our own CHANGELOG via GitHub). Raw HTML is escaped first."""
@@ -129,9 +197,14 @@ templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"),
                              logo_class=lambda: f"logo bg-{branding.backing()}")  # what's behind it (Site)
 
 
+_THEME_CODE = (HERE / "theme.py").read_bytes()  # how the colours are made: a change there (an update) is a new file too
+
+
 def _theme_stamp() -> str:
+    """theme.css's ?v=: changes with the club's colours and with the app's way of making them, so after an update no
+    browser keeps a day-old copy (one kept recolouring the console's in-person buttons blue)."""
     import hashlib
-    return hashlib.sha1(json.dumps(branding.colours(), sort_keys=True).encode()).hexdigest()[:10]
+    return hashlib.sha1(json.dumps(branding.colours(), sort_keys=True).encode() + _THEME_CODE).hexdigest()[:10]
 
 
 # ---------------- login gate ----------------
@@ -227,9 +300,8 @@ def admin_mode(request: Request) -> bool:
 
 
 def privileged(request: Request) -> bool:
-    """Officers, and admins while admin mode is on: see all contact details, the change log, undo."""
-    m = archive.club.members.get(getattr(request.state, "member", None) or "")
-    return bool(m and (m.officer or admin_mode(request)))
+    """Officers (the "oversee" permission), and admins while admin mode is on: the change log, undo, any business item."""
+    return archive.club.may(getattr(request.state, "member", None), "oversee") or admin_mode(request)
 
 
 def leader(request: Request) -> str:
@@ -245,6 +317,18 @@ def officer(request: Request) -> str:
 
 
 PK_OFFER = "pk_offer"  # set by an emailed-link sign-in; base.html offers a passkey while it's there
+PK_HERE = "pk_here"  # the members with a passkey on this browser (one was added or used here): never offered another
+
+
+def has_passkey_here(request: Request, member: str) -> bool:
+    return member in request.cookies.get(PK_HERE, "").split(".")
+
+
+def passkey_here(request: Request, response: Response, member: str) -> Response:
+    """Remember on this browser that `member` has a passkey here (a year, renewed each time it's used)."""
+    ids = {i for i in request.cookies.get(PK_HERE, "").split(".") if i.isalnum()} | {member}
+    response.set_cookie(PK_HERE, ".".join(sorted(ids)), max_age=365 * 86400, samesite="lax", secure=True)
+    return response
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -258,7 +342,21 @@ async def http_error(request: Request, exc: StarletteHTTPException):
     return await http_exception_handler(request, exc)
 
 
+def new_tabs(html: str, host: str) -> str:
+    """Links to other sites open in a new tab: club links, Join online, links typed into events, the guides'.
+    One place for every page, so a link typed in by a member is covered too."""
+    own = re.escape(host)
+    return re.sub(rf'<a (?![^>]*\btarget=)(?=[^>]*\bhref="https?://(?!{own}[/"]))', '<a target="_blank" rel="noopener" ', html)
+
+
 def page(request: Request, name: str, **ctx) -> HTMLResponse:
+    r = _page(request, name, **ctx)
+    r.body = new_tabs(r.body.decode(), request.url.netloc).encode()
+    r.headers["content-length"] = str(len(r.body))
+    return r
+
+
+def _page(request: Request, name: str, **ctx) -> HTMLResponse:
     mid = getattr(request.state, "member", None)
     return templates.TemplateResponse(request, name, {
         "club": archive.club,
@@ -274,7 +372,7 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         # an open meeting from another day (say, last week's never submitted): leaders get "Continue minutes"
         "open_draft": next((m for m in archive.meetings if m.status == "draft"), None),
         "update_available": _update_badge(request),
-        "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id),
+        "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id and not has_passkey_here(request, mid)),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
 
 
@@ -292,7 +390,7 @@ def _update_badge(request: Request) -> str | None:
         return None  # stage is updated by hand (deploy/stage-push.sh)
     try:
         rel = updates.available()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     return rel["version"] if rel else None
 
@@ -374,7 +472,7 @@ def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""
 
 @app.post("/login/email")
 def login_email(request: Request, email: str = Form(...), next: str = Form("/")):
-    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request))
+    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request), agent=request.headers.get("user-agent", ""))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
@@ -382,11 +480,11 @@ def login_email(request: Request, email: str = Form(...), next: str = Form("/"))
 def login_link(request: Request, t: str = ""):
     used = authn.use_link(t)
     if not used:
-        authn.event("bad_link", client_ip(request))
+        authn.event("bad_link", client_ip(request), agent=request.headers.get("user-agent", ""))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
-    if request.url.hostname == authn.rp_id:  # passkeys only work there: offer one (base.html, if this device can make one)
+    if request.url.hostname == authn.rp_id and not has_passkey_here(request, member):  # passkeys only work there: offer one (base.html, if this device can make one)
         response.set_cookie(PK_OFFER, "1", samesite="lax", secure=True)  # until the browser closes, Not now, or one is added
     return response
 
@@ -516,11 +614,11 @@ def followups_after_submit(slug: str) -> None:
     if ai.configured(archive.club):
         try:
             run_followups(slug)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _log.exception("AI follow-ups for %s failed", slug)
         try:
             console.refresh_ask_about(archive)
-        except Exception:
+        except Exception:  # noqa: BLE001
             _log.exception("AI ask-about prompts after %s failed", slug)
 
 
@@ -658,7 +756,7 @@ _chow_lock = threading.Lock()
 def can_edit_chow(request: Request) -> bool:
     """Changing the schedule: officers (it's the Secretary's job day to day) and admins in admin mode.
     Minutes editors see the member view; they record chow on meeting night from the console."""
-    return privileged(request)
+    return archive.club.may(request.state.member, "chow") or admin_mode(request)
 
 
 def chow_change(request: Request, fn, back: str = "/chow"):
@@ -698,7 +796,7 @@ def chow_pdf(mid: str = Depends(me)):
 @app.post("/chow/email", dependencies=[CHOW])
 def chow_email(request: Request, mid: str = Depends(chow_leader)):
     """Send the chow list to every member who wants it (Email tab), e.g. after filling or changing the schedule."""
-    how = lambda k: sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == k}, key=str.lower)  # noqa: E731
+    how = lambda k: sorted({m.email.strip() for m in prefs.emailable(archive.club) if prefs.wants(m.id, "chowlist") == k}, key=str.lower)
     pdf = chow_list_pdf()
     return chow_change(request, lambda s: chow.email_list(archive.club, s, pdf, how("pdf"), mid, base_url(request), how("link")))
 
@@ -725,8 +823,7 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
 
 def is_treasurer(request: Request) -> bool:
     """Recording money and the settings: whoever holds Treasurer, and admins in admin mode. Other officers only look."""
-    m = archive.club.members.get(request.state.member or "")
-    return bool(m and m.role and "treasurer" in m.role.lower()) or admin_mode(request)
+    return archive.club.may(request.state.member, "money") or admin_mode(request)
 
 
 def treasurer_only(request: Request) -> str:
@@ -741,7 +838,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
     """Officers see who owes what; the Treasurer records payments, expenses and bills, and runs the settings. A fund's
     keepers (the drinks committee, say) see and record only their fund's account."""
     club, s = archive.club, treasurer.load()
-    c, kept, full = treasurer.config(s), treasurer.kept_accounts(club, s, mid), privileged(request)
+    c, kept, full = treasurer.config(s), treasurer.kept_accounts(club, s, mid), club.may(mid, "treasurer") or admin_mode(request)
     if not (full or kept):
         raise HTTPException(403, "Only officers can do that.")
     tab = tab if full else "money"
@@ -814,7 +911,7 @@ def treasurer_category(eid: str, category: str = Form(...), mid: str = Depends(t
 
 def spending_visible(request: Request, s: dict) -> bool:
     """The club's spending (never anyone's dues): every member once tracking is on; officers during a preview."""
-    return treasurer.members_see(s) or (treasurer.on(s) and privileged(request))
+    return treasurer.members_see(s) or (treasurer.on(s) and (archive.club.may(request.state.member, "treasurer") or admin_mode(request)))
 
 
 @app.get("/spending", response_class=HTMLResponse)
@@ -1038,7 +1135,7 @@ async def admin_confirm_verify(request: Request, mid: str = Depends(real_me)):
     body = await _json(request)
     try:
         authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"], kind="step-up", member=mid)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(400, str(e))
     _admin_on(request, mid, "passkey")
     return {"ok": True, "next": _safe_next(body.get("next", "/"))}
@@ -1398,9 +1495,9 @@ async def passkey_register_verify(request: Request, mid: str = Depends(me)):
     body = await _json(request)
     try:
         authn.register(mid, request.cookies.get(CHALLENGE_COOKIE), body["credential"], body.get("label", ""))
-    except Exception as e:  # verification errors come from several exception types
+    except Exception as e:  # verification errors come from several exception types  # noqa: BLE001
         raise HTTPException(400, f"Couldn't add the passkey: {e}")
-    return {"ok": True}
+    return passkey_here(request, JSONResponse({"ok": True}), mid)
 
 
 @app.post("/auth/passkey/login/options")
@@ -1416,12 +1513,12 @@ async def passkey_login_verify(request: Request):
     body = await _json(request)
     try:
         member = authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"])
-    except Exception as e:
-        authn.event("passkey_failed", client_ip(request), detail=str(e)[:120])
+    except Exception as e:  # noqa: BLE001
+        authn.event("passkey_failed", client_ip(request), detail=str(e)[:120], agent=request.headers.get("user-agent", ""))
         raise HTTPException(400, str(e))
     if not authn.is_active(member):
         raise HTTPException(403, "Your roster entry isn't active.")
-    return start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member, "passkey")
+    return passkey_here(request, start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member, "passkey"), member)
 
 
 # ---------------- archive ----------------
@@ -1537,13 +1634,15 @@ def search(request: Request, q: str = "", kind: str = "all", p: str = Query("1",
     minutes = archive.search(q, limit=1000) if q else []
     for r in minutes:
         r["date"] = archive.by_slug[r["slug"]].date
-    found = {**_search_lists(q), "calendar": _search_calendar(q), "minutes": minutes}
+    found = {**_search_lists(q), "calendar": _search_calendar(q), "minutes": minutes,
+             "help": [{"guide": g, "label": t, "heading": h, "id": i} for g, t in guides_for(request).items()
+                      for h, i, body in guide_sections(g) if q.split() and _has(q, h, body)]}
     kind = kind if kind in SEARCH_KINDS and (kind != "nights" or archive.club.has("chow")) else "all"
     return page(request, "search.html", q=q, kind=kind, found=found, kinds=SEARCH_KINDS,
                 pg=paginate(found[kind], p, per) if kind != "all" else None)
 
 
-SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "nights": "Chow", "calendar": "Calendar", "minutes": "Minutes"}
+SEARCH_KINDS = {"members": "Members", "guests": "Guests", "items": "Business", "nights": "Chow", "calendar": "Calendar", "minutes": "Minutes", "help": "Help"}
 
 
 def _has(q: str, *texts) -> bool:
@@ -1596,21 +1695,26 @@ def member(request: Request, mid: str):
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
                 contact=contact, is_me=viewer == mid, is_officer=privileged(request), is_officer_or_admin=privileged(request),
                 can_view_as=elevated and mid != request.state.real_member,
-                can_edit_roster=archive.club.keeps_roster(viewer) or elevated)
+                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=[ROLES[k][0] for k in archive.club.roles(mid)])
 
 
 STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
 
 
 @app.get("/members/{who}/edit", response_class=HTMLResponse)
-def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, mid: str = Depends(roster_keeper)):
+def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, tab: str = "details", mid: str = Depends(roster_keeper)):
     """Roster keepers (and admins in admin mode) edit what the roster sheet holds about a member."""
     if who not in archive.club.members:
         raise HTTPException(404)
     m = archive.club.members[who]
+    club = archive.club
+    office_titles = {o["title"] for o in offices.offices(club)}
+    held = [t for t in offices.titles(m.role) if t in office_titles]  # shown, changed only on the Offices page
+    in_use = {t for x in club.members.values() for t in offices.titles(x.role)} - office_titles
     return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
+                tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
-                events=membership.EVENTS, today=dt.date.today().isoformat())
+                events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=[ROLES[k][0] for k in club.roles(who)])
 
 
 @app.post("/members/{who}/edit")
@@ -1618,7 +1722,15 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     if who not in archive.club.members:
         raise HTTPException(404)
     m, f = archive.club.members[who], await request.form()
-    back = f"/members/{quote(who, safe='')}/edit"
+    tab = "titles" if f.get("tab") == "titles" else "details"  # each tab saves its own fields, leaving the others as they are
+    back = _edit_url(who, tab)
+    if tab == "titles":
+        try:
+            new = {"role": member_titles(m, f)}  # roles are on Admin → Site → Roles
+            await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+        except (ValueError, SheetError) as e:
+            return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
+        return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
     first, last, email = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split()), f.get("email", "").strip()
     try:
         if not first or not last or " " in first:
@@ -1631,16 +1743,37 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
         if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
             raise ValueError("Only an admin, in admin mode, can change an admin's email.")
         new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
-               "role": ", ".join(t.strip() for t in f.get("role", "").split(",") if t.strip()),
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
-               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", "")),
-               **{k: "TRUE" if f.get(k) else "FALSE" for k in ("officer", "board", "minutes_editor", "calendar_editor")}}
+               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
         if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
             new["address"] = m.address or ""
         await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
     except (ValueError, SheetError) as e:
-        return RedirectResponse(_safe_next(back + "?error=" + quote(str(e))), status_code=303)
-    return RedirectResponse(_safe_next(back + "?saved=1"), status_code=303)
+        return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
+    return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
+
+
+def _edit_url(who: str, tab: str) -> str:
+    """A member's Edit page on a tab, ready for "error=..." or "saved=1": built from the member's id as the roster has
+    it, never the address typed, so a redirect only ever leads to a member's own page (and code scanning sees that)."""
+    m = archive.club.members.get(archive.club.canonical(who))
+    return f"/members/{quote(m.id if m else '', safe='')}/edit?tab={tab if tab in EDIT_TABS else 'details'}&"
+
+
+EDIT_TABS = {"details": "Details", "titles": "Titles", "callsign": "New callsign", "log": "Membership log"}
+
+
+def member_titles(m, f) -> str:
+    """The Titles a roster keeper picked (title, ticked) and added (title_new, comma-separated), with the offices the
+    member holds kept as they are: offices change only on the Offices page, which records the history."""
+    office_titles = {o["title"].lower(): o["title"] for o in offices.offices(archive.club)}
+    held = [t for t in offices.titles(m.role) if t.lower() in office_titles]
+    added = [" ".join(t.split())[:60] for t in f.get("title_new", "").split(",") if t.strip()]
+    for t in added:
+        if t.lower() in office_titles:
+            raise ValueError(f"{office_titles[t.lower()]} is an office: change who holds it on the Offices page, which keeps its history.")
+    picked = [t for t in f.getlist("title") if t.lower() not in office_titles]
+    return ", ".join(dict.fromkeys(held + picked + added))  # in that order, each once
 
 
 @app.post("/members/{who}/callsign")
@@ -1654,10 +1787,10 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
     except (ValueError, SheetError, backup.BackupError) as e:
-        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#callsign"), status_code=303)
+        return RedirectResponse(_safe_next(_edit_url(who, "callsign") + "error=" + quote(str(e))), status_code=303)
     if admin_mode(request):
         _admin_log(request, callsign_change=f"{who} to {new}")
-    return RedirectResponse(_safe_next(f"/members/{quote(new, safe='')}/edit?saved=1#callsign"), status_code=303)
+    return RedirectResponse(_safe_next(_edit_url(new, "callsign") + "saved=1"), status_code=303)
 
 
 @app.post("/members/{who}/log")
@@ -1668,8 +1801,8 @@ def member_log_event(request: Request, who: str, event: str = Form(""), date: st
     try:
         membership.add_event(archive.club, who, event, date, note, mid)
     except (ValueError, SheetError) as e:
-        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#log"), status_code=303)
-    return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?saved=1#log"), status_code=303)
+        return RedirectResponse(_safe_next(_edit_url(who, "log") + "error=" + quote(str(e))), status_code=303)
+    return RedirectResponse(_safe_next(_edit_url(who, "log") + "saved=1"), status_code=303)
 
 
 @app.get("/roster", response_class=HTMLResponse)
@@ -1761,6 +1894,74 @@ def dependencies() -> list[dict]:
     return sorted(out, key=lambda d: d["name"].lower())
 
 
+GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin"}  # docs/<name>.md; not developers.md
+DOCS = Path(__file__).resolve().parents[2] / "docs"
+# GitHub's alert syntax ("> [!TIP]" on a blockquote's first line), so a box looks the same here and on GitHub
+CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Important", "WARNING": "⚠️ Warning", "CAUTION": "🛑 Caution"}
+
+
+def guides_for(request: Request) -> dict:
+    """The guides offered to this member: everyone gets the members guide, leaders, officers and admins the
+    officers guide (it has admins' setup steps too), admins the server admin guide."""
+    mid, admin = request.state.member, archive.club.is_admin(real_me(request))
+    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request), "server-admin": admin}
+    return {g: t for g, t in GUIDES.items() if show[g]}
+
+
+def _guide_text(guide: str) -> str:
+    text = (DOCS / f"{guide}.md").read_text()
+    text = re.sub(r"\]\(([\w-]+)\.md(#[\w-]+)?\)", r"](/help/\1\2)", text)  # links between guides stay in the app
+    text = text.replace("](screenshots/", "](/help/screenshots/")
+    return text.replace("](../", "](https://github.com/KO4CGQ/minutes/blob/main/")  # anything else in the repo
+
+
+@functools.cache
+def guide_sections(guide: str) -> list[tuple[str, str, str]]:
+    """(heading, its id on the page, its text) for each ## and ### section of a guide, for the search."""
+    from markdown.extensions.toc import slugify, unique
+    text, ids = _guide_text(guide), {slugify(t, "-") for t in re.findall(r"^# +(.+)$", _guide_text(guide), flags=re.MULTILINE)}
+    parts = re.split(r"^#{2,3} +(.+)$", text, flags=re.MULTILINE)
+    return [(h.strip(), unique(slugify(h.strip(), "-"), ids), body)  # the ids the page gives them, repeats included
+            for h, body in zip(parts[1::2], parts[2::2], strict=True)]
+
+
+@app.get("/help", response_class=HTMLResponse)
+@app.get("/help/{guide}", response_class=HTMLResponse)
+def help_page(request: Request, guide: str = "members"):
+    """A guide from docs/, as of the running version, with its contents at the top. Open to every member (they're
+    public on GitHub anyway); the tabs offer each one to whoever it's for."""
+    import markdown
+    if guide not in GUIDES:
+        raise HTTPException(404)
+    md = markdown.Markdown(extensions=["fenced_code", "tables", "toc"], extension_configs={"toc": {"toc_depth": "2-2"}})
+    html = re.sub(r"<blockquote>\s*<p>\[!(\w+)\]\s*",
+                  lambda m: f'<blockquote class="callout {m[1].lower()}"><p class="calloutlabel">{CALLOUTS.get(m[1], m[1].title())}</p><p>',
+                  md.convert(_guide_text(guide)))
+    n = itertools.count(1)
+
+    def thumbnail(m):  # a picture as a thumbnail that opens full size in a popover (no script needed)
+        i, alt, src = next(n), m[1], m[2]
+        return (f'<button type="button" class="shot" popovertarget="shot{i}" aria-label="{alt}: show full size"><img alt="{alt}" src="{src}"></button>'
+                f'<div popover id="shot{i}" class="modal shotbig"><button type="button" class="calclose" popovertarget="shot{i}" '
+                f'popovertargetaction="hide" aria-label="Close">✕</button><img alt="{alt}" src="{src}"></div>')
+    html = re.sub(r'(?:<p>)?<img alt="([^"]*)" src="([^"]*)" />(?:</p>)?', thumbnail, html)  # a popover can't sit in a <p>
+    toc = "".join(f'<a href="#{t["id"]}">{t["name"]}</a>' for t in md.toc_tokens)  # names come escaped
+    if toc:  # after the title and the line under it
+        html = html.replace("</p>", f'</p><nav class="toc" aria-label="On this page">{toc}</nav>', 1)
+    guides = guides_for(request)
+    return page(request, "help.html", guide=guide, guides=guides | ({guide: GUIDES[guide]} if guide not in guides else {}),
+                html=Markup(html))
+
+
+@app.get("/help/screenshots/{name}")
+def help_picture(name: str):
+    stem = name.removesuffix(".png")  # letters, digits, - and _ only (no regex: nothing a long name can slow down)
+    if stem == name or not 0 < len(stem) <= 80 or not stem.replace("-", "").replace("_", "").isalnum() or not stem.isascii() \
+            or not (DOCS / "screenshots" / name).is_file():
+        raise HTTPException(404)
+    return FileResponse(DOCS / "screenshots" / name, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/about", response_class=HTMLResponse)
 def about(request: Request):
     import markdown
@@ -1845,6 +2046,9 @@ def admin_action(e: dict) -> str:
              "site_club": lambda v: "Club settings back to club.yaml's" if v == "club.yaml" else f"Club settings: {v.replace('_', ' ')}",
              "site_agenda": lambda v: "Agenda back to club.yaml's" if v == "club.yaml" else f"Agenda: {v.replace('_', ' ')}",
              "site_features": lambda v: "Features back to club.yaml's" if v == "club.yaml" else f"Features: {v.replace('_', ' ')}",
+             "site_offices": lambda v: "Offices back to club.yaml's" if v == "club.yaml" else f"Offices: {v.replace('_', ' ')}",
+             "site_roles": lambda v: f"Roles: {v}",
+             "site_privacy": lambda v: "Never-recorded names back to club.yaml's" if v == "club.yaml" else "Changed the never-recorded names",
              "site_bylaws": lambda v: "Bylaws settings back to club.yaml's" if v == "club.yaml" else f"Bylaws: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
              "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
@@ -1873,7 +2077,7 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
     sp = DATA / "stage-sync-status.json"
     try:
         upd = None if STAGE else updates.available()
-    except Exception:  # GitHub not reachable: just don't say
+    except Exception:  # GitHub not reachable: just don't say  # noqa: BLE001
         upd = None
     return page(request, "admin.html", failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
                 passphrase_set=len(os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE", "")) >= 12, upd=upd,
@@ -2011,7 +2215,7 @@ def security_backup_check(request: Request, passphrase: str = Form("")):
     _security_admin(request)
     ok, msg = backup.check(passphrase)
     _admin_log(request, backup="checked a passphrase")
-    return RedirectResponse("/admin/backups?" + ("note=" if ok else "error=") + quote(msg) + "#passphrase", status_code=303)
+    return RedirectResponse("/admin/backups?" + ("note=" if ok else "error=") + quote(msg), status_code=303)  # the answer shows at the top
 
 
 @app.post("/admin/backups/download")
@@ -2055,7 +2259,7 @@ def security_unban(request: Request, ip: str = Form(...)):
 
 
 @app.post("/admin/security/signout")
-def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):
+def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):  # noqa: B008 (FastAPI's form fields)
     """Sign out one device, or every ticked one."""
     _security_admin(request)
     for sid in session:
@@ -2067,7 +2271,8 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
-SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("features", "Features"), ("bylaws", "Bylaws"), ("dates", "Dates"))
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("bylaws", "Bylaws"),
+             ("dates", "Dates"), ("privacy", "Privacy"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
@@ -2094,12 +2299,12 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), perm_rows=[(label, [n for n, _h, ps in ROLES.values() if p in ps]) for p, label in PERMISSIONS.items()], regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
-                meeting_edit=_meeting_edit(request.query_params.get("meeting", ""), request.query_params.get("d", "")), weekdays=[d.title() for d in WEEKDAYS],
+                meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
-                default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb(),
+                default_name=f"{archive.club.label} Minutes", upload_mb=limits.upload_mb(),
                 colours=(c := branding.colours()), colours_own=bool(branding._settings().get("theme")),
                 palette=theme.palette(**c), swatches=theme.from_logo(branding.path("logo")) if branding.custom() else [],
                 vars=lambda p: "; ".join(f"{k}: {v}" for k, v in p.items()))
@@ -2115,7 +2320,7 @@ def _site_admin(request: Request) -> str:
 @app.post("/admin/site/dates")
 async def site_dates(request: Request):
     """Dates tab: a preset, the four formats by hand, or back to club.yaml's."""
-    mid, form = _site_admin(request), await request.form()
+    _mid, form = _site_admin(request), await request.form()
     choice = form.get("preset", "")
     value = (None if choice == "yaml" else DATE_PRESETS[choice][1] if choice in DATE_PRESETS else
              {k: (form.get(k) or "").strip() for k in ("list", "document", "short", "long")} if choice == "custom" else "?")
@@ -2173,7 +2378,7 @@ def _own_holidays(form) -> list[dict]:
 @app.post("/admin/site/features")
 async def site_features(request: Request):
     """Features tab: chow on or off, the public calendars, holiday and election regions."""
-    mid, form, club = _site_admin(request), await request.form(), archive.club
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
     regs = regions.choices()
     try:
         if form.get("back"):
@@ -2197,7 +2402,7 @@ async def site_features(request: Request):
 @app.post("/admin/site/bylaws")
 async def site_bylaws(request: Request):
     """Bylaws tab: the references the app cites, the arrears note, and the certificate (bond) members buy, if any."""
-    mid, form, club = _site_admin(request), await request.form(), archive.club
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
     line = lambda k, n: " ".join((form.get(k) or "").split())[:n]
     try:
         if form.get("back"):
@@ -2241,7 +2446,7 @@ def _agenda_rows(club) -> list[dict]:
 async def site_agenda(request: Request):
     """Agenda tab: the sections in order (tick to use, a number for the place) with their console hints, and the two
     reminders. Only what differs from club.yaml is kept."""
-    mid, form, club = _site_admin(request), await request.form(), archive.club
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
     keys = (("meeting", "sections"), ("club", "invite_after_visits"), ("club", "remind_days_before"))
     try:
         if form.get("back"):
@@ -2278,12 +2483,106 @@ async def site_agenda(request: Request):
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
-def _meeting_edit(eid: str, d: str) -> str | None:
-    """The calendar's page for changing the weekly meeting from date d on (after a new meeting day or time)."""
+def _role_rows(club) -> list[dict]:
+    """Roles tab: each role, what it allows, the offices that give it, and who has it."""
+    offs, keepers = offices.offices(club), set(club.roster_keepers)
+    given = {"officer": [o["title"] for o in offs if o["officer"]], "board": [o["title"] for o in offs],
+             "treasurer": [o["title"] for o in offs if "treasurer" in o["title"].lower()],
+             "roster_keeper": [o["title"] for o in offs if o["title"].lower() in keepers]}
+    by_name = sorted(club.members.values(), key=lambda m: m.name.lower())
+    return [{"key": k, "name": name, "how": how, "can": [PERMISSIONS[p] for p in perms], "offices": given.get(k, []),
+             "who": [m.id for m in by_name if k in club.roles(m.id)], "picked": k in PICKED,
+             "choices": [m.id for m in by_name if m.status.lower() not in ("inactive", "silent key") or getattr(m, k, False)]}
+            for k, (name, how, perms) in ROLES.items()]
+
+
+def _office_rows(club) -> list[dict]:
+    """Offices tab rows: the club's offices (who holds each, whether its holders add members), then two empty rows."""
+    keepers = set(club.roster_keepers)
+    return ([{**o, "keeper": o["title"].lower() in keepers, "held": bool(offices.holders(club, o["title"]))} for o in offices.offices(club)]
+            + [{"title": "", "officer": False, "seats": 1, "keeper": False, "held": False}] * 2)
+
+
+@app.post("/admin/site/offices")
+async def site_offices(request: Request):
+    """Offices tab: the club's offices (an officer's office or a board seat, how many seats), and which offices' holders
+    add members to the roster. An office someone holds can't be removed or renamed here: hand it over first."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    keys = (("", "offices"), ("", "roster_keepers"))
     try:
-        return f"/calendar/edit?id={eid}&d={dt.date.fromisoformat(d)}" if re.fullmatch(r"[0-9a-f]{6,20}", eid) else None
-    except ValueError:
-        return None
+        if form.get("back"):
+            values = dict.fromkeys(keys)
+        else:
+            rows, seen = [], set()
+            for i in range(min(num(form.get("rows")) or 0, 60)):
+                title = " ".join((form.get(f"title{i}") or "").split())[:60]
+                if not title:
+                    continue
+                if title.lower() in seen:
+                    raise ValueError(f"{title} is listed twice.")
+                seen.add(title.lower())
+                seats = num(form.get(f"seats{i}"))
+                if seats is None or not 1 <= seats <= 20:
+                    raise ValueError(f"Seats for {title}: a whole number from 1 to 20.")
+                rows.append({"title": title, "officer": bool(form.get(f"officer{i}")), "seats": seats, "keeper": bool(form.get(f"keeper{i}"))})
+            if not rows:
+                raise ValueError("Keep at least one office.")
+            gone = [o["title"] for o in offices.offices(club) if o["title"].lower() not in seen and offices.holders(club, o["title"])]
+            if gone:
+                raise ValueError(f"{', '.join(gone)} {'is' if len(gone) == 1 else 'are'} held: hand {'it' if len(gone) == 1 else 'them'} "
+                                 "over on the Offices page (Roster → Offices) before removing or renaming it here.")
+            new_offices = [r["title"] if r["officer"] and r["seats"] == 1 else {"title": r["title"], "officer": r["officer"], "seats": r["seats"]}
+                           for r in rows]
+            keepers = [r["title"] for r in rows if r["keeper"]]
+            if not keepers:
+                raise ValueError("Tick at least one office whose holders add members (usually the Secretary).")
+            same_offices = offices.offices(type("C", (), {"offices": club.yaml.get("offices") or []})()) == \
+                offices.offices(type("C", (), {"offices": new_offices})())
+            yaml_keepers = {str(x).lower() for x in club.yaml.get("roster_keepers") or ["Secretary", "Treasurer"]}
+            values = {("", "offices"): None if same_offices else new_offices,
+                      ("", "roster_keepers"): None if {k.lower() for k in keepers} == yaml_keepers else keepers}
+        club.save_site_settings(values)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/roles?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, site_offices="club.yaml" if form.get("back") else ", ".join(k.replace("roster_keepers", "who adds members")
+                                                                                  for (_, k), v in values.items() if v is not None) or "club.yaml")
+    return RedirectResponse("/admin/site/roles?note=" + quote("Saved."), status_code=303)
+
+
+@app.post("/admin/site/roles")
+async def site_roles(request: Request):
+    """Roles tab: who has the roles given by hand (Minutes editor, Calendar editor). The rest follow the offices."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    before = {k: {m.id for m in club.members.values() if getattr(m, k)} for k in PICKED}
+    picked = {k: [i for i in form.getlist(k) if i in club.members] for k in PICKED}
+    club.save_roles(picked)
+    changes = [f"{ROLES[k][0]} {'+' if add else '-'}{club.name(i)}" for k in PICKED
+               for add, ids in ((True, set(picked[k]) - before[k]), (False, before[k] - set(picked[k]))) for i in sorted(ids)]
+    _admin_log(request, site_roles=", ".join(changes) or "no change")
+    return RedirectResponse("/admin/site/roles?note=" + quote("Saved." if changes else "Nothing changed."), status_code=303)
+
+
+@app.post("/admin/site/privacy")
+async def site_privacy(request: Request):
+    """Privacy tab: names never shown in the minutes or the archive, one a line."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    if form.get("back"):
+        values = {("privacy", "never_record"): None}
+    else:
+        names = list(dict.fromkeys(" ".join(x.split())[:80] for x in (form.get("names") or "").splitlines() if x.strip()))[:200]
+        yaml_names = [" ".join(str(x).split()) for x in (club.yaml.get("privacy") or {}).get("never_record") or [] if str(x).strip()]
+        values = {("privacy", "never_record"): None if names == yaml_names else names}
+    club.save_site_settings(values)
+    _admin_log(request, site_privacy="club.yaml" if form.get("back") else "names")
+    return RedirectResponse("/admin/site/privacy?note=" + quote("Saved."), status_code=303)
+
+
+def _meeting_where(since: dt.date) -> tuple[str, str]:
+    """Where the weekly meeting is, and its online link, on its first date from `since` on (from the calendar)."""
+    found = events.next_meeting(events.load(), since)
+    o = events.occurrence(*found) if found else {}
+    return o.get("where", ""), o.get("online", "")
+
 
 
 @app.post("/admin/site/club")
@@ -2292,6 +2591,16 @@ async def site_club(request: Request):
     Only what differs from club.yaml is kept, so later changes there still count for the rest."""
     mid, form, club = _site_admin(request), await request.form(), archive.club
     old_day, old_time = club.meeting_weekday, club.meeting_time
+    today = dt.date.today()
+    try:
+        since = dt.date.fromisoformat(form.get("since") or today.isoformat())
+    except ValueError:
+        since = None
+    if since is None or since < today:
+        return RedirectResponse("/admin/site/club?error=" + quote("Starting: today or a later date."), status_code=303)
+    online = (form.get("online") or "").strip()[:500]
+    if online and not events.ONLINE_RE.fullmatch(online):
+        return RedirectResponse("/admin/site/club?error=" + quote("The online link starts with https:// (copy it from the meeting app's invite)."), status_code=303)
     if form.get("back"):
         values = dict.fromkeys(CLUB_KEYS)
     else:
@@ -2300,7 +2609,7 @@ async def site_club(request: Request):
             if not name:
                 raise ValueError("Give the club's name.")
             if not re.fullmatch(r"[A-Z0-9/]{3,12}", call):
-                raise ValueError("The callsign is letters and digits, like W1AW.")
+                raise ValueError("The callsign is letters and digits, like N0CALL.")
         except ValueError as e:
             return RedirectResponse("/admin/site/club?error=" + quote(str(e)), status_code=303)
         typed = {"name": name, "callsign": call, "meeting_day": (form.get("meeting_day") or "").strip().title(),
@@ -2321,18 +2630,17 @@ async def site_club(request: Request):
         branding.set_name(app_name, mid)
         _admin_log(request, site_name=branding.name(club))
     note = "Saved."
-    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time):
-        today = dt.date.today()
-        evs = events.load()
-        e = next((x for x in evs if x.get("meeting")), None)
-        nxt = next(iter(events.dates(e, today, today + dt.timedelta(days=60))), None) if e else None
-        late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
-                   and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0
-        note = ("Saved. Already planned, and not moved: the weekly meeting on the calendar"
-                + (f" (change it there: This and following dates)" if e else "")
-                + (f", and {late} chow night{'s' if late != 1 else ''} on the old day (the Chow page)" if late else "") + ".")
-        if e and nxt:
-            return RedirectResponse("/admin/site/club?note=" + quote(note) + f"&meeting={e['id']}&d={nxt}", status_code=303)
+    # only what was changed on the page: each later date keeps its own place and link otherwise (a change planned for later)
+    where = " ".join((form.get("where") or "").split())[:200]
+    where = where if "where" in form and where != form.get("shown_where", "") else None
+    online = online if "where" in form and online != form.get("shown_online", "") else None
+    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or (where, online) != (None, None):
+        first = events.move_meeting(club, since, where, online, mid)
+        note = f"Saved. The weekly meeting on the calendar changes from {show_date(first, 'day_year')}; earlier dates stay as they were."
+    late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
+               and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0
+    if late:
+        note += f" {late} chow night{'s are' if late != 1 else ' is'} still on the old day: move {'them' if late != 1 else 'it'} on the Chow page."
     return RedirectResponse("/admin/site/club?note=" + quote(note), status_code=303)
 
 
@@ -2562,7 +2870,7 @@ def calendar_feed(token: str, show: str = ""):
     if kinds := [k for k in show.split(",") if k in calview.KINDS]:
         items = [e for e in items if e.kind in kinds]
     name = " & ".join(calview.KINDS[k] for k in kinds) if 0 < len(kinds) < 3 else "calendar"
-    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} {name}")
+    return _ics(items, f"{archive.club.label} {name}")
 
 
 @app.get("/calendar/public.ics")
@@ -2571,7 +2879,7 @@ def calendar_public_feed():
         raise HTTPException(404)
     today = dt.date.today()
     items, _ = calview.entries(archive.club, archive, None, today - dt.timedelta(days=31), today + dt.timedelta(days=365), public=True)
-    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} events")
+    return _ics(items, f"{archive.club.label} events")
 
 
 def _club_tz() -> str:
@@ -2597,7 +2905,7 @@ def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str
 def _repeat_choices(day: str) -> list[tuple[str, str]]:
     """The Repeats menu, worded for the start day ("Monthly on the 2nd Tuesday")."""
     start = day[:10]
-    lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})  # noqa: E731
+    lab = lambda freq, **k: events.repeat_label(start, {"freq": freq, "interval": 1, "last": False, "until": None, **k})
     return [("", "Doesn't repeat"), ("daily", lab("daily")), ("weekly", lab("weekly")), ("biweekly", lab("weekly", interval=2)),
             ("monthly_weekday", lab("monthly_weekday")), ("monthly_last", lab("monthly_weekday", last=True)),
             ("monthly_weeks", f"Monthly on some {dt.date.fromisoformat(start):%A}s (pick the weeks)"),

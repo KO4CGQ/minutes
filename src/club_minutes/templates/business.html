@@ -48,8 +48,8 @@
 <div class="cards">{% for x in done %}
 {% call card(x) %}{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{{ x.owner_name }}</span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>{% endcall %}
 {% call shell(x) %}
-  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}">{{ x.owner_name }}</a></span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>
-    <span class="chip">{{ emoji('📅', 'calendar') }} first mentioned <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span></div>
+  <div class="card-meta">{% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}<a href="/members/{{ x.owner }}?from=business{% if x.status == 'done' %}&amp;tab=done{% endif %}">{{ x.owner_name }}</a></span>{% endif %}<span class="chip">{{ emoji('✅', 'check') }} done {{ fmt(x.closed) }}</span>
+    <span class="chip">{{ emoji('📅', 'calendar') }} {% if is_meeting(x.opened) %}first mentioned <a href="/meetings/{{ x.opened }}?from=business">{{ fmt(x.opened) }}</a>{% else %}added {{ fmt(x.opened) }}{% endif %}</span></div>
   {% if leader or x.owner == me.id %}<div class="dacts"><form method="post" action="/business/{{ x.id }}/done" class="inline"><input type="hidden" name="done" value="0"><button class="act">{{ emoji('🔄', 'refresh') }} Reopen</button></form></div>{% endif %}
   {{ history(x, True) }}
 {% endcall %}
@@ -70,7 +70,7 @@
 {% call card(x) %}<span class="chip">{{ mo.result }}</span><span class="chip">{{ emoji('📅', 'calendar') }} {{ fmt(x.opened) }}</span>{% endcall %}
 {% call shell(x) %}
   <div class="card-meta"><span class="chip">{{ mo.result }}</span>
-    <span class="chip">{{ emoji('📅', 'calendar') }} <a href="/meetings/{{ x.opened }}">{{ fmt(x.opened) }}</a></span>
+    <span class="chip">{{ emoji('📅', 'calendar') }} {% if is_meeting(x.opened) %}<a href="/meetings/{{ x.opened }}?from=business">{{ fmt(x.opened) }}</a>{% else %}{{ fmt(x.opened) }}{% endif %}</span>
     <span class="chip">{{ avatar(mo.mover, 'xs') }}moved by {{ club.name(mo.mover) }}</span>
     {% if mo.seconder %}<span class="chip">{{ avatar(mo.seconder, 'xs') }}seconded by {{ club.name(mo.seconder) }}</span>{% endif %}</div>
   {% if leader %}<div class="dacts"><button type="button" class="act" data-toggle="m{{ x.id }}" title="Correct it, or record what became of a tabled motion">{{ emoji('✏️', 'pencil') }} Edit</button></div>
@@ -99,7 +99,7 @@
       <label>Owner<input name="owner" data-combo="roster-names" placeholder="Type a name…" value="{{ club.name(g.owner) if g.owner else '' }}"></label>
       <label>Due<input type="date" name="due" value="{{ g.due or '' }}"></label>
     </div>
-    <p class="hint">From the <a href="/meetings/{{ g.meeting }}">{{ fmt(g.meeting) }}</a> minutes{% if g.why %}: “{{ g.why }}”{% endif %}</p>
+    <p class="hint">From the <a href="/meetings/{{ g.meeting }}?from=business">{{ fmt(g.meeting) }}</a> minutes{% if g.why %}: “{{ g.why }}”{% endif %}</p>
     <div class="formrow"><button class="btn small">{{ 'Accept the change' if g.kind == 'update' else 'Accept' }}</button></div>
   </form>
   <form method="post" action="/business/suggestions/{{ g.id }}/dismiss" class="inline"><button class="btn small ghost">Dismiss</button></form>

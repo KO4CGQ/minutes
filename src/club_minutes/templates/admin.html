@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block title %}Admin{% endblock %}{% block body %}
 <h1>Admin</h1>
 <p class="muted">Tools for the server and the app.{% if admin_until %} Admin mode is on until {{ admin_until|clock }}.{% endif %}</p>
+{% for note in club.renamed %}<p class="msg warn">{{ note }}</p>{% endfor %}
 <div class="admintools">
 <a class="card" href="/admin/security"><b>Security</b><span class="muted small">Sign-ins, members' passkeys and devices, failed attempts, bans, the admin log, the server.</span>
   <span class="small">{{ failed }} failed sign-in{{ 's' if failed != 1 }} in the last day{% if bans %} · {{ bans }} address{{ 'es' if bans != 1 }} banned{% endif %}</span></a>
@@ -12,6 +13,8 @@
   <span class="small">{{ app_name() }}</span></a>
 <a class="card" href="/admin/email"><b>Email log</b><span class="muted small">Every email the app sent{{ ', or held back' if PREVIEW or STAGE or club.email_only_to() is not none }}.</span>
   <span class="small">{% if held %}{{ held }} held back this week{% else %}Nothing held back this week{% endif %}</span></a>
+<a class="card" href="/help/server-admin"><b>Server admin guide</b><span class="muted small">Install, settings, backups, updates and security, step by step.</span>
+  <span class="small">For {{ VERSION }}</span></a>
 {% if STAGE %}<a class="card" href="/admin/stage"><b>Stage sync</b><span class="muted small">Pull the live data now, or pause the nightly sync.</span>
   <span class="small">{% if stage_last %}Last: {{ 'done' if stage_last.ok else 'failed' }}, {{ stage_last.finished|ts }}{% else %}No sync yet{% endif %}</span></a>{% endif %}
 </div>

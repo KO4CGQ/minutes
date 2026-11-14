@@ -127,7 +127,7 @@ class Meeting:
         return "\n".join(out)
 
     @classmethod
-    def from_markdown(cls, text: str) -> "Meeting":
+    def from_markdown(cls, text: str) -> Meeting:
         _, fm_text, body = text.split("---", 2)
         fm = yaml.safe_load(fm_text) or {}
         att = fm.get("attendance") or {}
@@ -170,5 +170,5 @@ class Meeting:
         return p
 
     @classmethod
-    def load(cls, path: Path) -> "Meeting":
+    def load(cls, path: Path) -> Meeting:
         return cls.from_markdown(path.read_text())

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>{{ club.info.callsign }} chow list</title>
+<html lang="en"><head><meta charset="utf-8"><title>{{ club.label }} chow list</title>
 <link rel="stylesheet" href="static/minutes.css"><style>:root { {{ theme_light() }} }</style></head>
 <body class="pdf"><article class="minutes">
   <header class="mh">
-    <img src="{{ brand(pdf=True) }}" alt="{{ club.info.callsign }} logo">
+    <img src="{{ brand(pdf=True) }}" alt="{{ club.label }} logo">
     <div>
-      <div class="club">{{ club.info.callsign }} · {{ club.info.name }}</div>
+      <div class="club">{{ [club.info.callsign, club.info.name]|select|join(' · ') or club.label }}</div>
       <h1>Chow List</h1>
       <div class="date">As of {{ today|longdate }}</div>
     </div>

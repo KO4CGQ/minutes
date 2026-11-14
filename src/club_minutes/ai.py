@@ -1,6 +1,6 @@
 """AI assistance, through OpenRouter (so the model can be chosen and changed in club.yaml).
 
-Ground rules (ROADMAP):
+Ground rules:
 - A person always approves. The AI only ever *suggests*; nothing is added or changed until a leader
   accepts it, and suggestions are marked as AI until then.
 - Lines naming anyone on the never-record list are dropped before any text leaves the server.
@@ -57,7 +57,7 @@ def complete(club: Club, system: str, user: str, purpose: str, post=None) -> str
     try:
         r = post(URL, json=body, timeout=90, headers={
             "Authorization": f"Bearer {os.environ['CLUB_MINUTES_OPENROUTER_KEY']}",
-            "X-Title": f"{club.info.get('callsign', 'Club')} Minutes"})
+            "X-Title": f"{club.label} Minutes"})
         if r.status_code != 200:
             raise AIError(f"OpenRouter answered {r.status_code}: {r.text[:200]}")
         data = r.json()

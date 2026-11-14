@@ -37,7 +37,7 @@ def test_every_colour_and_top_bar_stays_readable():
             for lightness in (0, 0.2, 0.5, 0.8, 1):
                 c = theme._hex(*colorsys.hls_to_rgb(h / 360, lightness, s))
                 for bar in (None, c, "#ffffff", "#000000", "#ffff00"):
-                    light, dark, notes = theme.palette(c, bar)
+                    light, dark, _notes = theme.palette(c, bar)
                     assert not failing(light, dark), (c, bar)
     assert theme.palette("#ffff00", "#ffff00")[2]  # a pale bar behind white text was darkened, and the admin is told
 
@@ -57,9 +57,9 @@ def test_bad_colours_are_refused_or_ignored(data):
     assert theme.valid(" #2D5F9A ") == "#2d5f9a" and not any(map(theme.valid, ("red", "#fff", "#12345g", "url(x)", None)))
     assert theme.palette("not a colour") == theme.palette(theme.DEFAULT)
     with pytest.raises(ValueError):
-        branding.set_colours("red", None, "kd8adm")
+        branding.set_colours("red", None, "n0admn")
     with pytest.raises(ValueError):
-        branding.set_colours("#123456", "};body{display:none", "kd8adm")
+        branding.set_colours("#123456", "};body{display:none", "n0admn")
     assert branding.colours() == {"main": theme.DEFAULT, "bar": None}
 
 
@@ -76,10 +76,11 @@ def test_suggestions_from_the_logo_are_its_colours_not_white_black_or_see_throug
 
 def test_site_sets_the_colours_every_page_and_pdf_follows(data, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
+
     from club_minutes import web
     from club_minutes.auth import Auth
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "kd8adm", "first": "Amy", "last": "Able"}, {"id": "kd8bbb", "first": "Bob", "last": "Baker"}])
-    club.admins = {"kd8adm"}
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed"}, {"id": "n0bbbb", "first": "Bob", "last": "Bloggs"}])
+    club.admins = {"n0admn"}
     monkeypatch.setattr(web.archive, "club", club)
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
@@ -88,7 +89,7 @@ def test_site_sets_the_colours_every_page_and_pdf_follows(data, tmp_path, monkey
         t = TestClient(web.app)
         t.cookies.set(web.COOKIE, a.new_session(who))
         return t
-    bob, amy, anon = as_("kd8bbb"), as_("kd8adm"), TestClient(web.app)
+    bob, amy, anon = as_("n0bbbb"), as_("n0admn"), TestClient(web.app)
     assert anon.get("/brand/theme.css").text == theme.css(theme.DEFAULT)  # public: the sign-in page uses it
     assert bob.get("/admin/site/colours/preview?main=%23ff0000").status_code == 404
     assert bob.post("/admin/site/colours", data={"main": "#ff0000"}).status_code == 404
@@ -113,3 +114,24 @@ def test_a_picked_top_bar_shows_in_dark_mode_too_dimmed():
     assert light["--nav-bg"] == "#7a3fb0" and hue(dark["--nav-bg"]) == hue("#7a3fb0")  # a purple bar is a dark purple bar
     assert colorsys.rgb_to_hls(*theme._rgb(dark["--nav-bg"]))[1] <= 0.225  # dimmed (to 0.22, give or take the hex rounding): a dark page keeps a dark bar
     assert theme.palette(theme.SHAPE_FROM)[1]["--nav-bg"] == theme.DARK["--nav-bg"]  # no bar picked: unchanged
+
+
+def test_attendance_colours_stay_put_whatever_the_club_picks():
+    """In person green, online blue, in light and dark: never recoloured (a blue club had both the same blue)."""
+    css = (Path(theme.__file__).parent / "static" / "style.css").read_text()
+    for main in (theme.DEFAULT, theme.SHAPE_FROM, "#7a3fb0", "#5a86c4"):
+        for p in theme.palette(main)[:2]:
+            assert not any(k.startswith(("--inperson", "--online")) for k in p), main
+    for block in re.findall(r"--inperson-bg: (#\w+); --inperson-edge: (#\w+); --online-bg: (#\w+); --online-edge: (#\w+)", css):
+        inperson_bg, inperson_edge, online_bg, online_edge = block
+        assert inperson_edge == "#7da04a" and online_edge == "#5a86c4" and inperson_bg != online_bg
+
+
+def test_theme_css_address_changes_with_the_app_too(monkeypatch):
+    """theme.css is cached for a day under ?v=: the stamp follows how the colours are made (theme.py), not only the
+    club's picks, so an update reaches browsers that keep their cache (Orion kept the old in-person blue)."""
+    from club_minutes import web
+    before = web._theme_stamp()
+    assert web._theme_stamp() == before  # the same app and colours: the same address, so the cache still works
+    monkeypatch.setattr(web, "_THEME_CODE", web._THEME_CODE + b"\n# changed")
+    assert web._theme_stamp() != before

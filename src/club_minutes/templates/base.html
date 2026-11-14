@@ -22,6 +22,13 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 <body><div id="emoji-icons" hidden>{% for n in ('check', 'x', 'xcircle', 'star') %}<span data-i="{{ n }}">{{ icon(n) }}</span>{% endfor %}</div>
 {% set PAGES = (('/', 'Home'), ('/minutes', 'Minutes'), ('/calendar', 'Calendar'), ('/chow', 'Chow'), ('/business', 'Business'), ('/roster', 'Roster'), ('/stats', 'Stats'), ('/guests', 'Guests'), ('/links', 'Links')) %}
 {% set here = request.url.path %}
+{% macro crumb(href, label) %}<nav class="crumb" aria-label="Back"><a href="{{ href }}">‹ {{ label }}</a></nav>{% endmacro %}
+{# where a list's links say they came from (?from=..., and a business item's ?item=), so the page's crumb leads back there #}
+{% macro back(href, label) %}{% set q = request.query_params %}{% set item = q.get('item', '') if q.get('item', '').isalnum() else '' %}
+{%- set came = {'stats': ('/stats', 'Attendance'), 'treasurer': ('/treasurer', 'Treasurer'), 'offices': ('/offices', 'Offices'), 'chow': ('/chow', 'Chow'), 'guests': ('/guests', 'Guests'), 'changes': ('/roster/changes', 'Roster changes'),
+    'business': ('/business' ~ ('?tab=done' if q.get('tab') == 'done' else ''), 'Business'), 'home': ('/', 'Home'),
+    'roster': ('/roster', 'Roster'), 'minutes': ('/minutes', 'Minutes'), 'search': ('/search?q=' ~ (q.get('q', '')|urlencode), 'Search')}.get(q.get('from')) %}
+{%- if came and item %}{% set came = (came[0] ~ '#i' ~ item, came[1]) %}{% endif %}{% if came or href %}{{ crumb(*(came or (href, label))) }}{% endif %}{% endmacro %}
 {% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
 <nav class="top">
   {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
@@ -34,7 +41,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   <span class="clock" title="Club time"></span>
   <form action="/search" class="barsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business{{ ', chow' if module('chow') }} and calendar"></form>
   <details class="menu"><summary class="me">{{ avatar(me.id, 'md') }}<span class="name">{{ me.short or me.first }}</span>{% if update_available %}<span class="dot" title="An update is available"></span>{% endif %} ▾</summary>
-    <div class="drop"><a href="/profile">Your profile</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">{{ emoji('⬆️', 'arrowup') }} Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin">Admin{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
+    <div class="drop"><a href="/profile">Your profile</a><a href="/help">Help</a><a href="/about">About</a>{% if update_available and not admin_until %}<a href="/admin/updates" class="updnote">{{ emoji('⬆️', 'arrowup') }} Update to {{ update_available }}<small>Turns on admin mode first</small></a>{% endif %}{% if is_admin and admin_until %}<a href="/admin">Admin{% if update_available %} <span class="badge">{{ update_available }}</span>{% endif %}</a>{% endif %}
     {% if is_admin %}<form method="post" action="/admin/mode"><input type="hidden" name="on" value="{{ 0 if admin_until else 1 }}"><input type="hidden" name="next" value="{{ request.url.path }}">
       <button type="submit"><span class="ico">{{ emoji("🛡️", "shield") }}</span>{{ 'Turn off admin mode' if admin_until else 'Turn on admin mode' }}</button></form>{% endif %}
     <div class="sep"></div>
@@ -85,13 +92,19 @@ document.addEventListener("submit", (e) => {
     try { await passkeyRegister(""); done("Passkey added. Next time, sign in with it (rename it under Profile → Sign-in &amp; passkeys)."); }
     catch (e) {
       if (e.name === "NotAllowedError") return;  // cancelled: the offer stays
+      if (e.name === "InvalidStateError") {  // it has one already: remember that here, so it isn't offered again
+        const ids = new Set((document.cookie.match(/(?:^|; )pk_here=([^;]*)/)?.[1] || "").split(".").filter(Boolean));
+        ids.add({{ me.id|tojson }});
+        document.cookie = `pk_here=${[...ids].sort().join(".")}; Max-Age=${365 * 86400}; path=/; SameSite=Lax; Secure`;
+      }
       done(e.name === "InvalidStateError" ? "This device already has a passkey for your account." : e.message);
     }
   };
 })();
 </script>{% endif %}
-<main>{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% endif %}{% block body %}{% endblock %}</main>
+<main>{% block crumb %}{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% else %}{{ back(None, None) }}{% endif %}{% endblock %}{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
+<script src="/static/fields.js?v={{ ASSETS }}"></script>
 <script nonce="{{ csp_nonce }}">  // what inline on…= handlers did, as data- attributes: the security policy runs no inline handlers
 document.addEventListener("submit", (e) => {
   const msg = e.submitter?.dataset.confirm || e.target.dataset.confirm;  // "Are you sure?"
@@ -131,7 +144,7 @@ markTheme();
 (() => { const clock = document.querySelector("nav.top .clock"), start = document.querySelector("nav.top a.start");
   const [day, hh, mm] = (start?.dataset.meets || "").split(/[ :]/).map(Number);
   const tick = () => { const now = new Date();
-    if (clock) clock.textContent = now.toLocaleTimeString([], {weekday: "short", hour: "numeric", minute: "2-digit"}).replace(/AM|PM/, (m) => m.toLowerCase());
+    if (clock) clock.textContent = now.toLocaleTimeString([], {weekday: "short", hour: "numeric", minute: "2-digit"});
     if (start) { const mins = (now.getHours() - hh) * 60 + now.getMinutes() - mm;
       start.classList.toggle("soon", now.getDay() === day && mins >= -30 && mins <= 30); } };
   tick(); setInterval(tick, 10000); })();

@@ -25,7 +25,7 @@ def test_the_demo_club_builds_and_opens(tmp_path):
     out = tmp_path / "demo"
     subprocess.run([sys.executable, str(ROOT / "demo" / "build.py"), str(out)], check=True, capture_output=True, text=True)
     env = {**os.environ, "CLUB_MINUTES_DATA": str(out / "data"), "CLUB_MINUTES_CONFIG": str(out / "club.yaml")}
-    r = subprocess.run([sys.executable, "-c", CHECK], env=env, capture_output=True, text=True, cwd=tmp_path)
+    r = subprocess.run([sys.executable, "-c", CHECK], env=env, check=False, capture_output=True, text=True, cwd=tmp_path)
     assert r.stdout.strip().endswith("ok"), r.stderr[-2000:]
 
 
@@ -33,5 +33,5 @@ def test_the_demo_is_never_built_in_a_folder_with_anything_in_it(tmp_path):
     club = tmp_path / "club-data"  # a club's data folder, say
     club.mkdir()
     (club / "roster.json").write_text("[]")
-    r = subprocess.run([sys.executable, str(ROOT / "demo" / "build.py"), str(club)], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, str(ROOT / "demo" / "build.py"), str(club)], check=False, capture_output=True, text=True)
     assert r.returncode and "isn't empty" in r.stderr and [p.name for p in club.iterdir()] == ["roster.json"]

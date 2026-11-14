@@ -11,7 +11,7 @@
 <thead><tr><th>Date</th><th class="n">In person</th><th class="n">Online</th><th class="n">Guests</th></tr></thead>
 <tbody>{% for m in pg.rows %}{% if loop.first or m.date.year != loop.previtem.date.year %}
 <tr class="yearrow"><th colspan="4">{{ m.date.year }}</th></tr>{% endif %}
-<tr><td data-sort="{{ m.slug }}"><a href="/meetings/{{ m.slug }}">{{ m.date|listdate }}</a>{% if m.status == 'draft' %} <a class="badge warn" href="/console/{{ m.slug }}">in progress</a>{% endif %}</td>
+<tr><td data-sort="{{ m.slug }}"><a href="/meetings/{{ m.slug }}?from=minutes">{{ m.date|listdate }}</a>{% if m.status == 'draft' %} <a class="badge warn" href="/console/{{ m.slug }}">in progress</a>{% endif %}</td>
 <td class="n">{{ m.in_person|length }}</td><td class="n">{{ m.remote|length }}</td><td class="n">{{ m.guests|length }}</td></tr>
 {% endfor %}</tbody>
 </table>

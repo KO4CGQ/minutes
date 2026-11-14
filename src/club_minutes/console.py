@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import re
 import logging
+import re
 import shutil
 import threading
 import time
@@ -269,7 +269,8 @@ def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
     community events, Planning, holidays and birthdays shared with everyone. Left out: events ticked to leave out (the
     weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events. next_meeting: the meeting
     event's next date, else a week on."""
-    from . import calview, events as store
+    from . import calview
+    from . import events as store
     evs = store.load()
     quiet = {e["id"] for e in evs if store.quiet(e)}
     items, _ = calview.entries(archive.club, archive, "", date, date + dt.timedelta(days=days))  # "": no private birthdays
@@ -404,13 +405,13 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
     recorder = club.members.get(m.recorder or "") if m.recorder != m.leader else None
     writer = recorder or leader  # replies (corrections) go to whoever took the minutes
     date = show_date(m.date, "document")
-    body = (f"Here are the minutes of the {club.info.get('callsign', '')} meeting of {date}"
+    body = (f"Here are the minutes of the {club.label} meeting of {date}"
             f"{f', led and recorded by {leader.name}' if leader and m.recorder == m.leader else f', led by {leader.name}' if leader else ''}"
             f"{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
             f"Replies go to {writer.first if writer and writer.email else 'the club'}.\n\n"
-            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.info.get('callsign', '')}")
-    subject, reply_to = f"{club.info.get('callsign', '')} meeting minutes, {date}", writer.email if writer and writer.email else None
+            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.label}")
+    subject, reply_to = f"{club.label} meeting minutes, {date}", writer.email if writer and writer.email else None
     try:
         pdf = make_pdf() if to else None
         sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],

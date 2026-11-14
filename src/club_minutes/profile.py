@@ -12,7 +12,7 @@ import os
 import secrets
 import time
 
-from . import branding, auth, prefs
+from . import auth, branding, prefs
 from .club import DATA, ROSTER_CACHE, Club, one_line, roster_locked
 from .roster import COLUMNS, EDITABLE, FLAGS, Sheet, _truthy
 
@@ -138,7 +138,7 @@ def _notify(club: Club, e: dict, url: str) -> None:
     m = club.members[e["member"]]
     member_to = [a for a in dict.fromkeys([m.email, e["old"].get("email")]) if a]  # both, after an email change
     you = "You" if e["by"] == e["member"] else by
-    _send(club, member_to, f"Your {club.info.get('callsign') or 'club'} roster details were updated",
+    _send(club, member_to, f"Your {club.label} roster details were updated",
           f"Hi {m.first},\n\n{you} updated your details on the club roster:\n\n{what}\n\n"
           f"You can see and change them on your profile: {url}/profile\n"
           f"If you didn't expect this, reply to this email or tell an officer.\n\n73,\n{branding.name(club)}", e)

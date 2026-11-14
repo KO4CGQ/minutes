@@ -9,7 +9,8 @@ import re
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
-from . import business, chow, events as store, regions
+from . import business, chow, regions
+from . import events as store
 from .club import DATA, Club, show_date
 
 KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays",
@@ -24,6 +25,7 @@ class Entry:
     kind: str
     time: str | None = None  # "7:30 PM", timed events only
     where: str | None = None
+    online: str = ""  # the online meeting link (checked http(s) when saved)
     id: str | None = None  # the app event's id (editable on the page)
     repeats: bool = False
     from_minutes: bool = False  # the minutes' Upcoming Events: changed in the leader console
@@ -54,7 +56,7 @@ def _entry(o: dict, kind: str, **kw) -> Entry:
     f = dt.datetime.fromisoformat(o["end"]) if o.get("end") else (s + dt.timedelta(hours=store_hours()) if timed else s)
     return Entry(s.date(), f.date() if not timed else max(s.date(), (f - dt.timedelta(seconds=1)).date()), o["title"], kind,
                  _clock(s) if timed else None, o.get("where") or None, starts=s if timed else None, ends=f if timed else None,
-                 notes=o.get("notes", ""), **kw)
+                 notes=o.get("notes", ""), online=o.get("online", ""), **kw)
 
 
 def _zone(o: dict, tz: str | None, club_tz: str) -> str:
@@ -148,7 +150,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     minutes = []  # the minutes' dated Upcoming Events, on the calendar the leader picked (Club events by default)
     for i in (archive.meetings[0].items("Upcoming Events") if archive.meetings else []):  # the newest list (a draft counts)
         if i.when and (i.cal or "events") in kinds:
-            s, f, all_day = i.span()
+            _s, f, all_day = i.span()
             o = {"title": i.text, "start": i.when, "end": i.until or (None if all_day else f.strftime("%Y-%m-%dT%H:%M"))}
             x = _entry(o, i.cal or "events", from_minutes=True)
             if x.end >= lo and x.start <= hi:
@@ -250,7 +252,7 @@ def _fold(line: str) -> str:
 def ics(items: list[Entry], name: str, tz: str) -> str:
     """An iCalendar file of these entries, for Apple Calendar, Outlook, Google and phones to subscribe to."""
     import hashlib
-    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Club Minutes//Club calendar//EN", "CALSCALE:GREGORIAN",
              f"X-WR-CALNAME:{_ics_text(name)}", f"X-WR-TIMEZONE:{tz}", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H"]
     for e in items:
@@ -263,6 +265,8 @@ def ics(items: list[Entry], name: str, tz: str) -> str:
             lines += [f"DTSTART;VALUE=DATE:{e.start:%Y%m%d}", f"DTEND;VALUE=DATE:{e.end + dt.timedelta(days=1):%Y%m%d}"]
         if e.where:
             lines.append(f"LOCATION:{_ics_text(e.where)}")
+        if e.online:  # URL for the apps that show it; DESCRIPTION for the many (Google among them) that don't
+            lines += [f"URL:{e.online}", f"DESCRIPTION:{_ics_text('Join online: ' + e.online)}"]
         lines.append("END:VEVENT")
     lines.append("END:VCALENDAR")
     return "\r\n".join(_fold(x) for x in lines) + "\r\n"

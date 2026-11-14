@@ -1,12 +1,10 @@
-{% extends "base.html" %}{% block title %}Roster changes{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}Roster changes{% endblock %}{% block crumb %}{{ back('/roster', 'Roster') }}{% endblock %}{% block body %}
 <h1>Roster changes</h1>
 <p class="muted">Changes to members' details made in the app, and members added, newest first. Each was written to the roster and emailed to the Secretary. Officers only.</p>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-<table class="list"><thead><tr><th>When</th><th>Member</th><th>Change</th><th>By</th><th></th></tr></thead>
+<table class="list"><thead><tr><th>When</th><th>Member</th><th>Change</th></tr></thead>
 <tbody>{% for e in changes %}<tr>
-<td data-sort="{{ e.at }}">{{ e.at|ts }}</td><td><a href="/members/{{ e.member }}">{{ club.name(e.member) }}</a></td>
-<td>{% if e.logged %}<b>Membership Log:</b> {{ e.new.membership_log }}{% elif e.added %}<b>Added to the roster</b>{% for f, v in e.new.items() %}<div class="change">{{ labels[f] }}: {{ v }}</div>{% endfor %}{% else %}{% for f, v in e.new.items() %}<div class="change"><b>{{ labels[f] }}:</b> {% if f == 'birthday' %}<s class="muted">{{ e.old[f]|monthday or '(blank)' }}</s> → {{ v|monthday or '(blank)' }}{% else %}<s class="muted">{{ e.old[f] or '(blank)' }}</s> → {{ v or '(blank)' }}{% endif %}</div>{% endfor %}{% endif %}</td>
-<td>{{ club.name(e.by) }}{% if e.undoes %} <span class="badge">undo</span>{% endif %}</td>
-<td>{% if e.undone %}<span class="muted">undone</span>{% elif not e.undoes and not e.added and not e.office and not e.logged %}<form method="post" action="/roster/changes/{{ e.id }}/undo" data-confirm="Put back the old values on the roster?"><button class="btn small ghost">Undo</button></form>{% endif %}</td>
-</tr>{% else %}<tr><td colspan="5" class="muted">No changes yet.</td></tr>{% endfor %}</tbody></table>
+<td data-sort="{{ e.at }}">{{ e.at|ts }}<div class="muted small">by {{ club.name(e.by) }}{% if e.undoes %} <span class="badge">undo</span>{% endif %}</div>{% if e.undone %}<div class="muted small">undone</div>{% elif not e.undoes and not e.added and not e.office and not e.logged %}<form method="post" action="/roster/changes/{{ e.id }}/undo" data-confirm="Put back the old values on the roster?"><button class="btn small ghost">Undo</button></form>{% endif %}</td><td><a href="/members/{{ e.member }}?from=changes">{{ club.name(e.member) }}</a></td>
+<td class="wrap">{% if e.logged %}<b>Membership Log:</b> {{ e.new.membership_log }}{% elif e.added %}<b>Added to the roster</b>{% for f, v in e.new.items() %}<div class="change">{{ labels[f] }}: {{ v|anydate }}</div>{% endfor %}{% else %}{% for f, v in e.new.items() %}<div class="change"><b>{{ labels[f] }}:</b> {% if f == 'birthday' %}<s class="muted">{{ e.old[f]|monthday or '(blank)' }}</s> → {{ v|monthday or '(blank)' }}{% else %}{% set yn = {'TRUE': 'Yes', 'FALSE': 'No'} %}<s class="muted">{{ yn.get(e.old[f], e.old[f]|anydate) or '(blank)' }}</s> → {{ yn.get(v, v|anydate) or '(blank)' }}{% endif %}</div>{% endfor %}{% endif %}</td>
+</tr>{% else %}<tr><td colspan="3" class="muted">No changes yet.</td></tr>{% endfor %}</tbody></table>
 {% endblock %}
