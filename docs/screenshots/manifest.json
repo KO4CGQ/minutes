@@ -186,7 +186,7 @@
  "files": {
   "static/auth.js": "05924870c23a3f339334b7d78034b20eeb79359e11c5dc482f551eb43361426b",
   "static/combo.js": "b54d38f7384e4ca8bfe8ece7bcdd6340f18bd8b66af03061e763d644b331b865",
-  "static/minutes.css": "ed67c21966d984633b743f29080abe3582252e0f79836b3f82539ea44fa5fbd1",
+  "static/minutes.css": "a50b373c8c8152d22b4588421a2255bbcd9b618ff7ab5169a28e7f8fbf02b442",
   "static/sort.js": "b7a9af370a7fee958f5ab413ae4d0045f4e1828a0fb082646d1e857131668f39",
   "static/style.css": "d4bd7bdbd007a66ae00c61c33516b063b836fbde2bde3b952c4cfd5050bcd910",
   "templates/_avatar.html": "0cfb33bf7e809ae5bd25d51a4d2026a8d84e293e1b10baf7a6398c13d9f3fa54",

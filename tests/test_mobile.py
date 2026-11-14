@@ -244,3 +244,32 @@ def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_pat
         assert not page.is_visible(d)
         assert not errors
         browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_a_name_after_a_minutes_line_never_splits(engine):
+    """The member's name pill after a line ("Rich S") stays whole at any width; a long web address still wraps.
+    Firefox broke it inside the word ("Ric" / "h S") while links in the minutes had word-break: break-all."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    css = (Path(__file__).parents[1] / "src/club_minutes/static/minutes.css").read_text()
+    line = ("Took his new antenna down since it got into the neighbor's TV, then put an 80m Hamstick on his jeep "
+            '<a class="who" href="/members/n0rich">Rich S</a>')
+    url = "https://example.org/a/very/long/address/without/any/spaces/at/all/to/break/at/minutes.pdf"
+    html = f'<style>{css}</style><article class="minutes"><ul class="items reports"><li>{line}</li><li>See <a href="{url}">{url}</a></li></ul></article>'
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        split, wide = [], []
+        for w in range(300, 901, 3):
+            page.set_viewport_size({"width": w, "height": 600})
+            page.set_content(html)
+            if page.evaluate("document.querySelector('a.who').getClientRects().length") > 1:
+                split.append(w)
+            if page.evaluate("document.documentElement.scrollWidth") > w:
+                wide.append(w)
+        browser.close()
+    assert not split, f"the name split at widths {split[:10]}"
+    assert not wide, f"the long address made the page too wide at {wide[:10]}"
