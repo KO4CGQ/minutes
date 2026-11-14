@@ -1,5 +1,5 @@
 """Lint, here and on GitHub, as part of the tests, each tool at the version pinned in uv.lock (Dependabot bumps them):
-ruff on the Python (its default rules), shellcheck on deploy/*.sh (setup, update and stage-sync run as root), and
+ruff on the Python (its default rules), shellcheck on deploy/*.sh (setup, update and stage-sync run as root) and dev/*.sh, and
 zizmor on the GitHub workflows (injection, tokens left on the runner, unpinned actions).
 
 A newer ruff is tried on GitHub too (Tests → ruff-latest, warn only); locally, `uvx ruff@latest check .` shows what
@@ -30,7 +30,7 @@ def test_ruff_passes():
 
 
 def test_shellcheck_passes():
-    r = run("shellcheck", *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "deploy").glob("*.sh")))
+    r = run("shellcheck", *sorted(str(p.relative_to(ROOT)) for d in ("deploy", "dev") for p in (ROOT / d).glob("*.sh")))
     assert r.returncode == 0, r.stdout[-4000:]
 
 

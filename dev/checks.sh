@@ -78,4 +78,4 @@ EOF
 fi
 
 printf '\n'
-[ "$fail" = 0 ] && echo "All checks passed." || { echo "Some checks failed (above)."; exit 1; }
+if [ "$fail" = 0 ]; then echo "All checks passed."; else echo "Some checks failed (above)."; exit 1; fi
