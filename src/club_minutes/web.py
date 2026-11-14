@@ -309,6 +309,18 @@ def officer(request: Request) -> str:
 
 
 PK_OFFER = "pk_offer"  # set by an emailed-link sign-in; base.html offers a passkey while it's there
+PK_HERE = "pk_here"  # the members with a passkey on this browser (one was added or used here): never offered another
+
+
+def has_passkey_here(request: Request, member: str) -> bool:
+    return member in request.cookies.get(PK_HERE, "").split(".")
+
+
+def passkey_here(request: Request, response: Response, member: str) -> Response:
+    """Remember on this browser that `member` has a passkey here (a year, renewed each time it's used)."""
+    ids = {i for i in request.cookies.get(PK_HERE, "").split(".") if i.isalnum()} | {member}
+    response.set_cookie(PK_HERE, ".".join(sorted(ids)), max_age=365 * 86400, samesite="lax", secure=True)
+    return response
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -352,7 +364,7 @@ def _page(request: Request, name: str, **ctx) -> HTMLResponse:
         # an open meeting from another day (say, last week's never submitted): leaders get "Continue minutes"
         "open_draft": next((m for m in archive.meetings if m.status == "draft"), None),
         "update_available": _update_badge(request),
-        "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id),
+        "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id and not has_passkey_here(request, mid)),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
 
 
@@ -464,7 +476,7 @@ def login_link(request: Request, t: str = ""):
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
-    if request.url.hostname == authn.rp_id:  # passkeys only work there: offer one (base.html, if this device can make one)
+    if request.url.hostname == authn.rp_id and not has_passkey_here(request, member):  # passkeys only work there: offer one (base.html, if this device can make one)
         response.set_cookie(PK_OFFER, "1", samesite="lax", secure=True)  # until the browser closes, Not now, or one is added
     return response
 
@@ -1478,7 +1490,7 @@ async def passkey_register_verify(request: Request, mid: str = Depends(me)):
         authn.register(mid, request.cookies.get(CHALLENGE_COOKIE), body["credential"], body.get("label", ""))
     except Exception as e:  # verification errors come from several exception types  # noqa: BLE001
         raise HTTPException(400, f"Couldn't add the passkey: {e}")
-    return {"ok": True}
+    return passkey_here(request, JSONResponse({"ok": True}), mid)
 
 
 @app.post("/auth/passkey/login/options")
@@ -1499,7 +1511,7 @@ async def passkey_login_verify(request: Request):
         raise HTTPException(400, str(e))
     if not authn.is_active(member):
         raise HTTPException(403, "Your roster entry isn't active.")
-    return start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member, "passkey")
+    return passkey_here(request, start_session(request, JSONResponse({"ok": True, "next": _safe_next(body.get("next", "/"))}), member, "passkey"), member)
 
 
 # ---------------- archive ----------------

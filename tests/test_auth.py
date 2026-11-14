@@ -266,3 +266,28 @@ def test_an_emailed_link_sign_in_offers_a_passkey_until_dismissed(tmp_path, monk
     other = TestClient(web.app)  # not the passkey host: no offer
     other.get("/login/link?t=" + a.create_link("n0aaaa").split("t=")[1], follow_redirects=False)
     assert other.cookies.get(web.PK_OFFER) is None
+
+
+def test_no_passkey_offer_on_a_browser_that_has_one(tmp_path, monkeypatch):
+    """A browser remembers the members with a passkey on it (pk_here: set when one is added or used there); a link
+    sign-in there offers none to them, but still to another member on the same browser."""
+    from fastapi.testclient import TestClient
+    from test_calview import signed_in
+
+    from club_minutes import web
+    _, _club, a = signed_in(tmp_path, monkeypatch, "n0aaaa")
+    monkeypatch.setattr(a, "rp_id", "minutes.example")
+    t = TestClient(web.app, base_url="https://minutes.example")
+    t.cookies.set(web.PK_HERE, "n0aaaa")
+    t.get("/login/link?t=" + a.create_link("n0aaaa").split("t=")[1], follow_redirects=False)
+    assert t.cookies.get(web.PK_OFFER) is None and 'id="pkoffer"' not in t.get("/").text
+    t.cookies.set(web.PK_OFFER, "1")  # an offer from before it was known: not shown either
+    assert 'id="pkoffer"' not in t.get("/").text
+    t.cookies.delete(web.PK_OFFER)
+    t.get("/login/link?t=" + a.create_link("n0bbbb").split("t=")[1], follow_redirects=False)
+    assert t.cookies.get(web.PK_OFFER) == "1"  # Bob has none here
+    from starlette.requests import Request
+    from starlette.responses import Response
+    req = Request({"type": "http", "headers": [(b"cookie", b"pk_here=n0aaaa.a-b")], "method": "GET", "path": "/"})
+    r = web.passkey_here(req, Response(), "n0bbbb")
+    assert "pk_here=n0aaaa.n0bbbb;" in r.headers["set-cookie"] and "Max-Age=31536000" in r.headers["set-cookie"]

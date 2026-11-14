@@ -92,6 +92,11 @@ document.addEventListener("submit", (e) => {
     try { await passkeyRegister(""); done("Passkey added. Next time, sign in with it (rename it under Profile → Sign-in &amp; passkeys)."); }
     catch (e) {
       if (e.name === "NotAllowedError") return;  // cancelled: the offer stays
+      if (e.name === "InvalidStateError") {  // it has one already: remember that here, so it isn't offered again
+        const ids = new Set((document.cookie.match(/(?:^|; )pk_here=([^;]*)/)?.[1] || "").split(".").filter(Boolean));
+        ids.add({{ me.id|tojson }});
+        document.cookie = `pk_here=${[...ids].sort().join(".")}; Max-Age=${365 * 86400}; path=/; SameSite=Lax; Secure`;
+      }
       done(e.name === "InvalidStateError" ? "This device already has a passkey for your account." : e.message);
     }
   };

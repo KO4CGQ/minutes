@@ -3,7 +3,7 @@
 For every member: what the app does for you, and where to find it. It's in the app too: **Help**, in the menu under your name.
 
 ## 🔑 Signing in
-Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or ask for a one-time link by email to the address the club has for you. After an emailed link, the app offers to add a passkey on your device (or add one any time under Profile → Sign-in & passkeys), so next time is one tap.
+Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or ask for a one-time link by email to the address the club has for you. After an emailed link, the app offers to add a passkey on your device, unless you already have one there (or add one any time under Profile → Sign-in & passkeys), so next time is one tap.
 
 > [!TIP]
 > Stuck signing in? Ask an admin.
