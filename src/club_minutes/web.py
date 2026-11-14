@@ -1700,7 +1700,12 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
     if who not in archive.club.members:
         raise HTTPException(404)
     m = archive.club.members[who]
+    club = archive.club
+    office_titles = {o["title"] for o in offices.offices(club)}
+    held = [t for t in offices.titles(m.role) if t in office_titles]  # shown, changed only on the Offices page
+    in_use = {t for x in club.members.values() for t in offices.titles(x.role)} - office_titles
     return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
+                held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
                 events=membership.EVENTS, today=dt.date.today().isoformat())
 
@@ -1723,7 +1728,7 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
         if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
             raise ValueError("Only an admin, in admin mode, can change an admin's email.")
         new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
-               "role": ", ".join(t.strip() for t in f.get("role", "").split(",") if t.strip()),
+               "role": member_titles(m, f),
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
                "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", "")),
                **{k: "TRUE" if f.get(k) else "FALSE" for k in ("officer", "board", "minutes_editor", "calendar_editor")}}
@@ -1733,6 +1738,19 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     except (ValueError, SheetError) as e:
         return RedirectResponse(_safe_next(back + "?error=" + quote(str(e))), status_code=303)
     return RedirectResponse(_safe_next(back + "?saved=1"), status_code=303)
+
+
+def member_titles(m, f) -> str:
+    """The Titles a roster keeper picked (title, ticked) and added (title_new, comma-separated), with the offices the
+    member holds kept as they are: offices change only on the Offices page, which records the history."""
+    office_titles = {o["title"].lower(): o["title"] for o in offices.offices(archive.club)}
+    held = [t for t in offices.titles(m.role) if t.lower() in office_titles]
+    added = [" ".join(t.split())[:60] for t in f.get("title_new", "").split(",") if t.strip()]
+    for t in added:
+        if t.lower() in office_titles:
+            raise ValueError(f"{office_titles[t.lower()]} is an office: change who holds it on the Offices page, which keeps its history.")
+    picked = [t for t in f.getlist("title") if t.lower() not in office_titles]
+    return ", ".join(dict.fromkeys(held + picked + added))  # in that order, each once
 
 
 @app.post("/members/{who}/callsign")

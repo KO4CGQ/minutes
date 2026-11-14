@@ -17,7 +17,15 @@
   <label>Email <input type="email" name="email" value="{{ member.email or '' }}"><span class="hint">Also how {{ member.first }} signs in. Both the old and new address are told.</span></label>
   <label>Phone <input type="tel" name="phone" value="{{ member.phone or '' }}" maxlength="40"></label>
   <label>Address <textarea name="address" rows="3" maxlength="200">{{ member.address or '' }}</textarea></label>
-  <label>Titles <input name="role" value="{{ member.role or '' }}" placeholder="e.g. Net Manager"><span class="hint">Comma-separated. For an office (President, Trustee, ...) use the <a href="/offices">Offices</a> page, which also records the history.</span></label>
+  <fieldset class="titles"><legend>Titles</legend>
+    {% if held %}<p>{% for t in held %}<span class="chip">{{ t }}</span> {% endfor %}<span class="hint">Offices change on the <a href="/offices">Offices</a> page, which keeps their history.</span></p>{% endif %}
+    <details class="multi"><summary data-none="None">{{ mine|join(', ') or 'None' }}</summary><div class="multi-list">
+      {% if choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter titles…" aria-label="Filter titles" hidden>{% endif %}
+      {% for t in choices %}<label class="check"><input type="checkbox" name="title" value="{{ t }}" {{ 'checked' if t in mine }}> {{ t }}</label>{% endfor %}
+      <label class="new">Add a title <input name="title_new" maxlength="120" placeholder="e.g. Net Manager"></label>
+    </div></details>
+    <span class="hint">Other jobs in the club (Net Manager, Webmaster...): tick them, or add a new one.</span>
+  </fieldset>
   <label>Other spellings <input name="aliases" value="{{ member.aliases|join(', ') }}"><span class="hint">Comma-separated: how the name shows up in old minutes, so their reports are matched to {{ member.first }}.</span></label>
   <fieldset><legend>Ticks</legend>
     <label class="check"><input type="checkbox" name="officer" value="1" {{ 'checked' if member.officer }}> Officer</label>
@@ -50,4 +58,16 @@
   <p class="hint">Added to the roster's Membership Log. It doesn't change the status above; set that too if it changed. Office changes go on the <a href="/offices">Offices</a> page.</p>
   <div class="formrow"><button class="btn small">Add to the log</button></div>
 </form>
+<script nonce="{{ csp_nonce }}">  // the Titles list: say what's ticked, and filter a long list as you type
+document.querySelectorAll("details.multi").forEach((d) => {
+  const sum = d.querySelector("summary"), boxes = [...d.querySelectorAll("input[type=checkbox]")], filter = d.querySelector(".multi-filter");
+  const show = () => { sum.textContent = boxes.filter((b) => b.checked).map((b) => b.value).join(", ") || sum.dataset.none; };
+  boxes.forEach((b) => b.addEventListener("change", show));
+  if (filter) {
+    filter.hidden = false;
+    filter.addEventListener("input", () => { const q = filter.value.trim().toLowerCase();
+      boxes.forEach((b) => { b.closest("label").hidden = q && !b.value.toLowerCase().includes(q); }); });
+  }
+});
+</script>
 {% endblock %}

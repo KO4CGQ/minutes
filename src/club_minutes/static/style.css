@@ -343,6 +343,15 @@ form.filter { width: 100%; }
 .mc-name { font-weight: 600; font-size: 1.05rem; } .mc-call { color: var(--muted); font-size: .88rem; }
 .mc-meta { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: center; margin: .2rem 0; }
 form.profile fieldset.fixed { background: var(--surface-2); }
+/* a multi-select: the ticked items in the summary, the list (filterable when long) under it */
+details.multi { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin: .3rem 0; }
+details.multi > summary { padding: .5rem .7rem; cursor: pointer; list-style: none; }
+details.multi > summary::-webkit-details-marker { display: none; }
+details.multi > summary::after { content: " ▾"; color: var(--muted); } details.multi[open] > summary::after { content: " ▴"; }
+details.multi[open] > summary { border-bottom: 1px solid var(--border); }
+.multi-list { display: grid; gap: .2rem; padding: .5rem .7rem; max-height: 18rem; overflow-y: auto; }
+form.profile .multi-list label.check { margin: 0; } .multi-list label.new { margin-top: .4rem; font-weight: normal; }
+.multi-list label[hidden] { display: none; }
 form.profile .fixedrow { display: flex; flex-wrap: wrap; gap: .8rem; }
 form.profile .fixedrow label { flex: 1 1 9rem; margin: .2rem 0 .5rem; font-weight: 600; font-size: .9rem; }
 form.profile input[readonly] { width: 100%; background: var(--surface-3); color: var(--muted); border-style: dashed; cursor: default; }

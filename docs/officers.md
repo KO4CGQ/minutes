@@ -17,7 +17,7 @@ For officers, minutes editors, roster keepers, calendar editors and the Treasure
 
 - **Officers see everything**; other members see only what each member chose to share.
 - **Every profile change** is emailed to the Secretary and listed under **Roster → Recent changes**, where any officer can undo it.
-- **Editing a member** (roster keepers): **Edit roster details** on their page. Name, class, status, contact details, titles, other spellings of their name, and the Officer, Board, Minutes editor and Calendar editor ticks. Not their birthday or sharing choices: those are theirs. Here you also add Membership Log rows (joined, left, suspended…).
+- **Editing a member** (roster keepers): **Edit roster details** on their page. Name, class, status, contact details, titles (ticked from those the club uses, or added; their offices show but change on the Offices page), other spellings of their name, and the Officer, Board, Minutes editor and Calendar editor ticks. Not their birthday or sharing choices: those are theirs. Here you also add Membership Log rows (joined, left, suspended…).
 - **A new callsign** (vanity call or upgrade): **New callsign** on the same page. The app takes a backup, then moves everything (minutes, chow, business, sign-ins, passkeys) to the new call. Old links keep working.
 - **Birthdays and anniversaries** a member shares show at the meeting's Attendance step.
 - **Offices** (Roster → Offices): who holds each office now and who held it before. An admin changes a holder in one step; the app updates both members' titles, logs it and emails the officers. **Add a past term** adds history only.

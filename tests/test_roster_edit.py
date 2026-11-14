@@ -49,7 +49,7 @@ def sheet_row(tmp, cs):
 def test_keeper_edits_and_undo(env):
     club, tmp, sent, _who, c = env
     r = c.post("/members/n0bbbb/edit", data=form(first="Robert", license_class="General", minutes_editor="1",
-                                               role="Net Manager", aliases="Bobby, Bob B"), follow_redirects=False)
+                                               title_new="Net Manager", aliases="Bobby, Bob B"), follow_redirects=False)
     assert "saved=1" in r.headers["location"]
     b = club.members["n0bbbb"]
     assert (b.name, b.license_class, b.minutes_editor, b.role, b.aliases) == ("Robert Bloggs", "General", True, "Net Manager", ["Bobby", "Bob B"])
@@ -96,3 +96,23 @@ def test_admins_email_needs_admin_mode(env, monkeypatch):
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     c.post("/members/n0bbbb/edit", data=form(email="bob@new.example.org"))
     assert club.members["n0bbbb"].email == "bob@new.example.org"
+
+
+def test_titles_are_picked_from_a_list_and_offices_stay_put(env):
+    """Titles: the member's offices are kept as they are (Offices page only); other titles are ticked from those in use
+    on the roster, or added; an office can't be added here."""
+    club, _tmp, _sent, _who, c = env
+    c.post("/members/n0bbbb/edit", data=form(title_new="Net Manager, Webmaster"))
+    assert club.members["n0bbbb"].role == "Net Manager, Webmaster"
+    page_ = c.get("/members/n0aaaa/edit").text
+    assert '<span class="chip">Secretary</span>' in page_ and 'name="title" value="Secretary"' not in page_  # an office: shown, not offered
+    assert 'name="title" value="Net Manager"' in page_ and 'name="title" value="Webmaster"' in page_       # titles in use: offered
+    amy = {**form(first="Amy", last="Appleseed", email="amy@example.org", license_class="General"), "officer": "1", "board": "1"}
+    c.post("/members/n0aaaa/edit", data={**amy, "title": ["Webmaster"], "title_new": "Field Day chair"})
+    assert club.members["n0aaaa"].role == "Secretary, Webmaster, Field Day chair"  # the office kept, first
+    c.post("/members/n0aaaa/edit", data={**amy, "title": []})
+    assert club.members["n0aaaa"].role == "Secretary"  # unticking every title leaves the office
+    r = c.post("/members/n0bbbb/edit", data=form(title_new="president"), follow_redirects=False)
+    assert "is%20an%20office" in r.headers["location"] and club.members["n0bbbb"].role == "Net Manager, Webmaster"
+    c.post("/members/n0bbbb/edit", data={**form(), "title": ["Secretary", "Webmaster"]})  # a forged tick of an office
+    assert club.members["n0bbbb"].role == "Webmaster"
