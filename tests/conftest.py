@@ -50,3 +50,7 @@ def no_console_holds(monkeypatch):
     from club_minutes import console
     monkeypatch.setattr(console, "_holds", {})
     monkeypatch.setattr(console, "closed_by", {})
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "docs: the docs and privacy checks, run alone for a docs-only change (dev/changes.sh)")

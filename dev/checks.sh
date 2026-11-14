@@ -6,23 +6,41 @@
 #   4. CodeQL with the security-extended queries, Python and JavaScript, as codeql.yml, on the committed files.
 # CodeQL findings already reviewed as false positives are in dev/codeql-accepted.txt; anything else fails.
 # Tools are kept in ~/.cache/club-minutes-checks (CodeQL: unpack GitHub's codeql-bundle-linux64 there, or set CODEQL).
-# Usage: dev/checks.sh [--quick]   (--quick: skip the tests, for when they've just passed)
+# A docs-only change (dev/changes.sh) runs just the quick checks: pip-audit, gitleaks, the changelog and `pytest -m docs`.
+# The slow ones (all the tests, the upgrade check, CodeQL) run anyway if their last pass here is older than
+# CHECKS_MAX_AGE_DAYS (7); each pass is noted in the cache folder as last-pass-tests / last-pass-codeql.
+# Usage: dev/checks.sh [--quick | --full]   (--quick: skip the tests, for when they've just passed; --full: everything)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CACHE=${CLUB_MINUTES_CHECKS:-$HOME/.cache/club-minutes-checks}
 mkdir -p "$CACHE"
 fail=0
 step() { printf '\n== %s\n' "$1"; }
+kind=code
+base=${CHECKS_BASE:-origin/main}  # for a stacked branch: the branch below
+[ "${1:-}" = "--full" ] || kind=$(dev/changes.sh "$base")
+due() {  # run this slow check? Always for code; for docs only when its last pass is too old
+  local f="$CACHE/last-pass-$1"
+  [ "$kind" = code ] || [ ! -f "$f" ] || [ $(( $(date +%s) - $(stat -c %Y "$f") )) -gt $(( ${CHECKS_MAX_AGE_DAYS:-7} * 86400 )) ]
+}
+echo "Changes since $base: $kind"
 
 if [ "${1:-}" != "--quick" ]; then
-  step "tests"
-  uv run pytest -q || fail=1
-  step "upgrade from the last release"
-  dev/upgrade-check.sh || fail=1
+  if due tests; then
+    step "tests"
+    ok=1
+    uv run pytest -q || ok=0
+    step "upgrade from the last release"
+    dev/upgrade-check.sh || ok=0
+    if [ "$ok" = 1 ]; then touch "$CACHE/last-pass-tests"; else fail=1; fi
+  else
+    step "tests (docs only: pytest -m docs; the rest passed within ${CHECKS_MAX_AGE_DAYS:-7} days)"
+    uv run pytest -q -m docs || fail=1
+  fi
 fi
 
-step "changelog line (if the app changed since origin/main)"
-dev/changelog-check.sh || fail=1
+step "changelog line (if the app changed since $base)"
+dev/changelog-check.sh "$base" || fail=1
 
 step "pip-audit (the locked packages)"
 req=$(mktemp)
@@ -43,7 +61,9 @@ fi
 
 step "CodeQL (security-extended, the committed files)"
 codeql=${CODEQL:-$CACHE/codeql/codeql}
-if [ ! -x "$codeql" ]; then
+if ! due codeql; then
+  echo "Skipped: docs only, and it passed within ${CHECKS_MAX_AGE_DAYS:-7} days."
+elif [ ! -x "$codeql" ]; then
   echo "CodeQL isn't installed: unpack codeql-bundle-linux64 from github/codeql-action's releases into $CACHE (or set CODEQL)."
   fail=1
 else
@@ -55,7 +75,8 @@ else
     "$codeql" database analyze "$work/db-$lang" "codeql/$lang-queries:codeql-suites/$lang-security-extended.qls" \
       --format=sarif-latest --output="$work/$lang.sarif" --quiet
   done
-  python3 - "$work" <<'EOF' || fail=1
+  ok=1
+  python3 - "$work" <<'EOF' || ok=0
 import json, pathlib, sys
 work = pathlib.Path(sys.argv[1])
 accepted = set()
@@ -78,6 +99,7 @@ if new:
           " dev/codeql-accepted.txt with the reason, and dismiss it on GitHub the same way.")
 sys.exit(1 if new else 0)
 EOF
+  if [ "$ok" = 1 ]; then touch "$CACHE/last-pass-codeql"; else fail=1; fi
 fi
 
 printf '\n'

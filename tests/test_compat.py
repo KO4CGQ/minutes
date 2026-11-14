@@ -6,9 +6,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from club_minutes import upgrade, web
 from club_minutes.auth import Auth
 from club_minutes.club import RENAMED, SITE_KEYS, Club
+
+pytestmark = pytest.mark.docs  # dev/changes.sh: a docs-only change runs just these
 
 ROOT = Path(__file__).parents[1]
 SRC = ROOT / "src" / "club_minutes"

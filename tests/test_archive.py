@@ -280,6 +280,7 @@ def test_other_sites_open_in_a_new_tab():
     assert out.count('target="_blank" rel="noopener"') == 2 and '<a href="/calendar">' in out and '<a href="https://minutes.example.net/x">' in out
 
 
+@pytest.mark.docs
 def test_help_pages_show_the_guides(monkeypatch):
     from fastapi.testclient import TestClient
 

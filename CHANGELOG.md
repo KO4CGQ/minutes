@@ -5,6 +5,7 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- Development only: smarter checks. A docs-only change (Markdown and `docs/`, `dev/changes.sh`) runs just the quick checks (pip-audit, gitleaks, the changelog, `pytest -m docs`), locally and on pull requests; the slow ones (every test, the upgrade check, CodeQL) run for anything else, on every push to main and every Monday, and locally whenever they last passed over a week ago (`dev/checks.sh --full` runs everything).
 - Development only: a pull request that changes the app (`src/`, `deploy/`) needs a CHANGELOG line, or the `no-changelog` label (`dev/changelog-check.sh`, also in `dev/checks.sh`); shellcheck covers `dev/*.sh`.
 - Development only: an upgrade check on every pull request (`dev/upgrade-check.sh`, also in `dev/checks.sh`): the last 1.x release builds the demo club's data, then the new code opens it and checks that every member and every meeting's minutes are still there, as an admin and as a member.
 - Development only: the secret scan no longer allows the icons file's pre-1.0 path (the 0.x tags it lived in are deleted), and `dev/checks.sh` scans branches and tags only, as GitHub does (not local worktrees).
