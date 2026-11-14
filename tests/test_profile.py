@@ -257,8 +257,8 @@ def test_admin_mode(tmp_path, monkeypatch):
     assert "Email log" not in c.get("/links").text and "Email outbox" not in c.get("/links").text
 
     c.cookies.set(web.COOKIE, a.new_session("n0cccc"))                    # not an admin: can't turn it on
-    assert c.post("/admin/mode", data={"on": 1}).status_code == 403
-    assert c.get("/admin/confirm").status_code == 403 and c.post("/admin/confirm/email").status_code == 403
+    assert c.post("/admin/mode", data={"on": 1}).status_code == 404                # as if it didn't exist
+    assert c.get("/admin/confirm").status_code == 404 and c.post("/admin/confirm/email").status_code == 404
     assert "Turn on admin mode" not in c.get("/links").text
     assert c.get("/admin/email").status_code == 404
     assert "Sign-in &amp; passkeys" not in c.get("/links").text           # it's a tab of Your profile now

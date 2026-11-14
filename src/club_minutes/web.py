@@ -1090,7 +1090,7 @@ def _admin_log(request: Request, **entry) -> None:
 
 def _admin(mid: str) -> str:
     if not archive.club.is_admin(mid):
-        raise HTTPException(403, "You aren't listed as an admin.")
+        raise HTTPException(404)  # as for an address that doesn't exist, like every other admin page
     return mid
 
 
@@ -1240,6 +1240,7 @@ def admin_updates_cancel(request: Request, mid: str = Depends(real_me)):
 @app.post("/admin/view-as")
 def admin_view_as(request: Request, member: str = Form(""), next: str = Form("/"), mid: str = Depends(real_me)):
     """Start (member=id) or stop (member empty) viewing the app as another member. Admin mode only; logged."""
+    _admin(mid)
     if not authn.admin_until(_session_token(request)):
         raise HTTPException(403, "Turn on admin mode first.")
     if member and (member not in archive.club.members or member == mid):
@@ -2131,8 +2132,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
 
 
 @app.post("/admin/security/limits")
-def security_limits(request: Request, upload_mb: int = Form(...)):
-    _security_admin(request)
+def security_limits(request: Request, upload_mb: int = Form(...), _mid: str = Depends(_security_admin)):  # checked before the form
     try:
         limits.set_upload_mb(upload_mb)
     except ValueError as e:
@@ -2188,8 +2188,8 @@ def admins_remove(request: Request, member: str = Form("")):
 
 
 @app.post("/admin/security/ban")
-def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), reason: str = Form("")):
-    mid = _security_admin(request)
+def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), reason: str = Form(""),
+                 mid: str = Depends(_security_admin)):
     import ipaddress
     try:
         ip = str(ipaddress.ip_address(ip.strip()))
@@ -2256,17 +2256,16 @@ def security_backup_download(request: Request, name: str):
 
 
 @app.post("/admin/security/unban")
-def security_unban(request: Request, ip: str = Form(...)):
-    _security_admin(request)
+def security_unban(request: Request, ip: str = Form(...), _mid: str = Depends(_security_admin)):
     authn.unban(ip)
     _admin_log(request, unban=ip)
     return RedirectResponse("/admin/security/bans", status_code=303)
 
 
 @app.post("/admin/security/signout")
-def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):  # noqa: B008 (FastAPI's form fields)
+def security_signout(request: Request, session: list[int] = Form(...), member: str = Form(""),  # noqa: B008 (FastAPI's form fields)
+                     _mid: str = Depends(_security_admin)):
     """Sign out one device, or every ticked one."""
-    _security_admin(request)
     for sid in session:
         _admin_log(request, signed_out=authn.end_session_id(sid))
     return RedirectResponse("/admin/security/devices" + (f"?member={quote(member)}" if member else ""), status_code=303)

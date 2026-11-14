@@ -5,6 +5,7 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Security:** every admin address answers a member who isn't an admin with "Not Found", the same as an address that doesn't exist (the admin-mode, update and view-as pages said "You aren't listed as an admin", and four Security-page actions answered "missing field" before checking who was asking). Admins with admin mode off still get the confirmation page.
 
 ## 1.0.1 (2026-11-15)
 - **Security:** a roster keeper could type an admin's callsign into their own "Other spellings" and become that admin (the admin losing admin rights, and their sign-ins becoming the keeper's); the same worked for any member's roles and items. Another member's callsign is now refused there, and a roster that has one anyway (or a former callsign two members both list) ignores it.

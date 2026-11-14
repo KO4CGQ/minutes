@@ -143,7 +143,7 @@ def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_pat
     assert r.status_code == 413 and "1 MB at most" in r.text  # turned away before it's read
     with pytest.raises(ValueError, match="1 MB at most"):
         avatars.save("n0aaaa", b"x" * (limits.max_upload() + 1))
-    assert amy.post("/admin/security/limits", data={"upload_mb": "50"}).status_code in (403, 404)  # admins only
+    assert amy.post("/admin/security/limits", data={"upload_mb": "50"}).status_code == 404  # admins only
     assert limits.upload_mb() == 1
     (tmp_path / "limits.json").write_text("not json")  # a damaged file: the default, not a crash
     assert limits.upload_mb() == limits.DEFAULT_MB
@@ -572,3 +572,36 @@ def test_site_roles(app, tmp_path, monkeypatch):
     assert not c.members["n0bbbb"].minutes_editor and not c.can_lead("n0bbbb")
     with pytest.raises(KeyError):
         c.may("n0bbbb", "everything")  # a misspelled permission fails loudly, never quietly "no"
+
+
+def test_every_admin_address_is_not_found_for_a_non_admin(tmp_path, monkeypatch):
+    """FIXES → i: a signed-in member who isn't an admin gets the same 404 on every /admin address as on one that doesn't
+    exist, so the admin pages' addresses tell them nothing (admins with admin mode off still get the confirm page)."""
+    import re
+
+    from fastapi.routing import APIRoute
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    from club_minutes.store import Archive
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN", "email": "ann@example.org"},
+        {"id": "n0cccc", "first": "Bob", "last": "Member", "callsign": "N0CCCC", "email": "bob@example.org"}])
+    club.admins = {"n0admn"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("n0cccc"))
+    tried, wrong = 0, []
+    for r in web.app.routes:
+        if isinstance(r, APIRoute) and r.path.startswith("/admin"):
+            path = re.sub(r"\{[^}]+\}", "x", r.path)
+            for method in sorted(r.methods - {"HEAD"}):
+                tried += 1
+                got = c.request(method, path, follow_redirects=False).status_code
+                if got != 404:
+                    wrong.append(f"{method} {path}: {got}")
+    assert tried > 30 and not wrong, wrong
