@@ -68,6 +68,11 @@ Run on every pull request, every push to main and **every Monday**, so a newly p
 - Actions in the workflows are pinned to a commit, with the version in a comment; Dependabot updates both.
 - **Repository settings** worth having on (Settings → Code security): Dependabot alerts, secret scanning and push protection (blocks a push that contains a key).
 
+## Checks before a push
+`dev/checks.sh` runs here what GitHub runs on a pull request, so nothing turns up only there: the tests (with ruff, shellcheck, zizmor and the browser tests), pip-audit on the locked packages, gitleaks at the version `security.yml` pins on the branch's history, and CodeQL with the `security-extended` queries on the committed files (Python and JavaScript). About four minutes; `--quick` skips the tests when they've just passed. Tools live in `~/.cache/club-minutes-checks`: gitleaks downloads itself (checked against the pinned checksum); for CodeQL, unpack `codeql-bundle-linux64` from github/codeql-action's releases there (checking its `.checksum.txt`), or set `CODEQL`.
+
+CodeQL findings reviewed as false positives are listed in `dev/codeql-accepted.txt` (rule, file, the line's text, why), matched by the line's text so moving code doesn't bring them back. A new finding fails: fix it, or, after a careful look, add it there with the reason and dismiss it on GitHub with the same words. To run the checks on every push, add a `.git/hooks/pre-push` that runs `dev/checks.sh`.
+
 ## Roles and permissions
 What a member may do is a **permission** (`PERMISSIONS` in `src/club_minutes/club.py`: lead, calendar, chow, contacts, oversee, treasurer, money, members), and **roles** (`ROLES`) say which permissions each gives. A new check asks `archive.club.may(member, "permission")`, plus `admin_mode(request)` (admins in admin mode may do everything); never `member.officer` or a title directly. Officer, Board, Treasurer and Roster keeper follow the offices a member holds; Minutes editor and Calendar editor (`PICKED`) are given on Admin → Site → Roles and kept in `data/roles.json` (the roster's old ticks are read only until that file exists). Admin isn't a role: it's `admins:` and Admin → Security, with admin mode and its re-confirm. A new permission goes in both tables and on the Site → Roles page by itself.
 
