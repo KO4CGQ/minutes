@@ -1,5 +1,6 @@
 # CodeQL: GitHub's code scanner, for security bugs in the Python and JavaScript (injection, script injection (XSS),
 # unsafe redirects, ...). Results are under Security → Code scanning. Same schedule as security.yml.
+# A docs-only pull request skips the analysis and passes (dev/changes.sh); pushes to main and Mondays always analyze.
 name: CodeQL
 on:
   pull_request:
@@ -21,9 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          fetch-depth: 0  # the base branch, for dev/changes.sh
           persist-credentials: false  # no token left on the runner for later steps
-      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4
+      - id: kind  # docs-only pull requests skip the slow steps (dev/changes.sh); pushes and the Monday run do everything
+        run: |
+          if [ "$EVENT" = pull_request ]; then echo "kind=$(dev/changes.sh "origin/$BASE")"; else echo kind=code; fi >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+      - if: steps.kind.outputs.kind == 'code'
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
-      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4
+      - if: steps.kind.outputs.kind == 'code'
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4

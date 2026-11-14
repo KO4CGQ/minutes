@@ -1,9 +1,13 @@
-# Run the tests on every pull request and every push to main.
+# Run the tests on every pull request, every push to main and every Monday (a test that only fails with time, or a
+# browser update, shows up within a week). A docs-only pull request runs just `pytest -m docs` (dev/changes.sh).
 name: Tests
 on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "29 6 * * 1"
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -12,11 +16,40 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          fetch-depth: 0  # the base branch, for dev/changes.sh
           persist-credentials: false  # no token left on the runner for later steps
+      - id: kind  # docs-only pull requests skip the slow steps (dev/changes.sh); pushes and the Monday run do everything
+        run: |
+          if [ "$EVENT" = pull_request ]; then echo "kind=$(dev/changes.sh "origin/$BASE")"; else echo kind=code; fi >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
       - run: uv sync --frozen
-      - run: uv run playwright install --with-deps chromium firefox webkit   # the browser tests run in each
-      - run: uv run pytest -q   # includes ruff (tests/test_lint.py), the version pinned in uv.lock
+      - if: steps.kind.outputs.kind == 'code'
+        run: uv run playwright install --with-deps chromium firefox webkit   # the browser tests run in each
+      - if: steps.kind.outputs.kind == 'code'
+        run: uv run pytest -q   # includes ruff (tests/test_lint.py), the version pinned in uv.lock
+      - if: steps.kind.outputs.kind == 'docs'
+        run: uv run pytest -q -m docs   # the docs and privacy checks: links, screenshots, contact details, the guides
+
+  # Upgrade from the last release: the newest 1.x release builds the demo club, then this code opens its data.
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0  # the base branch, for dev/changes.sh
+          persist-credentials: false  # no token left on the runner for later steps
+      - id: kind  # docs-only pull requests skip the slow steps (dev/changes.sh); pushes and the Monday run do everything
+        run: |
+          if [ "$EVENT" = pull_request ]; then echo "kind=$(dev/changes.sh "origin/$BASE")"; else echo kind=code; fi >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - if: steps.kind.outputs.kind == 'code'
+        run: dev/upgrade-check.sh
 
   # Warn only: the newest ruff, to see what the next version would flag before Dependabot's "bump ruff" pull request.
   # A red mark here doesn't fail the check; fix what it finds when the pin moves (or sooner).

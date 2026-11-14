@@ -5,7 +5,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from club_minutes import web
+
+pytestmark = pytest.mark.docs  # dev/changes.sh: a docs-only change runs just these
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = [ROOT / "README.md", ROOT / "SECURITY.md", ROOT / "CHANGELOG.md", *sorted((ROOT / "docs").glob("*.md"))]
