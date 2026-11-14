@@ -16,7 +16,7 @@ To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwi
     - `auth: rp_id`: the HTTPS address members will use (passkeys only work there)
     - your own callsign under `admins:`
 
-    Everything else is set in the app (step 3) or has a default; `club.example.yaml` lists every setting, for what's only in club.yaml (the club's offices, who may add members, sign-in, email test mode).
+    Everything else is set in the app (step 3) or has a default; `club.example.yaml` lists every setting, for what's only in club.yaml (sign-in, email test mode, AI).
 
     Then `systemctl restart club-minutes`.
 
@@ -52,12 +52,14 @@ Admin → **Site** changes most of the club's settings in the app, checked as yo
 | **Look** | The logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon, each with **Upload…** and **Reset** (the icons are made from the logo until one has its own). **Behind it**, so a dark logo on a see-through background still shows in dark mode. **Colours:** one main colour sets buttons, links, the top bar and the minutes' headings; the app makes light and dark palettes from it, checks every text colour is readable, and previews both before Save. |
 | **Club** | The app's name, the club's name and callsign, meeting day and time, time zone, and the weekly meeting's place and online link. A new day, time, place or link changes the calendar's meeting from the **Starting date** you pick. |
 | **Agenda** | The meeting's sections in order (built-in and the club's own), when a guest is invited to join, how many days before a reminder goes out. |
+| **Offices** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats; and whose holders add members to the roster (usually the Secretary and the Treasurer). Who holds each office is on Roster → Offices. |
 | **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own) and election days. |
 | **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
 | **Dates** | How dates are written (US order unless changed). |
+| **Privacy** | Names never recorded: a guest with one is left out of the minutes, a line with one out of imported minutes, and the AI never sees one. |
 
 > [!NOTE]
-> What's saved on Site wins over club.yaml until an admin picks **Back to club.yaml**. Sign-in (`auth:`), `admins:`, email test mode and AI can only be set in club.yaml.
+> What's saved on Site wins over club.yaml until an admin picks **Back to club.yaml**. Sign-in (`auth:`), email test mode and AI can only be set in club.yaml; admins beyond the first are added under Security → Admins.
 
 ## 🔑 Sign-in and email
 Members sign in with a passkey, or with a one-time link emailed to their roster address.

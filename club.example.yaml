@@ -92,12 +92,12 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 # modules:
 #   chow: true
 
-# Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer).
+# Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer). Also on Admin → Site → Offices.
 # roster_keepers: [Secretary, Treasurer]
 
 # The club's offices, from the bylaws, for the Offices page (who holds each, and who held them when).
 # A plain title is an officer's office with one seat; officer: false is a board seat that isn't an officer.
-# Left out: President, Vice President, Secretary, Treasurer.
+# Left out: President, Vice President, Secretary, Treasurer. Also on Admin → Site → Offices.
 offices:
   - President
   - Vice President
@@ -112,7 +112,7 @@ offices:
 #   enabled: true
 
 privacy:
-  never_record: []  # names never shown in minutes or the archive
+  never_record: []  # names never recorded in the minutes (also on Admin → Site → Privacy)
 
 # People come only from the roster the app keeps (roster-sheet.json in the data folder).
 # Secrets aren't kept here but in /etc/club-minutes/env (the server admin guide has them all), e.g. CLUB_MINUTES_SMTP_HOST, _PORT, _USER,

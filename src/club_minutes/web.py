@@ -2034,6 +2034,8 @@ def admin_action(e: dict) -> str:
              "site_club": lambda v: "Club settings back to club.yaml's" if v == "club.yaml" else f"Club settings: {v.replace('_', ' ')}",
              "site_agenda": lambda v: "Agenda back to club.yaml's" if v == "club.yaml" else f"Agenda: {v.replace('_', ' ')}",
              "site_features": lambda v: "Features back to club.yaml's" if v == "club.yaml" else f"Features: {v.replace('_', ' ')}",
+             "site_offices": lambda v: "Offices back to club.yaml's" if v == "club.yaml" else f"Offices: {v.replace('_', ' ')}",
+             "site_privacy": lambda v: "Never-recorded names back to club.yaml's" if v == "club.yaml" else "Changed the never-recorded names",
              "site_bylaws": lambda v: "Bylaws settings back to club.yaml's" if v == "club.yaml" else f"Bylaws: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
              "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
@@ -2256,7 +2258,8 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
-SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("features", "Features"), ("bylaws", "Bylaws"), ("dates", "Dates"))
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("offices", "Offices"), ("features", "Features"), ("bylaws", "Bylaws"),
+             ("dates", "Dates"), ("privacy", "Privacy"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
@@ -2283,7 +2286,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
@@ -2465,6 +2468,74 @@ async def site_agenda(request: Request):
         return RedirectResponse("/admin/site/agenda?error=" + quote(msg), status_code=303)
     _admin_log(request, site_agenda="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
+
+
+def _office_rows(club) -> list[dict]:
+    """Offices tab rows: the club's offices (who holds each, whether its holders add members), then two empty rows."""
+    keepers = set(club.roster_keepers)
+    return ([{**o, "keeper": o["title"].lower() in keepers, "held": bool(offices.holders(club, o["title"]))} for o in offices.offices(club)]
+            + [{"title": "", "officer": True, "seats": 1, "keeper": False, "held": False}] * 2)
+
+
+@app.post("/admin/site/offices")
+async def site_offices(request: Request):
+    """Offices tab: the club's offices (an officer's office or a board seat, how many seats), and which offices' holders
+    add members to the roster. An office someone holds can't be removed or renamed here: hand it over first."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    keys = (("", "offices"), ("", "roster_keepers"))
+    try:
+        if form.get("back"):
+            values = dict.fromkeys(keys)
+        else:
+            rows, seen = [], set()
+            for i in range(min(num(form.get("rows")) or 0, 60)):
+                title = " ".join((form.get(f"title{i}") or "").split())[:60]
+                if not title:
+                    continue
+                if title.lower() in seen:
+                    raise ValueError(f"{title} is listed twice.")
+                seen.add(title.lower())
+                seats = num(form.get(f"seats{i}"))
+                if seats is None or not 1 <= seats <= 20:
+                    raise ValueError(f"Seats for {title}: a whole number from 1 to 20.")
+                rows.append({"title": title, "officer": bool(form.get(f"officer{i}")), "seats": seats, "keeper": bool(form.get(f"keeper{i}"))})
+            if not rows:
+                raise ValueError("Keep at least one office.")
+            gone = [o["title"] for o in offices.offices(club) if o["title"].lower() not in seen and offices.holders(club, o["title"])]
+            if gone:
+                raise ValueError(f"{', '.join(gone)} {'is' if len(gone) == 1 else 'are'} held: hand {'it' if len(gone) == 1 else 'them'} "
+                                 "over on the Offices page (Roster → Offices) before removing or renaming it here.")
+            new_offices = [r["title"] if r["officer"] and r["seats"] == 1 else {"title": r["title"], "officer": r["officer"], "seats": r["seats"]}
+                           for r in rows]
+            keepers = [r["title"] for r in rows if r["keeper"]]
+            if not keepers:
+                raise ValueError("Tick at least one office whose holders add members (usually the Secretary).")
+            same_offices = offices.offices(type("C", (), {"offices": club.yaml.get("offices") or []})()) == \
+                offices.offices(type("C", (), {"offices": new_offices})())
+            yaml_keepers = {str(x).lower() for x in club.yaml.get("roster_keepers") or ["Secretary", "Treasurer"]}
+            values = {("", "offices"): None if same_offices else new_offices,
+                      ("", "roster_keepers"): None if {k.lower() for k in keepers} == yaml_keepers else keepers}
+        club.save_site_settings(values)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/offices?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, site_offices="club.yaml" if form.get("back") else ", ".join(k.replace("roster_keepers", "who adds members")
+                                                                                  for (_, k), v in values.items() if v is not None) or "club.yaml")
+    return RedirectResponse("/admin/site/offices?note=" + quote("Saved."), status_code=303)
+
+
+@app.post("/admin/site/privacy")
+async def site_privacy(request: Request):
+    """Privacy tab: names never shown in the minutes or the archive, one a line."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    if form.get("back"):
+        values = {("privacy", "never_record"): None}
+    else:
+        names = list(dict.fromkeys(" ".join(x.split())[:80] for x in (form.get("names") or "").splitlines() if x.strip()))[:200]
+        yaml_names = [" ".join(str(x).split()) for x in (club.yaml.get("privacy") or {}).get("never_record") or [] if str(x).strip()]
+        values = {("privacy", "never_record"): None if names == yaml_names else names}
+    club.save_site_settings(values)
+    _admin_log(request, site_privacy="club.yaml" if form.get("back") else "names")
+    return RedirectResponse("/admin/site/privacy?note=" + quote("Saved."), status_code=303)
 
 
 def _meeting_where(since: dt.date) -> tuple[str, str]:

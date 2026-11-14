@@ -188,7 +188,7 @@
   "static/combo.js": "b54d38f7384e4ca8bfe8ece7bcdd6340f18bd8b66af03061e763d644b331b865",
   "static/minutes.css": "a50b373c8c8152d22b4588421a2255bbcd9b618ff7ab5169a28e7f8fbf02b442",
   "static/sort.js": "b7a9af370a7fee958f5ab413ae4d0045f4e1828a0fb082646d1e857131668f39",
-  "static/style.css": "4083dc26b8eb59721dcba9735ce2506c926f63d25fd3fe22eb3f414ec85c625b",
+  "static/style.css": "43f67e9e3aa2963e57812c81b47febf9e66640ebed0bb6f49648f03ac3695a94",
   "templates/_avatar.html": "6706c6fa69201c1a1d29914618a54e5da08322a68108e51c2e0cbb040d7e4feb",
   "templates/_business_item.html": "53ec9525fc666d247b46ec35d6f970c54dbc2aaba2e4f092dfe2595651e9acba",
   "templates/_icons.html": "d7909338dc8d708dd8f49e8a15337a8af23a6d24b45f9d0ece1212f682d25c26",
@@ -203,7 +203,7 @@
   "templates/member_edit.html": "1b802930fbf0223e2aa4026220252cf79aba362e3893d30b1d5b1689326484ef",
   "templates/offices.html": "e53e7f4e186c004d707fa2ea3b185bbcd8e6c74ebb6df97d45a3a2d1b2b6b4cb",
   "templates/security.html": "cf06e2dfa262559d6dc1ad4f1e66322f39e96466182284691beba7d5dad37471",
-  "templates/site.html": "8149effcc68b3615f889ee9dadf8ccf87c2989edb47bc2dadd39b44859682054",
+  "templates/site.html": "017149c968f97994c8d1f92e4ac2cea68de01b5f4ed333604be29ee4de92f5c1",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "3a4f7ff5a88b5176441a6c10d6157b0908809211a69a46d85f7565a6e470e25c"
  }

@@ -614,6 +614,10 @@ form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items:
 @media (max-width: 560px) { .fmtgrid { grid-template-columns: 1fr; } .fmtgrid span { margin-bottom: .4rem; } }
 .agendagrid { display: grid; grid-template-columns: auto 3.5rem minmax(10rem, 16rem) 1fr; gap: .45rem .7rem; align-items: center; }
 .agendagrid input[name^=pos] { width: 3.2rem; text-align: center; }
+.officegrid { display: grid; grid-template-columns: minmax(0, 18rem) auto 4.2rem auto; gap: .45rem 1rem; align-items: center; justify-items: start; }
+.officegrid input[name^=title] { width: 100%; min-width: 0; box-sizing: border-box; }
+.officegrid input[type=number] { width: 4rem; } .officegrid input[readonly] { background: var(--surface-2); }
+@media (max-width: 560px) { .officegrid { gap: .45rem .6rem; } .officegrid .agh { font-size: .7rem; line-height: 1.2; } }
 @media (max-width: 560px) { .agendagrid { grid-template-columns: auto 3.2rem minmax(0, 1fr); } .agendagrid .agh { display: none; }
   .agendagrid input[name^=hint] { grid-column: 2 / -1; margin-bottom: .6rem; } }
 form.siteagenda { max-width: 52rem; } form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }

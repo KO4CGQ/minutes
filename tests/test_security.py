@@ -494,3 +494,48 @@ def test_a_renamed_setting_keeps_working_and_admins_are_told(app, monkeypatch, t
     web.archive.club.admins = {"n0offc"}
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     assert "works until version 2.0" in app("n0offc").get("/admin").text
+
+
+def test_site_offices_and_privacy_tabs(app, tmp_path, monkeypatch):
+    """Admin → Site → Offices: the club's offices (officer or board seat, seats) and whose holders add members, over
+    club.yaml's; unchanged keeps nothing; an office someone holds can't be removed or renamed. Privacy: names never
+    recorded. Members get nothing."""
+    from club_minutes import club as clubmod
+    from club_minutes import offices
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    c.members["n0offc"].role = "Secretary"
+    admin, member = app("n0offc"), app("n0bbbb")
+    for tab in ("offices", "privacy"):
+        assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data={"back": "1"}).status_code == 404
+    page_ = admin.get("/admin/site/offices").text
+    assert 'value="President"' in page_ and 'value="Secretary" maxlength="60" placeholder="" aria-label="Office" readonly' in page_
+    rows = lambda *rs: {"rows": str(len(rs))} | {f"{k}{i}": v for i, r in enumerate(rs) for k, v in r.items()}
+    four = [{"title": t, "officer": "1", "seats": "1", **({"keeper": "1"} if t in ("Secretary", "Treasurer") else {})}
+            for t in ("President", "Vice President", "Secretary", "Treasurer")]
+    admin.post("/admin/site/offices", data=rows(*four))
+    assert c.site_settings == {}  # as club.yaml (the defaults): nothing kept
+    trustee = {"title": "  Trustee ", "seats": "3"}  # no officer tick: a board seat
+    admin.post("/admin/site/offices", data=rows(*four, trustee))
+    assert offices.offices(c)[-1] == {"title": "Trustee", "officer": False, "seats": 3} and "roster_keepers" not in c.site_settings[""]
+    for bad, msg in (([*four, {"title": "president", "officer": "1", "seats": "1"}], "listed twice"),
+                     ([*four, {"title": "Webmaster", "seats": "0"}], "1 to 20"),
+                     ([o for o in four if o["title"] != "Secretary"], "Secretary is held"),
+                     ([{**o, "title": "Clerk"} if o["title"] == "Secretary" else o for o in four], "Secretary is held"),
+                     ([{k: v for k, v in o.items() if k != "keeper"} for o in four], "at least one office")):
+        before = c.site_settings
+        r = admin.post("/admin/site/offices", data=rows(*bad))
+        assert msg in r.text and c.site_settings == before, msg
+    admin.post("/admin/site/offices", data=rows(*[{k: v for k, v in o.items() if k != "keeper" or o["title"] == "Secretary"} for o in four]))
+    assert c.roster_keepers == ["secretary"] and c.keeps_roster("n0offc")  # the Treasurer no longer adds members
+    assert "Offices: who adds members" in admin.get("/admin/security/admin").text
+    admin.post("/admin/site/offices", data={"back": "1"})
+    assert c.site_settings == {} and len(offices.offices(c)) == 4
+    admin.post("/admin/site/privacy", data={"names": "Jane  Roe\n\nJohn Q Public\nJane Roe"})
+    assert c.never_record == ["Jane Roe", "John Q Public"] and c.is_redacted("Thanks to Jane Roe for the coffee")
+    assert "Jane Roe\nJohn Q Public</textarea>" in admin.get("/admin/site/privacy").text
+    admin.post("/admin/site/privacy", data={"back": "1"})
+    assert c.never_record == ["Tiny Visitor"] and not c.is_redacted("Thanks to Jane Roe")  # club.yaml's own list again

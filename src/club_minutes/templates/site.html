@@ -56,6 +56,36 @@
 <p class="row"><button class="btn">Save</button></p>
 </form>
 {% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'offices' %}
+<p class="muted">The club's offices, from its bylaws, and whose holders add members to the roster. Who holds each office is on the <a href="/offices">Offices</a> page (Roster → Offices). Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/offices" class="profile siteoffices">
+<input type="hidden" name="rows" value="{{ office_rows|length }}">
+<div class="card sitesec"><h2>Offices {{ origin('.offices') }}</h2>
+<p class="hint"><b>Officer</b>: its holders are officers (they lead meetings, edit the minutes and calendars, see the Treasurer pages). Untick it for a board seat that isn't an officer, like a trustee. Every office is on the board. An office someone holds can't be removed or renamed here; hand it over on the Offices page first.</p>
+<div class="officegrid">
+<span class="muted small agh">Office</span><span class="muted small agh">Officer</span><span class="muted small agh">Seats</span><span class="muted small agh">Adds<br>members</span>
+{% for r in office_rows %}{% set i = loop.index0 %}
+<input name="title{{ i }}" value="{{ r.title }}" maxlength="60" placeholder="{{ 'A new office' if not r.title }}" aria-label="Office"{{ ' readonly title="Held: hand it over on the Offices page to rename it"' if r.held }}>
+<input type="checkbox" name="officer{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }} is an officer's office"{{ ' checked' if r.officer }}>
+<input type="number" name="seats{{ i }}" value="{{ r.seats }}" min="1" max="20" aria-label="Seats for {{ r.title or 'the new office' }}">
+<input type="checkbox" name="keeper{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }}: adds members"{{ ' checked' if r.keeper }}>
+{% endfor %}
+</div>
+<p class="hint"><b>Adds members</b>: the holders can add members on the Roster page and change their details (usually the Secretary and the Treasurer). Admins, in admin mode, always can. Clear an office's name to remove it. {{ origin('.roster_keepers') }}</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices, and who adds members?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'privacy' %}
+<p class="muted">Names that are never recorded. Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/privacy" class="profile">
+<div class="card sitesec"><h2>Never recorded {{ origin('privacy.never_record') }}</h2>
+<p class="hint">One name a line: someone who asked not to be in the minutes (a guest, say). A guest with one of these names is left out each time the console saves, a line with one is left out of imported minutes, and the AI never sees one. Minutes already saved keep what they have: edit those by hand.</p>
+<textarea name="names" rows="6" maxlength="10000" aria-label="Names never recorded, one a line">{{ club.never_record|join('\n') }}</textarea>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if 'privacy.never_record' in here_keys %}<form method="post" action="/admin/site/privacy" data-confirm="Go back to club.yaml's list of names never recorded?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'features' %}
 <p class="muted">Parts of the app the club uses, and what anyone can see without signing in. Each change is in the admin log; changes here win over club.yaml on the server. Turning a part off keeps its data.</p>
 <form method="post" action="/admin/site/features" class="profile sitewide">

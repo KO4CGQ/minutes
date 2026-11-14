@@ -178,7 +178,8 @@ class Member:
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                     "invite_after_visits", "remind_days_before", "public_calendars")} | {
     ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
-    ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate")}
+    ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
+    ("", "offices"), ("", "roster_keepers")}  # "": a top-level club.yaml setting
 
 
 # club.yaml settings renamed since 1.0.0: (section, old name) -> (section, new name). The old name keeps working
@@ -202,7 +203,10 @@ def _overlay(cfg: dict, site: dict) -> dict:
     """club.yaml with the Site page's settings on top: a key there replaces club.yaml's, section by section."""
     out = dict(cfg)
     for sec, keys in site.items():
-        out[sec] = {**(cfg.get(sec) or {}), **keys}
+        if sec == "":  # top-level settings (offices:, roster_keepers:) replace club.yaml's as a whole
+            out.update(keys)
+        else:
+            out[sec] = {**(cfg.get(sec) or {}), **keys}
     return out
 
 
@@ -264,7 +268,8 @@ class Club:
         self._yaml_links = cfg.get("links", [])  # until an admin edits them on the Links page (links.json)
         self.auth = cfg.get("auth") or {}
         self.email = cfg.get("email") or {}
-        self.redact = [_n(x) for x in (cfg.get("privacy") or {}).get("never_record", [])]
+        self.never_record = [" ".join(str(x).split()) for x in (cfg.get("privacy") or {}).get("never_record") or [] if str(x).strip()]
+        self.redact = [_n(x) for x in self.never_record]
         self.ai = cfg.get("ai") or {}  # AI assistance (ai.py): model, and whether it's on
         self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
         # Offices whose holders add new members to the roster (the Secretary keeps it, usually).
