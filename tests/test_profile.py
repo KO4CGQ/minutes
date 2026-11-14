@@ -1,5 +1,6 @@
 """Profile edits: values-only writes to the roster sheet, change log, undo, Secretary notice, sharing."""
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -385,3 +386,39 @@ def test_admins_edit_club_links(tmp_path, monkeypatch):
     assert [x.get("icon") for x in club.links] == ["si:homeassistant", None]
     assert web.brand_path("si:homeassistant") in c.get("/links").text
     assert ">Home Assistant</small>" in c.get("/links?edit=1").text  # the picker shows the logo's name
+
+
+def test_email_log_and_server_log_hide_link_tokens(tmp_path, monkeypatch, caplog):
+    """FIXES → problem 3: the Email log (and the server's log, without SMTP) shows sign-in, email-confirm and admin-mode
+    links as `t=[hidden]`, so an admin can't open one and be signed in as the member; the email itself keeps the link."""
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "PREVIEW", None)
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def starttls(self): pass
+        def login(self, u, p): pass
+        def send_message(self, m): sent.append(m.get_content())
+    monkeypatch.setattr(auth_mod.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "club@example.org")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "pw")
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN",
+                                                  "email": "ann@example.org"}])
+    a = auth_mod.Auth(club, tmp_path / "auth.sqlite")
+    a.send_link("ann@example.org", base_url="https://club.example.org")                       # sign-in link
+    assert a.start_email_change("n0admn", "ann2@example.org", base_url="https://club.example.org") is None  # new email
+    step = a.step_up_link("n0admn")                                                            # admin mode (web.py's email)
+    auth_mod.send_email("ann@example.org", "Turn on admin mode", f"https://club.example.org/admin/confirm/link?t={step}&next=%2F")
+    log = [json.loads(x)["body"] for x in (tmp_path / "email-log.jsonl").read_text().splitlines()]
+    assert len(sent) == len(log) == 3
+    for body, mail in zip(log, sent, strict=True):
+        assert "t=[hidden]" in body and "t=[hidden]" not in mail and re.search(r"[?&]t=[\w-]{20,}", mail)
+        assert not re.search(r"[?&]t=[\w-]{20,}", body)
+    assert "&next=%2F" in log[2]                                                               # only the token goes
+    monkeypatch.delenv("CLUB_MINUTES_SMTP_PASSWORD")                                           # no SMTP: the body goes to the server log
+    a.send_link("ann@example.org", base_url="https://club.example.org")
+    assert "t=[hidden]" in caplog.text and not re.search(r"[?&]t=[\w-]{20,}", caplog.text)

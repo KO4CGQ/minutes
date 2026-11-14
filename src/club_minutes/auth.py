@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import smtplib
 import sqlite3
@@ -432,9 +433,17 @@ def _preview_outbox(recipients, subject, body, attachments, only_to, reply_to) -
 EMAIL_LOG_KEEP = 1000  # entries kept in email-log.jsonl
 
 
+def hide_tokens(text: str) -> str:
+    """A sign-in, email-confirm or admin-mode link with its one-time token blanked (`t=[hidden]`), for the copies an
+    admin or the server's log can read: the email itself still carries the working link."""
+    return re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text)
+
+
 def _email_log(entry: dict) -> None:
-    """Live site: every email the app sends or holds back (test mode), for admins' Email log page."""
+    """Live site: every email the app sends or holds back (test mode), for admins' Email log page. Links' tokens are
+    hidden: an admin opening the log within 15 minutes could otherwise sign in as the member."""
     p = DATA / "email-log.jsonl"
+    entry = {**entry, "body": hide_tokens(entry.get("body") or "")}
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         with p.open("a") as f:
@@ -488,7 +497,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
     password = (os.environ.get("CLUB_MINUTES_SMTP_PASSWORD") or "").replace(" ", "")  # Google shows app passwords in groups
     if not (user and password):
         log.warning("SMTP not configured; email to %s not sent: %s | %s", one_line(", ".join(recipients)), one_line(subject),
-                    one_line(body)[:2000])
+                    one_line(hide_tokens(body))[:2000])
         _email_log({**entry, "status": "not sent (no SMTP settings)"})
         return 0
     try:
