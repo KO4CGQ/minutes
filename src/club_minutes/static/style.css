@@ -677,3 +677,13 @@ input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
   input:is([type=date], [type=time]) { -webkit-appearance: none; appearance: none; min-width: 0; }
   input:is([type=date], [type=time])::-webkit-date-and-time-value { text-align: left; }
 }
+/* Lead a meeting → Start a new meeting: each label above its box, the button after with room to breathe; on a phone the
+   date and the leader side by side, the button on its own line, full width */
+.startform { display: flex; flex-wrap: wrap; gap: .9rem 1rem; align-items: flex-end; margin: .4rem 0 1.2rem; }
+.startform label { display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; font-weight: 600; margin: 0; }
+.startform select { min-width: 12rem; } .startform label > :is(input, select) { font-weight: normal; }
+@media (max-width: 560px) {
+  .startform { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .startform label > * { width: 100%; min-width: 0; box-sizing: border-box; }
+  .startform .btn { grid-column: 1 / -1; margin-top: .3rem; padding-block: .7rem; justify-content: center; text-align: center; }
+}

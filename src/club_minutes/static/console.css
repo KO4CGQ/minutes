@@ -25,7 +25,6 @@ textarea { resize: vertical; min-height: 2.4rem; }
 .past { background: var(--warn-soft); border-left: 3px solid var(--warn-edge); border-radius: .3rem; padding: .4rem .7rem; margin: .5rem 0; font-size: .9rem; }
 .past b { color: var(--warn-text); }
 .counter { display: inline-flex; align-items: center; gap: .4rem; }
-.startform { display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; } .startform label { display: flex; flex-direction: column; font-size: .9rem; }
 .floor textarea { width: 100%; margin: .5rem 0; }
 .invite { display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: .6rem; background: var(--warn-soft); color: var(--warn-text); font-size: .75rem; }
 .mbtn .invite { margin: .2rem 0 0; }
