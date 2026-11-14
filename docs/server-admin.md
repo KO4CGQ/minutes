@@ -52,11 +52,13 @@ Admin → **Site** changes most of the club's settings in the app, checked as yo
 | **Look** | The logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon, each with **Upload…** and **Reset** (the icons are made from the logo until one has its own). **Behind it**, so a dark logo on a see-through background still shows in dark mode. **Colours:** one main colour sets buttons, links, the top bar and the minutes' headings; the app makes light and dark palettes from it, checks every text colour is readable, and previews both before Save. |
 | **Club** | The app's name, the club's name and callsign, meeting day and time, time zone, and the weekly meeting's place and online link. A new day, time, place or link changes the calendar's meeting from the **Starting date** you pick. |
 | **Agenda** | The meeting's sections in order (built-in and the club's own), when a guest is invited to join, how many days before a reminder goes out. |
-| **Offices** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats; and whose holders add members to the roster (usually the Secretary and the Treasurer). Who holds each office is on Roster → Offices. |
+| **Roles** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats; and whose holders add members to the roster (usually the Secretary and the Treasurer). Who holds each office is on Roster → Offices. Then the roles: what each allows, who has it, and who is a **Minutes editor** or **Calendar editor** (the two roles given by hand, not by an office). |
 | **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own) and election days. |
 | **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
 | **Dates** | How dates are written (US order unless changed). |
 | **Privacy** | Names never recorded: a guest with one is left out of the minutes, a line with one out of imported minutes, and the AI never sees one. |
+
+![Site → Roles: what each role allows and who has it](screenshots/site-roles.png)
 
 > [!NOTE]
 > What's saved on Site wins over club.yaml until an admin picks **Back to club.yaml**. Sign-in (`auth:`), email test mode and AI can only be set in club.yaml; admins beyond the first are added under Security → Admins.

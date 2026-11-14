@@ -497,7 +497,7 @@ def test_a_renamed_setting_keeps_working_and_admins_are_told(app, monkeypatch, t
 
 
 def test_site_offices_and_privacy_tabs(app, tmp_path, monkeypatch):
-    """Admin → Site → Offices: the club's offices (officer or board seat, seats) and whose holders add members, over
+    """Admin → Site → Roles, its offices table: the club's offices (officer or board seat, seats) and whose holders add members, over
     club.yaml's; unchanged keeps nothing; an office someone holds can't be removed or renamed. Privacy: names never
     recorded. Members get nothing."""
     from club_minutes import club as clubmod
@@ -509,9 +509,9 @@ def test_site_offices_and_privacy_tabs(app, tmp_path, monkeypatch):
     c.save_app_admins({"n0offc"})
     c.members["n0offc"].role = "Secretary"
     admin, member = app("n0offc"), app("n0bbbb")
-    for tab in ("offices", "privacy"):
+    for tab in ("roles", "privacy"):
         assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data={"back": "1"}).status_code == 404
-    page_ = admin.get("/admin/site/offices").text
+    page_ = admin.get("/admin/site/roles").text
     assert 'value="President"' in page_ and 'value="Secretary" maxlength="60" placeholder="" aria-label="Office" readonly' in page_
     rows = lambda *rs: {"rows": str(len(rs))} | {f"{k}{i}": v for i, r in enumerate(rs) for k, v in r.items()}
     four = [{"title": t, "officer": "1", "seats": "1", **({"keeper": "1"} if t in ("Secretary", "Treasurer") else {})}
@@ -539,3 +539,36 @@ def test_site_offices_and_privacy_tabs(app, tmp_path, monkeypatch):
     assert "Jane Roe\nJohn Q Public</textarea>" in admin.get("/admin/site/privacy").text
     admin.post("/admin/site/privacy", data={"back": "1"})
     assert c.never_record == ["Tiny Visitor"] and not c.is_redacted("Thanks to Jane Roe")  # club.yaml's own list again
+
+
+def test_site_roles(app, tmp_path, monkeypatch):
+    """Admin → Site → Roles: each role, what it allows and who has it; the hand-given roles (Minutes editor, Calendar
+    editor) saved in roles.json and used at once, unknown ids dropped, logged. Members get nothing. Every check goes
+    through Club.may, so a role's permissions are the only way in."""
+    import json
+    import os
+    from pathlib import Path
+
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    admin, member = app("n0offc"), app("n0bbbb")
+    assert member.get("/admin/site/roles").status_code == 404
+    assert member.post("/admin/site/roles", data={"minutes_editor": "n0bbbb"}).status_code == 404 and not c.members["n0bbbb"].minutes_editor
+    page_ = admin.get("/admin/site/roles").text
+    assert "<h3>Minutes editor</h3>" in page_ and 'name="calendar_editor" value="n0bbbb"' in page_
+    assert "<td>Record money and change the Treasurer settings</td><td>Treasurer, Admin</td>" in page_
+    admin.post("/admin/site/roles", data={"minutes_editor": ["n0bbbb", "nobody"], "calendar_editor": []})
+    assert json.loads((tmp_path / "roles.json").read_text()) == {"minutes_editor": ["n0bbbb"], "calendar_editor": []}
+    assert c.members["n0bbbb"].minutes_editor and c.can_lead("n0bbbb") and c.can_edit_calendar("n0bbbb")
+    assert not c.may("n0bbbb", "contacts") and not c.may("n0bbbb", "money") and c.roles("n0bbbb") == ["minutes_editor"]
+    assert "Roles: Minutes editor +" in admin.get("/admin/security/admin").text
+    fresh = clubmod.Club(Path(os.environ["CLUB_MINUTES_CONFIG"]))  # a restart: roles.json wins over the roster's ticks
+    assert not fresh.members["doe"].minutes_editor  # ticked in club.yaml's members, not in roles.json
+    admin.post("/admin/site/roles", data={})
+    assert not c.members["n0bbbb"].minutes_editor and not c.can_lead("n0bbbb")
+    with pytest.raises(KeyError):
+        c.may("n0bbbb", "everything")  # a misspelled permission fails loudly, never quietly "no"

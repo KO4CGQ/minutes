@@ -24,8 +24,8 @@
   <p><button class="btn">Save</button></p>
 </form>
 
-{% elif tab == 'roles' %}
-<form method="post" action="/members/{{ member.id }}/edit" class="profile"><input type="hidden" name="tab" value="roles">
+{% elif tab == 'titles' %}
+<form method="post" action="/members/{{ member.id }}/edit" class="profile"><input type="hidden" name="tab" value="titles">
   <fieldset class="titles"><legend>Titles</legend>
     <p><b>Offices:</b> {% for t in held %}<span class="chip">{{ t }}</span> {% else %}<span class="muted">none</span> {% endfor %}<span class="hint">Offices change on the <a href="/offices">Offices</a> page, which keeps their history.</span></p>
     <p><b>Other titles</b> <span class="hint">(jobs in the club that aren't offices, kept here without history)</span></p>
@@ -35,14 +35,7 @@
       <label class="new">Add a title <input name="title_new" maxlength="120" placeholder="e.g. Net Manager"></label>
     </div></details>
   </fieldset>
-  <fieldset class="roles"><legend>Roles</legend>
-    <label class="check"><input type="checkbox" {{ 'checked' if member.officer }} disabled> Officer</label>
-    <label class="check"><input type="checkbox" {{ 'checked' if member.board }} disabled> Board</label>
-    <p class="hint">From the offices {{ member.first }} holds (the <a href="/offices">Offices</a> page).</p>
-    {% for k, label, what in (('minutes_editor', 'Minutes editor', 'leads meetings and edits the minutes'), ('calendar_editor', 'Calendar editor', 'changes the club calendars')) %}
-    <label class="check"><input type="checkbox" {% if member.officer %}checked disabled{% else %}name="{{ k }}" value="1" {{ 'checked' if member[k] }}{% endif %}> {{ label }} <span class="hint">{{ what }}{{ ', included with Officer' if member.officer }}</span></label>
-    {% endfor %}
-  </fieldset>
+  <p class="hint">Roles (what {{ member.first }} may do in the app) come from the offices they hold, or are given on Admin → Site → Roles. {{ member.first }}'s roles: {{ member_roles|join(', ') or 'none' }}.</p>
   <p><button class="btn">Save</button></p>
 </form>
 
@@ -69,16 +62,5 @@
   <div class="formrow"><button class="btn small">Add to the log</button></div>
 </form>
 {% endif %}
-<script nonce="{{ csp_nonce }}">  // the Titles list: say what's ticked, and filter a long list as you type
-document.querySelectorAll("details.multi").forEach((d) => {
-  const sum = d.querySelector("summary"), boxes = [...d.querySelectorAll("input[type=checkbox]")], filter = d.querySelector(".multi-filter");
-  const show = () => { sum.textContent = boxes.filter((b) => b.checked).map((b) => b.value).join(", ") || sum.dataset.none; };
-  boxes.forEach((b) => b.addEventListener("change", show));
-  if (filter) {
-    filter.hidden = false;
-    filter.addEventListener("input", () => { const q = filter.value.trim().toLowerCase();
-      boxes.forEach((b) => { b.closest("label").hidden = q && !b.value.toLowerCase().includes(q); }); });
-  }
-});
-</script>
+{% include "_multi.html" %}
 {% endblock %}

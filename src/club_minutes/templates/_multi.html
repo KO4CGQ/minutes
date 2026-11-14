@@ -1,0 +1,12 @@
+<script nonce="{{ csp_nonce }}">  // a details.multi list (Titles, Roles): say what's ticked, and filter a long list as you type
+document.querySelectorAll("details.multi").forEach((d) => {
+  const sum = d.querySelector("summary"), boxes = [...d.querySelectorAll("input[type=checkbox]")], filter = d.querySelector(".multi-filter");
+  const show = () => { sum.textContent = boxes.filter((b) => b.checked).map((b) => b.dataset.label || b.value).join(", ") || sum.dataset.none; };
+  boxes.forEach((b) => b.addEventListener("change", show));
+  if (filter) {
+    filter.hidden = false;
+    filter.addEventListener("input", () => { const q = filter.value.trim().toLowerCase();
+      boxes.forEach((b) => { b.closest("label").hidden = q && !(b.dataset.label || b.value).toLowerCase().includes(q); }); });
+  }
+});
+</script>

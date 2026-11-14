@@ -61,6 +61,7 @@ SHOTS = [  # file name, page, phone?, dark?, signed in as, height (a phone's is 
     ("admin", "/admin", False, False, "admin", 560),
     ("backups", "/admin/backups", False, True, "admin", 640),
     ("site-look", "/admin/site/look", False, False, "admin", 640),
+    ("site-roles", "/admin/site/roles#roles", False, False, "admin", 760),
     ("home-dues", "/", False, False, "member", 520),
     ("spending", "/spending", False, False, "member", 720),
     ("treasurer", "/treasurer", False, False, "treasurer", 680),

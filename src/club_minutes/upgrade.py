@@ -18,7 +18,26 @@ from pathlib import Path
 
 from .club import DATA
 
-STEPS: list[tuple[int, str, Callable[[Path], None]]] = []  # e.g. (2, "roles move to roles.json", _roles_file)
+
+def _roles_file(data: Path) -> None:
+    """2 (1.0.0): the roster's Minutes editor and Calendar editor ticks become roles.json (Admin → Site → Roles), which
+    the app reads from then on. Only with a roster and no roles.json yet; the roster's columns stay, unread."""
+    import json
+
+    from .roster import _dicts, to_members
+    sheet, out = data / "roster-sheet.json", data / "roles.json"
+    if not sheet.exists() or out.exists():
+        return
+    people = to_members(_dicts(json.loads(sheet.read_text()).get("Member Roster", [])))
+    roles = {k: sorted(p["id"] for p in people if p[k]) for k in ("minutes_editor", "calendar_editor")}
+    tmp = out.with_suffix(".tmp")
+    tmp.write_text(json.dumps(roles, indent=1))
+    tmp.replace(out)
+
+
+STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
+    (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
+]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"
 SKIP = ("backups", COPY)  # never copied or put back: the backups, and the copy itself

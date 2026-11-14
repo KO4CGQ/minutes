@@ -3,7 +3,7 @@ Sheet in 0.13.0; same tabs and columns). data/roster.json, what the rest of the 
 
 Reads columns by header name, so adding or reordering columns doesn't break it.
 Columns used: callsign, full_name, email, Title(s), is_officer, is_board, Class,
-minutes_editor (may lead meetings and edit minutes), calendar_editor (may change the club calendars), Status (Active / Inactive /
+minutes_editor and calendar_editor (read only until data/roles.json exists: Admin → Site → Roles), Status (Active / Inactive /
 Silent Key / Prospect) and aliases (comma-separated spellings seen in old minutes).
 
 Also phone, address, birthday (MM-DD, or MM for a month only) and share (which of email, phone, address,

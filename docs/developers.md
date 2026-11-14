@@ -68,6 +68,9 @@ Run on every pull request, every push to main and **every Monday**, so a newly p
 - Actions in the workflows are pinned to a commit, with the version in a comment; Dependabot updates both.
 - **Repository settings** worth having on (Settings → Code security): Dependabot alerts, secret scanning and push protection (blocks a push that contains a key).
 
+## Roles and permissions
+What a member may do is a **permission** (`PERMISSIONS` in `src/club_minutes/club.py`: lead, calendar, chow, contacts, oversee, treasurer, money, members), and **roles** (`ROLES`) say which permissions each gives. A new check asks `archive.club.may(member, "permission")`, plus `admin_mode(request)` (admins in admin mode may do everything); never `member.officer` or a title directly. Officer, Board, Treasurer and Roster keeper follow the offices a member holds; Minutes editor and Calendar editor (`PICKED`) are given on Admin → Site → Roles and kept in `data/roles.json` (the roster's old ticks are read only until that file exists). Admin isn't a role: it's `admins:` and Admin → Security, with admin mode and its re-confirm. A new permission goes in both tables and on the Site → Roles page by itself.
+
 ## Election days for another state
 Election days are worked out from a state's rules in a small file in `src/club_minutes/regions/`, named for its code: `us_oh.py` is `us-oh`. A file there is listed on Admin → Site → Features by itself; nothing else needs changing. It has:
 - `NAME`: how the list shows it, e.g. `"Ohio: primaries and general election"`.

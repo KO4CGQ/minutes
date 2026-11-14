@@ -21,7 +21,9 @@ def steps(monkeypatch):
     monkeypatch.setattr(upgrade, "CURRENT", 2)
 
 
-def test_new_or_older_folder_is_marked_with_this_version(tmp_path):
+def test_new_or_older_folder_is_marked_with_this_version(tmp_path, monkeypatch):
+    monkeypatch.setattr(upgrade, "STEPS", [])
+    monkeypatch.setattr(upgrade, "CURRENT", 1)
     assert upgrade.version(tmp_path) == 1  # no file: 1.0.0's shape (0.x data is the same)
     assert upgrade.run(tmp_path) == []
     assert (tmp_path / "data-version").read_text() == f"{upgrade.CURRENT}\n"
@@ -67,3 +69,19 @@ def test_backups_leave_out_the_copy(tmp_path, steps):
         names = t.getnames()
     assert "business.json" in names and "data-version" in names
     assert not any(n.startswith(upgrade.COPY) for n in names)
+
+
+def test_step_2_moves_the_editor_ticks_to_roles_json(tmp_path):
+    """The roster's minutes_editor / calendar_editor ticks become roles.json; a roles.json already there is kept."""
+    grid = [["callsign", "full_name", "minutes_editor", "calendar_editor"],
+            ["N0AAAA", "Jane Doe", "TRUE", ""], ["N0BBBB", "John Doe", "FALSE", "TRUE"], ["", "Pat Doe", "", "yes"]]
+    (tmp_path / "roster-sheet.json").write_text(json.dumps({"Member Roster": grid}))
+    upgrade._roles_file(tmp_path)
+    assert json.loads((tmp_path / "roles.json").read_text()) == {"minutes_editor": ["n0aaaa"], "calendar_editor": ["n0bbbb", "pat-doe"]}
+    (tmp_path / "roles.json").write_text('{"minutes_editor": [], "calendar_editor": []}')
+    upgrade._roles_file(tmp_path)  # run again (stopped part way): roles.json stays as it is
+    assert json.loads((tmp_path / "roles.json").read_text()) == {"minutes_editor": [], "calendar_editor": []}
+    empty = tmp_path / "new"
+    empty.mkdir()
+    upgrade._roles_file(empty)  # a new server, no roster yet: nothing written, the roster's ticks are read until Site saves
+    assert not (empty / "roles.json").exists()

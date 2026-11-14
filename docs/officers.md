@@ -3,10 +3,12 @@
 For officers, minutes editors, roster keepers, calendar editors and the Treasurer: running the club from the app. What every member sees is in the [members guide](members.md).
 
 ## 🔑 Who can do what
-- 🏛️ **Officers** see every member's contact details, the change logs, and can undo profile changes.
-- 🎙️ **Leaders** (officers, plus members ticked **Minutes editor** on the roster) run the meeting console and edit the calendar.
-- 📅 **Calendar editors** (members ticked **Calendar editor**, say the net manager) edit the calendar too.
-- 📋 **Roster keepers** (the Secretary and Treasurer, unless the club picks others) edit the roster.
+What a member may do comes from their **roles**. Most roles follow the offices a member holds; an admin gives the other two on **Admin → Site → Roles**, which also lists what each role allows and who has it. A member's roles show on their page.
+
+- 🏛️ **Officers** (holders of an officer's office) see every member's contact details, the change logs, and can undo profile changes; they lead meetings and edit the calendar too.
+- 🎙️ **Minutes editors** (given on Site → Roles) run the meeting console and edit the minutes and the calendar.
+- 📅 **Calendar editors** (given on Site → Roles, say the net manager) edit the calendar.
+- 📋 **Roster keepers** (holders of the offices that add members: the Secretary and Treasurer, unless the club picks others) edit the roster.
 - 💰 **The Treasurer** records money.
 
 > [!TIP]
@@ -17,7 +19,7 @@ For officers, minutes editors, roster keepers, calendar editors and the Treasure
 
 - **Officers see everything**; other members see only what each member chose to share.
 - **Every profile change** is emailed to the Secretary and listed under **Roster → Recent changes**, where any officer can undo it.
-- **Editing a member** (roster keepers): **Edit roster details** on their page, in four tabs, each saved on its own. **Details:** name, class, status, contact details and other spellings of their name. **Titles & roles:** their offices (shown; they change on the Offices page, which keeps their history), other titles (ticked from those the club uses, or added), and two roles for members without an office: **Minutes editor** (leads meetings and edits the minutes) and **Calendar editor** (changes the club calendars). Officers have both already; Officer and Board follow the offices held. **New callsign** and **Membership log** (joined, left, suspended…). Not their birthday or sharing choices: those are theirs.
+- **Editing a member** (roster keepers): **Edit roster details** on their page, in four tabs, each saved on its own. **Details:** name, class, status, contact details and other spellings of their name. **Titles:** their offices (shown; they change on the Offices page, which keeps their history) and other titles (ticked from those the club uses, or added). Roles aren't set here: they follow the offices, or an admin gives them on Site → Roles. **New callsign** and **Membership log** (joined, left, suspended…). Not their birthday or sharing choices: those are theirs.
 - **A new callsign** (vanity call or upgrade): **New callsign** on the same page. The app takes a backup, then moves everything (minutes, chow, business, sign-ins, passkeys) to the new call. Old links keep working.
 - **Birthdays and anniversaries** a member shares show at the meeting's Attendance step.
 - **Offices** (Roster → Offices): who holds each office now and who held it before. An admin changes a holder in one step; the app updates both members' titles, logs it and emails the officers. **Add a past term** adds history only.

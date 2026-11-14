@@ -68,7 +68,10 @@ from .backup import KEY_FILE
 from .club import (
     DATA,
     DATES,
+    PERMISSIONS,
+    PICKED,
     PREVIEW,
+    ROLES,
     STAGE,
     WEEKDAYS,
     _agenda,
@@ -80,7 +83,8 @@ from .club import (
 )
 from .roster import COLUMNS, SHAREABLE, SheetError
 
-KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share"))  # those two are the member's own choice
+# Not birthday and share (the member's own choice), nor the role ticks (Admin → Site → Roles, roles.json)
+KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share", "minutes_editor", "calendar_editor"))
 from .meeting import SECTIONS
 from .store import SEARCH_WORDS, Archive, spellings
 
@@ -291,9 +295,8 @@ def admin_mode(request: Request) -> bool:
 
 
 def privileged(request: Request) -> bool:
-    """Officers, and admins while admin mode is on: see all contact details, the change log, undo."""
-    m = archive.club.members.get(getattr(request.state, "member", None) or "")
-    return bool(m and (m.officer or admin_mode(request)))
+    """Officers (the "oversee" permission), and admins while admin mode is on: the change log, undo, any business item."""
+    return archive.club.may(getattr(request.state, "member", None), "oversee") or admin_mode(request)
 
 
 def leader(request: Request) -> str:
@@ -748,7 +751,7 @@ _chow_lock = threading.Lock()
 def can_edit_chow(request: Request) -> bool:
     """Changing the schedule: officers (it's the Secretary's job day to day) and admins in admin mode.
     Minutes editors see the member view; they record chow on meeting night from the console."""
-    return privileged(request)
+    return archive.club.may(request.state.member, "chow") or admin_mode(request)
 
 
 def chow_change(request: Request, fn, back: str = "/chow"):
@@ -815,8 +818,7 @@ def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str
 
 def is_treasurer(request: Request) -> bool:
     """Recording money and the settings: whoever holds Treasurer, and admins in admin mode. Other officers only look."""
-    m = archive.club.members.get(request.state.member or "")
-    return bool(m and m.role and "treasurer" in m.role.lower()) or admin_mode(request)
+    return archive.club.may(request.state.member, "money") or admin_mode(request)
 
 
 def treasurer_only(request: Request) -> str:
@@ -831,7 +833,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
     """Officers see who owes what; the Treasurer records payments, expenses and bills, and runs the settings. A fund's
     keepers (the drinks committee, say) see and record only their fund's account."""
     club, s = archive.club, treasurer.load()
-    c, kept, full = treasurer.config(s), treasurer.kept_accounts(club, s, mid), privileged(request)
+    c, kept, full = treasurer.config(s), treasurer.kept_accounts(club, s, mid), club.may(mid, "treasurer") or admin_mode(request)
     if not (full or kept):
         raise HTTPException(403, "Only officers can do that.")
     tab = tab if full else "money"
@@ -904,7 +906,7 @@ def treasurer_category(eid: str, category: str = Form(...), mid: str = Depends(t
 
 def spending_visible(request: Request, s: dict) -> bool:
     """The club's spending (never anyone's dues): every member once tracking is on; officers during a preview."""
-    return treasurer.members_see(s) or (treasurer.on(s) and privileged(request))
+    return treasurer.members_see(s) or (treasurer.on(s) and (archive.club.may(request.state.member, "treasurer") or admin_mode(request)))
 
 
 @app.get("/spending", response_class=HTMLResponse)
@@ -1688,7 +1690,7 @@ def member(request: Request, mid: str):
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
                 contact=contact, is_me=viewer == mid, is_officer=privileged(request), is_officer_or_admin=privileged(request),
                 can_view_as=elevated and mid != request.state.real_member,
-                can_edit_roster=archive.club.keeps_roster(viewer) or elevated)
+                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=[ROLES[k][0] for k in archive.club.roles(mid)])
 
 
 STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
@@ -1707,7 +1709,7 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
     return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
                 tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
-                events=membership.EVENTS, today=dt.date.today().isoformat())
+                events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=[ROLES[k][0] for k in club.roles(who)])
 
 
 @app.post("/members/{who}/edit")
@@ -1715,15 +1717,11 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     if who not in archive.club.members:
         raise HTTPException(404)
     m, f = archive.club.members[who], await request.form()
-    tab = "roles" if f.get("tab") == "roles" else "details"  # each tab saves its own fields, leaving the others as they are
+    tab = "titles" if f.get("tab") == "titles" else "details"  # each tab saves its own fields, leaving the others as they are
     back = f"/members/{quote(who, safe='')}/edit?tab={tab}&"
-    if tab == "roles":
+    if tab == "titles":
         try:
-            new = {"role": member_titles(m, f), **{k: "TRUE" if f.get(k) else "FALSE" for k in ("minutes_editor", "calendar_editor")}}
-            # Officer and On the board follow the offices held (offices.py, the Offices page); an officer leads and
-            # edits calendars anyway, so their two ticks are shown, not posted: keep them as they are
-            if m.officer:
-                new.update({k: "TRUE" if getattr(m, k) else "FALSE" for k in ("minutes_editor", "calendar_editor")})
+            new = {"role": member_titles(m, f)}  # roles are on Admin → Site → Roles
             await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
         except (ValueError, SheetError) as e:
             return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
@@ -1750,7 +1748,7 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
 
 
-EDIT_TABS = {"details": "Details", "roles": "Titles & roles", "callsign": "New callsign", "log": "Membership log"}
+EDIT_TABS = {"details": "Details", "titles": "Titles", "callsign": "New callsign", "log": "Membership log"}
 
 
 def member_titles(m, f) -> str:
@@ -2035,6 +2033,7 @@ def admin_action(e: dict) -> str:
              "site_agenda": lambda v: "Agenda back to club.yaml's" if v == "club.yaml" else f"Agenda: {v.replace('_', ' ')}",
              "site_features": lambda v: "Features back to club.yaml's" if v == "club.yaml" else f"Features: {v.replace('_', ' ')}",
              "site_offices": lambda v: "Offices back to club.yaml's" if v == "club.yaml" else f"Offices: {v.replace('_', ' ')}",
+             "site_roles": lambda v: f"Roles: {v}",
              "site_privacy": lambda v: "Never-recorded names back to club.yaml's" if v == "club.yaml" else "Changed the never-recorded names",
              "site_bylaws": lambda v: "Bylaws settings back to club.yaml's" if v == "club.yaml" else f"Bylaws: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
@@ -2258,7 +2257,7 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
-SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("offices", "Offices"), ("features", "Features"), ("bylaws", "Bylaws"),
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("bylaws", "Bylaws"),
              ("dates", "Dates"), ("privacy", "Privacy"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
@@ -2286,7 +2285,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), perm_rows=[(label, [n for n, _h, ps in ROLES.values() if p in ps]) for p, label in PERMISSIONS.items()], regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
@@ -2470,11 +2469,24 @@ async def site_agenda(request: Request):
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
+def _role_rows(club) -> list[dict]:
+    """Roles tab: each role, what it allows, the offices that give it, and who has it."""
+    offs, keepers = offices.offices(club), set(club.roster_keepers)
+    given = {"officer": [o["title"] for o in offs if o["officer"]], "board": [o["title"] for o in offs],
+             "treasurer": [o["title"] for o in offs if "treasurer" in o["title"].lower()],
+             "roster_keeper": [o["title"] for o in offs if o["title"].lower() in keepers]}
+    by_name = sorted(club.members.values(), key=lambda m: m.name.lower())
+    return [{"key": k, "name": name, "how": how, "can": [PERMISSIONS[p] for p in perms], "offices": given.get(k, []),
+             "who": [m.id for m in by_name if k in club.roles(m.id)], "picked": k in PICKED,
+             "choices": [m.id for m in by_name if m.status.lower() not in ("inactive", "silent key") or getattr(m, k, False)]}
+            for k, (name, how, perms) in ROLES.items()]
+
+
 def _office_rows(club) -> list[dict]:
     """Offices tab rows: the club's offices (who holds each, whether its holders add members), then two empty rows."""
     keepers = set(club.roster_keepers)
     return ([{**o, "keeper": o["title"].lower() in keepers, "held": bool(offices.holders(club, o["title"]))} for o in offices.offices(club)]
-            + [{"title": "", "officer": True, "seats": 1, "keeper": False, "held": False}] * 2)
+            + [{"title": "", "officer": False, "seats": 1, "keeper": False, "held": False}] * 2)
 
 
 @app.post("/admin/site/offices")
@@ -2517,10 +2529,23 @@ async def site_offices(request: Request):
                       ("", "roster_keepers"): None if {k.lower() for k in keepers} == yaml_keepers else keepers}
         club.save_site_settings(values)
     except ValueError as e:
-        return RedirectResponse("/admin/site/offices?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/site/roles?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_offices="club.yaml" if form.get("back") else ", ".join(k.replace("roster_keepers", "who adds members")
                                                                                   for (_, k), v in values.items() if v is not None) or "club.yaml")
-    return RedirectResponse("/admin/site/offices?note=" + quote("Saved."), status_code=303)
+    return RedirectResponse("/admin/site/roles?note=" + quote("Saved."), status_code=303)
+
+
+@app.post("/admin/site/roles")
+async def site_roles(request: Request):
+    """Roles tab: who has the roles given by hand (Minutes editor, Calendar editor). The rest follow the offices."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    before = {k: {m.id for m in club.members.values() if getattr(m, k)} for k in PICKED}
+    picked = {k: [i for i in form.getlist(k) if i in club.members] for k in PICKED}
+    club.save_roles(picked)
+    changes = [f"{ROLES[k][0]} {'+' if add else '-'}{club.name(i)}" for k in PICKED
+               for add, ids in ((True, set(picked[k]) - before[k]), (False, before[k] - set(picked[k]))) for i in sorted(ids)]
+    _admin_log(request, site_roles=", ".join(changes) or "no change")
+    return RedirectResponse("/admin/site/roles?note=" + quote("Saved." if changes else "Nothing changed."), status_code=303)
 
 
 @app.post("/admin/site/privacy")

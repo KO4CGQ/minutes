@@ -640,3 +640,7 @@ form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-
 .holrows .rm:has(input:focus-visible) { outline: 2px solid var(--accent); }
 .holrows .rm .rm-undo, .holrows .rm:has(input:checked) .rm-do { display: none; } .holrows .rm:has(input:checked) .rm-undo { display: inline; }
 .holrows .hrow:has(.rm input:checked) > :not(.rm) { opacity: .4; text-decoration: line-through; }
+.rolelist { display: grid; gap: .8rem; } .rolelist .role { border-top: 1px solid var(--border); padding-top: .6rem; }
+.rolelist .role h3 { margin: 0 0 .2rem; font-size: 1rem; } .rolelist .role p { margin: .2rem 0; }
+.permtable { width: 100%; border-collapse: collapse; font-size: .9rem; } .permtable th, .permtable td { text-align: left; vertical-align: top; padding: .35rem .5rem; border-bottom: 1px solid var(--border); }
+.rolelist ul.allows { margin: .1rem 0 .3rem; padding-left: 1.2rem; } .rolelist ul.allows li { margin: .05rem 0; }
