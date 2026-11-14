@@ -1,42 +1,52 @@
 {% extends "base.html" %}{% block title %}Edit {{ member.name }}{% endblock %}{% block crumb %}{{ crumb('/members/' ~ member.id, member.name) }}{% endblock %}{% block body %}
 <h1>Edit {{ member.name }}{% if member.callsign %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
-<p class="muted">What the roster holds about {{ member.first }}. Each change is written to the roster, listed under <a href="/roster/changes">Roster changes</a> (where an officer can undo it), and emailed to the Secretary and to {{ member.first }}. Birthday and sharing are {{ member.first }}'s own choices, on their profile. <a href="/members/{{ member.id }}">Back to {{ member.first }}'s page</a></p>
+<p class="muted">Saved changes go to the roster and are emailed to the Secretary and to {{ member.first }}; an officer can undo them on <a href="/roster/changes">Roster changes</a>. {{ member.first }} sets their own birthday and sharing on their profile.</p>
 {% if saved and not error %}<p class="msg ok">Saved. The roster is updated.</p>{% endif %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-<form method="post" action="/members/{{ member.id }}/edit" class="profile">
+<nav class="tabs" aria-label="Edit">{% for t, label in tabs.items() %}<a href="/members/{{ member.id }}/edit?tab={{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+
+{% if tab == 'details' %}
+<form method="post" action="/members/{{ member.id }}/edit" class="profile"><input type="hidden" name="tab" value="details">
   <div class="fixedrow">
     <label>First name <input name="first" value="{{ member.first }}" required></label>
     <label>Last name <input name="last" value="{{ member.last }}" required></label>
   </div>
   <label>Callsign <input value="{{ member.callsign or '' }}" readonly tabindex="-1" class="cs">
-    <span class="hint">Changed below, under <a href="#callsign">New callsign</a>.</span></label>
+    <span class="hint">Changed on the <a href="/members/{{ member.id }}/edit?tab=callsign">New callsign</a> tab.</span></label>
   <div class="fixedrow">
     <label>License class <select name="license_class"><option value="">(none)</option>{% for c in classes %}<option {{ 'selected' if member.license_class == c }}>{{ c }}</option>{% endfor %}</select></label>
     <label>Status <select name="status">{% for s in statuses %}<option {{ 'selected' if member.status == s }}>{{ s }}</option>{% endfor %}</select></label>
   </div>
-  <label>Email <input type="email" name="email" value="{{ member.email or '' }}"><span class="hint">Also how {{ member.first }} signs in. Both the old and new address are told.</span></label>
+  <label>Email <input type="email" name="email" value="{{ member.email or '' }}"><span class="hint">{{ member.first }} signs in with this address too. If it changes, both the old and the new address get an email about it.</span></label>
   <label>Phone <input type="tel" name="phone" value="{{ member.phone or '' }}" maxlength="40"></label>
   <label>Address <textarea name="address" rows="3" maxlength="200">{{ member.address or '' }}</textarea></label>
+  <label>Other spellings <input name="aliases" value="{{ member.aliases|join(', ') }}"><span class="hint">Comma-separated: how the name shows up in old minutes, so their reports are matched to {{ member.first }}.</span></label>
+  <p><button class="btn">Save</button></p>
+</form>
+
+{% elif tab == 'roles' %}
+<form method="post" action="/members/{{ member.id }}/edit" class="profile"><input type="hidden" name="tab" value="roles">
   <fieldset class="titles"><legend>Titles</legend>
-    {% if held %}<p>{% for t in held %}<span class="chip">{{ t }}</span> {% endfor %}<span class="hint">Offices change on the <a href="/offices">Offices</a> page, which keeps their history.</span></p>{% endif %}
+    <p><b>Offices:</b> {% for t in held %}<span class="chip">{{ t }}</span> {% else %}<span class="muted">none</span> {% endfor %}<span class="hint">Offices change on the <a href="/offices">Offices</a> page, which keeps their history.</span></p>
+    <p><b>Other titles</b> <span class="hint">(jobs in the club that aren't offices, kept here without history)</span></p>
     <details class="multi"><summary data-none="None">{{ mine|join(', ') or 'None' }}</summary><div class="multi-list">
       {% if choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter titles…" aria-label="Filter titles" hidden>{% endif %}
-      {% for t in choices %}<label class="check"><input type="checkbox" name="title" value="{{ t }}" {{ 'checked' if t in mine }}> {{ t }}</label>{% endfor %}
+      {% if choices %}<div class="multi-opts">{% for t in choices %}<label class="check"><input type="checkbox" name="title" value="{{ t }}" {{ 'checked' if t in mine }}> {{ t }}</label>{% endfor %}</div>{% endif %}
       <label class="new">Add a title <input name="title_new" maxlength="120" placeholder="e.g. Net Manager"></label>
     </div></details>
-    <span class="hint">Other jobs in the club (Net Manager, Webmaster...): tick them, or add a new one.</span>
   </fieldset>
-  <label>Other spellings <input name="aliases" value="{{ member.aliases|join(', ') }}"><span class="hint">Comma-separated: how the name shows up in old minutes, so their reports are matched to {{ member.first }}.</span></label>
-  <fieldset><legend>Ticks</legend>
-    <label class="check"><input type="checkbox" name="officer" value="1" {{ 'checked' if member.officer }}> Officer</label>
-    <label class="check"><input type="checkbox" name="board" value="1" {{ 'checked' if member.board }}> On the board</label>
-    <label class="check"><input type="checkbox" name="minutes_editor" value="1" {{ 'checked' if member.minutes_editor }}> May lead meetings and edit minutes</label>
-    <label class="check"><input type="checkbox" name="calendar_editor" value="1" {{ 'checked' if member.calendar_editor }}> May change the club calendars</label>
+  <fieldset class="roles"><legend>Roles</legend>
+    <label class="check"><input type="checkbox" {{ 'checked' if member.officer }} disabled> Officer</label>
+    <label class="check"><input type="checkbox" {{ 'checked' if member.board }} disabled> Board</label>
+    <p class="hint">From the offices {{ member.first }} holds (the <a href="/offices">Offices</a> page).</p>
+    {% for k, label, what in (('minutes_editor', 'Minutes editor', 'leads meetings and edits the minutes'), ('calendar_editor', 'Calendar editor', 'changes the club calendars')) %}
+    <label class="check"><input type="checkbox" {% if member.officer %}checked disabled{% else %}name="{{ k }}" value="1" {{ 'checked' if member[k] }}{% endif %}> {{ label }} <span class="hint">{{ what }}{{ ', included with Officer' if member.officer }}</span></label>
+    {% endfor %}
   </fieldset>
   <p><button class="btn">Save</button></p>
 </form>
 
-<h2 id="callsign">New callsign</h2>
+{% elif tab == 'callsign' %}
 <form method="post" action="/members/{{ member.id }}/callsign" class="modern card" data-confirm="Change {{ member.first }}'s callsign? Every record in the app follows.">
   <p class="hint">For a vanity call or a new call with an upgrade. The app takes a backup first, then writes the new call to the roster (the old one goes in Other spellings, so old links still work), adds a "Callsign Change" row to the Membership Log, and moves {{ member.first }}'s chow nights, business items, minutes, email choices, picture, sign-ins and passkeys to the new call. {{ member.first }} stays signed in. If {{ member.first }} is an admin, update <code>admins:</code> in club.yaml when convenient (the old call keeps working meanwhile).</p>
   <div class="formrow">
@@ -46,7 +56,7 @@
   </div>
 </form>
 
-<h2 id="log">Membership Log</h2>
+{% else %}
 <p class="muted">Member since {{ member.member_since|anydate or '(not recorded)' }}: the latest Joined or Rejoined.</p>
 <ul class="plain">{% for e in member.events %}<li>{{ e.date|anydate or '?' }}: {{ e.event }}{% if e.note %} <span class="muted">({{ e.note }})</span>{% endif %}</li>{% else %}<li class="muted">Nothing yet.</li>{% endfor %}</ul>
 <form method="post" action="/members/{{ member.id }}/log" class="modern card">
@@ -55,9 +65,10 @@
     <label>Date<input type="date" name="date" value="{{ today }}" required></label>
     <label>Note<input name="note" maxlength="200" placeholder="e.g. moved out of state"></label>
   </div>
-  <p class="hint">Added to the roster's Membership Log. It doesn't change the status above; set that too if it changed. Office changes go on the <a href="/offices">Offices</a> page.</p>
+  <p class="hint">Added to the roster's Membership Log. It doesn't change the status; set that on Details too if it changed. Office changes go on the <a href="/offices">Offices</a> page.</p>
   <div class="formrow"><button class="btn small">Add to the log</button></div>
 </form>
+{% endif %}
 <script nonce="{{ csp_nonce }}">  // the Titles list: say what's ticked, and filter a long list as you type
 document.querySelectorAll("details.multi").forEach((d) => {
   const sum = d.querySelector("summary"), boxes = [...d.querySelectorAll("input[type=checkbox]")], filter = d.querySelector(".multi-filter");

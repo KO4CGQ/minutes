@@ -19,7 +19,7 @@ To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwi
     Then `systemctl restart club-minutes`.
 
 2. **You, the first member:** `club-minutes first-member YOURCALL --first First --last Last --email you@example.org --class General` starts the roster with you and prints a sign-in link. It runs once: with a roster in place it refuses, so it can't overwrite one.
-3. **Sign in** with that link and add a passkey when offered. Turn on admin mode (name menu → Admin), tick yourself (and the other officers, once added) as an officer on your member page, add the other members on the Roster page, and set the name, logo and colours on **Site**.
+3. **Sign in** with that link and add a passkey when offered. Turn on admin mode (name menu → Admin), add the other members on the Roster page, put the officers in their offices on the **Offices** page (Roster → Offices; that makes them officers), and set the name, logo and colours on **Site**.
 4. **Email** (sign-in links, the minutes): the SMTP settings in `/etc/club-minutes/env` (Sign-in and email, below). Until then, links are written to the server's log (`journalctl -u club-minutes`), and the pages say so.
 5. **Backups** (Admin → Backups), before anything is entered for real.
 

@@ -1695,7 +1695,7 @@ STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
 
 
 @app.get("/members/{who}/edit", response_class=HTMLResponse)
-def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, mid: str = Depends(roster_keeper)):
+def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, tab: str = "details", mid: str = Depends(roster_keeper)):
     """Roster keepers (and admins in admin mode) edit what the roster sheet holds about a member."""
     if who not in archive.club.members:
         raise HTTPException(404)
@@ -1705,7 +1705,7 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
     held = [t for t in offices.titles(m.role) if t in office_titles]  # shown, changed only on the Offices page
     in_use = {t for x in club.members.values() for t in offices.titles(x.role)} - office_titles
     return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
-                held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
+                tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
                 events=membership.EVENTS, today=dt.date.today().isoformat())
 
@@ -1715,7 +1715,19 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     if who not in archive.club.members:
         raise HTTPException(404)
     m, f = archive.club.members[who], await request.form()
-    back = f"/members/{quote(who, safe='')}/edit"
+    tab = "roles" if f.get("tab") == "roles" else "details"  # each tab saves its own fields, leaving the others as they are
+    back = f"/members/{quote(who, safe='')}/edit?tab={tab}&"
+    if tab == "roles":
+        try:
+            new = {"role": member_titles(m, f), **{k: "TRUE" if f.get(k) else "FALSE" for k in ("minutes_editor", "calendar_editor")}}
+            # Officer and On the board follow the offices held (offices.py, the Offices page); an officer leads and
+            # edits calendars anyway, so their two ticks are shown, not posted: keep them as they are
+            if m.officer:
+                new.update({k: "TRUE" if getattr(m, k) else "FALSE" for k in ("minutes_editor", "calendar_editor")})
+            await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+        except (ValueError, SheetError) as e:
+            return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
+        return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
     first, last, email = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split()), f.get("email", "").strip()
     try:
         if not first or not last or " " in first:
@@ -1728,16 +1740,17 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
         if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
             raise ValueError("Only an admin, in admin mode, can change an admin's email.")
         new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
-               "role": member_titles(m, f),
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
-               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", "")),
-               **{k: "TRUE" if f.get(k) else "FALSE" for k in ("officer", "board", "minutes_editor", "calendar_editor")}}
+               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
         if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
             new["address"] = m.address or ""
         await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
     except (ValueError, SheetError) as e:
-        return RedirectResponse(_safe_next(back + "?error=" + quote(str(e))), status_code=303)
-    return RedirectResponse(_safe_next(back + "?saved=1"), status_code=303)
+        return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
+    return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
+
+
+EDIT_TABS = {"details": "Details", "roles": "Titles & roles", "callsign": "New callsign", "log": "Membership log"}
 
 
 def member_titles(m, f) -> str:
@@ -1764,10 +1777,10 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
     except (ValueError, SheetError, backup.BackupError) as e:
-        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#callsign"), status_code=303)
+        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?tab=callsign&error=" + quote(str(e))), status_code=303)
     if admin_mode(request):
         _admin_log(request, callsign_change=f"{who} to {new}")
-    return RedirectResponse(_safe_next(f"/members/{quote(new, safe='')}/edit?saved=1#callsign"), status_code=303)
+    return RedirectResponse(_safe_next(f"/members/{quote(new, safe='')}/edit?tab=callsign&saved=1"), status_code=303)
 
 
 @app.post("/members/{who}/log")
@@ -1778,8 +1791,8 @@ def member_log_event(request: Request, who: str, event: str = Form(""), date: st
     try:
         membership.add_event(archive.club, who, event, date, note, mid)
     except (ValueError, SheetError) as e:
-        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?error=" + quote(str(e)) + "#log"), status_code=303)
-    return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?saved=1#log"), status_code=303)
+        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?tab=log&error=" + quote(str(e))), status_code=303)
+    return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?tab=log&saved=1"), status_code=303)
 
 
 @app.get("/roster", response_class=HTMLResponse)

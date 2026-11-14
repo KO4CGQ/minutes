@@ -48,9 +48,10 @@ def sheet_row(tmp, cs):
 
 def test_keeper_edits_and_undo(env):
     club, tmp, sent, _who, c = env
-    r = c.post("/members/n0bbbb/edit", data=form(first="Robert", license_class="General", minutes_editor="1",
-                                               title_new="Net Manager", aliases="Bobby, Bob B"), follow_redirects=False)
-    assert "saved=1" in r.headers["location"]
+    r = c.post("/members/n0bbbb/edit", data=form(first="Robert", license_class="General", aliases="Bobby, Bob B"), follow_redirects=False)
+    assert "tab=details&saved=1" in r.headers["location"]
+    r = c.post("/members/n0bbbb/edit", data={"tab": "roles", "minutes_editor": "1", "title_new": "Net Manager"}, follow_redirects=False)
+    assert "tab=roles&saved=1" in r.headers["location"]
     b = club.members["n0bbbb"]
     assert (b.name, b.license_class, b.minutes_editor, b.role, b.aliases) == ("Robert Bloggs", "General", True, "Net Manager", ["Bobby", "Bob B"])
     row = sheet_row(tmp, "N0BBBB")
@@ -58,8 +59,10 @@ def test_keeper_edits_and_undo(env):
     assert row["is_officer"] is False and json.loads((tmp / "roster.json").read_text())[1]["first"] == "Robert"
     e = profile.history()[0]
     assert e["new"]["minutes_editor"] == "TRUE" and e["old"]["minutes_editor"] == "FALSE" and "officer" not in e["new"]
+    assert "name" not in e["new"] and "role" in e["new"]  # the roles tab saved only its own fields
     assert any("bob@example.org" in to for to, _ in sent)  # the member is told
     profile.undo(club, e["id"], "n0aaaa")
+    profile.undo(club, profile.history()[2]["id"], "n0aaaa")  # and the details change before it
     assert (b.name, b.minutes_editor, b.aliases) == ("Bob Bloggs", False, ["Bobby"]) and sheet_row(tmp, "N0BBBB")["minutes_editor"] is False
     assert "Pick%20a%20license%20class" in str(c.post("/members/n0bbbb/edit", data=form(status="Retired"), follow_redirects=False).headers["location"])
     assert "isn't" not in c.get("/members/n0bbbb/edit").text and "Edit roster details" in c.get("/members/n0bbbb").text
@@ -102,17 +105,32 @@ def test_titles_are_picked_from_a_list_and_offices_stay_put(env):
     """Titles: the member's offices are kept as they are (Offices page only); other titles are ticked from those in use
     on the roster, or added; an office can't be added here."""
     club, _tmp, _sent, _who, c = env
-    c.post("/members/n0bbbb/edit", data=form(title_new="Net Manager, Webmaster"))
+    c.post("/members/n0bbbb/edit", data={"tab": "roles", "title_new": "Net Manager, Webmaster"})
     assert club.members["n0bbbb"].role == "Net Manager, Webmaster"
-    page_ = c.get("/members/n0aaaa/edit").text
+    page_ = c.get("/members/n0aaaa/edit?tab=roles").text
     assert '<span class="chip">Secretary</span>' in page_ and 'name="title" value="Secretary"' not in page_  # an office: shown, not offered
     assert 'name="title" value="Net Manager"' in page_ and 'name="title" value="Webmaster"' in page_       # titles in use: offered
-    amy = {**form(first="Amy", last="Appleseed", email="amy@example.org", license_class="General"), "officer": "1", "board": "1"}
-    c.post("/members/n0aaaa/edit", data={**amy, "title": ["Webmaster"], "title_new": "Field Day chair"})
+    c.post("/members/n0aaaa/edit", data={"tab": "roles", "title": ["Webmaster"], "title_new": "Field Day chair"})
     assert club.members["n0aaaa"].role == "Secretary, Webmaster, Field Day chair"  # the office kept, first
-    c.post("/members/n0aaaa/edit", data={**amy, "title": []})
+    c.post("/members/n0aaaa/edit", data={"tab": "roles"})
     assert club.members["n0aaaa"].role == "Secretary"  # unticking every title leaves the office
-    r = c.post("/members/n0bbbb/edit", data=form(title_new="president"), follow_redirects=False)
+    r = c.post("/members/n0bbbb/edit", data={"tab": "roles", "title_new": "president"}, follow_redirects=False)
     assert "is%20an%20office" in r.headers["location"] and club.members["n0bbbb"].role == "Net Manager, Webmaster"
-    c.post("/members/n0bbbb/edit", data={**form(), "title": ["Secretary", "Webmaster"]})  # a forged tick of an office
+    c.post("/members/n0bbbb/edit", data={"tab": "roles", "title": ["Secretary", "Webmaster"]})  # a forged tick of an office
     assert club.members["n0bbbb"].role == "Webmaster"
+    c.post("/members/n0bbbb/edit", data=form(phone="555-0123"))  # the Details tab leaves the titles alone
+    assert club.members["n0bbbb"].role == "Webmaster" and club.members["n0bbbb"].phone == "555-0123"
+
+
+def test_officer_and_board_follow_the_offices_not_the_edit_page(env):
+    """Roles: Officer and On the board show, greyed out, and stay as the Offices page set them; the editor roles change here."""
+    club, _tmp, _sent, _who, c = env
+    page_ = c.get("/members/n0bbbb/edit?tab=roles").text
+    assert "<legend>Roles</legend>" in page_ and 'name="officer"' not in page_ and 'name="board"' not in page_
+    c.post("/members/n0bbbb/edit", data={"tab": "roles", "officer": "1", "board": "1", "calendar_editor": "1"})
+    b = club.members["n0bbbb"]
+    assert (b.officer, b.board, b.calendar_editor) == (False, False, True)
+    c.post("/members/n0aaaa/edit", data={"tab": "roles"})  # no ticks posted: an officer's are shown, not sent
+    a = club.members["n0aaaa"]
+    assert (a.officer, a.board) == (True, True)  # the Secretary stays one
+    assert "included with Officer" in c.get("/members/n0aaaa/edit?tab=roles").text  # leads and edits calendars anyway

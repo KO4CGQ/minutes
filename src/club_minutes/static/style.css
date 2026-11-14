@@ -352,8 +352,10 @@ details.multi > summary { padding: .5rem .7rem; cursor: pointer; list-style: non
 details.multi > summary::-webkit-details-marker { display: none; }
 details.multi > summary::after { content: " ▾"; color: var(--muted); } details.multi[open] > summary::after { content: " ▴"; }
 details.multi[open] > summary { border-bottom: 1px solid var(--border); }
-.multi-list { display: grid; gap: .2rem; padding: .5rem .7rem; max-height: 18rem; overflow-y: auto; }
-form.profile .multi-list label.check { margin: 0; } .multi-list label.new { margin-top: .4rem; font-weight: normal; }
+.multi-list { display: grid; gap: .4rem; padding: .5rem .7rem; }
+/* only a long list of titles scrolls (and shows its scrollbar); the filter and Add a title stay in full view */
+.multi-opts { display: grid; gap: .2rem; max-height: 14rem; overflow-y: auto; scrollbar-gutter: stable; }
+form.profile .multi-list label.check { margin: 0; } fieldset.roles label.check .hint { display: inline; margin-left: .3rem; } .multi-list label.new { margin-top: .4rem; font-weight: normal; }
 .multi-list label[hidden] { display: none; }
 form.profile .fixedrow { display: flex; flex-wrap: wrap; gap: .8rem; }
 form.profile .fixedrow label { flex: 1 1 9rem; margin: .2rem 0 .5rem; font-weight: 600; font-size: .9rem; }

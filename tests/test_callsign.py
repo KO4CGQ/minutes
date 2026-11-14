@@ -117,7 +117,7 @@ def test_callsign_change_from_the_page(env, monkeypatch):
     who["id"] = "n0bbbb"
     assert "New callsign" in c.get("/members/n0aaaa/edit").text
     r = c.post("/members/n0aaaa/callsign", data={"callsign": "W0AMYA", "date": "2026-11-08"}, follow_redirects=False)
-    assert r.headers["location"].startswith("/members/w0amya/edit?saved=1")
+    assert r.headers["location"].startswith("/members/w0amya/edit?tab=callsign&saved=1")
     assert a.by_slug["2026-11-05"].leader == "w0amya" and c.get("/members/w0amya").status_code == 200
     club.members["n0bbbb"].role = "Secretary"  # the roster reload dropped the test's in-memory title
     assert "error=" in c.post("/members/w0amya/callsign", data={"callsign": "N0BBBB", "date": "2026-11-08"},
