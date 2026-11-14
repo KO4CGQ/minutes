@@ -334,3 +334,22 @@ def test_optional_date_and_time_boxes_can_be_cleared(engine):
         page.wait_for_timeout(50)
         assert page.locator("input[name=added] + .clearbox").is_visible()  # built after the page loaded (the console)
         browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_a_tap_on_a_home_items_box_opens_the_item(engine):
+    """Home's business items: the box drawn beside each is part of its link (a tap on the box on an iPhone did
+    nothing, and the stuck "hover" left the faint tick showing as if it were done)."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    css = (Path(__file__).parents[1] / "src/club_minutes/static/style.css").read_text()
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page(viewport={"width": 390, "height": 400})
+        page.set_content(f'<style>{css}</style><ul class="checklist open"><li><a href="#x" id="it">Order QSL cards</a></li></ul>')
+        box = page.evaluate("(() => { const r = document.querySelector('li').getBoundingClientRect(); return [r.left + 8, r.top + 14]; })()")
+        hit = page.evaluate(f"document.elementFromPoint({box[0]}, {box[1]}).closest('a')?.id")
+        browser.close()
+    assert hit == "it"
