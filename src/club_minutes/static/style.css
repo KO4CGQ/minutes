@@ -657,11 +657,13 @@ form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-
    box in when tapped and its picker can't empty it) */
 .clearwrap { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
 .clearwrap.block { display: flex; width: 100%; } .clearwrap > input { flex: 1 1 auto; min-width: 0; }
-.clearwrap:has(> button.clearbox:not([hidden])) > input { padding-right: 2.1rem; }
-button.clearbox { position: absolute; right: .45rem; top: 50%; transform: translateY(-50%); width: 1.35rem; height: 1.35rem;
-  padding: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--muted); font-size: .75rem; line-height: 1;
-  display: grid; place-items: center; cursor: pointer; }
-button.clearbox:hover, button.clearbox:focus-visible { background: var(--border-strong); color: var(--text); }
+.clearwrap:has(> button.clearbox:not([hidden])) > input { padding-right: 2.7rem; }
+/* the circle is small, but the button is the box's whole right end, full height and 2.6rem wide: easy to hit with a thumb */
+button.clearbox { position: absolute; right: 0; top: 0; bottom: 0; width: 2.6rem; padding: 0; border: 0; border-radius: 0 var(--radius-sm, .4rem) var(--radius-sm, .4rem) 0;
+  background: radial-gradient(circle, var(--surface-3) 0 .68rem, transparent .72rem); color: var(--muted); font-size: .75rem; line-height: 1;
+  display: grid; place-items: center; cursor: pointer; touch-action: manipulation; }
+button.clearbox:hover, button.clearbox:focus-visible { background: radial-gradient(circle, var(--border-strong) 0 .68rem, transparent .72rem); color: var(--text); }
+button.clearbox:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 button.clearbox[hidden] { display: none; }
 /* an empty date or time box keeps its size on iPhones, which otherwise shrink it to nothing */
 input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
@@ -669,3 +671,9 @@ input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
 .pairgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem .8rem; align-items: end; max-width: 26rem; }
 .pairgrid > label { margin: 0; min-width: 0; } .pairgrid input, .pairgrid .clearwrap { width: 100%; min-width: 0; box-sizing: border-box; }
 .pairgrid .clearwrap { display: flex; }
+/* iPhones and iPads (the only browsers with -webkit-touch-callout): their own date and time box won't shrink to fit
+   its space (it spilled into the next box) and centres its value; plain boxes size like the rest and read from the left */
+@supports (-webkit-touch-callout: none) {
+  input:is([type=date], [type=time]) { -webkit-appearance: none; appearance: none; min-width: 0; }
+  input:is([type=date], [type=time])::-webkit-date-and-time-value { text-align: left; }
+}
