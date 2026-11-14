@@ -283,7 +283,7 @@ def test_hovering_a_member_link_leaves_the_initials_alone(engine):
     root = Path(__file__).parents[1] / "src/club_minutes"
     css = (root / "static/style.css").read_text()
     from jinja2 import Environment, FileSystemLoader
-    env = Environment(loader=FileSystemLoader(root / "templates"))
+    env = Environment(loader=FileSystemLoader(root / "templates"), autoescape=True)
     env.globals.update(avatar_url=lambda mid: None, avatar_hue=lambda mid: 200, initials=lambda mid: "JD")
     circle = env.from_string('{% from "_avatar.html" import avatar %}{{ avatar("n0jane", "sm") }}').render()
     # a plain link (a table row would shade itself on hover, behind the circle's corners)

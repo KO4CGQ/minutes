@@ -1718,7 +1718,7 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
         raise HTTPException(404)
     m, f = archive.club.members[who], await request.form()
     tab = "titles" if f.get("tab") == "titles" else "details"  # each tab saves its own fields, leaving the others as they are
-    back = f"/members/{quote(who, safe='')}/edit?tab={tab}&"
+    back = _edit_url(who, tab)
     if tab == "titles":
         try:
             new = {"role": member_titles(m, f)}  # roles are on Admin → Site → Roles
@@ -1748,6 +1748,13 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
     return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
 
 
+def _edit_url(who: str, tab: str) -> str:
+    """A member's Edit page on a tab, ready for "error=..." or "saved=1": built from the member's id as the roster has
+    it, never the address typed, so a redirect only ever leads to a member's own page (and code scanning sees that)."""
+    m = archive.club.members.get(archive.club.canonical(who))
+    return f"/members/{quote(m.id if m else '', safe='')}/edit?tab={tab if tab in EDIT_TABS else 'details'}&"
+
+
 EDIT_TABS = {"details": "Details", "titles": "Titles", "callsign": "New callsign", "log": "Membership log"}
 
 
@@ -1775,10 +1782,10 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
     except (ValueError, SheetError, backup.BackupError) as e:
-        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?tab=callsign&error=" + quote(str(e))), status_code=303)
+        return RedirectResponse(_safe_next(_edit_url(who, "callsign") + "error=" + quote(str(e))), status_code=303)
     if admin_mode(request):
         _admin_log(request, callsign_change=f"{who} to {new}")
-    return RedirectResponse(_safe_next(f"/members/{quote(new, safe='')}/edit?tab=callsign&saved=1"), status_code=303)
+    return RedirectResponse(_safe_next(_edit_url(new, "callsign") + "saved=1"), status_code=303)
 
 
 @app.post("/members/{who}/log")
@@ -1789,8 +1796,8 @@ def member_log_event(request: Request, who: str, event: str = Form(""), date: st
     try:
         membership.add_event(archive.club, who, event, date, note, mid)
     except (ValueError, SheetError) as e:
-        return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?tab=log&error=" + quote(str(e))), status_code=303)
-    return RedirectResponse(_safe_next(f"/members/{quote(who, safe='')}/edit?tab=log&saved=1"), status_code=303)
+        return RedirectResponse(_safe_next(_edit_url(who, "log") + "error=" + quote(str(e))), status_code=303)
+    return RedirectResponse(_safe_next(_edit_url(who, "log") + "saved=1"), status_code=303)
 
 
 @app.get("/roster", response_class=HTMLResponse)
