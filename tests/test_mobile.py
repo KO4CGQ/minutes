@@ -273,3 +273,32 @@ def test_a_name_after_a_minutes_line_never_splits(engine):
         browser.close()
     assert not split, f"the name split at widths {split[:10]}"
     assert not wide, f"the long address made the page too wide at {wide[:10]}"
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_hovering_a_member_link_leaves_the_initials_alone(engine):
+    """A link with a member's initials circle (the Roster, Business, Home...) underlines its text on hover, never the
+    letters in the circle: the circle looks the same hovered or not."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    root = Path(__file__).parents[1] / "src/club_minutes"
+    css = (root / "static/style.css").read_text()
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader(root / "templates"))
+    env.globals.update(avatar_url=lambda mid: None, avatar_hue=lambda mid: 200, initials=lambda mid: "JD")
+    circle = env.from_string('{% from "_avatar.html" import avatar %}{{ avatar("n0jane", "sm") }}').render()
+    # a plain link (a table row would shade itself on hover, behind the circle's corners)
+    html = f'<style>{css}</style><p><a href="#" class="withavatar">{circle}Jane Doe</a></p>'
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page(device_scale_factor=2)
+        page.set_content(html)
+        before = page.locator(".avatar").screenshot()
+        page.hover("a")
+        page.wait_for_timeout(100)
+        hovered = page.locator(".avatar").screenshot()
+        underlined = page.evaluate("getComputedStyle(document.querySelector('a')).textDecorationColor")
+        browser.close()
+    assert underlined and before == hovered, "the link's hover underline shows inside the initials circle"
