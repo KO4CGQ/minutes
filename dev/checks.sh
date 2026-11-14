@@ -2,7 +2,7 @@
 # The checks GitHub runs on a pull request, here, before a push (docs/developers.md → Checks before a push):
 #   1. the tests (with ruff, shellcheck, zizmor and the browser tests), as tests.yml;
 #   2. pip-audit on the locked packages, as security.yml;
-#   3. gitleaks at the version security.yml pins, checked against its checksum, on this branch's history;
+#   3. gitleaks at the version security.yml pins, checked against its checksum, on every branch and tag (as GitHub);
 #   4. CodeQL with the security-extended queries, Python and JavaScript, as codeql.yml, on the committed files.
 # CodeQL findings already reviewed as false positives are in dev/codeql-accepted.txt; anything else fails.
 # Tools are kept in ~/.cache/club-minutes-checks (CodeQL: unpack GitHub's codeql-bundle-linux64 there, or set CODEQL).
@@ -25,7 +25,7 @@ uv export --frozen --no-emit-project -o "$req" >/dev/null
 uvx pip-audit -r "$req" --disable-pip --strict --progress-spinner off || fail=1
 rm -f "$req"
 
-step "gitleaks (this branch's history)"
+step "gitleaks (every branch and tag, as GitHub's scan reads them all)"
 v=$(sed -n 's/^ *GITLEAKS_VERSION: *//p' .github/workflows/security.yml | head -1)
 sum=$(sed -n 's/^ *GITLEAKS_SHA256: *//p' .github/workflows/security.yml | head -1)
 gl="$CACHE/gitleaks-$v"
@@ -34,7 +34,7 @@ if [ ! -x "$gl" ]; then
   echo "$sum  $CACHE/gitleaks.tgz" | sha256sum -c - >/dev/null
   tar xzf "$CACHE/gitleaks.tgz" -C "$CACHE" gitleaks && mv "$CACHE/gitleaks" "$gl" && rm "$CACHE/gitleaks.tgz"
 fi
-"$gl" git --redact --no-banner --log-opts=HEAD . || fail=1
+"$gl" git --redact --no-banner --log-opts=--all . || fail=1
 
 step "CodeQL (security-extended, the committed files)"
 codeql=${CODEQL:-$CACHE/codeql/codeql}
