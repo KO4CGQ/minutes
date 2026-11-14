@@ -1,9 +1,9 @@
 {# The minutes document itself; shared by the web view and the PDF. #}
 <article class="minutes">
   <header class="mh">
-    <img src="{{ brand(pdf=pdf) }}" alt="{{ club.info.callsign or 'Club' }} logo" class="{{ logo_class() }}">
+    <img src="{{ brand(pdf=pdf) }}" alt="{{ club.label }} logo" class="{{ logo_class() }}">
     <div>
-      <div class="club">{{ club.info.callsign }} · {{ club.info.name }}</div>
+      <div class="club">{{ [club.info.callsign, club.info.name]|select|join(' · ') or club.label }}</div>
       <h1>Meeting Minutes</h1>
       <div class="date">{{ m.date|longdate }}</div>
       {% if m.leader %}<div class="leader">{% if m.recorder == m.leader %}Led &amp; Recorded by {{ club.name(m.leader) }}{% else %}Led by {{ club.name(m.leader) }}{% if m.recorder %} · Recorded by {{ club.name(m.recorder) }}{% endif %}{% endif %}</div>{% endif %}

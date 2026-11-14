@@ -75,7 +75,7 @@ def ensure_meeting(club) -> None:
         at = club.meeting_time
         start = dt.datetime.fromisoformat(f"{first}T{at}")
         evs = load()
-        e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": "", "notes": "",
+        e = add(evs, "events", {"title": f"{club.label} meeting", "where": "", "notes": "",
                                 "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
                                 "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, "the app")
         e["meeting"] = True
@@ -117,7 +117,7 @@ def move_meeting(club, since: dt.date, where: str | None, online: str | None, by
             changed.append(moved)
         if not changed:  # no meeting on the calendar (deleted, or its dates ended): a new series
             start = at(nearest(since))
-            e = add(evs, "events", {"title": f"{club.info.get('callsign', 'Club')} meeting", "where": where or "", "online": online or "",
+            e = add(evs, "events", {"title": f"{club.label} meeting", "where": where or "", "online": online or "",
                                     "notes": "", "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
                                     "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, by)
             e["meeting"] = True

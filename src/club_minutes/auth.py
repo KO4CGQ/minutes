@@ -503,7 +503,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
 def _smtp_send(recipients, subject, body, attachments, reply_to, user, password) -> int:
     reply_to = reply_to or os.environ.get("CLUB_MINUTES_SMTP_REPLY_TO")
     host, port = os.environ.get("CLUB_MINUTES_SMTP_HOST", "smtp.gmail.com"), int(os.environ.get("CLUB_MINUTES_SMTP_PORT", "587"))
-    sender = Club().info.get("callsign") or "Club Minutes"  # the From name, unless CLUB_MINUTES_SMTP_FROM sets it all
+    sender = Club().label  # the From name, unless CLUB_MINUTES_SMTP_FROM sets it all
     with smtplib.SMTP(host, port, timeout=30) as s:
         s.starttls()
         s.login(user, password)

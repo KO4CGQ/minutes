@@ -443,7 +443,7 @@ def list_changed(s: dict, today: dt.date | None = None) -> bool:
 def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: str, url: str, link_to: list[str] = ()) -> int:
     """Send the chow list (the PDF to `to`, a link to `link_to`, as each chose on their Email tab) and remember what was
     sent, so the Chow page can tell when it has changed."""
-    callsign = club.info.get("callsign") or "Club"
+    callsign = club.label
     rest = (f"Can't make your night? Ask someone to swap on the chow page: {url}/chow\n\nTo change or stop getting the "
             f"chow list: {url}/profile/email\n\n73,\n{branding.name(club)}")
     sent = auth.send_email(to, f"{callsign} chow list", f"The chow list as of {show_date(dt.date.today(), 'document')} is attached: "

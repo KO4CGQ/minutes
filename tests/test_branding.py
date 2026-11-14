@@ -36,6 +36,8 @@ def test_the_name_comes_from_site_then_club_yaml_then_the_callsign(data):
     branding.set_name("", "n0aaaa")
     assert branding.name(c) == "Club Records"     # empty: back to the next one
     c.info.pop("app_name"), c.info.pop("callsign", None)
+    assert branding.name(c) == "Test Club Minutes"  # no callsign: the club's name
+    c.info.pop("name", None)
     assert branding.name(c) == "Club Minutes"
 
 

@@ -332,6 +332,12 @@ class Club:
         ref = " ".join(str((self.bylaws.get("refs") or {}).get(rule) or "").split())[:20]
         return f" (bylaws {ref})" if ref else ""
 
+    @property
+    def label(self) -> str:
+        """What the club is called in subjects, titles and sign-offs: its callsign, else its name, else "Club"
+        (a new server before Site is filled in)."""
+        return " ".join(str(self.info.get("callsign") or self.info.get("name") or "Club").split())
+
     def has(self, module: str) -> bool:
         """Whether an optional part of the app is turned on in club.yaml (`modules:`)."""
         return self.modules.get(module, False)

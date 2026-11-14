@@ -100,3 +100,20 @@ def test_upgrade_steps_are_numbered_in_order():
     """Steps only ever get added at the end: 2, 3, 4…; the data version follows."""
     assert [v for v, _w, _s in upgrade.STEPS] == list(range(2, 2 + len(upgrade.STEPS)))
     assert upgrade.CURRENT == 1 + len(upgrade.STEPS)
+
+
+def test_the_minimal_club_yaml_starts_a_server(tmp_path):
+    """club.minimal.yaml (Getting started) is enough to start: the rest is on Site or has a default. Before Site is
+    filled in, the club is "Club" in subjects and titles, never a blank."""
+    import yaml
+    minimal = yaml.safe_load((ROOT / "club.minimal.yaml").read_text())
+    assert set(minimal) == {"club", "auth", "admins"} and set(minimal["club"]) == {"meeting_day", "meeting_time"}
+    c = Club(ROOT / "club.minimal.yaml", roster=[])
+    _ = (c.meeting_weekday, c.meeting_time, c.timezone, c.sections())
+    assert Auth(c, tmp_path / "auth.sqlite").rp_id and c.all_admins == {"n0call"}
+    assert c.label == "Club"
+    c.info.update(name="Example Radio Club")
+    assert c.label == "Example Radio Club"
+    c.info.update(callsign="W0CLUB")
+    assert c.label == "W0CLUB"
+    assert "club.minimal.yaml" in (ROOT / "docs" / "server-admin.md").read_text()

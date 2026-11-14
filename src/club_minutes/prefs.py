@@ -149,7 +149,7 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
             lines.append("Coming up this week:\n" + "\n".join(f"  - {e}" for e in events) + f"\n  The calendar: {url}/calendar")
         if latest:
             lines.append(f"Last meeting's minutes ({show_date(latest.date, 'long')}): {url}/meetings/{latest.slug}")
-        out.append((m.id, f"digest:{today}:{m.id}", f"{club.info.get('callsign') or 'Club'} meeting tonight",
+        out.append((m.id, f"digest:{today}:{m.id}", f"{club.label} meeting tonight",
                     f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nTo stop this email, or choose which others you get: {url}/profile/email\n\n{_sign(club)}"))
     return out
 

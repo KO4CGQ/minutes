@@ -410,7 +410,7 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
         return f"due {show_date(due, 'weekday')}" + (" (today)" if days == 0 else " (tomorrow)" if days == 1 else "")
     late = any(k == "overdue" for _, k in items)
     lines = "\n".join(f"- {x['text']}\n  {when(x, k)}" for x, k in items)
-    subject = f"{club.info.get('callsign') or 'Club'} club business: " + ("past due" if late else "coming due")
+    subject = f"{club.label} club business: " + ("past due" if late else "coming due")
     body = (f"Hi {m.first},\n\nA reminder about club business you're looking after:\n\n{lines}\n\n"
             f"If it's finished, mark it done (or change the date) here: {url}/business\n"
             f"Or just bring it up at the next meeting.\n\n"

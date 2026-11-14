@@ -11,15 +11,17 @@ curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh
 
 To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwise it keeps the server's own; the app uses that unless club.yaml names one). Then:
 
-1. **club.yaml:** copy `club.example.yaml` to `/etc/club-minutes/club.yaml` and fill in at least:
-    - the club's name and callsign, `meeting_day` and `meeting_time` (required: the app won't start without them)
+1. **club.yaml:** copy `club.minimal.yaml` to `/etc/club-minutes/club.yaml` and fill in its three things:
+    - `meeting_day` and `meeting_time` (the app won't start without them)
     - `auth: rp_id`: the HTTPS address members will use (passkeys only work there)
     - your own callsign under `admins:`
+
+    Everything else is set in the app (step 3) or has a default; `club.example.yaml` lists every setting, for what's only in club.yaml (the club's offices, who may add members, sign-in, email test mode).
 
     Then `systemctl restart club-minutes`.
 
 2. **You, the first member:** `club-minutes first-member YOURCALL --first First --last Last --email you@example.org --class General` starts the roster with you and prints a sign-in link. It runs once: with a roster in place it refuses, so it can't overwrite one.
-3. **Sign in** with that link and add a passkey when offered. Turn on admin mode (name menu → Admin), add the other members on the Roster page, put the officers in their offices on the **Offices** page (Roster → Offices; that makes them officers), and set the name, logo and colours on **Site**.
+3. **Sign in** with that link and add a passkey when offered. Turn on admin mode (name menu → Admin), add the other members on the Roster page, put the officers in their offices on the **Offices** page (Roster → Offices; that makes them officers), and set the club's name, callsign, logo and colours on **Site**.
 4. **Email** (sign-in links, the minutes): the SMTP settings in `/etc/club-minutes/env` (Sign-in and email, below). Until then, links are written to the server's log (`journalctl -u club-minutes`), and the pages say so.
 5. **Backups** (Admin → Backups), before anything is entered for real.
 

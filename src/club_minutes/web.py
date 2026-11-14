@@ -2288,7 +2288,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
-                default_name=f"{archive.club.info.get('callsign') or 'Club'} Minutes", upload_mb=limits.upload_mb(),
+                default_name=f"{archive.club.label} Minutes", upload_mb=limits.upload_mb(),
                 colours=(c := branding.colours()), colours_own=bool(branding._settings().get("theme")),
                 palette=theme.palette(**c), swatches=theme.from_logo(branding.path("logo")) if branding.custom() else [],
                 vars=lambda p: "; ".join(f"{k}: {v}" for k, v in p.items()))
@@ -2760,7 +2760,7 @@ def calendar_feed(token: str, show: str = ""):
     if kinds := [k for k in show.split(",") if k in calview.KINDS]:
         items = [e for e in items if e.kind in kinds]
     name = " & ".join(calview.KINDS[k] for k in kinds) if 0 < len(kinds) < 3 else "calendar"
-    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} {name}")
+    return _ics(items, f"{archive.club.label} {name}")
 
 
 @app.get("/calendar/public.ics")
@@ -2769,7 +2769,7 @@ def calendar_public_feed():
         raise HTTPException(404)
     today = dt.date.today()
     items, _ = calview.entries(archive.club, archive, None, today - dt.timedelta(days=31), today + dt.timedelta(days=365), public=True)
-    return _ics(items, f"{archive.club.info.get('callsign', 'Club')} events")
+    return _ics(items, f"{archive.club.label} events")
 
 
 def _club_tz() -> str:

@@ -30,7 +30,7 @@ Every change is listed in [CHANGELOG.md](CHANGELOG.md).
 On a Debian server or container (tested on Debian 13), as root:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/KO4CGQ/minutes/main/deploy/setup.sh | bash
-cp /opt/club-minutes/club.example.yaml /etc/club-minutes/club.yaml   # then fill it in and: systemctl restart club-minutes
+cp /opt/club-minutes/club.minimal.yaml /etc/club-minutes/club.yaml   # fill in its three things, then: systemctl restart club-minutes
 club-minutes first-member N0CALL --first Jane --last Doe --email jane@example.org --class General   # prints your sign-in link
 ```
 The [server admin guide](docs/server-admin.md#getting-started-a-new-club) walks through it: the HTTPS address, email, admin mode and backups.
