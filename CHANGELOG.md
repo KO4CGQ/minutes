@@ -5,6 +5,7 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Security:** turning on admin mode with a passkey needs it to check your PIN, fingerprint or face; a security key that's only tapped was accepted. Signing in still takes a tap, so older keys keep working; an emailed link still turns admin mode on too.
 - **Security:** the Email log, and the server's log when no SMTP is set up, show sign-in, new-email and admin-mode links with their one-time code hidden (`t=[hidden]`), so an admin reading the log can't open a member's link and be signed in as them. The emails themselves are unchanged.
 - **Security:** every admin address answers a member who isn't an admin with "Not Found", the same as an address that doesn't exist (the admin-mode, update and view-as pages said "You aren't listed as an admin", and four Security-page actions answered "missing field" before checking who was asking). Admins with admin mode off still get the confirmation page.
 

@@ -395,7 +395,8 @@ class Auth:
         v = verify_authentication_response(credential=credential, expected_challenge=ch["challenge"],
                                            expected_rp_id=self.rp_id, expected_origin=self.origins,
                                            credential_public_key=row["public_key"],
-                                           credential_current_sign_count=row["sign_count"])
+                                           credential_current_sign_count=row["sign_count"],
+                                           require_user_verification=kind == "step-up")  # admin mode: a PIN or biometric, not just a tap
         self.db.execute("update passkeys set sign_count=?, last_used=? where id=?",
                         (v.new_sign_count, int(time.time()), row["id"]))
         return row["member"]

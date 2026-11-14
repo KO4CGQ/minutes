@@ -79,7 +79,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 **Removing a test meeting:** `club-minutes delete-meeting 2026-12-31`, then `systemctl restart club-minutes`.
 
 ## 🛡️ Admin mode
-Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged.
+Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged. Turning it on asks you to confirm it's you: with a passkey that checks your PIN, fingerprint or face (a security key that only takes a tap isn't enough here, though it still signs you in), or with a link emailed to you.
 
 - **Who's an admin:** callsigns under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins, and the last admin can't be removed.
 - Admins in club.yaml can only be removed there, so whoever has the server can always get back in.

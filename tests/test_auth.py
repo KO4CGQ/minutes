@@ -291,3 +291,49 @@ def test_no_passkey_offer_on_a_browser_that_has_one(tmp_path, monkeypatch):
     req = Request({"type": "http", "headers": [(b"cookie", b"pk_here=n0aaaa.a-b")], "method": "GET", "path": "/"})
     r = web.passkey_here(req, Response(), "n0bbbb")
     assert "pk_here=n0aaaa.n0bbbb;" in r.headers["set-cookie"] and "Max-Age=31536000" in r.headers["set-cookie"]
+
+
+class _SoftPasskey:
+    """A software passkey for tests: signs WebAuthn assertions with chosen flags (UP 0x01, UV 0x04)."""
+
+    def __init__(self, a, member):
+        import cbor2
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.key, self.id = ec.generate_private_key(ec.SECP256R1()), "c29mdC1wYXNza2V5LTE"  # base64url of "soft-passkey-1"
+        n = self.key.public_key().public_numbers()
+        cose = cbor2.dumps({1: 2, 3: -7, -1: 1, -2: n.x.to_bytes(32, "big"), -3: n.y.to_bytes(32, "big")})
+        a.db.execute("insert into passkeys (id, member, public_key, sign_count, created) values (?,?,?,0,0)", (self.id, member, cose))
+        self.a, self.count = a, 0
+
+    def assertion(self, options_json: str, flags: int) -> dict:
+        import base64
+        import hashlib
+        import json as js
+        import struct
+
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+        self.count += 1
+        client = js.dumps({"type": "webauthn.get", "challenge": js.loads(options_json)["challenge"],
+                           "origin": self.a.origins[0]}).encode()
+        auth = hashlib.sha256(self.a.rp_id.encode()).digest() + bytes([flags]) + struct.pack(">I", self.count)
+        sig = self.key.sign(auth + hashlib.sha256(client).digest(), ec.ECDSA(hashes.SHA256()))
+        return {"id": self.id, "rawId": self.id, "type": "public-key",
+                "response": {"clientDataJSON": b64(client), "authenticatorData": b64(auth), "signature": b64(sig)}}
+
+
+def test_admin_step_up_needs_user_verification_but_sign_in_doesnt(tmp_path):
+    """FIXES → a: turning on admin mode with a passkey needs user verification (a PIN, fingerprint or face), not just a
+    tap; ordinary sign-in still takes a tap alone, so older security keys keep working."""
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN"}])
+    a = Auth(club, tmp_path / "auth.sqlite")
+    a.rp_id, a.origins = "club.example.org", ["https://club.example.org"]
+    key = _SoftPasskey(a, "n0admn")
+    cid, opts = a.step_up_options("n0admn")
+    with pytest.raises(Exception, match="(?i)verif"):
+        a.authenticate(cid, key.assertion(opts, 0x01), kind="step-up", member="n0admn")   # tapped, not verified
+    cid, opts = a.step_up_options("n0admn")
+    assert a.authenticate(cid, key.assertion(opts, 0x05), kind="step-up", member="n0admn") == "n0admn"  # verified
+    cid, opts = a.authentication_options()
+    assert a.authenticate(cid, key.assertion(opts, 0x01)) == "n0admn"                    # sign-in: a tap is enough
