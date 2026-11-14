@@ -126,7 +126,42 @@ Then `systemctl restart fail2ban` and check it with `fail2ban-client status sshd
 
 1. SSH with keys only: `PasswordAuthentication no` in `/etc/ssh/sshd_config`.
 2. Automatic security updates, with restarts: `apt install unattended-upgrades needrestart`, then `dpkg-reconfigure -plow unattended-upgrades`. In `/etc/needrestart/conf.d/50-auto.conf` put `$nrconf{restart} = 'a';` (and, in a container, `$nrconf{kernelhints} = 0;`), or needrestart only lists what needs restarting.
-3. A firewall that allows only SSH and the app's port.
+3. **Close the app's port to everyone but the server** (below).
+4. A firewall that otherwise allows only SSH (and, without Tailscale, the proxy's 80 and 443).
+
+**Closing the app's port.** The app listens on port 8000 on every network, in plain HTTP: anyone on your LAN could use it there, around the HTTPS proxy, and a stolen sign-in would work over it. Only the proxy on the same server (Tailscale serve, Caddy…) and the roster API's callers (a Discord bot's container) need it. With nftables (`apt install nftables`), save this as `/etc/club-minutes-firewall.nft` (one `accept` line per caller, or none):
+
+```
+table inet club_minutes
+delete table inet club_minutes
+table inet club_minutes {
+  chain input {
+    type filter hook input priority filter; policy accept;
+    tcp dport 8000 iif "lo" accept
+    tcp dport 8000 ip saddr 192.168.1.50 accept
+    tcp dport 8000 counter drop
+  }
+}
+```
+
+Load it at boot with a small unit, `/etc/systemd/system/club-minutes-firewall.service`:
+
+```ini
+[Unit]
+Description=Close the minutes app's port
+Before=club-minutes.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/sbin/nft -f /etc/club-minutes-firewall.nft
+ExecStop=/usr/sbin/nft delete table inet club_minutes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then `systemctl daemon-reload && systemctl enable --now club-minutes-firewall`. Check from another machine on the LAN: `curl -m 5 http://SERVER:8000/login` should time out, while the app's https address still works. Don't use Debian's own `/etc/nftables.conf` for this: it starts with `flush ruleset`, which also removes Tailscale's rules. A Proxmox firewall rule on the container does the same job from outside.
 
 ## 🧪 Staging server (optional)
 A second container that runs the app on a copy of the live data, to try a change before it's released. It pulls the live data **one way** (nightly at 03:00 server time, and **Sync now**); nothing on it can change the live server.
@@ -165,7 +200,7 @@ For the club's other tools on the same server (the Discord bot): `GET /api/roste
 
 - Off until `CLUB_MINUTES_ROSTER_API_TOKEN=...` (a long random string) is in `/etc/club-minutes/env`.
 - Then it answers only `Authorization: Bearer <token>` requests from the server itself or an address in `CLUB_MINUTES_ROSTER_API_ALLOW` (comma-separated; the bot's container), never through the web proxy. E.g. from the bot's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`.
-- Give the bot's container a fixed IP, and ideally limit port 8000 to it with the Proxmox firewall. Every call, allowed or not, is logged.
+- Give the bot's container a fixed IP, and close port 8000 to everyone else (Security → Closing the app's port). Every call, allowed or not, is logged.
 
 ## 📜 Bylaws
 The Bylaws page shows the club's constitution and bylaws from `bylaws.md` in the data folder (`/var/lib/club-minutes/bylaws.md`). It's kept out of the public repo.
