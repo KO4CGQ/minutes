@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import ai, business
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
+from club_minutes import ai, business
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True},
-          {"id": "amy", "first": "Amy", "last": "Able", "callsign": "KD8AMY"}]
+          {"id": "amy", "first": "Amy", "last": "Appleseed", "callsign": "N0AMYA"}]
 
 
 class Reply:
@@ -27,7 +27,7 @@ class Reply:
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(ai, "DATA", tmp_path)
-    monkeypatch.setenv("W8LBZ_OPENROUTER_KEY", "test-key")
+    monkeypatch.setenv("CLUB_MINUTES_OPENROUTER_KEY", "test-key")
     club = Club(FIX / "test-club.yaml", roster=PEOPLE)
     club.ai = {"model": "test/model"}
     club.redact = ["secretname"]
@@ -54,7 +54,7 @@ def test_followups_sent_and_checked(env):
     found = ai.suggest_followups(club, m, [{"id": "x1", "text": "Club patches", "owner": None, "due": None}], post=post)
     prompt = sent["messages"][1]["content"]
     assert "Secret Name" not in prompt and "Amy will call the park" in prompt and "x1 | Club patches" in prompt
-    assert "amy: Amy Able (KD8AMY)" in prompt and sent["model"] == "test/model"
+    assert "amy: Amy Appleseed (N0AMYA)" in prompt and sent["model"] == "test/model"
     assert found == [{"kind": "new", "item": None, "text": "Call the park about Field Day", "owner": "amy",
                       "due": "2026-12-01", "why": "Amy will call"},
                      {"kind": "new", "item": None, "text": "Order a new feedline", "owner": None, "due": None, "why": ""}]
@@ -68,7 +68,7 @@ def test_not_configured_or_failing(env, monkeypatch):
         ai.suggest_followups(club, m, [], post=lambda *a, **k: Reply("oops", 500))
     with pytest.raises(ai.AIError):
         ai.suggest_followups(club, m, [], post=lambda *a, **k: Reply("not json"))
-    monkeypatch.delenv("W8LBZ_OPENROUTER_KEY")
+    monkeypatch.delenv("CLUB_MINUTES_OPENROUTER_KEY")
     assert not ai.configured(club)
 
 
@@ -93,8 +93,9 @@ def test_suggestions_wait_for_a_person(tmp_path, monkeypatch):
 
 def test_business_page_suggestions_for_leaders_only(env, monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.store import Archive
+
+    from club_minutes import web
+    from club_minutes.store import Archive
     club, m, _ = env
     meetings = tmp_path / "meetings"
     m.save(meetings)
@@ -119,8 +120,8 @@ def test_business_page_suggestions_for_leaders_only(env, monkeypatch, tmp_path):
 
 
 def test_ask_about_prompts(env, monkeypatch, tmp_path):
-    from w8lbz_minutes import console
-    from w8lbz_minutes.store import Archive
+    from club_minutes import console
+    from club_minutes.store import Archive
     club, _, _ = env
     sent = {}
 

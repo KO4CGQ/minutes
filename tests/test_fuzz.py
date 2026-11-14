@@ -13,17 +13,17 @@ import pytest
 from fastapi.testclient import TestClient
 from test_calview import signed_in
 
-from w8lbz_minutes import roster, web
-from w8lbz_minutes.auth import _safe_next
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive, spellings
+from club_minutes import roster, web
+from club_minutes.auth import _safe_next
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive, spellings
 
 R = random.Random(20261109)
 NASTY = ['"', "'", "*", "^", ":", "(", ")", "-", "+", "\\", "/", "//", "/\\", "%", "%2F", "%00", "\x00", "\t", "\n", "\r",
          "\x7f", "<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "javascript:alert(1)", "NEAR", "AND", "OR",
          "NOT", "NEAR(a b, 2)", "{col}", "docs:", "text:", "slug:", "é", "ß", "İ", "🙂", "\U0001f468\u200d\U0001f469\u200d\U0001f467", "\u202e", "\ufeff",
          "a" * 300, "x" * 3, " ", "=1+1", "@SUM(1)", "${7*7}", "{{7*7}}", "../../etc/passwd", "https://evil.example",
-         "Bob", "bob", "Baker", "Extra", "net"]
+         "Bob", "bob", "Bloggs", "Extra", "net"]
 
 
 def junk(n: int = 8) -> str:
@@ -45,8 +45,8 @@ def member(tmp_path, monkeypatch):
     root = tmp_path / "meetings"
     Meeting(date=__import__("datetime").date(2026, 10, 1), status="published",
             sections={"Community Reports": [Item("Bobby Bakker passed his Extra exam <b>tonight</b>")]}).save(root)
-    m, club, a = signed_in(tmp_path, monkeypatch, "kd8aaa")
-    club.members["kd8bbb"].aliases = ["Bobby", "Bakker", junk(), junk()]  # aliases are typed by roster keepers
+    m, club, a = signed_in(tmp_path, monkeypatch, "n0aaaa")
+    club.members["n0bbbb"].aliases = ["Bobby", "Bakker", junk(), junk()]  # aliases are typed by roster keepers
     monkeypatch.setattr(web, "archive", Archive(root, club))
     return m, club, a
 
@@ -99,12 +99,12 @@ def test_roster_file_keeps_every_value_exactly(tmp_path, monkeypatch):
     monkeypatch.setattr(roster, "CACHE", tmp_path / "roster.json")
     monkeypatch.setattr(roster, "PREVIEW", None)
     header = ["callsign", "full_name", "email", "Phone", "Address", "aliases", "Title(s)"]
-    roster.LocalSheet(tmp_path / "roster-sheet.json").save({"Member Roster": [header, ["KD8AAA", "Amy Able", "", "", "", "", ""]],
+    roster.LocalSheet(tmp_path / "roster-sheet.json").save({"Member Roster": [header, ["N0AAAA", "Amy Appleseed", "", "", "", "", ""]],
                                                              "Membership Log": [["callsign", "full_name", "date", "event", "note"]]})
     sheet = roster.Sheet()
     for _ in range(300):
         new = {f: junk(6) for f in R.sample(["email", "phone", "address", "aliases", "title(s)"], 2)}
-        sheet.update_member("KD8AAA", "Amy Able", new)
+        sheet.update_member("N0AAAA", "Amy Appleseed", new)
         row = dict(zip([h.lower() for h in sheet.read()[0]], sheet.read()[1]))
         assert all(row[f] == v for f, v in new.items())  # as typed: "=1+1" stays text, nothing is parsed
     json.loads((tmp_path / "roster-sheet.json").read_text())  # still valid after every write
@@ -112,7 +112,7 @@ def test_roster_file_keeps_every_value_exactly(tmp_path, monkeypatch):
 
 
 def test_roster_api_never_answers_without_its_token(monkeypatch):
-    monkeypatch.setenv("W8LBZ_ROSTER_API_TOKEN", "s3cret-token-value")
+    monkeypatch.setenv("CLUB_MINUTES_ROSTER_API_TOKEN", "s3cret-token-value")
     c = TestClient(web.app, client=("127.0.0.1", 5000))
     for _ in range(300):
         h = {"authorization": R.choice(["", "Bearer ", "bearer ", "Basic "]) + R.choice(["s3cret-token-valu", "s3cret-token-value ", ascii_junk(), ""])}
@@ -150,6 +150,6 @@ def test_no_page_answers_random_parameters_with_a_server_error(member):
 
 def test_numbers_from_the_query_string():
     """Found by the page sweep: str.isdigit() accepts "²" and "⁰", which int() can't read (a server error)."""
-    from w8lbz_minutes.club import num
+    from club_minutes.club import num
     assert [num(v) for v in ("12", " 7 ", "²", "⁰", "٣", "-1", "1e3", "", None, "9" * 5000)] == [12, 7, None, None, None, None, None, None, None, None]
     assert web.paginate(list(range(30)), "²", "⁰")["p"] == 1 and web.paginate(list(range(30)), "2", "10")["rows"] == list(range(10, 20))

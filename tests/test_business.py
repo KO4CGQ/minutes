@@ -4,15 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import business, chow, console
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import business, chow, console
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True},
-          {"id": "amy", "first": "Amy", "last": "Able"},
-          {"id": "bob", "first": "Bob", "last": "Baker"}]
+          {"id": "amy", "first": "Amy", "last": "Appleseed"},
+          {"id": "bob", "first": "Bob", "last": "Bloggs"}]
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ def test_items_carry_until_done(env):
 
 
 def test_agenda_hold_and_deleted_meetings(env):
-    club, a = env
+    _club, a = env
     s = business.load()
     business.seed(s, a.meetings)
     sotc = business.add(s, "State of the Club (President)", "sec", agenda="2027-01-07", opened="2026-11-01")
@@ -76,8 +76,9 @@ def test_agenda_hold_and_deleted_meetings(env):
 
 def test_business_page_permissions(env, monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    club, a = env
+
+    from club_minutes import web
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "amy"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
@@ -101,7 +102,7 @@ def test_business_page_permissions(env, monkeypatch, tmp_path):
 
 
 def test_reminders_once_each_and_only_owners(env):
-    club, a = env
+    club, _a = env
     s = business.load()
     soon = business.add(s, "Book the park", "sec", owner="amy", due="2026-12-03")
     late = business.add(s, "Return the borrowed antenna", "sec", owner="amy", due="2026-11-20")
@@ -122,8 +123,9 @@ def test_reminders_once_each_and_only_owners(env):
 
 def test_comments_history_and_notes(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    club, a = env
+
+    from club_minutes import web
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "bob"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
@@ -160,24 +162,26 @@ def test_comments_history_and_notes(env, monkeypatch):
 
 def test_owner_typed_by_name(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    club, a = env
+
+    from club_minutes import web
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     monkeypatch.setattr(web.authn, "member_for", lambda token: "sec")
     c = TestClient(web.app)
     c.get("/business")
     iid = business.load()["items"][0]["id"]
-    for typed, want in (("Amy Able", "amy"), ("  bob  baker ", "bob"), ("", None)):
+    for typed, want in (("Amy Appleseed", "amy"), ("  bob  bloggs ", "bob"), ("", None)):
         c.post(f"/business/{iid}/edit", data={"owner": typed})
         assert business.get(business.load(), iid)["owner"] == want
     assert "No member called" in c.post(f"/business/{iid}/edit", data={"owner": "Nobody Here"}).text
-    c.post("/business/add", data={"text": "Book the pavilion", "owner": "Amy Able"})
+    c.post("/business/add", data={"text": "Book the pavilion", "owner": "Amy Appleseed"})
     assert business.load()["items"][-1]["owner"] == "amy"
 
 
 def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
+
+    from club_minutes import web
     club, a = env
     club.members["bob"].minutes_editor = True  # may lead a meeting, but isn't an officer
     monkeypatch.setattr(web, "archive", a)
@@ -198,23 +202,24 @@ def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch)
 def test_motions_are_records(env, monkeypatch):
     """A motion keeps its mover, seconder and result as data; its text is the minutes' line."""
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    club, a = env
+
+    from club_minutes import web
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "amy"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
     c = TestClient(web.app)
-    form = {"mover": "Amy Able", "seconder": "Bob Baker", "what": "to buy a new antenna.", "result": "Passed"}
+    form = {"mover": "Amy Appleseed", "seconder": "Bob Bloggs", "what": "to buy a new antenna.", "result": "Passed"}
     assert c.post("/business/motion", data={**form, "meeting": "2026-11-05"}).status_code == 403  # not leading
     who["id"] = "sec"
     console.start(a, dt.date(2026, 11, 5), "sec")
     r = c.post("/business/motion", data={**form, "meeting": "2026-11-05"}, headers={"Accept": "application/json"})
-    assert r.json()["new"][0]["text"] == "Motion: Amy Able moved to buy a new antenna, seconded by Bob Baker. Passed."
-    assert a.by_slug["2026-11-05"].items("New Business")[0].text.startswith("Motion: Amy Able")  # in the draft
+    assert r.json()["new"][0]["text"] == "Motion: Amy Appleseed moved to buy a new antenna, seconded by Bob Bloggs. Passed."
+    assert a.by_slug["2026-11-05"].items("New Business")[0].text.startswith("Motion: Amy Appleseed")  # in the draft
     x = business.motions(business.load())[0]
     assert x["motion"] == {"mover": "amy", "seconder": "bob", "what": "buy a new antenna", "result": "Passed"}
     # problems are refused, not stored
-    for bad in ({**form, "result": "Maybe"}, {**form, "seconder": "Amy Able"}, {**form, "mover": "Nobody Here"}):
+    for bad in ({**form, "result": "Maybe"}, {**form, "seconder": "Amy Appleseed"}, {**form, "mover": "Nobody Here"}):
         assert c.post("/business/motion", data={**bad, "meeting": "2026-11-05"},
                       headers={"Accept": "application/json"}).status_code == 409
     # a past motion, from old minutes: filed under its date, closed, so it never comes up in Old Business
@@ -233,7 +238,7 @@ def test_motions_are_records(env, monkeypatch):
     # a tabled motion's later result; a died motion drops its seconder
     c.post(f"/business/{old['id']}/motion", data={**form, "what": "open the books", "result": "Died for lack of a second"})
     old = business.get(business.load(), old["id"])
-    assert old["text"] == "Motion: Amy Able moved to open the books. The motion died for lack of a second."
+    assert old["text"] == "Motion: Amy Appleseed moved to open the books. The motion died for lack of a second."
     assert old["motion"]["seconder"] is None and "result" in old["history"][-1]["changes"]
     page = c.get("/business?tab=motions&result=Passed").text
     assert "buy a new antenna" in page and "open the books" not in page and "Record a past motion" in page
@@ -244,8 +249,9 @@ def test_motions_are_records(env, monkeypatch):
 
 def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    club, a = env
+
+    from club_minutes import web
+    _club, a = env
     monkeypatch.setattr(web, "archive", a)
     who = {"id": "sec"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
@@ -265,3 +271,20 @@ def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch
     who["id"] = "amy"
     r = c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}, follow_redirects=False)
     assert r.headers["location"] == "/" and business.get(business.load(), iid)["status"] == "done"
+
+
+def test_an_item_added_between_meetings_links_no_missing_meeting(monkeypatch):
+    """An item added on the Business page on a day with no meeting says "added <date>"; one from a meeting links to it."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web.archive, "by_slug", {"2026-11-05": object()})
+    s = business.load()
+    business.add(s, "Between meetings", "n0offc", opened="2026-11-10")
+    business.add(s, "At a meeting", "n0offc", opened="2026-11-05")
+    business.save(s)
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, web.authn.new_session(next(iter(web.archive.club.members))))
+    html = t.get("/business").text
+    assert 'href="/meetings/2026-11-10' not in html and "added" in html
+    assert 'href="/meetings/2026-11-05?from=business' in html

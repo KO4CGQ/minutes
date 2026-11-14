@@ -1,0 +1,17 @@
+[Unit]
+Description=Email members about business items coming due
+
+[Service]
+Type=oneshot
+User=minutes
+Group=minutes
+WorkingDirectory=/opt/club-minutes
+Environment=CLUB_MINUTES_CONFIG=/etc/club-minutes/club.yaml
+Environment=CLUB_MINUTES_DATA=/var/lib/club-minutes
+EnvironmentFile=-/etc/club-minutes/env
+ExecStart=/opt/club-minutes/.venv/bin/club-minutes reminders
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/club-minutes

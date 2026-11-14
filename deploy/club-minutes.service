@@ -1,0 +1,24 @@
+[Unit]
+Description=Club Minutes web app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=minutes
+Group=minutes
+WorkingDirectory=/opt/club-minutes
+Environment=CLUB_MINUTES_CONFIG=/etc/club-minutes/club.yaml
+Environment=CLUB_MINUTES_DATA=/var/lib/club-minutes
+Environment=CLUB_MINUTES_GOOGLE_KEY=/etc/club-minutes/google-service-account.json
+EnvironmentFile=-/etc/club-minutes/env
+ExecStart=/opt/club-minutes/.venv/bin/club-minutes serve --host 0.0.0.0 --port 8000
+Restart=on-failure
+# Hardening: the app only needs to write its data directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/club-minutes
+
+[Install]
+WantedBy=multi-user.target

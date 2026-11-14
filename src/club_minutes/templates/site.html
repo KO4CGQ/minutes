@@ -1,0 +1,316 @@
+{% extends "base.html" %}{% block title %}Site{% endblock %}{% block body %}
+<h1>Site</h1>
+{% macro origin(k) %}<span class="muted small">{{ 'Set here' if k in set_here or k in here_keys else 'From club.yaml' }}</span>{% endmacro %}
+<nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+{% if tab == 'club' %}
+<p class="muted">The club's name and callsign, and when it meets. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
+<form method="post" action="/admin/site/club" class="profile siteclub">
+<div class="card sitesec"><h2>The club</h2>
+<div class="fmtgrid">
+<label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ origin('name') }}
+<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9\/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
+<label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}"><span class="muted small">{{ 'Set here' if app_name() != default_name else 'From the callsign' }}</span>
+</div>
+<p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
+<div class="card sitesec"><h2>Meetings</h2>
+<div class="fmtgrid">
+<label for="c-day">Day</label><select id="c-day" name="meeting_day">{% for d in weekdays %}<option{{ ' selected' if d|lower == (club.info.meeting_day or '')|lower }}>{{ d }}</option>{% endfor %}</select>{{ origin('meeting_day') }}
+<label for="c-time">Starts at</label><input id="c-time" type="time" name="meeting_time" value="{{ club.meeting_time }}" required>{{ origin('meeting_time') }}
+<label for="c-tz">Time zone</label><input id="c-tz" name="timezone" list="zones" value="{{ club.timezone }}" required autocomplete="off" spellcheck="false">{{ origin('timezone') }}
+<label for="c-where">Where</label><input id="c-where" name="where" value="{{ meeting_where[0] }}" maxlength="200" placeholder="123 Main St, Anytown"><span class="muted small">On the calendar</span>
+<label for="c-online">Online link</label><input id="c-online" type="url" name="online" value="{{ meeting_where[1] }}" maxlength="500" placeholder="https://meet.example.com/abc"><span class="muted small">On the calendar</span>
+<input type="hidden" name="shown_where" value="{{ meeting_where[0] }}"><input type="hidden" name="shown_online" value="{{ meeting_where[1] }}">
+<label for="c-since">Starting</label><input id="c-since" type="date" name="since" value="{{ sample }}" min="{{ sample }}" required><span></span>
+</div>
+<datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
+<p class="hint">Every week on this day, as the weekly meeting on the Club events calendar. A new day, time, Where or online link changes the meeting there from the Starting date on; earlier dates stay as they were. Where and the online link show the next meeting's; only what you change here is applied, so a different place already planned for a later date stays. Where is the place; the online link (Zoom, Meet, Teams…) shows as a Join online button on the calendar and goes to phones' calendars too. One date (a holiday, a new place for a night) is changed on the calendar itself. Chow nights come from the chow schedule on the Chow page: the app says if any are on the old day.</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'agenda' %}
+<p class="muted">The meeting's sections, in order, as the leader console and the minutes show them, and two reminders. Each change is in the admin log. Changes here win over club.yaml on the server. Past minutes keep the sections they have.</p>
+<form method="post" action="/admin/site/agenda" class="profile siteagenda">
+<input type="hidden" name="rows" value="{{ agenda|length }}">
+<div class="card sitesec"><h2>Sections {{ origin('sections') }}</h2>
+<p class="hint">Tick the ones the meeting uses; the numbers set the order (lowest first). A hint is shown to the leader in the console under that section. Attendance always comes first.</p>
+<div class="agendagrid">
+<span class="muted small agh">Use</span><span class="muted small agh">Place</span><span class="muted small agh">Section</span><span class="muted small agh">Hint for the console</span>
+{% for r in agenda %}{% set i = loop.index0 %}
+{% if r.name %}<input type="checkbox" name="use{{ i }}" value="1" aria-label="Use {{ r.name }}"{{ ' checked' if r.use }}>{% else %}<span></span>{% endif %}
+<input name="pos{{ i }}" value="{{ loop.index if r.use or not r.name else '' }}" inputmode="decimal" size="3" aria-label="Place of {{ r.name or 'a new section' }}">
+{% if r.builtin %}<span>{{ r.name }}<input type="hidden" name="name{{ i }}" value="{{ r.name }}">{% if r.name == 'Upcoming Chow' %} <span class="muted small">(only while chow is on)</span>{% endif %}</span>
+{% else %}<input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="{{ 'A new section' if not r.name }}" aria-label="Section name">{% endif %}
+{% if r.name %}<input type="hidden" name="was{{ i }}" value="1">{% endif %}
+<input name="hint{{ i }}" value="{{ r.hint }}" maxlength="200" aria-label="Hint for {{ r.name or 'the new section' }}" placeholder="Hint for the console (optional)">
+{% endfor %}
+</div></div>
+<div class="card sitesec"><h2>Reminders</h2>
+<div class="fmtgrid">
+<label for="a-inv">Invite a guest to apply after</label><span><input id="a-inv" type="number" name="invite_after_visits" min="1" max="50" value="{{ club.info.get('invite_after_visits', 3) }}" required> visits</span>{{ origin('invite_after_visits') }}
+<label for="a-rem">Remind owners of business items</label><span><input id="a-rem" type="number" name="remind_days_before" min="0" max="60" value="{{ club.info.get('remind_days_before', 3) }}" required> days before the due date</span>{{ origin('remind_days_before') }}
+</div>
+<p class="hint">The leader console reminds the leader when a guest reaches that many visits; item owners get an email that many days before the due date (and once if it's overdue).</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'roles' %}
+<p class="muted">Roles say what a member may do in the app; most come from the offices a member holds. Below: the club's offices, from its bylaws, then each role, what it allows and who has it. Who holds each office is on the <a href="/offices">Offices</a> page (Roster → Offices). Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/offices" class="profile siteoffices">
+<input type="hidden" name="rows" value="{{ office_rows|length }}">
+<div class="card sitesec"><h2>Offices {{ origin('.offices') }}</h2>
+<p class="hint"><b>Officer</b>: its holders are officers (they lead meetings, edit the minutes and calendars, see the Treasurer pages). Untick it for a board seat that isn't an officer, like a trustee. Every office is on the board. An office someone holds can't be removed or renamed here; hand it over on the Offices page first.</p>
+<div class="officegrid">
+<span class="muted small agh">Office</span><span class="muted small agh">Officer</span><span class="muted small agh">Seats</span><span class="muted small agh">Adds<br>members</span>
+{% for r in office_rows %}{% set i = loop.index0 %}
+<input name="title{{ i }}" value="{{ r.title }}" maxlength="60" placeholder="{{ 'A new office' if not r.title }}" aria-label="Office"{{ ' readonly title="Held: hand it over on the Offices page to rename it"' if r.held }}>
+<input type="checkbox" name="officer{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }} is an officer's office"{{ ' checked' if r.officer }}>
+<input type="number" name="seats{{ i }}" value="{{ r.seats }}" min="1" max="20" aria-label="Seats for {{ r.title or 'the new office' }}">
+<input type="checkbox" name="keeper{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }}: adds members"{{ ' checked' if r.keeper }}>
+{% endfor %}
+</div>
+<p class="hint"><b>Adds members</b>: the holders can add members on the Roster page and change their details (usually the Secretary and the Treasurer). Admins, in admin mode, always can. Clear an office's name to remove it. Two empty rows are for new offices; Save, and two more appear. {{ origin('.roster_keepers') }}</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices, and who adds members?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+<div class="card sitesec" id="roles"><h2>Roles</h2>
+<p class="hint">What each role allows, and who has it. A member with several roles may do everything any of them allows. Admins, in admin mode, may do everything; they're added on <a href="/admin">Admin</a> → Security.</p>
+<form method="post" action="/admin/site/roles" class="profile">
+<div class="rolelist">{% for r in role_rows %}
+<section class="role"><h3>{{ r.name }}</h3>
+  {% if r.can %}<p class="small"><b>Allows:</b></p><ul class="small allows">{% for c in r.can %}<li>{{ c[:1]|upper ~ c[1:] }}</li>{% endfor %}</ul>
+  {% else %}<p class="small"><b>Allows:</b> nothing yet; it marks who is on the board.</p>{% endif %}
+  {% if r.picked %}<p class="small"><b>Who:</b> members picked here{{ ' (officers have it already)' if r.key == 'minutes_editor' else ' (officers and minutes editors have it already)' }}.</p>
+  <details class="multi"><summary data-none="Nobody">{% for i in r.who %}{{ club.name(i) }}{{ ', ' if not loop.last }}{% else %}Nobody{% endfor %}</summary><div class="multi-list">
+    {% if r.choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter members…" aria-label="Filter members" hidden>{% endif %}
+    <div class="multi-opts">{% for i in r.choices %}<label class="check"><input type="checkbox" name="{{ r.key }}" value="{{ i }}" data-label="{{ club.name(i) }}" {{ 'checked' if i in r.who }}> {{ club.name(i) }}</label>{% endfor %}</div>
+  </div></details>
+  {% else %}<p class="small"><b>Given by:</b> {{ r.how[:1]|lower ~ r.how[1:] }}{% if r.offices %} ({{ r.offices|join(', ') }}){% else %}: none at the moment{% endif %}.</p>
+  <p class="small"><b>Who:</b> {% for i in r.who %}<span class="chip"><a href="/members/{{ i }}">{{ club.name(i) }}</a></span> {% else %}<span class="muted">nobody</span>{% endfor %}</p>{% endif %}
+</section>{% endfor %}</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+</div>
+<div class="card sitesec"><h2>What each permission is</h2>
+<table class="permtable"><thead><tr><th>Permission</th><th>Roles that allow it</th></tr></thead><tbody>
+{% for label, names in perm_rows %}<tr><td>{{ label[:1]|upper ~ label[1:] }}</td><td>{{ (names + ['Admin'])|join(', ') }}</td></tr>{% endfor %}
+</tbody></table>
+</div>
+{% include "_multi.html" %}
+{% elif tab == 'privacy' %}
+<p class="muted">Names that are never recorded. Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/privacy" class="profile">
+<div class="card sitesec"><h2>Never recorded {{ origin('privacy.never_record') }}</h2>
+<p class="hint">One name a line: someone who asked not to be in the minutes (a guest, say). A guest with one of these names is left out each time the console saves, a line with one is left out of imported minutes, and the AI never sees one. Minutes already saved keep what they have: edit those by hand.</p>
+<textarea name="names" rows="6" maxlength="10000" aria-label="Names never recorded, one a line">{{ club.never_record|join('\n') }}</textarea>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if 'privacy.never_record' in here_keys %}<form method="post" action="/admin/site/privacy" data-confirm="Go back to club.yaml's list of names never recorded?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'features' %}
+<p class="muted">Parts of the app the club uses, and what anyone can see without signing in. Each change is in the admin log; changes here win over club.yaml on the server. Turning a part off keeps its data.</p>
+<form method="post" action="/admin/site/features" class="profile sitewide">
+<div class="card sitesec"><h2>Chow {{ origin('modules.chow') }}</h2>
+<label class="check"><input type="checkbox" name="chow" value="1"{{ ' checked' if module('chow') }}> <span><b>A chow rotation</b><br><span class="muted small">Members take turns bringing food to meetings: the Chow page, swaps, reminders, the console's Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.</span></span></label>
+</div>
+<div class="card sitesec"><h2>Public calendars {{ origin('club.public_calendars') }}</h2>
+<p class="hint">Anyone can see these at /calendar/public (and subscribe), signed in or not. Chow and birthdays are never public.</p>
+{% set pub = club.info.get('public_calendars') or [] %}
+{% for k, label in public_cals.items() %}<label class="check"><input type="checkbox" name="public_{{ k }}" value="1"{{ ' checked' if k in pub }}> {{ label }}</label>{% endfor %}
+</div>
+<div class="card sitesec"><h2>Holidays</h2>
+<div class="fmtgrid">
+<label for="f-hol">The country's</label><input id="f-hol" name="holidays" list="hol-regions" value="{{ regions.holidays.get(club.calendar.get('holidays') or '', '') }}" placeholder="None: type a country or state" autocomplete="off" spellcheck="false">{{ origin('calendar.holidays') }}
+</div>
+<datalist id="hol-regions">{% for code, about in regions.holidays.items() %}<option value="{{ about }}"></option>{% endfor %}</datalist>
+<p class="hint">Official holidays of a country, or of a state, region or nation in it: start typing (United States, Ohio, France, Bayern, Scotland…) and pick from the list; clear the box for none. They come from the python-holidays package, kept up to date with the app.</p>
+<h3>The club's own {{ origin('calendar.extra_holidays') }}</h3>
+{% set own = club.calendar.get('extra_holidays') or [] %}{% set MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'] %}
+{% set NTH = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th', -1: 'last'} %}{% set WD = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+<input type="hidden" name="hol_rows" value="{{ own|length + 10 }}">
+<div class="holrows">
+<div class="hrow head" aria-hidden="true"><span>Name</span><span>Month</span><span>Day</span><span>Days after</span><span></span></div>
+{% macro holrow(i, h) %}<div class="hrow">
+<input name="hol_name{{ i }}" value="{{ h.name or '' }}" maxlength="60" placeholder="Name" aria-label="Holiday name">
+<select name="hol_month{{ i }}" aria-label="Month">{% for m in MONTHS %}<option value="{{ loop.index }}"{{ ' selected' if h.month == loop.index }}>{{ m }}</option>{% endfor %}</select>
+<select name="hol_day{{ i }}" aria-label="Day"><optgroup label="A date">{% for d in range(1, 32) %}<option value="d{{ d }}"{{ ' selected' if h.day == d }}>{{ d }}</option>{% endfor %}</optgroup>
+{% for n, nl in NTH.items() %}<optgroup label="{{ nl|capitalize }} weekday">{% for w in WD %}<option value="w{{ loop.index0 }}:{{ n }}"{{ ' selected' if h.weekday == loop.index0 and h.nth == n }}>{{ nl }} {{ w }}</option>{% endfor %}</optgroup>{% endfor %}</select>
+<label class="after"><input name="hol_after{{ i }}" type="number" min="0" max="30" value="{{ h.after or 0 }}" aria-label="Days after"><span> days after</span></label>
+<label class="btn small ghost rm"><input type="checkbox" name="hol_rm{{ i }}" value="1" aria-label="Remove {{ h.name or 'this holiday' }} when saved"><span class="rm-do">Remove</span><span class="rm-undo">Undo</span></label>
+</div>{% endmacro %}
+{% for h in own %}{{ holrow(loop.index0, h) }}{% endfor %}
+{% for j in range(10) %}<input type="checkbox" class="more" id="more{{ j }}" aria-label="Add a holiday"><label for="more{{ j }}" class="btn small ghost add">+ Add a holiday</label>{{ holrow(own|length + j, {}) }}{% endfor %}
+</div>
+<p class="hint">Days the club keeps that aren't on the country's list, with or without a country above: a date (December 24) or a weekday (the last Friday of June). "Days after" moves it on: Black Friday is November, 4th Thursday, 1 day after. Remove takes one out when you save (Undo, before then, keeps it). All of them go on the Holidays calendar. A meeting night on a holiday still gets chow scheduled; an officer marks it No chow on the Chow page if the club skips it.</p>
+</div>
+<div class="card sitesec"><h2>Election days</h2>
+<div class="fmtgrid">
+<label for="f-ele">Election days</label><select id="f-ele" name="elections"><option value="">None</option>{% for code, about in regions.elections.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('elections') == code }}>{{ about }}</option>{% endfor %}</select>{{ origin('calendar.elections') }}
+</div>
+<p class="hint">On the Community calendar: the US general election (even years), or a state's own (primaries too). For a state that isn't listed, add its primaries as Community events.</p>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'bylaws' %}
+<p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/bylaws" class="profile sitewide">
+<div class="card sitesec"><h2>References {{ origin('bylaws.refs') }}</h2>
+<p class="hint">The section of the bylaws for each, like VII.B; shown as "(bylaws VII.B)". Leave one empty and the sentence reads without it.</p>
+<div class="fmtgrid">{% for k, label in refs.items() %}<label for="r-{{ k }}">{{ label }}</label><input id="r-{{ k }}" name="ref_{{ k }}" value="{{ (club.bylaws.get('refs') or {}).get(k) or '' }}" maxlength="20" size="8"><span></span>{% endfor %}</div>
+</div>
+<div class="card sitesec"><h2>Arrears note {{ origin('bylaws.arrears_note') }}</h2>
+<p class="hint">Added to the arrears email to the Treasurer and the Board: what happens next under the bylaws (who may suspend a member, and how).</p>
+<textarea name="arrears_note" rows="4" maxlength="1000" aria-label="Arrears note">{{ club.bylaws.get('arrears_note') or '' }}</textarea>
+</div>
+<div class="card sitesec sitecert"><h2>Certificate {{ origin('treasurer.certificate') }}</h2>
+{% set cert = club.certificate %}
+<label class="check"><input type="checkbox" name="cert_on" value="1"{{ ' checked' if cert }}> <span><b>Each member buys a certificate once</b><br><span class="muted small">Some clubs call it a bond. The Treasurer pages track who has bought it, and Home reminds those who haven't.</span></span></label>
+<div class="fmtgrid certfields">
+<label for="b-name">Its name</label><input id="b-name" name="cert_name" value="{{ cert.name if cert else '' }}" maxlength="80" placeholder="Certificate of Indebtedness"><span></span>
+<label for="b-short">A short word for sentences</label><input id="b-short" name="cert_short" value="{{ cert.short if cert else '' }}" maxlength="30" placeholder="certificate"><span class="muted small">"Has bought a bond"</span>
+<label for="b-note">A note for the Treasurer pages</label><textarea id="b-note" name="cert_note" rows="4" maxlength="500">{{ cert.note if cert else '' }}</textarea><span></span>
+</div>
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if here_keys|select('in', ['bylaws.refs', 'bylaws.arrears_note', 'treasurer.certificate'])|list %}<form method="post" action="/admin/site/bylaws" data-confirm="Go back to club.yaml's bylaws references, arrears note and certificate?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'dates' %}
+<p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
+{{ 'Set here.' if dates_here else 'From the server (club.yaml) until you save here.' }}</p>
+<form method="post" action="/admin/site/dates" class="profile sitedates">
+<div class="card sitesec" role="radiogroup" aria-labelledby="dates-h"><h2 id="dates-h">Dates read like</h2>
+{% for k, (label, f) in presets.items() %}<label class="check"><input type="radio" name="preset" value="{{ k }}"{{ ' checked' if preset == k }}> <span><b>{{ label }}</b><br><span class="muted small">{{ sample.strftime(f.list) }} · {{ sample.strftime('%A, ' + f.long) }}</span></span></label>{% endfor %}
+<label class="check"><input type="radio" name="preset" value="custom"{{ ' checked' if preset == 'custom' }}> <span><b>Your own formats</b><br><span class="muted small">Set below</span></span></label>
+</div>
+<fieldset class="card sitesec" data-own><h2>Your own formats</h2>
+<p class="hint">Codes: %b Nov · %B November · %-d 5 · %d 05 · %m 11 · %Y 2026 · %a Thu · %A Thursday</p>
+<div class="fmtgrid" data-codes='{{ codes|tojson }}'>{% for k, label in (('list', 'In lists and tables'), ('document', 'At the top of the minutes'), ('short', 'Without the year, short'), ('long', 'Without the year, long')) %}
+<label for="fmt-{{ k }}">{{ label }}</label><input id="fmt-{{ k }}" name="{{ k }}" value="{{ fmts[k] }}" maxlength="40"><span class="muted small" aria-live="polite">Now: {{ sample.strftime(fmts[k]) }}</span>{% endfor %}</div>
+</fieldset>
+<script nonce="{{ csp_nonce }}">
+// Own formats: each field's example follows what's typed, from the server's text for each code (so it matches Save).
+(() => {
+  const g = document.querySelector(".fmtgrid"), codes = JSON.parse(g.dataset.codes);
+  g.addEventListener("input", (e) => {
+    e.target.nextElementSibling.textContent = "Preview: " + e.target.value.replace(/%(-?[A-Za-z]|%)/g, (c) => codes[c] ?? c);
+  });
+})();
+</script>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if dates_here %}<form method="post" action="/admin/site/dates" data-confirm="Go back to how club.yaml on the server writes dates?"><input type="hidden" name="preset" value="yaml"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% else %}
+<p class="muted">The club's pictures and colours. Each change is in the admin log. The app's name is on the Club tab.</p>
+
+<details class="card sitesec" open><summary><h2>Pictures</h2></summary>
+<p class="muted small">PNG (best: it can have a see-through background), JPEG or WebP, up to {{ upload_mb }} MB. A new picture shows here first; nothing changes on the site until you press Save. Each saved picture is redrawn as a fresh one, so nothing else in the file is kept. The icons are made from the logo unless you upload one of their own.</p>
+{% set USE = {"logo": "The top bar, the sign-in page, the minutes and their PDF" ~ (", the chow list." if module('chow') else "."),
+              "favicon": "The browser tab and bookmarks. Small: a simple, square picture reads best.",
+              "icon": "A phone's home screen, when the app is added to it. Shown on white."} %}
+{% set FROM = {"own": "The club's own", "logo": "Made from the logo", "plain": "The plain one that comes with the app"} %}
+<div class="sitepics">
+{% for kind, label in pictures.items() %}{% set src = source(kind) %}
+<div class="sitepic">
+  {% if kind == "logo" %}<div class="thumbs"><div class="thumb onlight"><img src="{{ brand() }}" alt="The logo on a light page" class="{{ logo_class() }}"></div>
+    <div class="thumb ondark"><img src="{{ brand() }}" alt="The logo in dark mode" class="{{ logo_class() }}"></div></div>
+  {% else %}<div class="thumb {{ kind }}"><img src="{{ brand(kind) }}" alt="{{ label }}, now"></div>{% endif %}
+  <div class="about"><b>{{ label }}</b> <span class="unsaved" hidden>Not saved yet: this is a preview</span><br><span class="muted small">{{ USE[kind] }}</span><br><span class="small">Now: {{ FROM[src] }}</span>
+  {% if kind == "logo" %}<form method="post" action="/admin/site/backing" class="backing" data-preview data-auto="{{ backing_auto }}"><label class="small">Behind it, so it shows in dark mode:
+    <select name="backing">{% for v, t in backings.items() %}<option value="{{ v }}" {{ 'selected' if v == backing_choice }}>{{ t }}{% if v == 'auto' %} ({{ backings[backing_auto]|lower }}){% endif %}</option>{% endfor %}</select></label>
+    <span class="pend"><button class="btn small" data-save>Save</button> <button type="button" class="btn small ghost" data-cancel>Cancel</button></span></form>{% endif %}</div>
+  <div class="acts">
+    <form method="post" action="/admin/site/picture/{{ kind }}" enctype="multipart/form-data" data-preview>
+      <label class="btn small ghost pick">Choose…<input type="file" name="file" accept="image/png,image/jpeg,image/webp" aria-label="Choose a new {{ label }}"></label>
+      <span class="pend"><button class="btn small" data-save>Save</button> <button type="button" class="btn small ghost" data-cancel>Cancel</button></span>
+    </form>
+    {% if src == "own" %}<form method="post" action="/admin/site/picture/{{ kind }}/reset" data-confirm="{{ 'Remove the club logo and go back to the plain one?' if kind == 'logo' else 'Go back to the icon made from the logo (or the plain one)?' }}">
+      <button class="btn small ghost">Reset</button></form>{% endif %}
+  </div>
+</div>
+{% endfor %}
+</div>
+
+</details>
+<details class="card sitesec" id="colours" open><summary><h2>Colours</h2></summary>
+<p class="muted small">One main colour sets the buttons, links, top bar and the minutes' section headings, in light and dark mode. Each shade is checked so text stays readable. Now: {{ "the club's own" if colours_own else "the app's own blue" }}.</p>
+<form method="post" action="/admin/site/colours" class="colours" data-colours>
+  <div class="row"><label>Main colour <input type="color" name="main" value="{{ colours.main }}"></label>
+    {% if swatches %}<span class="small swatches">From the logo: {% for c in swatches %}<button type="button" class="swatch" data-colour="{{ c }}" style="background: {{ c }}" title="{{ c }}" aria-label="Use {{ c }}"></button>{% endfor %}</span>{% endif %}</div>
+  <div class="row"><label class="check"><input type="checkbox" name="own_bar" value="1" {{ 'checked' if colours.bar }}> A different top bar colour</label>
+    <input type="color" name="bar" value="{{ colours.bar or palette[0]['--nav-bg'] }}" aria-label="Top bar colour" {{ '' if colours.bar else 'disabled' }}></div>
+  <div class="themeprev">{% for mode, p in (("Light", palette[0]), ("Dark", palette[1])) %}
+    <div class="tp" data-mode="{{ mode|lower }}" style="{{ vars(p) }}" aria-label="{{ mode }} mode, as it would look"><div class="tp-bar">{{ app_name() }}</div>
+      <div class="tp-body"><span class="tp-link">A link</span> <span class="tp-btn">Button</span><div class="tp-h">Old Business</div><span class="tp-muted">{{ mode }} mode</span></div></div>{% endfor %}</div>
+  <p class="small" data-notes>{{ palette[2]|join(' ') }}</p>
+  <p><span class="unsaved" hidden>Not saved yet: this is a preview</span> <button class="btn">Save</button> <button type="button" class="btn ghost" data-cancel>Cancel</button></p>
+</form>
+{% if colours_own %}<form method="post" action="/admin/site/colours/reset" data-confirm="Go back to the app's own blue?"><button class="btn small ghost">Back to the default</button></form>{% endif %}
+</details>
+<script nonce="{{ csp_nonce }}">
+// Colours: each change asks the server for the palette (as it will be saved, readability fixes included) and shows it
+// in the two previews; nothing changes on the site until Save. Cancel puts the saved colours back.
+(() => {
+  const f = document.querySelector("form[data-colours]"), main = f.elements.main, bar = f.elements.bar, own = f.elements.own_bar;
+  const previews = [...f.querySelectorAll(".tp")], notes = f.querySelector("[data-notes]"), unsaved = f.querySelector(".unsaved");
+  const was = { main: main.value, bar: bar.value, own: own.checked, styles: previews.map((p) => p.getAttribute("style")), notes: notes.textContent };
+  let timer;
+  const show = async () => {
+    bar.disabled = !own.checked;
+    const q = new URLSearchParams({ main: main.value, bar: own.checked ? bar.value : "" });
+    const r = await fetch("/admin/site/colours/preview?" + q, { headers: { Accept: "application/json" } });
+    if (!r.ok) return;
+    const d = await r.json();
+    previews.forEach((p) => Object.entries(d[p.dataset.mode]).forEach(([k, v]) => p.style.setProperty(k, v)));
+    notes.textContent = d.notes.join(" ");
+    unsaved.hidden = false;
+  };
+  f.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(show, 150); });
+  f.querySelectorAll(".swatch").forEach((b) => b.addEventListener("click", () => { main.value = b.dataset.colour; show(); }));
+  f.querySelector("[data-cancel]").addEventListener("click", () => {
+    main.value = was.main; bar.value = was.bar; own.checked = was.own; bar.disabled = !own.checked;
+    previews.forEach((p, i) => p.setAttribute("style", was.styles[i])); notes.textContent = was.notes; unsaved.hidden = true;
+  });
+})();
+</script>
+<script nonce="{{ csp_nonce }}">
+// Preview, then Save: a chosen picture (or a new "behind it") shows in its card first; Cancel puts it back.
+// The chosen file is read as a data: address (the security policy allows those, not blob: ones).
+document.querySelectorAll("form[data-preview]").forEach((f) => {
+  const card = f.closest(".sitepic"), imgs = [...card.querySelectorAll(".thumb img")];
+  const was = imgs.map((i) => [i.src, i.className]);
+  const pending = (on) => { f.classList.toggle("pending", on); card.querySelector(".unsaved").hidden = !card.querySelector("form.pending"); };
+  f.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.type === "file" && t.files[0]) {
+      const r = new FileReader();
+      r.onload = () => {
+        imgs.forEach((i) => { i.src = r.result; }); pending(true);
+        // the logo with "behind it" on Automatic: guess as the server will (branding.auto_backing): a JPEG has its own
+        // background; a see-through one about as wide as tall gets the circle, any other shape the rounded square
+        const auto = card.querySelector("select[name=backing]");
+        if (!auto || auto.value !== "auto") return;
+        const probe = new Image();
+        probe.onload = () => {
+          const ratio = probe.naturalWidth / probe.naturalHeight;
+          const v = t.files[0].type === "image/jpeg" ? "none" : ratio >= 0.85 && ratio <= 1.18 ? "circle" : "square";
+          imgs.forEach((i) => { i.className = "logo bg-" + v; });
+        };
+        probe.src = r.result;
+      };
+      r.readAsDataURL(t.files[0]);
+    } else if (t.name === "backing") {
+      const v = t.value === "auto" ? f.dataset.auto : t.value;
+      imgs.forEach((i) => { i.className = "logo bg-" + v; }); pending(true);
+    }
+  });
+  f.querySelector("[data-cancel]").addEventListener("click", () => {
+    f.reset(); imgs.forEach((i, n) => { [i.src, i.className] = was[n]; }); pending(false);
+  });
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -5,17 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from w8lbz_minutes import treasurer
-from w8lbz_minutes.club import Club
-from w8lbz_minutes.meeting import Item, Meeting
-from w8lbz_minutes.store import Archive
+from club_minutes import treasurer
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [
-    {"id": "amy", "first": "Amy", "last": "Able", "member_since": "2020-03-05", "email": "amy@example.org"},
-    {"id": "bob", "first": "Bob", "last": "Baker", "member_since": "2026-11-12"},  # joined after tracking began
+    {"id": "amy", "first": "Amy", "last": "Appleseed", "member_since": "2020-03-05", "email": "amy@example.org"},
+    {"id": "bob", "first": "Bob", "last": "Bloggs", "member_since": "2026-11-12"},  # joined after tracking began
     {"id": "old", "first": "Old", "last": "Timer", "status": "Silent Key"},
-    {"id": "tre", "first": "Tess", "last": "Teller", "role": "Treasurer", "officer": True, "board": True,
+    {"id": "tre", "first": "Tess", "last": "Taxpayer", "role": "Treasurer", "officer": True, "board": True,
      "member_since": "2019-01-03", "email": "tre@example.org"},
     {"id": "pres", "first": "Pat", "last": "Prez", "role": "President", "officer": True, "board": True, "email": "pres@example.org"},
 ]
@@ -151,9 +151,14 @@ def test_arrears_alert_once_each_time_and_never_in_preview(club, monkeypatch):
     today = dt.date(2026, 12, 3)
     assert treasurer.arrears_alert(club, s, today) is None  # preview: no emails
     s["settings"]["mode"] = "on"
-    to, subject, body = treasurer.arrears_alert(club, s, today)
-    assert to == ["pres@example.org", "tre@example.org"] and "Amy Able" in body and "certified mail" in body
+    to, _subject, body = treasurer.arrears_alert(club, s, today)
+    assert to == ["pres@example.org", "tre@example.org"] and "Amy Appleseed" in body and "behind on dues:" in body
+    assert "bylaws" not in body and "The app never suspends" in body  # no club rules unless club.yaml gives them
     assert treasurer.arrears_alert(club, s, today) is None  # once
+    s["alerted"] = {}
+    club.bylaws = {"refs": {"arrears": "IX.Z"}, "arrears_note": "Only the Board suspends,\n after a hearing."}
+    body = treasurer.arrears_alert(club, s, today)[2]
+    assert "behind on dues (bylaws IX.Z):" in body and "Only the Board suspends, after a hearing.\n" in body
     treasurer.record(club, s, "tre", "dues", "100", "2026-12-03", "Cash", "amy")
     treasurer.arrears_alert(club, s, today)
     assert "amy" not in s["alerted"]  # caught up: a later slip alerts again
@@ -161,8 +166,9 @@ def test_arrears_alert_once_each_time_and_never_in_preview(club, monkeypatch):
 
 def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -179,29 +185,34 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
     assert pres.post("/treasurer/settings", data=on).status_code == 403
     assert tre.post("/treasurer/settings", data=on, follow_redirects=False).status_code == 303
     assert "Preview:" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text  # members don't see a preview
-    form = {"kind": "dues", "amount": "7", "date": "2026-11-12", "account": "Cash", "member": "Amy Able"}
+    form = {"kind": "dues", "amount": "7", "date": "2026-11-12", "account": "Cash", "member": "Amy Appleseed"}
     assert pres.post("/treasurer/record", data=form).status_code == 403
     assert tre.post("/treasurer/record", data=form, follow_redirects=False).status_code == 303
     assert treasurer.load()["entries"][0]["member"] == "amy"
-    assert "Record</button>" not in pres.get("/treasurer?tab=money").text and "Amy Able" in pres.get("/treasurer?tab=money").text
+    assert "Record</button>" not in pres.get("/treasurer?tab=money").text and "Amy Appleseed" in pres.get("/treasurer?tab=money").text
     assert tre.post("/treasurer/settings/rate", data={"kind": "dues_weekly", "start": "2027-01-07", "amount": "4"}).status_code == 200
     assert tre.post("/treasurer/settings/account", data={"name": "Emergency Fund"}).status_code == 200
     assert "Emergency Fund" in tre.get("/treasurer?tab=settings").text and "$4.00" in pres.get("/treasurer?tab=settings").text
+    assert "bylaws (" not in (pg := tre.get("/treasurer?tab=settings").text) and "(bylaws" not in pg  # no sections unless given
+    club.bylaws = {"refs": {"dues": "VII", "bills": "<b>IV.C</b>"}}
+    pg = tre.get("/treasurer?tab=settings").text + tre.get("/treasurer?tab=bills").text
+    assert "The club's amounts (bylaws VII)." in pg and "every month or year (bylaws &lt;b&gt;IV.C&lt;/b&gt;)" in pg  # escaped
     tre.post("/treasurer/settings", data={**on, "mode": "on"})
     assert "Your dues" in amy.get("/").text
 
 
 def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
     tre = TestClient(web.app)
     tre.cookies.set(web.COOKIE, a.new_session("tre"))
     tre.post("/treasurer/settings/account", data={"name": "Drinks Checking"})
-    tre.post("/treasurer/settings/fund", data={"name": "Drinks fund", "account": "Drinks Checking", "keepers": "Bob Baker"})
+    tre.post("/treasurer/settings/fund", data={"name": "Drinks fund", "account": "Drinks Checking", "keepers": "Bob Bloggs"})
     s = treasurer.load()
     assert treasurer.kept_accounts(club, s, "bob") == ["Drinks Checking"]
     bob = TestClient(web.app)
@@ -209,7 +220,7 @@ def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
     sale = {"kind": "income", "amount": "42", "date": "2026-11-12", "account": "Drinks Checking", "note": "can sales"}
     assert bob.post("/treasurer/record", data=sale, follow_redirects=False).status_code == 303
     assert bob.post("/treasurer/record", data={**sale, "account": "Checking"}).status_code == 403
-    assert bob.post("/treasurer/record", data={**sale, "kind": "dues", "member": "Amy Able"}).status_code == 403
+    assert bob.post("/treasurer/record", data={**sale, "kind": "dues", "member": "Amy Appleseed"}).status_code == 403
     assert bob.post("/treasurer/settings/account", data={"name": "Mine"}).status_code == 403
     with treasurer.locked():
         s = treasurer.load()
@@ -237,7 +248,7 @@ def test_categories_spending_by_month_and_the_console(club, tmp_path, monkeypatc
     nov = sp["months"][-1]
     assert nov["by"]["utilities"] == 9900 and nov["by"]["other"] == 1000 and nov["total"] == 10900
     assert sp["totals"]["insurance"] == 288400 and sp["total"] == 299300 and sp["top"] == 288400
-    from w8lbz_minutes import console
+    from club_minutes import console
     treasurer.save(s)
     Meeting(date=dt.date(2026, 11, 12), status="draft").save(tmp_path / "m")
     assert console.paid_since(Archive(tmp_path / "m", club), dt.date(2026, 11, 12)) == [
@@ -246,8 +257,9 @@ def test_categories_spending_by_month_and_the_console(club, tmp_path, monkeypatc
 
 def test_spending_page_members_once_on_officers_in_preview(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -269,7 +281,7 @@ def test_spending_page_members_once_on_officers_in_preview(club, tmp_path, monke
         s = treasurer.load()
         s["settings"]["mode"] = "on"
         treasurer.save(s)
-    assert "$81.00" in amy.get("/spending").text and "Amy Able" not in amy.get("/spending").text
+    assert "$81.00" in amy.get("/spending").text and "Amy Appleseed" not in amy.get("/spending").text
 
 
 def test_cost_per_member_follows_people_joining_and_leaving(club):
@@ -304,8 +316,9 @@ def test_a_bond_bought_years_ago_is_on_file_and_moves_no_money(club):
 
 def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -319,7 +332,32 @@ def test_who_owes_what_lists_who_owes_unless_asked_for_everyone(club, tmp_path, 
     owe, everyone = tre.get("/treasurer").text, tre.get("/treasurer?everyone=1").text
     table = lambda html: html.split("<tbody>")[1].split("</tbody>")[0]
     assert "Pat Prez" not in table(owe) and "Pat Prez" in table(everyone)
-    assert "everyday name for the Certificate of Indebtedness" in owe and "Thu" not in owe.split("Record a bond bought before")[1][:20]
+    assert "Each member buys one." in owe and "Thu" not in owe.split("Record a bond bought before")[1][:20]
+
+
+def test_without_a_certificate_in_club_yaml_nobody_owes_one(club, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    monkeypatch.setattr(treasurer.chow, "DATA", tmp_path)  # an empty chow schedule (Home reads it too)
+    with treasurer.locked():
+        s = started("on", "2026-01-01")
+        treasurer.save(s)
+    tre, amy = TestClient(web.app), TestClient(web.app)
+    tre.cookies.set(web.COOKIE, a.new_session("tre"))
+    amy.cookies.set(web.COOKIE, a.new_session("amy"))
+    pages = lambda: "".join(tre.get(f"/treasurer?tab={t}&everyone=1").text for t in ("standing", "money", "settings")) + amy.get("/").text
+    looks = lambda html: {"name": "Certificate of Indebtedness" in html, "record": "Record a bond" in html,
+                          "column": "<th>Bond</th>" in html, "years": "Years to buy the bond" in html, "note": "Each member buys one." in html,
+                          "kind": 'value="certificate"' in html}
+    assert all((on := looks(pages())).values()), on  # each check sees it while the club has one
+    club.certificate = None
+    assert not any((off := looks(pages())).values()), off
+    assert treasurer.standing(club, s, "amy", dt.date(2026, 3, 1))["certificate"]  # nothing to buy: never late
 
 
 def test_the_treasurer_manages_categories_and_colours_stay_put(club):
@@ -358,8 +396,9 @@ def test_bills_from_older_minutes_only_when_asked(club, tmp_path):
 
 def test_bill_tabs_names_and_the_read_only_dialog(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -398,8 +437,9 @@ def test_amounts_and_dates_that_are_typos_or_tricks(club):
 
 def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import web
-    from w8lbz_minutes.auth import Auth
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -410,9 +450,9 @@ def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, 
         e = treasurer.record(club, s, "tre", "dues", "7", "2026-11-12", "Cash", "amy")
         treasurer.save(s)
     before = treasurer.load()
-    every = {"kind": "dues", "amount": "5", "date": "2026-11-12", "account": "Cash", "member": "Amy Able", "key": "2026-11-05:abcdef12:0",
+    every = {"kind": "dues", "amount": "5", "date": "2026-11-12", "account": "Cash", "member": "Amy Appleseed", "key": "2026-11-05:abcdef12:0",
              "payee": "Gas", "every": "month", "mode": "on", "start": "2026-11-05", "name": "X", "label": "X", "note": "x",
-             "category": "other", "keepers": "Bob Baker"}
+             "category": "other", "keepers": "Bob Bloggs"}
     posts = [r.path.replace("{eid}", e["id"]).replace("{rid}", "x") for r in web.app.routes
              if r.path.startswith("/treasurer") and "POST" in getattr(r, "methods", ())]
     assert len(posts) >= 11
@@ -428,8 +468,9 @@ def test_nobody_but_the_treasurer_reaches_the_treasurer_actions(club, tmp_path, 
 
 def test_text_from_the_minutes_and_members_is_never_run_as_html(club, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
-    from w8lbz_minutes import business, web
-    from w8lbz_minutes.auth import Auth
+
+    from club_minutes import business, web
+    from club_minutes.auth import Auth
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)

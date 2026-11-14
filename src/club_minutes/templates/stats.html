@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% import "_pager.html" as pager %}{% block body %}
+<div class="headrow"><h1>Attendance</h1>
+<form class="filter"><label>Period <select name="period" data-autosubmit>
+  <option value="6m" {{ 'selected' if period == '6m' }}>Last 6 months</option>
+  <option value="12m" {{ 'selected' if period == '12m' }}>Last 12 months</option>
+  {% for y in years %}<option {{ 'selected' if y|string == period }}>{{ y }}</option>{% endfor %}
+  <option value="all" {{ 'selected' if period == 'all' }}>All time</option>
+</select></label><noscript><button class="btn small">Show</button></noscript></form></div>
+<p>{{ s.count }} meeting{{ 's' if s.count != 1 }} {{ label }}, averaging {{ '%.1f'|format(s.avg) }} people per meeting (members and guests).</p>
+{% set rows = s.rows|reverse|list %}{% if rows|length > 1 %}
+{% set top = rows|map(attribute='total')|max %}{% set step = 5 if top <= 30 else 10 %}{% set ymax = [((top + step - 1) // step) * step, step]|max %}
+<figure class="chart" role="img" aria-label="Attendance per meeting {{ label }}, oldest to newest, as stacked bars: in person, online and guests. The same numbers are in the Per meeting table.">
+  <div class="legend"><span><i class="k1"></i>In person</span><span><i class="k2"></i>Online</span><span><i class="k3"></i>Guests</span></div>
+  <div class="plot">
+    {% for t in range(0, ymax + 1, step) %}<div class="grid" style="bottom: {{ t / ymax * 100 }}%"><span>{{ t }}</span></div>{% endfor %}
+    <div class="bars">{% for r in rows %}<a class="bar" href="/meetings/{{ r.meeting.slug }}?from=stats" style="height: {{ r.total / ymax * 100 }}%"
+      title="{{ r.meeting.date|listdate }}: {{ r.in_person }} in person, {{ r.remote }} online, {{ r.guests }} guest{{ 's' if r.guests != 1 }} ({{ r.total }})">
+      {% for n, k in ((r.guests, 'k3'), (r.remote, 'k2'), (r.in_person, 'k1')) if n %}<i class="{{ k }}" style="flex-grow: {{ n }}"></i>{% endfor %}</a>{% endfor %}</div>
+  </div>
+  <figcaption><span>{{ rows[0].meeting.date|listdate }}</span><span>{{ rows[-1].meeting.date|listdate }}</span></figcaption>
+</figure>{% endif %}
+<div class="cols">
+<section><div class="headrow"><h2>Per meeting</h2>
+<form class="filter"><input type="hidden" name="period" value="{{ period }}">{{ pager.size(pg) }}</form></div>
+<table class="list"><thead><tr><th>Date</th><th class="n">In person</th><th class="n">Online</th><th class="n">Guests</th><th class="n">Total</th></tr></thead>
+<tbody>{% for r in pg.rows %}<tr><td data-sort="{{ r.meeting.slug }}"><a href="/meetings/{{ r.meeting.slug }}?from=stats">{{ r.meeting.date|listdate }}</a></td>
+<td class="n">{{ r.in_person }}</td><td class="n">{{ r.remote }}</td><td class="n">{{ r.guests }}</td><td class="n"><b>{{ r.total }}</b></td></tr>{% endfor %}</tbody></table>
+{{ pager.links(pg, request) }}
+</section>
+<section><h2>Per member</h2>
+<table class="list"><thead><tr><th>Member</th><th class="n">In person</th><th class="n">Online</th><th class="n">Rate</th><th>Last</th></tr></thead>
+<tbody>{% for r in s.members %}<tr><td><a href="/members/{{ r.id }}?from=stats">{{ r.name }}</a></td>
+<td class="n">{{ r.in_person }}</td><td class="n">{{ r.remote }}</td><td class="n">{{ '%.0f'|format(r.rate*100) }}%</td><td data-sort="{{ r.last }}">{{ r.last|listdate if r.last }}</td></tr>{% endfor %}</tbody></table>
+</section></div>
+{% endblock %}

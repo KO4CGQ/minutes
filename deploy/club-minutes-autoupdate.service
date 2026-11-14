@@ -1,0 +1,15 @@
+[Unit]
+Description=Install a newer Club Minutes release that needs no steps by hand, after a backup (if turned on on the Updates page)
+
+[Service]
+Type=oneshot
+User=minutes
+Group=minutes
+WorkingDirectory=/opt/club-minutes
+Environment=CLUB_MINUTES_CONFIG=/etc/club-minutes/club.yaml
+Environment=CLUB_MINUTES_DATA=/var/lib/club-minutes
+Environment=CLUB_MINUTES_GOOGLE_KEY=/etc/club-minutes/google-service-account.json
+# CLUB_MINUTES_BACKUP_PASSPHRASE for the backup first, and the SMTP settings to tell the admins
+EnvironmentFile=-/etc/club-minutes/env
+ExecStart=/opt/club-minutes/.venv/bin/club-minutes auto-update
+TimeoutStartSec=30min

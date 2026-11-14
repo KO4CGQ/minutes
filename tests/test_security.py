@@ -5,15 +5,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from w8lbz_minutes import business, chow, web
-from w8lbz_minutes.auth import Auth, _safe_next
-from w8lbz_minutes.club import Club
+from club_minutes import business, chow, web
+from club_minutes.auth import Auth, _safe_next
+from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
-PEOPLE = [{"id": "kd8aaa", "first": "Amy", "last": "Able", "email": "amy@example.org"},
-          {"id": "kd8bbb", "first": "Bob", "last": "Baker", "email": "bob@example.org"},
-          {"id": "kd8off", "first": "Ola", "last": "Officer", "officer": True, "email": "o@example.org"}]
-PUBLIC_GET = {"/login", "/favicon.ico", "/calendar/public", "/calendar/public.ics", "/calendar/feed/x.ics", "/api/roster", "/login/link",
+PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "email": "amy@example.org"},
+          {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"},
+          {"id": "n0offc", "first": "Ola", "last": "Officer", "officer": True, "email": "o@example.org"}]
+PUBLIC_GET = {"/login", "/favicon.ico", "/brand/theme.css", "/calendar/public", "/calendar/public.ics", "/calendar/feed/x.ics", "/api/roster", "/login/link",
               "/healthz"}
 
 
@@ -36,7 +36,7 @@ def routes():
     for r in web.app.routes:
         path = r.path
         for p in ("slug", "iid", "eid", "rid", "cid", "sid", "nid", "mid", "tab", "tid", "id", "key", "kind"):
-            path = path.replace("{%s}" % p, "x")
+            path = path.replace(f"{{{p}}}", "x")
         path = path.replace("{token}.ics", "x.ics")
         if "{" not in path and not path.startswith(("/static", "/docs", "/openapi")):
             for m in getattr(r, "methods", None) or ():
@@ -62,18 +62,18 @@ def test_a_signed_out_visitor_reaches_only_the_public_pages(app):
 @pytest.mark.parametrize("path", ["/console", "/roster/add", "/roster/changes", "/calendar/edit", "/calendar/import", "/calendar/changes",
                                   "/links/icons", "/treasurer", "/admin/updates", "/admin/security", "/admin/email", "/spending"])
 def test_officer_and_admin_pages_turn_members_away(app, path):
-    assert app("kd8aaa").get(path, follow_redirects=False).status_code in (403, 404)
+    assert app("n0aaaa").get(path, follow_redirects=False).status_code in (403, 404)
 
 
 def test_members_change_only_their_own_things(app):
     s = business.load()
-    x = business.add(s, "Bob's item", "kd8off", owner="kd8bbb")
-    c = business.comment(s, x["id"], "kd8bbb", "Bob's comment")
+    x = business.add(s, "Bob's item", "n0offc", owner="n0bbbb")
+    c = business.comment(s, x["id"], "n0bbbb", "Bob's comment")
     business.save(s)
     cs = chow.load()
-    cs["swaps"].append({"id": "sw1", "requester": "kd8off", "with": "kd8bbb", "mine": "2030-01-03", "theirs": "2030-01-10", "status": "pending"})
+    cs["swaps"].append({"id": "sw1", "requester": "n0offc", "with": "n0bbbb", "mine": "2030-01-03", "theirs": "2030-01-10", "status": "pending"})
     chow.save(cs)
-    amy = app("kd8aaa")
+    amy = app("n0aaaa")
     amy.post(f"/business/{x['id']}/edit", data={"text": "hijacked", "due": ""})
     amy.post(f"/business/{x['id']}/done", data={"done": "1"})
     amy.post(f"/business/{x['id']}/comments/{c['id']}/delete")
@@ -100,7 +100,7 @@ def test_unreadable_requests_are_a_400_not_a_crash(app):
 
 
 def test_the_original_pdf_is_only_served_for_a_real_meeting(app):
-    amy = app("kd8aaa")
+    amy = app("n0aaaa")
     for slug in ("..", ".", "%2e%2e"):
         assert amy.get(f"/meetings/{slug}/original.pdf", follow_redirects=False).status_code == 404
 
@@ -109,10 +109,12 @@ def test_a_slow_profile_save_doesnt_hold_up_everyone_else(app, monkeypatch):
     """Saving a profile writes the Google roster sheet, which can take seconds; other requests are answered meanwhile."""
     import asyncio
     import time
+
     import httpx
-    from w8lbz_minutes import profile
+
+    from club_minutes import profile
     monkeypatch.setattr(profile, "change", lambda *a, **k: time.sleep(2))  # the sheet, slow today
-    cookie = {web.COOKIE: web.authn.new_session("kd8aaa")}
+    cookie = {web.COOKIE: web.authn.new_session("n0aaaa")}
 
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=web.app), base_url="http://testserver", cookies=cookie) as c:
@@ -127,7 +129,7 @@ def test_a_slow_profile_save_doesnt_hold_up_everyone_else(app, monkeypatch):
 
 
 def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_path, monkeypatch):
-    from w8lbz_minutes import avatars, limits
+    from club_minutes import avatars, limits
     monkeypatch.setattr(limits, "DATA", tmp_path)
     assert limits.upload_mb() == limits.DEFAULT_MB
     with pytest.raises(ValueError):
@@ -135,12 +137,12 @@ def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_pat
     with pytest.raises(ValueError):
         limits.set_upload_mb(101)
     limits.set_upload_mb(1)
-    amy = app("kd8aaa")
+    amy = app("n0aaaa")
     big = b"x" * (limits.max_upload() + limits.FORM_ROOM + 1)
     r = amy.post("/profile/photo", files={"photo": ("p.jpg", big, "image/jpeg")})
     assert r.status_code == 413 and "1 MB at most" in r.text  # turned away before it's read
     with pytest.raises(ValueError, match="1 MB at most"):
-        avatars.save("kd8aaa", b"x" * (limits.max_upload() + 1))
+        avatars.save("n0aaaa", b"x" * (limits.max_upload() + 1))
     assert amy.post("/admin/security/limits", data={"upload_mb": "50"}).status_code in (403, 404)  # admins only
     assert limits.upload_mb() == 1
     (tmp_path / "limits.json").write_text("not json")  # a damaged file: the default, not a crash
@@ -148,14 +150,14 @@ def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_pat
 
 
 def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
-    from w8lbz_minutes import limits
+    from club_minutes import limits
     monkeypatch.setattr(limits, "DATA", tmp_path)
     club = Club(FIX / "test-club.yaml", roster=PEOPLE)
-    club.admins = {"kd8off"}
+    club.admins = {"n0offc"}
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
-    tok = a.new_session("kd8off")
+    tok = a.new_session("n0offc")
     t = TestClient(web.app)
     t.cookies.set(web.COOKIE, tok)
     assert t.post("/admin/security/limits", data={"upload_mb": "25"}).status_code == 403  # admin mode first
@@ -166,18 +168,19 @@ def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
 
 
 def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, monkeypatch):
-    """The sync (`w8lbz-minutes roster`, its own process) and the web app take the same roster lock, so neither writes over
+    """The sync (`club-minutes roster`, its own process) and the web app take the same roster lock, so neither writes over
     the other's roster.json."""
     import os
     import subprocess
     import sys
     import time
-    from w8lbz_minutes import club as clubmod
+
+    from club_minutes import club as clubmod
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     holder = subprocess.Popen(
-        [sys.executable, "-c", "import time; from w8lbz_minutes.club import roster_locked\n"
-                               "roster_locked(lambda: (print('held', flush=True), time.sleep(1.5)))()"],
-        env={**os.environ, "W8LBZ_DATA": str(tmp_path)}, stdout=subprocess.PIPE, text=True)
+        [sys.executable, "-c", ("import time; from club_minutes.club import roster_locked\n"
+                                "roster_locked(lambda: (print('held', flush=True), time.sleep(1.5)))()")],
+        env={**os.environ, "CLUB_MINUTES_DATA": str(tmp_path)}, stdout=subprocess.PIPE, text=True)
     assert holder.stdout.readline().strip() == "held"  # the "sync" has the lock
     t0 = time.monotonic()
     assert clubmod.roster_locked(lambda: clubmod.roster_locked(lambda: "nested ok")())() == "nested ok"  # waits; nesting is fine
@@ -189,8 +192,8 @@ def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, m
 def test_admin_address_members_tab_and_a_page_for_not_found(app, monkeypatch):
     """/admin goes to Security for an admin and is not found for a member; a browser gets a page, scripts get JSON."""
     import time as _t
-    web.archive.club.admins = {"kd8off"}
-    admin, member = app("kd8off"), app("kd8bbb")
+    web.archive.club.admins = {"n0offc"}
+    admin, member = app("n0offc"), app("n0bbbb")
     assert admin.get("/admin/", follow_redirects=False).headers["location"].startswith("/admin/confirm")  # admin mode first
     old = admin.get("/admin/security/backups?note=hi", follow_redirects=False)  # Backups' old address, in older emails
     assert old.status_code == 301 and old.headers["location"] == "/admin/backups?note=hi"
@@ -202,7 +205,370 @@ def test_admin_address_members_tab_and_a_page_for_not_found(app, monkeypatch):
     page_ = member.get("/no-such-page", headers={"Accept": "text/html"})
     assert page_.status_code == 404 and "Page not found" in page_.text
     assert member.get("/no-such-page", headers={"Accept": "application/json"}).json() == {"detail": "Not Found"}
-    web.authn.db.execute("insert into passkeys (id, member, public_key, sign_count, label, created) values ('pk1', 'kd8bbb', x'00', 0, 'phone', ?)",
+    web.authn.db.execute("insert into passkeys (id, member, public_key, sign_count, label, created) values ('pk1', 'n0bbbb', x'00', 0, 'phone', ?)",
                          (int(_t.time()),))
     got = web.authn.by_member()
-    assert got["kd8bbb"]["passkeys"] == 1 and got["kd8bbb"]["devices"] == 1 and "last" not in got["kd8bbb"]
+    assert got["n0bbbb"]["passkeys"] == 1 and got["n0bbbb"]["devices"] == 1 and "last" not in got["n0bbbb"]
+
+
+def test_admins_add_and_remove_admins_in_the_app(app, tmp_path, monkeypatch):
+    """Admin → Security → Admins: adding needs a fresh confirmation; club.yaml's stay; never the last admin; others are told."""
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    sent = []
+    monkeypatch.setattr(web.authmod, "send_email", lambda to, subject, body, **k: sent.append((to, subject)) or 1)
+    c = web.archive.club
+    c.admins = {"n0offc"}  # club.yaml's
+    admin, member = app("n0offc"), app("n0bbbb")
+    tok = admin.cookies.get(web.COOKIE)
+    assert member.post("/admin/security/admins/add", data={"member": "n0bbbb"}).status_code == 404  # not an admin
+    assert admin.post("/admin/security/admins/add", data={"member": "n0bbbb"}).status_code == 403  # admin mode first
+    web.authn.set_admin(tok, 50)  # an hour from confirming, so confirmed 10 minutes ago
+    r = admin.post("/admin/security/admins/add", data={"member": "n0bbbb"}, follow_redirects=False)
+    assert r.headers["location"] == "/admin/confirm?next=" + web.quote("/admin/security/admins?add=n0bbbb") and not c.app_admins
+    web.authn.set_admin(tok, 60)  # just confirmed
+    assert admin.post("/admin/security/admins/add", data={"member": "nobody"}).status_code == 400
+    page_ = admin.post("/admin/security/admins/add", data={"member": "n0bbbb"}).text
+    assert "Bob Bloggs is now an admin." in page_ and c.is_admin("n0bbbb") and c.app_admins == {"n0bbbb"}
+    assert sent == [(["bob@example.org"], "Bob Bloggs is now an admin")]  # not to whoever made the change
+    assert "Made Bob Bloggs an admin" in admin.get("/admin/security/admin").text
+    assert admin.post("/admin/security/admins/remove", data={"member": "n0offc"}).status_code == 400  # club.yaml's: on the server
+    assert "Bob Bloggs is no longer an admin." in admin.post("/admin/security/admins/remove", data={"member": "n0bbbb"}).text
+    assert not c.is_admin("n0bbbb") and sent[-1] == (["bob@example.org"], "Bob Bloggs is no longer an admin")
+    c.admins = set()  # only app admins now: the last one can't go
+    c.save_app_admins({"n0offc"})
+    assert admin.post("/admin/security/admins/remove", data={"member": "n0offc"}).status_code == 400 and c.is_admin("n0offc")
+
+
+@pytest.mark.parametrize("headers, ok", [
+    ({}, True),  # scripts and older browsers: the SameSite cookie still covers them
+    ({"Origin": "http://testserver", "Sec-Fetch-Site": "same-origin"}, True),
+    ({"Origin": "https://meet.example-tailnet.ts.net", "Sec-Fetch-Site": "same-site"}, False),  # a sibling host
+    ({"Origin": "https://evil.example"}, False),
+    ({"Origin": "null"}, False),
+    ({"Sec-Fetch-Site": "cross-site"}, False),
+])
+def test_changes_come_only_from_the_apps_own_pages(app, headers, ok):
+    r = app("n0bbbb").post("/profile/settings", data={}, headers=headers)
+    assert (r.status_code != 403) == ok and (("another site" in r.text) != ok)
+
+
+def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkeypatch):
+    """Admin → Site → Dates: a preset or own formats, used at once; a wrong one changes nothing; never other settings."""
+    import datetime as dt
+
+    from club_minutes import club as clubmod
+    from club_minutes.club import show_date
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c, d = web.archive.club, dt.date(2026, 11, 5)
+    c.save_app_admins({"n0offc"})  # (a save reloads the settings: an admin set by hand here wouldn't last)
+    admin, member = app("n0offc"), app("n0bbbb")
+    try:
+        assert member.get("/admin/site/dates").status_code == 404 and member.post("/admin/site/dates", data={"preset": "dayfirst"}).status_code == 404
+        assert "US: month first" in admin.get("/admin/site/dates").text and admin.get("/admin/site/nope").status_code == 404
+        assert "Saved" in admin.post("/admin/site/dates", data={"preset": "dayfirst"}).text and show_date(d) == "5 Nov 2026"
+        assert c.site_settings == {"club": {"date_formats": web.DATE_PRESETS["dayfirst"][1]}}
+        bad = admin.post("/admin/site/dates", data={"preset": "custom", "list": "", "document": "%B", "short": "%b", "long": "%B"})
+        assert "date_formats" in bad.text and show_date(d) == "5 Nov 2026"  # unchanged
+        assert "Dates: Day first" in admin.get("/admin/security/admin").text
+        admin.post("/admin/site/dates", data={"preset": "yaml"})
+        assert show_date(d) == "Nov 5, 2026" and c.site_settings == {}
+        with pytest.raises(ValueError):
+            c.save_site_settings({("auth", "rp_id"): "evil.example"})
+    finally:
+        clubmod.set_dates(None)
+
+
+def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app, tmp_path, monkeypatch):
+    """Admin → Site → Club: only what differs from club.yaml is kept; a wrong value changes nothing; a new meeting day
+    moves the calendar's weekly meeting from the Starting date on (earlier dates stay) and says which chow nights aren't moved."""
+    import datetime as dt
+    from urllib.parse import unquote
+
+    from club_minutes import club as clubmod
+    from club_minutes import events
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    admin, member = app("n0offc"), app("n0bbbb")
+    same = {"name": "Test Club", "callsign": "w0test", "meeting_day": "thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
+    try:
+        assert member.get("/admin/site/club").status_code == 404 and member.post("/admin/site/club", data=same).status_code == 404
+        assert admin.get("/admin/site/club").text.count("From club.yaml") == 5
+        admin.post("/admin/site/club", data=same)
+        assert c.site_settings == {}  # nothing differs: nothing kept
+        for bad, why in (({"callsign": "W0 <b>"}, "callsign"), ({"name": "  "}, "name"), ({"timezone": "Mars/Base"}, "time zone: &#39;mars/base&#39; isn"),
+                         ({"meeting_time": "25:99"}, "start time: &#39;25:99&#39;"), ({"meeting_day": "Caturday"}, "meeting day: &#39;caturday&#39;")):
+            r = admin.post("/admin/site/club", data={**same, **bad})
+            assert "msg err" in r.text and why in r.text.lower() and "club.yaml club" not in r.text and c.site_settings == {}, bad
+        c.save_site_settings({("club", "date_formats"): {"list": "%-d %b %Y"}})
+        (tmp_path / "x").mkdir(exist_ok=True)
+        (events.DATA / "events-meeting-added").unlink()
+        events.ensure_meeting(c)
+        from club_minutes import chow
+        monkeypatch.setattr(chow, "DATA", tmp_path)
+        nxt_thu = dt.date.today() + dt.timedelta(days=(3 - dt.date.today().weekday()) % 7 or 7)
+        chow.save({"nights": {nxt_thu.isoformat(): {"member": "n0aaaa", "status": "scheduled"}}})
+        today = dt.date.today()
+        assert "Starting: today" in admin.post("/admin/site/club", data={**same, "since": str(today - dt.timedelta(days=1))}).text
+        before = events.load()
+        assert "msg err" in admin.post("/admin/site/club", data={**same, "since": "soon"}).text and events.load() == before
+        since = nxt_thu + dt.timedelta(days=1)  # the Thursday chow night stays a meeting; the Tuesdays start after it
+        where, online = "Clubhouse, 123 Main St <b>", "https://meet.example.com/abc?pwd=x&y=1"
+        for bad in ("javascript:alert(1)", 'https://x.example.com/"><b>', "meet.example.com/abc"):
+            r = admin.post("/admin/site/club", data={**same, "meeting_day": "Tuesday", "since": str(since), "where": where, "online": bad})
+            assert "starts with https://" in r.text and events.load() == before and c.meeting_weekday == 3, bad
+        r = admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since),
+                                                 "where": where, "online": online}, follow_redirects=False)
+        loc = unquote(r.headers["location"])
+        assert "weekly meeting on the calendar changes from" in loc and "1 chow night is still on the old day" in loc
+        assert c.site_settings["club"] == {"date_formats": {"list": "%-d %b %Y"}, "name": "Test Radio Club", "meeting_day": "Tuesday"}
+        assert c.meeting_weekday == 1 and c.info["name"] == "Test Radio Club"
+        old, new = sorted((e for e in events.load() if e.get("meeting")), key=lambda e: e["start"])
+        assert not events.dates(old, since, since + dt.timedelta(days=60)) and nxt_thu in events.dates(old, today, since) and old.get("where", "") == ""
+        assert new["start"].startswith(str(since + dt.timedelta(days=(1 - since.weekday()) % 7))) and new["where"] == where and new["online"] == online
+        tab = admin.get("/admin/site/club").text
+        assert tab.count("Set here") == 2 and tab.count("From club.yaml") == 3  # name and day were changed
+        assert 'value=""' in tab.split('id="c-where"')[1][:80]  # the next meeting (still the old Thursday) has no Where yet
+        cal = admin.get(f"/calendar?start={since}").text
+        assert 'href="https://meet.example.com/abc?pwd=x&amp;y=1" rel="noopener">Join online' in cal and "123 Main St &lt;b&gt;" in cal
+        n = len(events.load())
+        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": "", "online": "",
+                                             "shown_where": "", "shown_online": ""})  # as the page sends it, untouched
+        assert len(events.load()) == n  # nothing new: the calendar's left alone
+        # from today on, a new time: the Thursdays before `since` and the Tuesdays already planned both change
+        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "meeting_time": "18:00",
+                                             "since": str(today), "where": "Library <b>", "online": online})
+        occ = sorted((events.occurrence(e, d) | {"d": d} for e in events.load() if e.get("meeting")
+                     for d in events.dates(e, today, today + dt.timedelta(days=60))), key=lambda o: o["d"])
+        assert occ and all(o["start"].endswith("T18:00") and o["where"] == "Library <b>" and o["online"] == online and o["d"].weekday() == 1 for o in occ), occ
+        assert len({o["d"] for o in occ}) == len(occ)  # each Tuesday once
+        # a place planned for later stays when only the time changes from today (Where and the link untouched on the page)
+        later = today + dt.timedelta(days=21)
+        new = {**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "meeting_time": "18:00", "online": online, "shown_online": online}
+        admin.post("/admin/site/club", data={**new, "since": str(later), "where": "Hall", "shown_where": "Library <b>"})
+        admin.post("/admin/site/club", data={**new, "meeting_time": "18:30", "since": str(today), "where": "Library <b>", "shown_where": "Library <b>"})
+        occ = sorted((events.occurrence(e, d) | {"d": d} for e in events.load() if e.get("meeting")
+                      for d in events.dates(e, today, today + dt.timedelta(days=60))), key=lambda o: o["d"])
+        assert [o["where"] for o in occ] == ["Library <b>" if o["d"] < later else "Hall" for o in occ] and "Hall" in [o["where"] for o in occ], occ
+        assert all(o["start"].endswith("T18:30") for o in occ) and len({o["d"] for o in occ}) == len(occ)
+        tab = admin.get("/admin/site/club").text
+        assert 'value="Library &lt;b&gt;"' in tab and 'value="https://meet.example.com/abc?pwd=x&amp;y=1"' in tab  # escaped
+        assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
+        admin.post("/admin/site/club", data={"back": "1"})
+        assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay
+    finally:
+        clubmod.set_dates(None)
+
+
+def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path, monkeypatch):
+    """Admin → Site → Agenda: tick, place and hint each section, add one, and the two reminders; only changes from
+    club.yaml are kept; a wrong one changes nothing."""
+    import pytest as _pytest
+
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    admin, member = app("n0offc"), app("n0bbbb")
+
+    def form(change=lambda rows: rows, **extra):
+        rows = change([dict(r) for r in web._agenda_rows(c)])
+        f = {"rows": str(len(rows)), "invite_after_visits": "3", "remind_days_before": "3"}
+        for i, r in enumerate(rows):
+            f |= {f"name{i}": r["name"], f"hint{i}": r["hint"], f"pos{i}": str(r.get("pos", i + 1))}
+            f |= {f"was{i}": "1"} if r.get("was", bool(r["name"])) else {}
+            f |= {f"use{i}": "1"} if r["use"] else {}
+        return f | extra
+
+    assert member.get("/admin/site/agenda").status_code == 404 and member.post("/admin/site/agenda", data=form()).status_code == 404
+    page_ = admin.get("/admin/site/agenda").text
+    assert "Old Business" in page_ and "Winners" in page_ and page_.count("From club.yaml") == 3
+    assert 'name="remind_days_before" min="0" max="60" value="3"' in page_ and 'name="invite_after_visits" min="1" max="50" value="3"' in page_
+    admin.post("/admin/site/agenda", data=form())
+    assert c.site_settings == {}  # nothing changed: nothing kept
+
+    def moved(rows):  # New Business before Old Business, a new section with a hint, Financial Report dropped
+        for r in rows:
+            r["pos"] = {"New Business": 3.5, "Financial Report": 1}.get(r["name"], rows.index(r) + 1)
+            r["use"] = r["use"] and r["name"] != "Financial Report"
+        rows[-1] |= {"name": "Net Report", "hint": "Who checked in", "was": False, "pos": 2}
+        return rows
+    assert "Saved" in admin.post("/admin/site/agenda", data=form(moved, invite_after_visits="5")).text
+    names = c.sections()
+    assert names.index("Net Report") < names.index("New Business") < names.index("Old Business") and "Financial Report" not in names
+    assert c.section_hints() == {"Net Report": "Who checked in"} and c.info["invite_after_visits"] == 5
+    assert set(c.site_settings["club"]) == {"invite_after_visits"} and "sections" in c.site_settings["meeting"]
+    before = c.site_settings
+    for bad, why in ((form(lambda r: r[:-1] + [{**r[-1], "name": "Old Business", "was": False}]), "isn&#39;t a usable section name"),
+                     (form(lambda r: r[:-1] + [{**r[-1], "name": "Attendance", "was": False}]), "isn&#39;t a usable section name"),
+                     (form(lambda r: [{**r[0], "pos": "first"}] + r[1:]), "isn&#39;t a number"),
+                     (form(lambda r: [{**x, "use": False} for x in r]), "at least one section"),
+                     (form(invite_after_visits="0"), "from 1 to 50"), (form(remind_days_before="soon"), "from 0 to 60")):
+        r = admin.post("/admin/site/agenda", data=bad)
+        assert "msg err" in r.text and why in r.text and c.site_settings == before, why
+    assert "Agenda: sections, invite after visits" in admin.get("/admin/security/admin").text
+    admin.post("/admin/site/agenda", data={"back": "1"})
+    assert c.site_settings == {} and "Financial Report" in c.sections() and c.info.get("invite_after_visits") is None
+    with _pytest.raises(ValueError, match="invite_after_visits"):
+        c._configure({"club": {"invite_after_visits": "three"}})  # club.yaml's too: stops the app at start
+    c._configure(c.yaml)
+
+
+def test_site_features_and_bylaws_tabs(app, tmp_path, monkeypatch):
+    """Admin → Site → Features and Bylaws: unchanged keeps nothing; turning off what club.yaml turns on wins over it;
+    a wrong one changes nothing; Back to club.yaml undoes them."""
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    admin, member = app("n0offc"), app("n0bbbb")
+    feats = {"chow": "1", "holidays": "us", "elections": "us-oh"}  # as the test club.yaml has them
+    cert = {"cert_on": "1", "cert_name": "Bond (Certificate of Indebtedness)", "cert_short": "bond", "cert_note": "Each member buys one."}
+    for tab, data in (("features", feats), ("bylaws", cert)):
+        assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data=data).status_code == 404
+        assert "From club.yaml" in admin.get(f"/admin/site/{tab}").text
+        admin.post(f"/admin/site/{tab}", data=data)
+        assert c.site_settings == {}, tab  # unchanged: nothing kept
+    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1", "public_chow": "1"})
+    assert not c.has("chow") and not c.calendar.get("holidays") and c.calendar["elections"] == "us-oh"
+    assert c.info["public_calendars"] == ["events"]  # never chow, even if sent
+    assert c.site_settings == {"modules": {"chow": False}, "calendar": {"holidays": ""}, "club": {"public_calendars": ["events"]}}
+    before = c.site_settings
+    assert "Pick a region" in admin.post("/admin/site/features", data={"holidays": "zz"}).text and c.site_settings == before
+    import datetime as dt
+
+    from club_minutes import chow
+    rows = lambda *hs: {"hol_rows": str(len(hs) + 1)} | {f"hol_{k}{i}": v for i, h in enumerate(hs) for k, v in h.items()}
+    eve = {"name": "Christmas  Eve", "month": "12", "day": "d24", "after": "0"}
+    black = {"name": "Black Friday", "month": "11", "day": "w3:4", "after": "1"}  # the day after the 4th Thursday
+    admin.post("/admin/site/features", data={"holidays": "Germany: Bayern", "elections": "us-oh", "public_events": "1"} | rows(eve, black))
+    assert c.calendar["holidays"] == "de-by" and "Germany: Bayern" in admin.get("/admin/site/features").text  # a name, kept as its code
+    assert c.calendar["extra_holidays"] == [{"name": "Christmas Eve", "month": 12, "day": 24, "after": 0},
+                                            {"name": "Black Friday", "month": 11, "weekday": 3, "nth": 4, "after": 1}]
+    assert chow.holiday(c, dt.date(2026, 12, 24)) == "Christmas Eve" and chow.holiday(c, dt.date(2026, 12, 26)) == "Second Day of Christmas"
+    assert chow.holiday(c, dt.date(2024, 11, 29)) == "Black Friday" and chow.holiday(c, dt.date(2024, 11, 22)) is None  # not the 4th Friday
+    tab = admin.get("/admin/site/features").text
+    assert 'value="w3:4" selected' in tab and 'value="d24" selected' in tab
+    c.save_site_settings({k: None for k in web.FEATURE_KEYS if k != ("calendar", "extra_holidays")})
+    assert "Back to club.yaml" in admin.get("/admin/site/features").text  # its own holidays alone are something to go back from
+    for bad in ({**eve, "day": "x"}, {**eve, "month": "13"}, {**eve, "day": "d30", "month": "2"}, {**black, "day": "w3:5"}):
+        r = admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh"} | rows(bad))
+        assert "The club&#39;s own holidays" in r.text and len(c.calendar["extra_holidays"]) == 2, bad
+    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows({**eve, "name": ""}, black))
+    assert [h["name"] for h in c.calendar["extra_holidays"]] == ["Black Friday"]  # an emptied name removes it
+    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows(black, eve) | {"hol_rm0": "1"})
+    assert [h["name"] for h in c.calendar["extra_holidays"]] == ["Christmas Eve"]  # Remove ticked: gone on save
+    assert "holiday" in __import__("club_minutes.calview", fromlist=["x"]).kinds(c)  # its own holidays alone are enough for the calendar
+    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"})
+    before = c.site_settings
+    admin.post("/admin/site/bylaws", data={"ref_dues": "VII", "ref_arrears": "<b>VII.B</b>", "arrears_note": "Only the  Board\nmay suspend."})
+    assert c.certificate is None and c.cite("dues") == " (bylaws VII)" and c.bylaws["arrears_note"] == "Only the Board may suspend."
+    assert "&lt;b&gt;VII.B&lt;/b&gt;" in admin.get("/admin/site/bylaws").text
+    assert "Give the certificate" in admin.post("/admin/site/bylaws", data={"cert_on": "1", "cert_name": " "}).text and c.certificate is None
+    assert "Features: chow, public calendars, holidays" in admin.get("/admin/security/admin").text
+    for tab in ("features", "bylaws"):
+        admin.post(f"/admin/site/{tab}", data={"back": "1"})
+    assert c.site_settings == {} and c.has("chow") and c.certificate["short"] == "bond" and c.cite("dues") == ""
+
+
+def test_a_renamed_setting_keeps_working_and_admins_are_told(app, monkeypatch, tmp_path):
+    """docs/developers.md → Compatibility: an old club.yaml name is read as the new one until 2.0, with a line on Admin."""
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "RENAMED", {("club", "old_invite"): ("club", "invite_after_visits")})
+    y = tmp_path / "club.yaml"
+    y.write_text((Path(__file__).parent / "fixtures" / "test-club.yaml").read_text().replace("club: {", "club: {old_invite: 7, ", 1))
+    c = clubmod.Club(y)
+    assert c.info["invite_after_visits"] == 7 and "old_invite" not in c.info
+    assert len(c.renamed) == 1 and "is now called club: invite_after_visits:" in c.renamed[0]
+    monkeypatch.setattr(web.archive.club, "renamed", c.renamed)
+    web.archive.club.admins = {"n0offc"}
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    assert "works until version 2.0" in app("n0offc").get("/admin").text
+
+
+def test_site_offices_and_privacy_tabs(app, tmp_path, monkeypatch):
+    """Admin → Site → Roles, its offices table: the club's offices (officer or board seat, seats) and whose holders add members, over
+    club.yaml's; unchanged keeps nothing; an office someone holds can't be removed or renamed. Privacy: names never
+    recorded. Members get nothing."""
+    from club_minutes import club as clubmod
+    from club_minutes import offices
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    c.members["n0offc"].role = "Secretary"
+    admin, member = app("n0offc"), app("n0bbbb")
+    for tab in ("roles", "privacy"):
+        assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data={"back": "1"}).status_code == 404
+    page_ = admin.get("/admin/site/roles").text
+    assert 'value="President"' in page_ and 'value="Secretary" maxlength="60" placeholder="" aria-label="Office" readonly' in page_
+    rows = lambda *rs: {"rows": str(len(rs))} | {f"{k}{i}": v for i, r in enumerate(rs) for k, v in r.items()}
+    four = [{"title": t, "officer": "1", "seats": "1", **({"keeper": "1"} if t in ("Secretary", "Treasurer") else {})}
+            for t in ("President", "Vice President", "Secretary", "Treasurer")]
+    admin.post("/admin/site/offices", data=rows(*four))
+    assert c.site_settings == {}  # as club.yaml (the defaults): nothing kept
+    trustee = {"title": "  Trustee ", "seats": "3"}  # no officer tick: a board seat
+    admin.post("/admin/site/offices", data=rows(*four, trustee))
+    assert offices.offices(c)[-1] == {"title": "Trustee", "officer": False, "seats": 3} and "roster_keepers" not in c.site_settings[""]
+    for bad, msg in (([*four, {"title": "president", "officer": "1", "seats": "1"}], "listed twice"),
+                     ([*four, {"title": "Webmaster", "seats": "0"}], "1 to 20"),
+                     ([o for o in four if o["title"] != "Secretary"], "Secretary is held"),
+                     ([{**o, "title": "Clerk"} if o["title"] == "Secretary" else o for o in four], "Secretary is held"),
+                     ([{k: v for k, v in o.items() if k != "keeper"} for o in four], "at least one office")):
+        before = c.site_settings
+        r = admin.post("/admin/site/offices", data=rows(*bad))
+        assert msg in r.text and c.site_settings == before, msg
+    admin.post("/admin/site/offices", data=rows(*[{k: v for k, v in o.items() if k != "keeper" or o["title"] == "Secretary"} for o in four]))
+    assert c.roster_keepers == ["secretary"] and c.keeps_roster("n0offc")  # the Treasurer no longer adds members
+    assert "Offices: who adds members" in admin.get("/admin/security/admin").text
+    admin.post("/admin/site/offices", data={"back": "1"})
+    assert c.site_settings == {} and len(offices.offices(c)) == 4
+    admin.post("/admin/site/privacy", data={"names": "Jane  Roe\n\nJohn Q Public\nJane Roe"})
+    assert c.never_record == ["Jane Roe", "John Q Public"] and c.is_redacted("Thanks to Jane Roe for the coffee")
+    assert "Jane Roe\nJohn Q Public</textarea>" in admin.get("/admin/site/privacy").text
+    admin.post("/admin/site/privacy", data={"back": "1"})
+    assert c.never_record == ["Tiny Visitor"] and not c.is_redacted("Thanks to Jane Roe")  # club.yaml's own list again
+
+
+def test_site_roles(app, tmp_path, monkeypatch):
+    """Admin → Site → Roles: each role, what it allows and who has it; the hand-given roles (Minutes editor, Calendar
+    editor) saved in roles.json and used at once, unknown ids dropped, logged. Members get nothing. Every check goes
+    through Club.may, so a role's permissions are the only way in."""
+    import json
+    import os
+    from pathlib import Path
+
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    admin, member = app("n0offc"), app("n0bbbb")
+    assert member.get("/admin/site/roles").status_code == 404
+    assert member.post("/admin/site/roles", data={"minutes_editor": "n0bbbb"}).status_code == 404 and not c.members["n0bbbb"].minutes_editor
+    page_ = admin.get("/admin/site/roles").text
+    assert "<h3>Minutes editor</h3>" in page_ and 'name="calendar_editor" value="n0bbbb"' in page_
+    assert "<td>Record money and change the Treasurer settings</td><td>Treasurer, Admin</td>" in page_
+    admin.post("/admin/site/roles", data={"minutes_editor": ["n0bbbb", "nobody"], "calendar_editor": []})
+    assert json.loads((tmp_path / "roles.json").read_text()) == {"minutes_editor": ["n0bbbb"], "calendar_editor": []}
+    assert c.members["n0bbbb"].minutes_editor and c.can_lead("n0bbbb") and c.can_edit_calendar("n0bbbb")
+    assert not c.may("n0bbbb", "contacts") and not c.may("n0bbbb", "money") and c.roles("n0bbbb") == ["minutes_editor"]
+    assert "Roles: Minutes editor +" in admin.get("/admin/security/admin").text
+    fresh = clubmod.Club(Path(os.environ["CLUB_MINUTES_CONFIG"]))  # a restart: roles.json wins over the roster's ticks
+    assert not fresh.members["doe"].minutes_editor  # ticked in club.yaml's members, not in roles.json
+    admin.post("/admin/site/roles", data={})
+    assert not c.members["n0bbbb"].minutes_editor and not c.can_lead("n0bbbb")
+    with pytest.raises(KeyError):
+        c.may("n0bbbb", "everything")  # a misspelled permission fails loudly, never quietly "no"

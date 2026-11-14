@@ -1,47 +1,108 @@
 # Officers guide
 
-For officers, minutes editors, roster keepers and the Treasurer: running the club from the app. Setup steps for admins sit alongside; the rest of the setup is in the [server admin guide](server-admin.md). Back to the [README](../README.md).
+For officers, minutes editors, roster keepers, calendar editors and the Treasurer: running the club from the app. What every member sees is in the [members guide](members.md).
 
-## Member profiles
-Members edit their own email, phone, address, birthday and sharing choices at `/profile`. The app writes them to the roster it keeps (`roster-sheet.json` in the data folder). A birthday shared with members, and each membership anniversary, shows at the top of the leader console's Attendance step at the first meeting on or after the day (a month-only birthday: the month's first meeting).
-- Each change is logged in `profile-changes.jsonl` in the data directory, emailed to members whose title includes Secretary, and can be undone by any officer at `/roster/changes`.
-- Officers see all contact details; other members see only what each member shares.
-- **Roster keepers edit the roster** (Secretary and Treasurer by default, `roster_keepers:`; admins in admin mode): **Edit roster details** on a member's page (`/members/ID/edit`) changes name, class, status, email, phone, address, titles, aliases and the `is_officer`, `is_board`, `minutes_editor` and `calendar_editor` ticks, through the same path as members' own edits (values only, logged, undoable, emailed). It also adds Membership Log rows. Not birthday or sharing (the member's own choices).
-- **Callsign changes** (same page, **New callsign**): the callsign is the member's id across the data folder, so a change renames it everywhere (`callsign.py`): current state (`chow.json`, `business.json`, `events.json`, `calendar-feeds.json`, `ask-about.json`, `email-prefs.json`, `settings.json`, `treasurer.json`, drafts' `console.json`), the minutes' front matter and report tags (never their text), the sign-in database and the picture. Logs (`*.jsonl`) keep the old id as history. It needs the backup passphrase (a backup is taken first and kept as `…-before-NEWCALL.tar.gz.enc`); the old call goes into the member's `aliases` on the roster, so `Club.canonical` maps it to the member (club.yaml's `admins:` and `email.only_to` included).
-- **Roster API** (`GET /api/roster`), for the club's other tools on the same server: active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON. Off until `W8LBZ_ROSTER_API_TOKEN=...` (a long random string) is in `/etc/w8lbz-minutes/env`; then it answers only requests with `Authorization: Bearer <token>` from the server itself or an address in `W8LBZ_ROSTER_API_ALLOW` (comma-separated; the Discord bot's container), and never through the web proxy. E.g. from the bot's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`. Give the bot's container a fixed IP, and ideally limit port 8000 to it with the Proxmox firewall. Every call, allowed or not, is logged in `api-log.jsonl` in the data directory.
-- **Offices** (`/offices`, linked from the Roster): the offices in club.yaml's `offices:` (a title is an officer's office with one seat; `{title: Trustee, officer: false, seats: 3}` is a board seat), who holds each, and who held them when, from the Membership Log's "Took office" / "Left office" rows (the office in the `note` column). An admin in admin mode changes a holder in one step: the app writes `Title(s)`, `is_officer` and `is_board` for both members (officer if any office they hold is an officer's, board if any is in the list; other titles are kept), adds the log rows, and emails the officers. "Add a past term" adds history only.
-- **Email** and **Settings** tabs: which emails each member gets (`email-prefs.json`) and how the app shows things to them, e.g. the first day of the week (`settings.json`), both in the data directory.
+## 🔑 Who can do what
+What a member may do comes from their **roles**. Most roles follow the offices a member holds; an admin gives the other two on **Admin → Site → Roles**, which also lists what each role allows and who has it. A member's roles show on their page.
 
-## Club calendars
-The app keeps the club calendars itself (`events.json` in the data folder), so nothing depends on Google: **Club events** (what the club runs or joins: meetings, nets, VE testing, fox hunts), **Planning** (officers' dates, like the annual meeting) and **Community** (what's on in the area). It adds chow nights, the minutes' dated Upcoming Events, the birthdays members share (never private ones, not even for officers), open business items' due dates (on Planning, as "Due: …") a **Holidays** calendar (US federal holidays, plus Christmas Eve and New Year's Eve; the list is `HOLIDAYS` in `calview.py`) and Ohio's election days on Community (`elections()` in `calview.py`). Both are worked out from their rules, so they need no updating unless a law changes (a new federal holiday, a new Ohio election date). The weekly meeting is put on Club events once, from `meeting_day` and `meeting_time`, as an ordinary repeating event: delete one date for a holiday, or move it.
+- 🏛️ **Officers** (holders of an officer's office) see every member's contact details, the change logs, and can undo profile changes; they lead meetings and edit the calendar too.
+- 🎙️ **Minutes editors** (given on Site → Roles) run the meeting console and edit the minutes and the calendar.
+- 📅 **Calendar editors** (given on Site → Roles, say the net manager) edit the calendar.
+- 📋 **Roster keepers** (holders of the offices that add members: the Secretary and Treasurer, unless the club picks others) edit the roster.
+- 💰 **The Treasurer** records money.
 
-**Calendar page** (`/calendar`, in the menu): an agenda (8 weeks at a time by default, or 3 months, 6 months or a year; earlier or later) or a month grid. Leaders and minutes editors, members ticked `calendar_editor` on the roster (say, the net manager; add the column if it isn't there), and admins in admin mode **add, change and delete** events there: start, optional end (a time, or a last day for several days), an optional **time zone** (the club's by default; e.g. UTC for Field Day, shown in club time), where, notes, and **Repeats** (every day, every week, every 2 weeks, monthly on the 2nd Tuesday or the last Tuesday, monthly on several weeks like the 1st and 3rd Tuesday, monthly on a date, yearly on a date or on the 1st Thursday of January; optionally until a date). A repeating event can be changed or deleted for **this date only**, **this and following dates**, or **every date**. Events from the minutes are changed in the leader console. **In the leader console**, the Upcoming Events step lists what's on the calendar until the next meeting (or the next 2 weeks, month or 3 months), for the leader to read out: club and community events, Planning, holidays and shared birthdays (not chow, or business items' due dates). **+ Add** puts one in the minutes; the calendar still shows it once. Each dated event in the minutes goes on the calendar picked beside it (Club events by default). Two entries the same day with look-alike titles are highlighted as a **possible duplicate** (on the Calendar page and in the console), never hidden: delete one if they are the same. In the console, **use the calendar's** replaces the minutes' entry with the calendar's version, so the minutes keep it and the calendar shows it once. An event's form has **Leave out of the leader console's Upcoming Events**, ticked for the weekly meeting by default. Every change is logged in `calendar-log.jsonl`; officers see it at **Calendar → Who changed what** (`/calendar/changes`).
+> [!TIP]
+> Admins can do all of the above while admin mode is on.
 
-**Import .ics** (Calendar → Import .ics, leaders): events from Google Calendar, Outlook, Apple or anything that exports an .ics file, into the calendar you pick. In Google Calendar: Settings → Import & export → Export (a .zip with one .ics per calendar). Importing the same file again updates what it imported, so nothing is doubled; an event already on the calendar with the same title on the same day is left alone; events that ended before a chosen date are skipped. Repeating events come in when they repeat daily, weekly (several weekdays become one event per day), every few weeks, monthly (on a date, a weekday, or several weeks like the 1st and 3rd Tuesday) or yearly (on a date, or like the 1st Thursday of January); anything else is listed as not imported, to add by hand. Formatted (HTML) descriptions, as Google exports them, come in as plain text.
+## 👥 The roster
+**Roster** in the menu. Members keep their own email, phone, address, birthday and sharing choices up to date on their profile.
 
-**Subscribing:** Calendar → "Subscribe in your calendar app" gives each member a private link (`/calendar/feed/SECRET.ics`) for Apple Calendar, Outlook, Google or a phone, a month back and a year ahead; tick what to include (`?show=events,chow`), and subscribe more than once for separate colors. The link works without signing in, so it's secret; "Make a new link" replaces it. It uses the app's HTTPS name, so calendar services on the internet can fetch it (Google refreshes subscribed calendars only every few hours).
+- **Officers see everything**; other members see only what each member chose to share.
+- **Every profile change** is emailed to the Secretary and listed under **Roster → Recent changes**, where any officer can undo it.
+- **Editing a member** (roster keepers): **Edit roster details** on their page, in four tabs, each saved on its own. **Details:** name, class, status, contact details and other spellings of their name. **Titles:** their offices (shown; they change on the Offices page, which keeps their history) and other titles (ticked from those the club uses, or added). Roles aren't set here: they follow the offices, or an admin gives them on Site → Roles. **New callsign** and **Membership log** (joined, left, suspended…). Not their birthday or sharing choices: those are theirs.
+- **A new callsign** (vanity call or upgrade): **New callsign** on the same page. The app takes a backup, then moves everything (minutes, chow, business, sign-ins, passkeys) to the new call. Old links keep working.
+- **Birthdays and anniversaries** a member shares show at the meeting's Attendance step.
+- **Offices** (Roster → Offices): who holds each office now and who held it before. An admin changes a holder in one step; the app updates both members' titles, logs it and emails the officers. **Add a past term** adds history only.
 
-**Public calendars:** `public_calendars: [events]` (any of events, planning, community, holiday) under `club:` shows those calendars to anyone, signed in or not, at `/calendar/public`, with a public feed at `/calendar/public.ics`. Chow nights, birthdays and business due dates are never public. Empty by default.
+![Editing a member's roster details](screenshots/roster-edit.png)
 
-## Chow schedule
-`/chow` is the chow list; the app is the source of truth (state in `chow.json`, every change in `chow-log.jsonl`, both in the data directory).
-- One-time import of the Secretary's spreadsheet: `w8lbz-minutes chow-import FILE.xlsx --order "Surname,Surname,..." --next Surname` prints what it found, including anything to check; add `--write` to save it (it won't overwrite an existing schedule).
-- Members ask each other to swap; leaders edit directly; the console records provided, missed or covered on meeting night.
-- The printable list (`/chow/list.pdf`): every night still to come. Officers email it to members from the Chow page (each member can turn it off); the page shows whether the schedule changed since it was last sent.
+![The Offices page, in dark mode](screenshots/offices.png)
 
-## Treasurer
-**Treasurer** in the menu (`/treasurer`), for officers; whoever holds Treasurer, and admins in admin mode, record the money and change the settings (`treasurer.py`, `treasurer.json` in the data folder, every change logged in `treasurer-log.jsonl`). Nothing goes in club.yaml.
-- **Settings** (a tab): tracking (dues, bills and spending) **Off**, **Preview** (officers see everything, members see nothing, no emails go out: for checking the figures on the live app first) or **On** (members see their own figures on Home); the date tracking starts (nothing is owed before it; older balances go in as adjustments); how many weeks behind counts as in arrears (4, bylaws VII.B); the years a new member has to buy the bond (2); the arrears email; the **amounts** (dues each meeting night, the initiation fee, the bond, a missed chow night), each change with the date it takes effect, so earlier weeks keep the old amount and the bond costs what it did when a member joined; the **accounts**; and the **funds**.
-- **Who owes what** lists who owes something (money, or a bond past its due date); **Everyone** shows the rest. It's worked out, never typed: dues for each meeting night since tracking started (or since the member joined), the initiation fee for members who joined since then, a charge for each chow night marked missed, plus adjustments, minus payments. Every meeting night counts, holidays included (52 × $3.50 is the bylaws' $182 a year), whether or not a meeting is held. Members may pay weekly, monthly or for the year: paying ahead shows as "paid through" a date. Members in arrears show in red; it also shows who still owes the **Bond (Certificate of Indebtedness)**, and by when.
-- **Arrears and suspension:** with the arrears email on (and tracking On), the daily job emails the Treasurer and the Board when a member reaches the arrears line, once each time. The app never suspends anyone: under bylaws VIII only the Board can, after notice by certified mail at least five days before its meeting, and the member may answer and appeal. When the Board suspends someone, a roster keeper sets their status to **Suspended** and adds a Suspended (later Reinstated) row to the Membership Log on their member page. Dues keep counting while suspended.
-- **Bonds bought years ago:** at the top of Who owes what, "Record a bond bought before …": the member, the date (or the year they joined) and what it cost then. The member list offers only those who haven't got one. It's kept **on file**: the member shows as having bought it, and it isn't money received now or in any totals. Dues, initiation or missed-chow payments can't be dated before tracking starts (nothing was owed then); an older balance goes in as an adjustment dated on the start date.
-- **Money in and out:** payments (dues, initiation fee, missed chow, the bond), other income (drink sales, donations), adjustments (a charge, or a credit when negative: a balance from before the app, or a charge made by mistake) and expenses, each with a date and an account. Delete fixes a mistake; the log keeps it. On a wider screen the Treasurer can rename an entry in place (its Note), say to tidy a bill's name.
-- **Regular bills** (Bills tab): the Treasurer lists what the club pays every month or year (payee, about how much; a yearly one's month), and the tab shows which haven't been paid this month or year, whether or not they were read at a meeting.
-- **Bills read at meetings:** every amount under Bills and Communications since tracking started gets its own card: "Pizza bill for fox hunt $10, Gas Bill $81" becomes "Pizza bill for fox hunt: $10" and "Gas Bill: $81", each showing the bullet it came from ("Electric 50.64" counts without a $). A bullet word for word the same as the week before is marked "same as last week". The tab has **Waiting** (where it opens), **Paid**, **Not a bill** and **All**. The Treasurer marks each paid, naming it as he likes (it starts as the bill's words), (an expense) or not a bill; when it's one of the regular bills, pick which, so it isn't counted twice. Nothing counts until it's marked. **Look in older minutes** reads bills from before the start date, from a date the Treasurer picks; **Back to the start date** hides them again (any marked paid stay recorded).
-- **Funds** run by a committee (the drinks fund with its own checking account, say): added under Settings with an account and keepers. Keepers get the Treasurer page with only their fund's account: they record its income and expenses and see only those; the Treasurer sees everything.
-- **Categories:** each expense has one, guessed from its words ("Gas Bill" → Utilities, "pizza" → Food) and changeable on the Bills or Money tab. The Treasurer manages the list under Settings → Spending categories: add (8 at most, one chart colour each), rename (expenses stay in it), or remove (its expenses move to Other, which always stays). Each keeps its colour for good. A credit card bill that mixes internet with purchases goes under one category unless it's recorded as separate expenses.
-- **Spending** (`/spending`, in the menu): the club's expenses for the last 12 months as a chart by category and month, with the same numbers in tables. Every member sees it once tracking is On; officers only during Preview. It never shows anyone's dues. It also shows the **cost per member**: each month's spending divided by everyone who was a member that month (from the roster's Joined, Rejoined, Left and Silent Key dates, so it follows people joining and leaving), the average a month over the year, and what dues bring in a month per member to compare (the weekly dues × 52 ÷ 12, shown on the page). Someone marked Inactive without a Left row isn't counted.
-- **In the leader console:** the Bills step lists what the Treasurer recorded as paid since the last meeting, for the leader to read out; **Add to tonight's bills** puts those lines in the minutes. Nothing is added on its own, and taking the minutes doesn't change: whatever is typed under Bills shows up on the Treasurer's Bills tab once the minutes are submitted.
-- **Home** shows each member their own figures (when tracking is On), never anyone else's.
+## 📅 Calendars
+**Calendar** in the menu. The app keeps three calendars: **Club events** (meetings, nets, VE testing, fox hunts), **Planning** (officers' dates, like the annual meeting) and **Community** (what's on nearby). It adds chow nights, shared birthdays (never private ones), business items' due dates (on Planning), and holidays and election days if an admin turned them on.
 
-Not a bookkeeping system: there are no account balances or transfers yet (ROADMAP → Treasurer).
+![The calendar's month view, in dark mode](screenshots/calendar.png)
+
+**Adding and changing events** (leaders and calendar editors):
+
+- Start, optional end, where, notes, an **Online link** (shown as a **Join online** button), and a time zone if it isn't the club's (Field Day in UTC, say).
+- **Repeats**: daily, weekly, every 2 weeks, monthly (2nd Tuesday, last Tuesday, 1st and 3rd Tuesday, or a date), yearly.
+- Change or delete a repeating event for **this date only**, **this and following dates**, or **every date**.
+- Look-alike events on the same day are marked **possible duplicate**; delete one if they're the same.
+- **Leave out of the leader console's Upcoming Events**: tick it for things not worth reading out (the weekly meeting is ticked already).
+- **Who changed what** (officers) lists every change.
+
+> [!TIP]
+> To skip the meeting on a holiday, delete that one date.
+
+**The weekly meeting** is on Club events. To change its day, time, place or online link, an admin uses **Admin → Site → Club** and picks the date it starts; earlier meetings stay as they were.
+
+📥 **Import .ics** (Calendar → Import .ics): events from Google Calendar, Outlook or Apple. In Google Calendar: Settings → Import & export → Export. Importing the same file again updates rather than doubles. Anything it can't bring in is listed, to add by hand.
+
+📲 **Subscribing:** every member gets a private link under **Subscribe in your calendar app**, for their phone or calendar app. **Make a new link** if it's been shared by mistake. An admin can also make some calendars public (Admin → Site → Features); chow, birthdays and due dates are never public.
+
+## 🎙️ At the meeting
+The leader console's **Upcoming Events** step lists what's on until the next meeting, to read out. **+ Add** puts one in the minutes. **Use the calendar's** swaps a typed entry for the calendar's own, so it shows once. Events you add in the minutes go on the calendar you pick beside them (Club events unless you change it).
+
+## 🍲 Chow
+Only if the club has the chow module (an admin turns it on under Admin → Site → Features). **Chow** in the menu.
+
+- Members ask each other to swap; leaders change the list directly.
+- On meeting night the console records who provided, missed or was covered.
+- **The printable list** (PDF): officers email it to members from the Chow page, which shows whether it has changed since it was last sent.
+
+![The chow schedule](screenshots/chow.png)
+
+## 💰 Treasurer
+**Treasurer** in the menu: officers see it; the Treasurer (and admins in admin mode) record money and change settings.
+
+⚙️ **Getting started (Settings tab):**
+
+- **Tracking:** Off, **Preview** (officers see everything, members nothing, no emails: for checking the figures first) or **On** (members see their own figures on Home).
+- **Start date:** nothing is owed before it. Older balances go in as adjustments on that date.
+- **Amounts:** dues per meeting night, initiation fee, the bond, a missed chow night. Each change has a date it takes effect, so earlier weeks keep the old amount.
+- **Arrears:** how many weeks behind counts (4 by default), and whether the Treasurer and Board get an email when someone gets there.
+- **Accounts, funds** and **spending categories** (up to 8, each keeps its chart colour).
+
+![Treasurer → Settings](screenshots/treasurer-settings.png)
+
+🧾 **Who owes what** is worked out, never typed: dues for every meeting night (holidays too; 52 × $3.50 is $182 a year), initiation, missed chow nights and adjustments, less payments. Members may pay weekly, monthly or yearly; paying ahead shows as "paid through" a date. Members in arrears show in red.
+
+> [!NOTE]
+> **An example:** dues are $3.50 a meeting night and tracking started 26 weeks ago, so a long-time member owes $91.00 so far. Pat has paid $66.50: Pat owes **$24.50**, 7 weeks, in red (4 weeks or more). Max joined 8 weeks ago: the $25.00 initiation fee plus 8 nights ($28.00), less what he's paid.
+
+![Who owes what](screenshots/treasurer.png)
+
+**The bond** (only if the club has one): who still owes it and by when. A bond bought before the app: **Record a bond bought before…** at the top of Who owes what. It's kept on file, not counted as money now.
+
+> [!IMPORTANT]
+> **Arrears and suspension:** the app never suspends anyone. When the club does, a roster keeper sets the member's status to **Suspended** and adds a Membership Log row. Dues keep counting.
+
+**Recording money:** each expense gets a category guessed from its words ("pizza" → Food), which you can change. Payments, other income (drink sales, donations), adjustments (a charge, or a negative one as a credit) and expenses, each with a date and an account. **Delete** fixes a mistake; the log keeps it.
+
+📄 **Bills:**
+
+- **Regular bills** (Bills tab): what the club pays every month or year. The tab shows which haven't been paid yet.
+- **Bills read at meetings:** each amount under Bills and Communications in the minutes gets its own card ("Gas Bill $81"). Mark each **Paid** (an expense), **Not a bill**, or match it to a regular bill so it isn't counted twice. Nothing counts until it's marked. **Look in older minutes** finds bills from before the start date.
+- At the meeting, the console's Bills step lists what was paid since the last one; **Add to tonight's bills** puts it in the minutes.
+
+![Treasurer → Bills: the regular bills, each paid this month or year](screenshots/treasurer-bills.png)
+
+🥤 **Funds** run by a committee (the drinks fund, say): their keepers see only their fund's account and record its money.
+
+📊 **Spending** (in the menu): the last 12 months by category, and the cost per member each month next to what dues bring in. Every member sees it once tracking is On. It never shows anyone's dues.
+
+![Spending: a year of the club's bills by category](screenshots/spending.png)
+
+> [!NOTE]
+> Not a bookkeeping system: no account balances or transfers yet.

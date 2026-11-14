@@ -1,0 +1,12 @@
+# The least a new server needs in /etc/club-minutes/club.yaml. Everything else is set in the app (Admin → Site:
+# the club's name and callsign, time zone, agenda, holidays, colours, logo...), or has a default.
+# Every setting, with what it does: club.example.yaml.
+
+club:
+  meeting_day: Thursday    # the weekly meeting: the app won't start without these two (also changed later on Site)
+  meeting_time: "19:30"    # 24-hour, in quotes
+
+auth:
+  rp_id: minutes.example.org   # the HTTPS address members use; passkeys only work there
+
+admins: [N0CALL]   # your own callsign: the first admin (add others in the app, Admin → Security → Admins)

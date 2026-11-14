@@ -17,6 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false  # no token left on the runner for later steps
           fetch-depth: 0
       - name: Read the version
         id: v
@@ -26,13 +27,16 @@ jobs:
           if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
       - name: Release notes from CHANGELOG.md
         if: steps.v.outputs.exists != 'true'
+        env:
+          VERSION: ${{ steps.v.outputs.version }}  # as a variable, never pasted into the script
         run: |
-          awk -v v="${{ steps.v.outputs.version }}" '
+          awk -v v="$VERSION" '
             /^## / { if (on) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { on = 1; next } }
             on' CHANGELOG.md > notes.md
-          if [ ! -s notes.md ]; then echo "CHANGELOG.md has no section for ${{ steps.v.outputs.version }}" >&2; exit 1; fi
+          if [ ! -s notes.md ]; then echo "CHANGELOG.md has no section for $VERSION" >&2; exit 1; fi
       - name: Tag and publish
         if: steps.v.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v${{ steps.v.outputs.version }}" --target "$GITHUB_SHA" --title "v${{ steps.v.outputs.version }}" --notes-file notes.md
+          VERSION: ${{ steps.v.outputs.version }}
+        run: gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" --notes-file notes.md

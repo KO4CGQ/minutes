@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block title %}Import events{% endblock %}{% block crumb %}{{ crumb('/calendar', 'Calendar') }}{% endblock %}{% block body %}
+<h1>Import events</h1>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+{% if report %}
+<p class="msg ok">Added {{ report.added|length }}, updated {{ report.updated|length }} into {{ cals[cal] }}.
+  <a href="/calendar">See the calendar</a></p>
+{% for key, title in (('added', 'Added'), ('updated', 'Updated (imported before)'), ('already', 'Already on the calendar (same title and day), left alone')) %}
+{% if report[key] %}<details{% if key == 'added' %} open{% endif %}><summary>{{ title }}: {{ report[key]|length }}</summary><ul>{% for t in report[key] %}<li>{{ t }}</li>{% endfor %}</ul></details>{% endif %}{% endfor %}
+{% if report.skipped %}<h2>Not imported</h2><p class="muted">Add these by hand if you need them.</p>
+<ul>{% for t, why in report.skipped %}<li><b>{{ t }}</b>: {{ why }}</li>{% endfor %}</ul>{% endif %}
+<h2>Import another file</h2>
+{% endif %}
+<p>Bring in events from Google Calendar, Outlook, Apple Calendar or anything else that exports an <b>.ics</b> file.
+In Google Calendar (on a computer): Settings → Import &amp; export → Export, which downloads a .zip with one .ics per calendar; or a calendar's settings → Export calendar.</p>
+<form method="post" action="/calendar/import" enctype="multipart/form-data" class="profile">
+<label>The .ics file <input type="file" name="file" accept=".ics,text/calendar" required></label>
+<label>Into <select name="cal">{% for k, label in cals.items() %}<option value="{{ k }}" {{ 'selected' if k == cal }}>{{ label }}</option>{% endfor %}</select></label>
+<label>Skip events that ended before <input type="date" name="since" value="{{ since }}"></label>
+<p class="muted small">Importing the same file again updates what it imported before, so nothing is doubled. An event that's already on the calendar with the same title on the same day is left alone.</p>
+<p><button class="btn">Import</button> <a class="btn ghost" href="/calendar">Cancel</a></p>
+</form>
+{% endblock %}

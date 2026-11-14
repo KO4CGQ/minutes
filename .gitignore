@@ -7,9 +7,12 @@ archive/
 data/
 private/
 club.yaml
+!demo/club.yaml
 *.json
 # except the brand logos (public data, from deploy/update-simple-icons.py)
-!src/w8lbz_minutes/simple_icons.json
+!src/club_minutes/simple_icons.json
+# and which files each screenshot shows (demo/manifest.py; made from the demo club)
+!docs/screenshots/manifest.json
 .env
 *.docx
 bylaws.md

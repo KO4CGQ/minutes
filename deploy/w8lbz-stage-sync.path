@@ -1,9 +1,0 @@
-[Unit]
-Description=Staging server: watch for Sync now on the Stage page
-
-[Path]
-PathExists=/var/lib/w8lbz-minutes/stage-sync-request
-Unit=w8lbz-stage-sync.service
-
-[Install]
-WantedBy=paths.target

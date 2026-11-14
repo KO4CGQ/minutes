@@ -1,0 +1,47 @@
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}{% block title %}Your profile{% endblock %}{% block body %}
+<h1>Your profile</h1>
+{% include "_profile_tabs.html" %}
+{% if saved and not error %}<p class="msg ok">Saved. The club roster is updated.</p>{% endif %}
+{% if email_sent and not email_ready() %}<p class="msg err">This server can't send email yet, so the confirmation link for <b>{{ email_sent }}</b> is in its log (ask an admin). Your email changes once it's opened.</p>{% elif email_sent %}<p class="msg ok">We sent a confirmation link to <b>{{ email_sent }}</b>. Your email changes once you open it.</p>{% endif %}
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+
+{% if photo %}<p class="msg ok">Picture saved.</p>{% endif %}
+<div class="photorow card">
+  {{ avatar(m.id, 'xl') }}
+  <div>
+    <form method="post" action="/profile/photo" enctype="multipart/form-data" class="photoform">
+      <label class="btn small ghost filebtn">{{ 'Change picture' if avatar_url(m.id) else 'Add a picture' }}
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" data-autosubmit hidden></label>
+    </form>
+    {% if avatar_url(m.id) %}<form method="post" action="/profile/photo/remove" class="inline"><button class="linkbtn">Remove</button></form>{% endif %}
+    <p class="hint">Members see it next to your name. It's cropped to a square; camera details and location are removed.</p>
+  </div>
+</div>
+
+<form method="post" action="/profile" class="profile">
+  <fieldset class="fixed"><legend>From the club roster</legend>
+    <div class="fixedrow">
+      <label>Name <input value="{{ m.name }}" readonly tabindex="-1"></label>
+      <label>Callsign <input value="{{ m.callsign or '' }}" readonly tabindex="-1" class="cs"></label>
+      <label>License class <input value="{{ m.license_class or '' }}" readonly tabindex="-1"></label>
+    </div>
+    <span class="hint">{{ emoji('🔒', 'lock') }} The Secretary keeps these on the roster. To change one, ask an officer.</span>
+  </fieldset>
+  <label>Email <input type="email" name="email" value="{{ m.email or '' }}" autocomplete="email">
+    <span class="hint">Also how you sign in. A change takes effect after you confirm it from the new address.</span></label>
+  <label>Phone <input type="tel" name="phone" value="{{ m.phone or '' }}" maxlength="40" autocomplete="tel"></label>
+  <label>Address <textarea name="address" rows="3" maxlength="200" autocomplete="street-address">{{ m.address or '' }}</textarea></label>
+  <fieldset><legend>Birthday <span class="hint">(just the month is fine; never the year)</span></legend>
+    {% set bm = m.birthday[:2]|int if m.birthday else 0 %}{% set bd = m.birthday[3:]|int if m.birthday else 0 %}
+    <select name="bmonth" aria-label="Month"><option value="">Month</option>{% for i in range(1, 13) %}<option value="{{ i }}" {{ 'selected' if i == bm }}>{{ ['January','February','March','April','May','June','July','August','September','October','November','December'][i-1] }}</option>{% endfor %}</select>
+    <select name="bday" aria-label="Day"><option value="">Day</option>{% for i in range(1, 32) %}<option {{ 'selected' if i == bd }}>{{ i }}</option>{% endfor %}</select>
+  </fieldset>
+
+  <fieldset><legend>Share with all members</legend>
+    <p class="hint">Officers can always see your details; the Secretary keeps the roster. Tick what other members may see on the Roster page.
+    <b>Birthday:</b> share it and it goes on the club calendar, so the club can wish you a happy birthday. Don't share it and it stays private: it's never on the calendar or announced.</p>
+    {% for f in shareable %}<label class="check"><input type="checkbox" name="share" value="{{ f }}" {{ 'checked' if f in m.share }}> {{ f|capitalize }}</label>{% endfor %}
+  </fieldset>
+  <p><button class="btn" type="submit">Save</button></p>
+</form>
+{% endblock %}
