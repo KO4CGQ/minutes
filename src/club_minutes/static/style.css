@@ -147,7 +147,7 @@ table.list { width: 100%; border-collapse: separate; border-spacing: 0; backgrou
 .list tbody tr:nth-child(even) td { background: var(--surface-2); }
 .list tbody tr:hover td { background: var(--accent-soft); }
 .list tbody tr:last-child td { border-bottom: 0; }
-.list .nw { white-space: nowrap; }
+.list .nw { white-space: nowrap; } .list td.wrap { overflow-wrap: anywhere; }
 .list .n { text-align: right; font-variant-numeric: tabular-nums; }
 .list td a { text-decoration: none; font-weight: 500; } .list td a:hover { text-decoration: underline; }
 th.asc::after { content: " ▲"; } th.desc::after { content: " ▼"; } .list thead th { cursor: pointer; user-select: none; }
@@ -231,7 +231,7 @@ form.profile legend { font-weight: 600; float: left; width: 100%; padding: 0; ma
 form.profile legend + * { clear: both; } form.profile label.check { display: inline-flex; align-items: center; margin-right: 1.2rem; font-weight: normal; }
 svg.lock { width: .85em; height: .85em; vertical-align: -.05em; fill: var(--faint); stroke: var(--faint); stroke-width: 2.2; } svg.lock rect { stroke: none; }
 div.change { white-space: pre-line; }
-article.mail { border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; margin: .8rem 0; background: var(--surface); box-shadow: var(--shadow); }
+article.mail { overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; margin: .8rem 0; background: var(--surface); box-shadow: var(--shadow); }
 article.mail h3 { margin: .2rem 0; } article.mail pre { white-space: pre-wrap; font: inherit; font-size: .9rem; margin: .5rem 0 0; }
 pre.relnotes { white-space: pre-wrap; background: var(--surface-2); border-radius: var(--radius-sm); padding: .6rem .8rem; font-size: .88rem; max-height: 20rem; overflow-y: auto; }
 
