@@ -5,7 +5,7 @@
 <table class="list"><thead><tr><th>Guest</th><th>Callsign</th><th class="n">Visits</th><th class="opt">First visit</th><th>Last visit</th><th></th></tr></thead>
 <tbody>{% for g in current %}<tr>
 <td>{{ g.name }}</td><td class="cs">{{ g.callsign or '' }}</td><td class="n">{{ g.visits|length }}</td>
-<td class="opt nw" data-sort="{{ g.visits[0][0] }}"><a href="/meetings/{{ g.visits[0][0] }}">{{ g.visits[0][0]|listdate }}</a></td><td class="nw" data-sort="{{ g.visits[-1][0] }}"><a href="/meetings/{{ g.visits[-1][0] }}">{{ g.visits[-1][0]|listdate }}</a></td>
+<td class="opt nw" data-sort="{{ g.visits[0][0] }}"><a href="/meetings/{{ g.visits[0][0] }}?from=guests">{{ g.visits[0][0]|listdate }}</a></td><td class="nw" data-sort="{{ g.visits[-1][0] }}"><a href="/meetings/{{ g.visits[-1][0] }}?from=guests">{{ g.visits[-1][0]|listdate }}</a></td>
 <td>{% if g.visits|length >= (club.info.invite_after_visits or 3) %}<span class="badge warn">regular, invite to join?</span>{% endif %}</td>
 </tr>{% else %}<tr><td colspan="6" class="muted">No guests yet.</td></tr>{% endfor %}</tbody></table>
 
@@ -16,7 +16,7 @@
 <tbody>{% for g in joined %}<tr>
 <td><a href="/members/{{ g.member }}?from=guests">{{ club.name(g.member) }}</a></td><td class="cs">{{ club.members[g.member].callsign or g.callsign or '' }}</td>
 <td class="n">{{ g.visits|length }}</td>
-<td class="opt nw" data-sort="{{ g.visits[0][0] }}"><a href="/meetings/{{ g.visits[0][0] }}">{{ g.visits[0][0]|listdate }}</a></td>
+<td class="opt nw" data-sort="{{ g.visits[0][0] }}"><a href="/meetings/{{ g.visits[0][0] }}?from=guests">{{ g.visits[0][0]|listdate }}</a></td>
 <td class="nw" data-sort="{{ g.joined or '' }}">{{ g.joined|listdate if g.joined }}</td>
 </tr>{% endfor %}</tbody></table>
 {% endif %}

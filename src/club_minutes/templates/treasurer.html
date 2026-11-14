@@ -90,7 +90,7 @@
 <div class="cards">{% for b in bills if show == 'all' or b.status == show %}<article class="card{{ ' done' if b.status != 'waiting' }}">
   {% if b.split %}<div class="card-text">{{ b.label }}: {{ money(b.cents) }}</div><div class="muted small">Part of “{{ b.text }}”</div>
   {% else %}<div class="card-text">{{ b.text }}</div>{% endif %}
-  <div class="card-meta"><span class="chip"><a href="/meetings/{{ b.meeting }}">{{ fmt(b.meeting) }}</a></span><span class="chip">{{ money(b.cents) }}</span>{% if b.repeated %}<span class="chip warn" title="The same words as the week before: copied forward?">same as last week</span>{% endif %}
+  <div class="card-meta"><span class="chip"><a href="/meetings/{{ b.meeting }}?from=treasurer">{{ fmt(b.meeting) }}</a></span><span class="chip">{{ money(b.cents) }}</span>{% if b.repeated %}<span class="chip warn" title="The same words as the week before: copied forward?">same as last week</span>{% endif %}
     <span class="chip{{ ' warn' if b.status == 'waiting' }}">{{ {'waiting': 'waiting', 'paid': 'paid', 'dismissed': 'not a bill'}[b.status] }}</span></div>
   {% if edit and b.status == 'waiting' %}<form method="post" action="/treasurer/record" class="modern"><input type="hidden" name="kind" value="expense"><input type="hidden" name="bill" value="{{ b.key }}">
     <label>Name<input name="note" maxlength="300" value="{{ (b.label if b.split else b.text)[:300] }}"></label>

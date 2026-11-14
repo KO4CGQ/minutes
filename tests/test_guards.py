@@ -72,3 +72,27 @@ def test_no_real_looking_contact_details():
         bad += [f"{f}: email domain {d}" for d in {d for d in EMAIL.findall(text) if not OK_DOMAINS.match(d)}]
         bad += [f"{f}: phone {a}-{b}" for a, b in set(PHONE.findall(text)) if not (a == "555" and b.startswith("01"))]
     assert not bad, "use fictional examples (Jane Doe, N0CALL, example.org, 555-0100 to 555-0199): " + "; ".join(sorted(bad))
+
+
+LISTS = ["roster.html", "index.html", "guests.html", "search.html", "treasurer.html", "business.html", "_business_item.html", "stats.html"]
+
+
+def test_list_links_say_where_they_came_from():
+    """A member or a meeting opened from a list leads back to that list (?from=..., base.html's back())."""
+    bad = []
+    for t in LISTS:
+        for href in re.findall(r'href="(/(?:members|meetings)/\{\{[^"]*)"', (ROOT / "src/club_minutes/templates" / t).read_text()):
+            if "from=" not in href and "from_item" not in href and not href.endswith((".pdf", "/edit")):
+                bad.append(f"{t}: {href}")
+    assert not bad, bad
+
+
+def test_every_from_leads_back(monkeypatch):
+    from fastapi.testclient import TestClient
+    mid = next(iter(web.archive.club.members))
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, web.authn.new_session(mid))
+    for came, href, label in (("roster", "/roster", "Roster"), ("guests", "/guests", "Guests"), ("minutes", "/minutes", "Minutes"),
+                              ("stats", "/stats", "Attendance"), ("search&q=bob%20a", "/search?q=bob%20a", "Search"), ("home", "/", "Home")):
+        html = t.get(f"/members/{mid}?from={came}").text
+        assert f'<nav class="crumb" aria-label="Back"><a href="{href}">‹ {label}</a>' in html, came

@@ -286,5 +286,5 @@ def test_an_item_added_between_meetings_links_no_missing_meeting(monkeypatch):
     t = TestClient(web.app)
     t.cookies.set(web.COOKIE, web.authn.new_session(next(iter(web.archive.club.members))))
     html = t.get("/business").text
-    assert 'href="/meetings/2026-11-10"' not in html and "added" in html
-    assert 'href="/meetings/2026-11-05"' in html
+    assert 'href="/meetings/2026-11-10' not in html and "added" in html
+    assert 'href="/meetings/2026-11-05?from=business' in html

@@ -7,7 +7,7 @@
 {% if not total %}<p class="muted">Nothing found.</p>{% endif %}{% endif %}
 
 {% macro rows(k, list) %}<ul class="results">{% for r in list %}
-{% if k == 'members' %}<li><a href="/members/{{ r.id }}">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}{% if r.status != 'Active' %} <span class="muted small">{{ r.status }}</span>{% endif %}</li>
+{% if k == 'members' %}<li><a href="/members/{{ r.id }}?from=search&amp;q={{ q|urlencode }}">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}{% if r.status != 'Active' %} <span class="muted small">{{ r.status }}</span>{% endif %}</li>
 {% elif k == 'guests' %}<li><a href="/guests">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}
 <span class="muted small">{{ r.visits|length }} visit{{ 's' if r.visits|length != 1 }}, last {{ r.visits[-1][0]|listdate }}</span></li>
 {% elif k == 'items' %}<li><a href="/business{{ '?tab=done' if r.status == 'done' }}#i{{ r.id }}">{{ r.text }}</a>
@@ -16,8 +16,8 @@
 {% elif k == 'calendar' %}<li><a href="/calendar?start={{ r.date }}">{{ r.date|date('day_year') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}
 <div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>
 {% elif k == 'help' %}<li><a href="/help/{{ r.guide }}#{{ r.id }}">{{ r.heading }}</a> <span class="sec">{{ r.label }} guide</span></li>
-{% else %}<li><a href="/meetings/{{ r.slug }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>
-{% if r.member %}<a class="who" href="/members/{{ r.member }}">{{ club.short(r.member) }}</a>{% endif %}
+{% else %}<li><a href="/meetings/{{ r.slug }}?from=search&amp;q={{ q|urlencode }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>
+{% if r.member %}<a class="who" href="/members/{{ r.member }}?from=search&amp;q={{ q|urlencode }}">{{ club.short(r.member) }}</a>{% endif %}
 <div>{{ r.snippet|safe }}</div></li>{% endif %}{% endfor %}</ul>{% endmacro %}
 
 {% if kind == 'all' %}{% for k, label in kinds.items() if found[k] %}<h2>{{ label }}</h2>
