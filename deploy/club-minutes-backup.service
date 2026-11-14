@@ -1,0 +1,13 @@
+[Unit]
+Description=Encrypted backup of the Club Minutes data, when the Backups page schedule says one is due
+
+[Service]
+Type=oneshot
+User=minutes
+Group=minutes
+WorkingDirectory=/opt/club-minutes
+Environment=CLUB_MINUTES_CONFIG=/etc/club-minutes/club.yaml
+Environment=CLUB_MINUTES_DATA=/var/lib/club-minutes
+# CLUB_MINUTES_BACKUP_PASSPHRASE, and CLUB_MINUTES_S3_KEY_ID / CLUB_MINUTES_S3_SECRET to send it off the server
+EnvironmentFile=-/etc/club-minutes/env
+ExecStart=/opt/club-minutes/.venv/bin/club-minutes backup --if-due

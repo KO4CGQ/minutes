@@ -1,0 +1,11 @@
+# gitleaks (Security workflow): the default rules, minus files that only look like secrets.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Simple Icons brand logos: long SVG path strings, public data (see README → Links page icons)"
+paths = ['''^src/club_minutes/simple_icons\.json$''']
+
+[[allowlists]]
+description = "Screenshot manifest: SHA-256 fingerprints of the files each picture shows (demo/manifest.py), not keys"
+paths = ['''^docs/screenshots/manifest\.json$''']

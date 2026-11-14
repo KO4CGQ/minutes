@@ -1,0 +1,54 @@
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_business_item.html" import open_item, item_script with context %}{% block title %}Home · {{ app_name() }}{% endblock %}{% block body %}
+<h1>Hi {{ me.first }}</h1>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+{% for r in swaps %}
+<div class="msg ok swapreq"><b>{{ club.name(r.requester) }}</b> asks to swap chow: you'd bring it on <b>{{ fmt(r.mine) }}</b> instead of {{ fmt(r.theirs) }}.
+  <form method="post" action="/chow/requests/{{ r.id }}/answer"><input type="hidden" name="approve" value="1"><button class="btn small">Approve</button></form>
+  <form method="post" action="/chow/requests/{{ r.id }}/answer"><input type="hidden" name="approve" value="0"><button class="btn small ghost">Decline</button></form></div>
+{% endfor %}
+<div class="homegrid">
+<section class="card">
+  <h2>{% if live %}Meeting in progress{% else %}Next meeting{% endif %}</h2>
+  {% if live %}<p class="big"><a href="/meetings/{{ live.slug }}?from=home">{{ emoji('🔴', 'live') }} Follow tonight's minutes live</a></p>
+  {% elif next_meeting %}<p class="big">{{ next_meeting|date('weekday') }}{% if next_meeting == today %} · tonight{% endif %}</p>{% endif %}
+  {% if chow_next %}<p>Chow{% if not next_meeting or chow_next[0] != next_meeting.isoformat() %} {{ fmt(chow_next[0]) }}{% endif %}: {% if chow_next[1].status == 'none' %}none{% if chow_next[1].note %} ({{ chow_next[1].note }}){% endif %}{% elif chow_next[1].member %}{{ club.name(chow_next[1].member) }}{% else %}not set{% endif %}</p>{% endif %}
+  {% if teams %}<p><a href="{{ teams.url }}">Join online ({{ teams.label }})</a></p>{% endif %}
+</section>
+{% if module('chow') %}<section class="card">
+  <h2>Your chow night</h2>
+  {% if my_chow %}<p class="big">{{ fmt(my_chow[0]) }}</p><p class="muted">Can't make it? <a href="/chow?from=home">Ask someone to swap</a>.</p>
+  {% else %}<p class="muted">You don't have an upcoming chow night scheduled. <a href="/chow?from=home">See the chow schedule</a>.</p>{% endif %}
+</section>{% endif %}
+{% if dues %}<section class="card">
+  <h2>Your dues</h2>
+  {% if dues.owed > 0 %}<p class="big{{ ' late' if dues.behind }}">You owe {{ money(dues.owed) }}</p>
+  <p class="muted">That's about {{ dues.weeks_behind }} week{{ 's' if dues.weeks_behind != 1 }} of dues{% if dues.missed_chow %}, including {{ dues.missed_chow|length }} missed chow night{{ 's' if dues.missed_chow|length != 1 }}{% endif %}. Pay the Treasurer at a meeting.</p>
+  {% else %}<p class="big">Paid up</p>{% if dues.paid_through %}<p class="muted">Paid through {{ fmt(dues.paid_through) }} ({{ money(-dues.owed) }} ahead).</p>{% endif %}{% endif %}
+  {% if not dues.certificate %}<p{% if dues.certificate_late %} class="late"{% endif %}>{{ cert().name }}: not bought yet{% if dues.certificate_due %}, due by {{ fmt(dues.certificate_due) }}{% endif %}.</p>
+  {% if certificate_note %}<p class="muted small">{{ certificate_note }}</p>{% endif %}{% endif %}
+</section>{% endif %}
+<section class="card">
+  <h2>Your business items</h2>
+  {% if items %}<ul class="checklist open">{% for x in items %}<li class="{{ 'late' if x.overdue }}"><a href="/business#i{{ x.id }}" data-item="d{{ x.id }}" aria-haspopup="dialog" title="Open it: update it, comment, or mark it done">{{ x.text }}{% if x.due %} <span class="chip{{ ' late' if x.overdue }}">due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}</a></li>{% endfor %}</ul>
+  <p><a href="/business?from=home">All open business</a></p>
+  {% else %}<p class="muted">Nothing assigned to you. <a href="/business?from=home">All open business</a>.</p>{% endif %}
+</section>
+{% if latest %}<section class="card">
+  <h2>Latest minutes</h2>
+  <p class="big"><a href="/meetings/{{ latest.slug }}?from=home">{{ latest.date|longdate }}</a></p>
+  {% set nb = latest.sections.get('New Business') or [] %}
+  {% if nb %}<p class="muted">New business:</p><ul class="plain">{% for it in nb[:3] %}<li>{{ it.text|truncate(110) }}</li>{% endfor %}</ul>{% endif %}
+  <p><a href="/minutes?from=home">All minutes</a></p>
+</section>
+{% endif %}
+<section class="card">
+  <h2>Coming up</h2>
+  {% if coming %}<ul class="plain">{% for e in coming %}<li><i class="dot k-{{ e.kind }}"></i><b>{{ 'Today' if e.start == today else e.start|date('day') }}</b>{% if e.time %} {{ e.time }}{% endif %}: {{ e.title|linkify }}</li>{% endfor %}</ul>
+  {% elif not undated %}<p class="muted">Nothing on the calendar for the next two weeks.</p>{% endif %}
+  {% if undated %}<p class="muted small">From the last minutes:</p><ul class="plain">{% for t in undated %}<li>{{ t|linkify }}</li>{% endfor %}</ul>{% endif %}
+  <p><a href="/calendar?from=home">The calendar</a></p>
+</section>
+</div>
+{# the items' dialogs, outside the cards (so they don't take the cards' heading style) #}
+{% for x in items %}{{ open_item(x, False, back="/") }}{% endfor %}{{ item_script() }}
+{% endblock %}

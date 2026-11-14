@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% import "_pager.html" as pager %}{% block body %}
+<h1>Search{% if q %}: “{{ q }}”{% endif %}</h1>
+<form action="/search" class="pagesearch"><input name="q" type="search" placeholder="Search everything…" value="{{ q or '' }}" aria-label="Search minutes, members, business{{ ', chow' if module('chow') }} and calendar">{% if kind != 'all' %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}</form>
+{% set total = found.values()|map('length')|sum %}
+{% if q %}<nav class="tabs" aria-label="Kind of result"><a href="/search?q={{ q|urlencode }}" class="{{ 'on' if kind == 'all' }}"{% if kind == 'all' %} aria-current="page"{% endif %}>All ({{ total }})</a>
+{%- for k, label in kinds.items() if found[k] or kind == k %}<a href="/search?q={{ q|urlencode }}&amp;kind={{ k }}" class="{{ 'on' if kind == k }}"{% if kind == k %} aria-current="page"{% endif %}>{{ label }} ({{ found[k]|length }})</a>{% endfor %}</nav>
+{% if not total %}<p class="muted">Nothing found.</p>{% endif %}{% endif %}
+
+{% macro rows(k, list) %}<ul class="results">{% for r in list %}
+{% if k == 'members' %}<li><a href="/members/{{ r.id }}?from=search&amp;q={{ q|urlencode }}">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}{% if r.status != 'Active' %} <span class="muted small">{{ r.status }}</span>{% endif %}</li>
+{% elif k == 'guests' %}<li><a href="/guests">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}
+<span class="muted small">{{ r.visits|length }} visit{{ 's' if r.visits|length != 1 }}, last {{ r.visits[-1][0]|listdate }}</span></li>
+{% elif k == 'items' %}<li><a href="/business{{ '?tab=done' if r.status == 'done' }}#i{{ r.id }}">{{ r.text }}</a>
+<div class="muted small">{{ 'Open' if r.status == 'open' else 'Done' }}{% if r.owner_name %} · {{ r.owner_name }}{% endif %}{% if r.due and r.status == 'open' %} · due {{ r.due }}{% endif %}</div></li>
+{% elif k == 'nights' %}<li><a href="/chow">{{ r[0]|date('day_year') }}</a> {{ r[1] }}</li>
+{% elif k == 'calendar' %}<li><a href="/calendar?start={{ r.date }}">{{ r.date|date('day_year') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}
+<div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>
+{% elif k == 'help' %}<li><a href="/help/{{ r.guide }}#{{ r.id }}">{{ r.heading }}</a> <span class="sec">{{ r.label }} guide</span></li>
+{% else %}<li><a href="/meetings/{{ r.slug }}?from=search&amp;q={{ q|urlencode }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>
+{% if r.member %}<a class="who" href="/members/{{ r.member }}?from=search&amp;q={{ q|urlencode }}">{{ club.short(r.member) }}</a>{% endif %}
+<div>{{ r.snippet|safe }}</div></li>{% endif %}{% endfor %}</ul>{% endmacro %}
+
+{% if kind == 'all' %}{% for k, label in kinds.items() if found[k] %}<h2>{{ label }}</h2>
+{{ rows(k, found[k][:5]) }}{% if found[k]|length > 5 %}<p><a href="/search?q={{ q|urlencode }}&amp;kind={{ k }}">See all {{ found[k]|length }} →</a></p>{% endif %}{% endfor %}
+{% elif pg.total %}<form class="filter" action="/search"><input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="kind" value="{{ kind }}">{{ pager.size(pg) }}<noscript><button class="btn small">Show</button></noscript></form>
+{{ rows(kind, pg.rows) }}{{ pager.links(pg, request) }}
+{% else %}<p class="muted">No {{ kinds[kind]|lower }} found.</p>{% endif %}
+{% endblock %}

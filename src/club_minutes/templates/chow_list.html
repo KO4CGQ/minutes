@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>{{ club.label }} chow list</title>
+<link rel="stylesheet" href="static/minutes.css"><style>:root { {{ theme_light() }} }</style></head>
+<body class="pdf"><article class="minutes">
+  <header class="mh">
+    <img src="{{ brand(pdf=True) }}" alt="{{ club.label }} logo">
+    <div>
+      <div class="club">{{ [club.info.callsign, club.info.name]|select|join(' · ') or club.label }}</div>
+      <h1>Chow List</h1>
+      <div class="date">As of {{ today|longdate }}</div>
+    </div>
+  </header>
+  <table class="chowlist">
+    {% for d, x in nights %}{% set dd = d|isodate %}<tr class="{{ 'none' if x.status == 'none' }}">
+      <td>{{ dd.strftime('%a') }}</td><td>{{ dd|listdate }}</td>
+      <td>{% if x.status == 'none' %}No chow{% if x.note %} ({{ x.note }}){% endif %}{% elif x.member %}{{ club.name(x.member) }}{% else %}(open){% endif %}</td>
+    </tr>{% else %}<tr><td class="muted">Nothing scheduled yet.</td></tr>{% endfor %}
+  </table>
+  <p class="muted">Can't make your night? Ask another member to swap on the Chow page of the minutes site.</p>
+</article></body></html>

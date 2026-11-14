@@ -1,0 +1,57 @@
+# Security checks on every pull request, every push to main, and every Monday (a newly published advisory is caught
+# even in a week with no changes). Run one by hand from the Actions tab (Run workflow).
+#  - dependencies: pip-audit, the locked Python packages (uv.lock) against the PyPI and OSV advisory databases
+#  - secrets: gitleaks, keys, tokens and passwords anywhere in the git history (not just the current files)
+# Third-party actions are pinned to a commit (a moved tag can't change what runs); Dependabot keeps the pins current.
+name: Security
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false  # no token left on the runner for later steps
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+      - name: Known vulnerabilities in the locked packages
+        run: |
+          uv export --frozen --no-emit-project -o requirements.txt
+          uvx pip-audit -r requirements.txt --disable-pip --strict --progress-spinner off
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false  # no token left on the runner for later steps
+          fetch-depth: 0  # the whole history
+      - name: gitleaks ${{ env.GITLEAKS_VERSION }} (checked against its published checksum)
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors --retry-delay 10 -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+          ./gitleaks git --redact --no-banner --verbose .
+
+  # Warn only: Dependabot can't update gitleaks (it's a download, not a package). When this shows red, a newer gitleaks
+  # is out: set GITLEAKS_VERSION and GITLEAKS_SHA256 above (the checksum from the release's checksums.txt) in a PR.
+  gitleaks-latest:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Is gitleaks ${{ env.GITLEAKS_VERSION }} still the newest?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api repos/gitleaks/gitleaks/releases/latest --jq .tag_name)
+          echo "pinned v${GITLEAKS_VERSION}, newest $latest"
+          if [ "$latest" != "v${GITLEAKS_VERSION}" ]; then echo "::warning::gitleaks $latest is out (pinned: v${GITLEAKS_VERSION})"; exit 1; fi

@@ -1,0 +1,61 @@
+.ch { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.ch h1 { margin: 0 0 .2rem; } .saved { font-size: .85rem; color: var(--accent-text); } .saved.dirty { color: var(--warn-text); } .saved.err { color: var(--danger); }
+.steps { display: flex; flex-wrap: wrap; gap: .3rem; margin: 1rem 0; }
+.steps button { font: inherit; font-size: .88rem; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: 1rem; padding: .3rem .8rem; cursor: pointer; }
+.steps button:hover { background: var(--accent-soft); }
+.steps button.on { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
+#panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.3rem; min-height: 18rem; box-shadow: var(--shadow); }
+#panel h2 { margin-top: 0; }
+.pager { display: flex; justify-content: space-between; margin: 1rem 0 3rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: .4rem; }
+.mbtn { padding: .55rem .6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.mbtn small { display: block; color: var(--muted); font-size: .75rem; }
+.mbtn.inperson { background: var(--inperson-bg); border-color: var(--inperson-edge); } .mbtn.online { background: var(--online-bg); border-color: var(--online-edge); }
+.legend span { display: inline-block; padding: 0 .5rem; border-radius: .3rem; margin-right: .4rem; font-size: .85rem; }
+.row { display: flex; gap: .4rem; align-items: start; margin: .35rem 0; }
+.row textarea, .row input[type=text] { flex: 1; }
+textarea { resize: vertical; min-height: 2.4rem; }
+.hint { margin: .2rem 0 .6rem; } .ghint { color: var(--accent-text); font-size: .85rem; }
+.cols2 { display: grid; grid-template-columns: 17rem 1fr; gap: 1.2rem; } @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } }
+.queue h3 { font-size: .9rem; margin: .8rem 0 .3rem; color: var(--muted); }
+.queue ul { list-style: none; padding: 0; margin: 0; } .queue li { display: flex; justify-content: space-between; align-items: center; padding: .2rem 0; border-bottom: 1px dashed var(--border); }
+.queue li.cur { font-weight: bold; }
+.floor { border: 2px solid var(--accent); border-radius: var(--radius); padding: .9rem 1.1rem; }
+.floor h3 { margin: 0 0 .4rem; font-size: 1.3rem; }
+.past { background: var(--warn-soft); border-left: 3px solid var(--warn-edge); border-radius: .3rem; padding: .4rem .7rem; margin: .5rem 0; font-size: .9rem; }
+.past b { color: var(--warn-text); }
+.counter { display: inline-flex; align-items: center; gap: .4rem; }
+.floor textarea { width: 100%; margin: .5rem 0; }
+.invite { display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: .6rem; background: var(--warn-soft); color: var(--warn-text); font-size: .75rem; }
+.mbtn .invite { margin: .2rem 0 0; }
+.invitebox { background: var(--warn-soft); border-left: 4px solid var(--warn-edge); border-radius: .4rem; padding: .6rem .8rem; margin: .5rem 0; font-weight: 600; color: var(--warn-text); }
+.share { font: inherit; font-size: .85rem; margin-left: .4rem; padding: .15rem .65rem; border-radius: 1rem; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-text); cursor: pointer; }
+.share:hover { filter: brightness(.95); } .share.ok { background: var(--btn-bg); color: var(--btn-text); }
+.chowbox { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); padding: .6rem .8rem; margin: .4rem 0 .8rem; }
+.chowbox .row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .4rem 0; } 
+.bizitem { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .7rem .9rem; margin: .6rem 0;
+  box-shadow: var(--shadow); } .bizitem .meta { font-size: .9rem; color: var(--muted); }
+.bizitem.done textarea { text-decoration: line-through; color: var(--faint); } .bizitem.overdue { border-left: 4px solid var(--danger); } .bizitem.done { background: var(--surface-2); }
+.bizcomment { background: var(--surface-2); border-radius: .6rem; padding: .25rem .5rem; margin: .25rem 0; font-size: .95rem; }
+.notesbox { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); padding: .2rem .7rem .5rem; margin-top: 1rem; }
+.askabout ul { margin: .2rem 0 .4rem 1.1rem; padding: 0; font-weight: 600; } .askabout details summary { cursor: pointer; }
+.notecard { background: var(--surface); border: 1px solid var(--border); border-radius: .7rem; padding: .6rem .8rem; margin: .5rem 0; }
+.notecard .badge { margin-left: .5rem; } .notetext { margin: .3rem 0 .2rem; white-space: pre-wrap; font-size: 1.02rem; }
+.notebtns { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: .6rem; }
+.notelead { font-size: 1rem; color: var(--text); line-height: 1.45; margin: .2rem 0 .4rem; }
+.bizitem .combo > input { padding: .25rem 1.8rem .25rem .5rem; border-radius: .4rem; width: 13rem; height: auto; }
+.bizitem input[type=date] { padding: .25rem .45rem; min-width: 9.5rem; min-height: 2rem; } .bizitem label.due { display: inline-flex; align-items: center; gap: .3rem; }
+.bizitem .evlabel { min-width: 3.2rem; align-self: center; }
+.bizitem input[type=time] { padding: .25rem .45rem; min-height: 2rem; }
+.bizitem.motion { display: flex; flex-direction: column; gap: .5rem; } .bizitem.motion textarea { width: 100%; }
+/* an event's Starts and Ends: label, date, "at", time, each row centred on one line, the boxes sharing what's left */
+.bizitem .when { display: grid; grid-template-columns: auto minmax(0, 1.5fr) auto minmax(0, 1fr); align-items: center; gap: .45rem .4rem; margin: .5rem 0 .2rem; }
+.bizitem .when > input, .bizitem .when > .clearwrap, .bizitem .when .clearwrap > input { width: 100%; min-width: 0; }
+.bizitem .when .hint { margin: 0; } .bizitem .when input { padding-left: .55rem; padding-right: .4rem; }
+.bizitem .when .clearwrap:has(> button.clearbox:not([hidden])) > input { padding-right: 2.3rem; } .bizitem .when button.clearbox { width: 2.3rem; } .bizitem .row.meta { align-items: center; }
+/* a phone: "Starts" / "Ends" on a line of their own, the date and the time side by side under it, each half the width */
+@media (max-width: 560px) {
+  .bizitem .when { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .3rem .5rem; }
+  .bizitem .when .evlabel { grid-column: 1 / -1; margin-top: .2rem; font-weight: 600; } .bizitem .when .hint { display: none; }
+}
+.bizitem label.due .clearwrap > input[type=date] { min-width: 11.5rem; }  /* a business item's Due: room for the date beside the ✕ */

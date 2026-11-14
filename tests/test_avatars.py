@@ -1,0 +1,98 @@
+"""Profile pictures: squared and stripped of camera data, members-only, removable by the member or an officer."""
+import io
+from pathlib import Path
+
+import pytest
+from PIL import Image
+
+from club_minutes import avatars
+
+FIX = Path(__file__).parent / "fixtures"
+
+
+def photo(w=800, h=600, fmt="JPEG", exif=True) -> bytes:
+    img = Image.new("RGB", (w, h), (200, 30, 30))
+    out = io.BytesIO()
+    kw = {}
+    if exif:
+        e = Image.Exif()
+        e[0x010F] = "PhoneMaker"   # camera make
+        e[0x8825] = {2: (41.0, 27.0, 0.0)}  # GPS latitude
+        kw["exif"] = e
+    img.save(out, fmt, **kw)
+    return out.getvalue()
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    monkeypatch.setattr(avatars, "DATA", tmp_path)
+    return tmp_path
+
+
+def test_save_squares_and_strips(env):
+    avatars.save("amy", photo())
+    img = Image.open(avatars.path("amy"))
+    assert img.size == (256, 256) and img.format == "JPEG" and not dict(img.getexif())
+    assert avatars.url("amy").startswith("/avatars/amy.jpg?v=") and avatars.url("bob") is None
+    assert oct(avatars.path("amy").stat().st_mode)[-3:] == "600"
+    for bad in (b"", b"not a picture", photo(fmt="GIF", exif=False)):
+        with pytest.raises(ValueError):
+            avatars.save("amy", bad)
+    assert avatars.remove("amy") and not avatars.path("amy").exists()
+
+
+def test_routes(env, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "amy", "first": "Amy", "last": "Appleseed"}, {"id": "bob", "first": "Bob", "last": "Bloggs"},
+        {"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True}])
+    monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
+    who = {"id": "amy"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    assert 'class="avatar md initials"' in c.get("/profile").text and ">AA<" in c.get("/profile").text
+    r = c.post("/profile/photo", files={"photo": ("me.jpg", photo(), "image/jpeg")}, follow_redirects=False)
+    assert r.headers["location"] == "/profile?photo=1"
+    page = c.get("/roster").text
+    assert "/avatars/amy.jpg?v=" in page
+    img = c.get("/avatars/amy.jpg")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg"
+    assert "a picture we can read" in c.post("/profile/photo", files={"photo": ("x.jpg", b"nope", "image/jpeg")}).text
+    who["id"] = "bob"
+    assert c.post("/members/amy/photo/remove").status_code == 403          # not an officer
+    who["id"] = "sec"
+    c.post("/members/amy/photo/remove")
+    assert not avatars.path("amy").exists() and c.get("/avatars/amy.jpg").status_code == 404
+
+
+def test_roster_card_view_is_remembered(env, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "amy", "first": "Amy", "last": "Appleseed", "role": "Secretary"}])
+    monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "amy")
+    c = TestClient(web.app)
+    assert '<table class="list">' in c.get("/roster").text                          # a list by default
+    page = c.get("/roster?view=cards").text
+    assert 'class="membercard"' in page and "Secretary" in page and '<table class="list">' not in page
+    assert 'class="membercard"' in c.get("/roster").text                            # remembered
+    assert '<table class="list">' in c.get("/roster?view=list").text
+
+
+def test_transparency_kept(env):
+    img, out = Image.new("RGBA", (300, 300), (0, 0, 0, 0)), io.BytesIO()
+    img.save(out, "PNG")
+    avatars.save("amy", out.getvalue())
+    got = Image.open(avatars.path("amy"))
+    assert got.format == "PNG" and got.mode == "RGBA" and got.getpixel((5, 5))[3] == 0
+    assert avatars.url("amy").startswith("/avatars/amy.png?v=")
+    avatars.save("amy", photo())  # a JPEG replaces the PNG
+    assert avatars.path("amy").suffix == ".jpg" and not (env / "avatars" / "amy.png").exists()
+    assert avatars.remove("amy") and avatars.url("amy") is None

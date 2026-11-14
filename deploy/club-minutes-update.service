@@ -1,0 +1,7 @@
+[Unit]
+Description=Update the Club Minutes app (asked for from its admin page)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/club-minutes/deploy/update-from-app.sh
+TimeoutStartSec=15min

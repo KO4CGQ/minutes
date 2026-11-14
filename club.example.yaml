@@ -1,0 +1,120 @@
+# Every setting, with what it does. To start a server, club.minimal.yaml is enough: most of this is also set in the app
+# (Admin → Site), and whatever is left out has a default.
+
+club:
+  name: Example Radio Club
+  callsign: W0CLUB
+  # app_name: Example Club Minutes   # the app's name in pages and emails; default "<callsign> Minutes" (Admin → Site sets it too)
+  meeting_day: Thursday     # required, with meeting_time
+  meeting_time: "19:30"     # 24-hour; the "Start meeting" button pulses from 30 minutes before
+  invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit
+  timezone: America/New_York  # for the club calendars; left out: the server's own
+  public_calendars: []     # e.g. [events, community]: shown to anyone at /calendar/public and /calendar/public.ics
+                           # (never chow or birthdays). Leave empty to keep every calendar members-only.
+  remind_days_before: 3    # business item owners get an email this many days before the due date (and once if overdue)
+  date_formats:          # strftime codes; %-d = day without leading zero
+    list: "%b %-d, %Y"    # tables, e.g. Nov 5, 2026
+    document: "%B %-d, %Y"  # minutes header, e.g. November 5, 2026
+    short: "%b %-d"       # without the year, e.g. Nov 5 (calendar, emails); the weekday is added where shown: Thu Nov 5
+    long: "%B %-d"        # e.g. November 5; with the weekday: Thursday, November 5
+    # Day first:  list: "%-d %b %Y"  document: "%-d %B %Y"  short: "%-d %b"  long: "%-d %B"
+
+auth:
+  rp_id: minutes.example-tailnet.ts.net   # passkeys only work on this exact HTTPS hostname
+  # rp_name: Example Club Minutes   # the name phones show for a passkey; default: the app's name (admin → Site)
+  session_days: 180                      # "remember this device"
+  # origins: [https://minutes.example-tailnet.ts.net]   # addresses passkeys are accepted from; default https://<rp_id>
+  # base_url: https://minutes.example-tailnet.ts.net    # the start of links in emails; default the first origin
+
+admins: [N0CALL]   # callsigns that may turn on admin mode (name menu) for an hour at a time; more can be added in the app (Admin → Security → Admins)
+
+email:
+  # TEST MODE: while this list is present, email only goes to these callsigns or addresses.
+  # Everything else is withheld and logged. Remove only_to to email members for real.
+  only_to: [N0CALL]
+
+links:  # shown in the "Club Links" footer of the minutes and on the Links page
+  # The starting list: once an admin edits the links on the Links page, links.json in the data folder is used instead.
+  # Optional icon: video, chat, globe, document, radio, calendar or link (guessed from the address if left out)
+  - label: Join online       # a video meeting link (Teams, Zoom, Meet, Jitsi…): Home offers the first one
+    url: https://meet.jit.si/REPLACE_ME
+  - label: Club Discord
+    url: https://discord.com/invite/REPLACE_ME
+  - label: Constitution and Bylaws   # a page of this app: /page, shown in full in the minutes and their PDF
+    url: /bylaws
+
+# Holidays and election days on the calendars, by region. None by default. Also on Admin → Site → Features.
+# calendar:
+#   holidays: us        # a country, or a state or region in it: us, us-oh, fr, de-by, gb-sct… (from python-holidays)
+#   extra_holidays:     # the club's own: a date, or a weekday rule (nth 1-4 or -1 for the last), + days after
+#     - {name: Christmas Eve, month: 12, day: 24}
+#     - {name: Black Friday, month: 11, weekday: thursday, nth: 4, after: 1}
+#   elections: us-oh    # on the Community calendar: us (the US general election, even years) or us-oh (Ohio:
+#                       # primaries and general election)
+
+# The meeting's sections, in order (the leader console's steps between Attendance and Review). Built in, each with
+# something behind it: Bills and Communications (bills read out reach the Treasurer pages), Financial Report,
+# Community Reports (each tied to a member), Old Business and New Business (tracked week to week), Upcoming Chow (the
+# chow module) and Upcoming Events (the calendars). Any other name is the club's own free-text section, with an
+# optional hint for the console. Left out: the built-ins except Upcoming Chow (added with the chow module).
+# meeting:
+#   sections:
+#     - Bills and Communications
+#     - Financial Report
+#     - Community Reports
+#     - Old Business
+#     - New Business
+#     - name: Winners
+#       hint: e.g. “50/50 drawing – Jane D $7.50”.
+#     - Upcoming Events
+
+# A certificate each member buys once (some clubs call it a bond), on the Treasurer pages: who has bought it, who
+# owes it and by when (the years to buy it and its price are Treasurer settings). Off unless named here.
+# treasurer:
+#   certificate:
+#     name: Bond (Certificate of Indebtedness)   # its full name
+#     short: bond                                 # in sentences ("Record a bond bought before …")
+#     note: What it is, shown with it to members and officers.
+
+# The club's bylaws, where the app refers to them. Each section is shown only if given ("… (bylaws VII.B)").
+# bylaws:
+#   refs:
+#     dues: VII            # the Treasurer pages: dues, fees and the amounts
+#     bills: IV.C          # regular bills
+#     arrears: VII.B       # the arrears email to the Treasurer and the Board
+#     certificate: VII.D   # the bond (Certificate of Indebtedness)
+#     missed_chow: VII.F   # the fee for a missed chow night
+#   arrears_note: What happens next under your bylaws (who may suspend a member, and how), added to the arrears email.
+
+# Optional parts of the app, each off unless turned on here:
+#   chow: a rotation of members bringing food to meetings: the Chow page, swaps, reminders, the console's
+#         Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.
+# modules:
+#   chow: true
+
+# Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer). Also on Admin → Site → Offices.
+# roster_keepers: [Secretary, Treasurer]
+
+# The club's offices, from the bylaws, for the Offices page (who holds each, and who held them when).
+# A plain title is an officer's office with one seat; officer: false is a board seat that isn't an officer.
+# Left out: President, Vice President, Secretary, Treasurer. Also on Admin → Site → Offices.
+offices:
+  - President
+  - Vice President
+  - Secretary
+  - Treasurer
+  - {title: Trustee, officer: false, seats: 3}
+
+# AI assistance (suggested follow-ups from the minutes), through OpenRouter. Needs the API key in the
+# environment too: CLUB_MINUTES_OPENROUTER_KEY=... in /etc/club-minutes/env. Leave out to keep AI off.
+# ai:
+#   model: provider/model-name   # any chat model id from openrouter.ai/models
+#   enabled: true
+
+privacy:
+  never_record: []  # names never recorded in the minutes (also on Admin → Site → Privacy)
+
+# People come only from the roster the app keeps (roster-sheet.json in the data folder).
+# Secrets aren't kept here but in /etc/club-minutes/env (the server admin guide has them all), e.g. CLUB_MINUTES_SMTP_HOST, _PORT, _USER,
+# _PASSWORD, _FROM, _REPLY_TO (email); CLUB_MINUTES_BACKUP_PASSPHRASE; CLUB_MINUTES_ROSTER_API_TOKEN (the Discord bot);
+# CLUB_MINUTES_OPENROUTER_KEY (AI).

@@ -1,0 +1,9 @@
+[Unit]
+Description=Staging server: pull the live minutes app's data (one way) and restart
+
+[Service]
+Type=oneshot
+# CLUB_MINUTES_STAGE=1 and STAGE_SYNC_FROM=root@<prod host>:./
+EnvironmentFile=-/etc/club-minutes/env
+ExecStart=/opt/club-minutes/deploy/stage-sync.sh
+TimeoutStartSec=20min

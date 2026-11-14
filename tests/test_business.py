@@ -1,0 +1,290 @@
+"""Tracked business items: carried until done, owners and due dates, the minutes' Old and New Business."""
+import datetime as dt
+from pathlib import Path
+
+import pytest
+
+from club_minutes import business, chow, console
+from club_minutes.club import Club
+from club_minutes.meeting import Item, Meeting
+from club_minutes.store import Archive
+
+FIX = Path(__file__).parent / "fixtures"
+PEOPLE = [{"id": "sec", "first": "Sam", "last": "Scribe", "role": "Secretary", "officer": True},
+          {"id": "amy", "first": "Amy", "last": "Appleseed"},
+          {"id": "bob", "first": "Bob", "last": "Bloggs"}]
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    monkeypatch.setattr(business, "DATA", tmp_path)
+    monkeypatch.setattr(chow, "DATA", tmp_path)
+    club = Club(FIX / "test-club.yaml", roster=PEOPLE)
+    meetings = tmp_path / "meetings"
+    meetings.mkdir()
+    Meeting(date=dt.date(2026, 10, 22), status="published", sections={"New Business": [Item("Club  patches for hats")]}).save(meetings)
+    Meeting(date=dt.date(2026, 10, 29), status="published", sections={
+        "Old Business": [Item("Club patches for hats")], "New Business": [Item("Field Day at Osborn Park?")]}).save(meetings)
+    return club, Archive(meetings, club)
+
+
+def test_items_carry_until_done(env):
+    club, a = env
+    m = console.start(a, dt.date(2026, 11, 5), "sec")
+    assert [i.text for i in m.items("Old Business")] == ["Club patches for hats", "Field Day at Osborn Park?"]  # seeded
+    s = business.load()
+    patches, park = s["items"]
+    assert (patches["opened"], park["opened"]) == ("2026-10-22", "2026-10-29")  # when each first came up
+    business.edit(s, patches["id"], "sec", owner="amy", due="2026-11-01")
+    business.close(s, park["id"], "sec", "2026-11-05")
+    new = business.add(s, "Order a new feedline", "sec", opened="2026-11-05")
+    business.save(s)
+    assert business.view(club, business.get(s, patches["id"]), "2026-11-05")["overdue"]
+    console.submit(a, "2026-11-05")
+    m = a.by_slug["2026-11-05"]
+    assert [i.text for i in m.items("Old Business")] == ["Club patches for hats (Amy, due Nov 1)",
+                                                        "Field Day at Osborn Park? Done."]
+    assert [i.text for i in m.items("New Business")] == ["Order a new feedline"]
+
+    m = console.start(a, dt.date(2026, 11, 12), "sec")  # done items drop off; tonight's new item is now old
+    assert [i.text for i in m.items("Old Business")] == ["Club patches for hats (Amy, due Nov 1)", "Order a new feedline"]
+    s = business.load()
+    business.close(s, new["id"], "amy", "2026-11-09")  # marked done between meetings: shows as done at the next one
+    business.save(s)
+    old, _ = business.for_meeting(s, "2026-11-12", since="2026-11-05")
+    assert [business.line(club, x, "2026-11-12") for x in old][-1] == "Order a new feedline Done."
+
+
+def test_agenda_hold_and_deleted_meetings(env):
+    _club, a = env
+    s = business.load()
+    business.seed(s, a.meetings)
+    sotc = business.add(s, "State of the Club (President)", "sec", agenda="2027-01-07", opened="2026-11-01")
+    assert sotc not in business.for_meeting(s, "2026-11-05")[0] and sotc in business.for_meeting(s, "2027-01-07")[0]
+    # A practice meeting is deleted: what it added goes, what it closed reopens.
+    oops = business.add(s, "practice item", "sec", opened="2026-11-20")
+    business.close(s, s["items"][0]["id"], "sec", "2026-11-20")
+    assert business.forget_meeting(s, "2026-11-20") == 1 and oops not in s["items"]
+    assert s["items"][0]["status"] == "open"
+    with pytest.raises(ValueError):
+        business.remove(s, sotc["id"], "2026-11-05")  # only items added at that meeting can be deleted
+    with pytest.raises(ValueError):
+        business.add(s, "   ", "sec")
+    with pytest.raises(ValueError):
+        business.edit(s, sotc["id"], "sec", due="soon")
+
+
+def test_business_page_permissions(env, monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    _club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "amy"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    assert "Club patches for hats" in c.get("/business").text and "Add an item" not in c.get("/business").text
+    assert c.post("/business/add", data={"text": "x"}).status_code == 403
+    iid = business.load()["items"][0]["id"]
+    assert "Only an officer or the item" in c.post(f"/business/{iid}/edit", data={"due": "2026-12-01"}).text
+    who["id"] = "sec"
+    c.post(f"/business/{iid}/edit", data={"owner": "amy"})
+    who["id"] = "amy"  # now Amy owns it: she can set the due date and mark it done, but not hand it off
+    c.post(f"/business/{iid}/edit", data={"due": "2026-12-01", "owner": "bob"})
+    x = business.get(business.load(), iid)
+    assert x["due"] == "2026-12-01" and x["owner"] == "amy"
+    c.post(f"/business/{iid}/done", data={"done": 1})
+    assert business.get(business.load(), iid)["status"] == "done"
+    who["id"] = "sec"
+    r = c.post("/business/add", data={"text": "Order a new feedline", "meeting": "2026-11-05"},
+               headers={"Accept": "application/json"})
+    assert [x["text"] for x in r.json()["new"]] == ["Order a new feedline"]
+
+
+def test_reminders_once_each_and_only_owners(env):
+    club, _a = env
+    s = business.load()
+    soon = business.add(s, "Book the park", "sec", owner="amy", due="2026-12-03")
+    late = business.add(s, "Return the borrowed antenna", "sec", owner="amy", due="2026-11-20")
+    business.add(s, "Nobody's job", "sec", due="2026-12-01")                          # no owner: nobody to remind
+    business.close(s, business.add(s, "Finished", "sec", owner="bob", due="2026-12-02")["id"], "sec")
+    today = dt.date(2026, 11, 30)
+    due = business.due_reminders(s, today, days_before=3)
+    assert list(due) == ["amy"] and [(x["text"], k) for x, k in due["amy"]] == [
+        ("Book the park", "soon"), ("Return the borrowed antenna", "overdue")]
+    subject, body = business.reminder_email(club, "amy", due["amy"], today, "https://x")
+    assert "past due" in subject and "due Thursday, December 3" in body and "was due Friday, November 20" in body
+    business.mark_reminded(due["amy"])
+    assert business.due_reminders(s, today) == {} and business.due_reminders(s, dt.date(2026, 12, 2)) == {}
+    business.edit(s, soon["id"], "amy", due="2026-12-10")                              # a new date: a new reminder
+    assert [x["text"] for x, _ in business.due_reminders(s, dt.date(2026, 12, 8))["amy"]] == ["Book the park"]
+    assert late["reminded"] == {"overdue": "2026-11-20"}
+
+
+def test_comments_history_and_notes(env, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    _club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "bob"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    monkeypatch.setattr(web, "upcoming_meetings", lambda n=4: [dt.date(2026, 11, 12), dt.date(2026, 11, 19)])
+    c = TestClient(web.app)
+    c.get("/business")                                            # seeds from the Oct 29 minutes
+    iid = business.load()["items"][0]["id"]
+    c.post(f"/business/{iid}/comment", data={"text": "I can help with the patches"})   # any member can comment
+    x = business.get(business.load(), iid)
+    assert [cm["text"] for cm in x["comments"]] == ["I can help with the patches"]
+    who["id"] = "amy"
+    assert "only delete your own" in c.post(f"/business/{iid}/comments/{x['comments'][0]['id']}/delete").text
+
+    who["id"] = "sec"                                             # a leader rewords it at a meeting: the old text is kept
+    c.post(f"/business/{iid}/edit", data={"text": "Club patches: Bob orders them", "meeting": "2026-11-05"})
+    h = business.get(business.load(), iid)["history"][-1]
+    assert h["changes"] == {"text": ["Club patches for hats", "Club patches: Bob orders them"]} and h["meeting"] == "2026-11-05"
+    page = c.get("/business").text
+    assert "History" in page and "Club patches for hats</s>" in page and "I can help with the patches" in page
+
+    who["id"] = "bob"                                             # a note for a meeting he'll miss
+    assert c.post("/business/notes", data={"text": "x", "meeting": "2027-01-01"}).status_code == 400
+    c.post("/business/notes", data={"text": "Can't make the 12th. I built a new minutes app.", "meeting": "2026-11-12"})
+    n = business.load()["notes"][0]
+    assert "Your note for" in c.get("/business?tab=notes").text
+    assert "Only the meeting" in c.post(f"/business/notes/{n['id']}/read").text   # only a leader marks it read
+    who["id"] = "sec"
+    s = business.load()
+    assert [x["text"] for x in business.notes_for(s, "2026-11-05")] == []         # not for an earlier meeting
+    assert [x["text"] for x in business.notes_for(s, "2026-11-12")] == ["Can't make the 12th. I built a new minutes app."]
+    r = c.post(f"/business/notes/{n['id']}/read", data={"meeting": "2026-11-12"}, headers={"Accept": "application/json"})
+    assert r.json()["notes"] == [] and business.load()["notes"][0]["status"] == "read"
+
+
+def test_owner_typed_by_name(env, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    _club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "sec")
+    c = TestClient(web.app)
+    c.get("/business")
+    iid = business.load()["items"][0]["id"]
+    for typed, want in (("Amy Appleseed", "amy"), ("  bob  bloggs ", "bob"), ("", None)):
+        c.post(f"/business/{iid}/edit", data={"owner": typed})
+        assert business.get(business.load(), iid)["owner"] == want
+    assert "No member called" in c.post(f"/business/{iid}/edit", data={"owner": "Nobody Here"}).text
+    c.post("/business/add", data={"text": "Book the pavilion", "owner": "Amy Appleseed"})
+    assert business.load()["items"][-1]["owner"] == "amy"
+
+
+def test_minutes_editors_manage_business_only_from_the_console(env, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    club, a = env
+    club.members["bob"].minutes_editor = True  # may lead a meeting, but isn't an officer
+    monkeypatch.setattr(web, "archive", a)
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "bob")
+    c = TestClient(web.app)
+    page = c.get("/business").text
+    assert "Add an item" not in page and "Edit</button>" not in page and "Mark done" not in page
+    iid = business.load()["items"][0]["id"]
+    assert c.post("/business/add", data={"text": "x"}).status_code == 403
+    assert "Only an officer" in c.post(f"/business/{iid}/edit", data={"text": "changed"}).text
+    # In the console, as the meeting's leader, he can.
+    r = c.post(f"/business/{iid}/edit", data={"text": "changed", "meeting": "2026-11-05"}, headers={"Accept": "application/json"})
+    assert r.status_code == 200 and business.get(business.load(), iid)["text"] == "changed"
+    assert c.post("/business/add", data={"text": "New thing", "meeting": "2026-11-05"},
+                  headers={"Accept": "application/json"}).status_code == 200
+
+
+def test_motions_are_records(env, monkeypatch):
+    """A motion keeps its mover, seconder and result as data; its text is the minutes' line."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    _club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "amy"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    form = {"mover": "Amy Appleseed", "seconder": "Bob Bloggs", "what": "to buy a new antenna.", "result": "Passed"}
+    assert c.post("/business/motion", data={**form, "meeting": "2026-11-05"}).status_code == 403  # not leading
+    who["id"] = "sec"
+    console.start(a, dt.date(2026, 11, 5), "sec")
+    r = c.post("/business/motion", data={**form, "meeting": "2026-11-05"}, headers={"Accept": "application/json"})
+    assert r.json()["new"][0]["text"] == "Motion: Amy Appleseed moved to buy a new antenna, seconded by Bob Bloggs. Passed."
+    assert a.by_slug["2026-11-05"].items("New Business")[0].text.startswith("Motion: Amy Appleseed")  # in the draft
+    x = business.motions(business.load())[0]
+    assert x["motion"] == {"mover": "amy", "seconder": "bob", "what": "buy a new antenna", "result": "Passed"}
+    # problems are refused, not stored
+    for bad in ({**form, "result": "Maybe"}, {**form, "seconder": "Amy Appleseed"}, {**form, "mover": "Nobody Here"}):
+        assert c.post("/business/motion", data={**bad, "meeting": "2026-11-05"},
+                      headers={"Accept": "application/json"}).status_code == 409
+    # a past motion, from old minutes: filed under its date, closed, so it never comes up in Old Business
+    c.post("/business/motion", data={**form, "what": "open the books", "result": "Tabled", "date": "2026-10-22"})
+    old = business.motions(business.load())[1]
+    assert (old["opened"], old["status"]) == ("2026-10-22", "done")
+    assert "open the books" not in str(business.for_meeting(business.load(), "2026-11-12"))
+    # a past motion can't be deleted: no meeting is being written that day, and the record refuses it anyway
+    assert c.post(f"/business/{old['id']}/delete", data={"meeting": "2026-10-22"}).status_code == 403
+    with pytest.raises(ValueError):
+        business.remove(business.load(), old["id"], "2026-10-22")
+    j = c.post("/business/add", data={"text": "oops", "meeting": "2026-11-05"}, headers={"Accept": "application/json"}).json()
+    oops = next(x for x in j["new"] if x["text"] == "oops")  # but an item added by mistake at a live meeting can be
+    assert "oops" not in str(c.post(f"/business/{oops['id']}/delete", data={"meeting": "2026-11-05"},
+                                    headers={"Accept": "application/json"}).json())
+    # a tabled motion's later result; a died motion drops its seconder
+    c.post(f"/business/{old['id']}/motion", data={**form, "what": "open the books", "result": "Died for lack of a second"})
+    old = business.get(business.load(), old["id"])
+    assert old["text"] == "Motion: Amy Appleseed moved to open the books. The motion died for lack of a second."
+    assert old["motion"]["seconder"] is None and "result" in old["history"][-1]["changes"]
+    page = c.get("/business?tab=motions&result=Passed").text
+    assert "buy a new antenna" in page and "open the books" not in page and "Record a past motion" in page
+    who["id"] = "amy"
+    assert "Record a past motion" not in c.get("/business?tab=motions").text
+    assert c.post(f"/business/{old['id']}/motion", data=form).status_code == 403
+
+
+def test_home_opens_your_items_in_a_dialog_and_comes_back_there(env, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    _club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "sec"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c = TestClient(web.app)
+    a.reload()
+    iid = console.business_state(a)["items"][0]["id"]
+    c.post(f"/business/{iid}/edit", data={"owner": "amy"})
+    who["id"] = "amy"
+    home = c.get("/").text
+    assert f'data-item="d{iid}"' in home and f'id="d{iid}"' in home and 'name="back" value="/"' in home  # the dialog is on Home
+    r = c.post(f"/business/{iid}/comment", data={"text": "Ordered them", "back": "/"}, follow_redirects=False)
+    assert r.headers["location"] == f"/#i{iid}"                                    # back to Home, that item open
+    assert c.post(f"/business/{iid}/comment", data={"text": "x", "back": "https://evil.example/"},
+                  follow_redirects=False).headers["location"] == f"/business#i{iid}"  # anything else: the Business page
+    who["id"] = "bob"                                                              # not his: refused, and Home says so
+    assert "Only an officer or the item&#39;s owner" in c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}).text
+    who["id"] = "amy"
+    r = c.post(f"/business/{iid}/done", data={"done": 1, "back": "/"}, follow_redirects=False)
+    assert r.headers["location"] == "/" and business.get(business.load(), iid)["status"] == "done"
+
+
+def test_an_item_added_between_meetings_links_no_missing_meeting(monkeypatch):
+    """An item added on the Business page on a day with no meeting says "added <date>"; one from a meeting links to it."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web.archive, "by_slug", {"2026-11-05": object()})
+    s = business.load()
+    business.add(s, "Between meetings", "n0offc", opened="2026-11-10")
+    business.add(s, "At a meeting", "n0offc", opened="2026-11-05")
+    business.save(s)
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, web.authn.new_session(next(iter(web.archive.club.members))))
+    html = t.get("/business").text
+    assert 'href="/meetings/2026-11-10' not in html and "added" in html
+    assert 'href="/meetings/2026-11-05?from=business' in html
