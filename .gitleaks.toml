@@ -5,3 +5,7 @@ useDefault = true
 [[allowlists]]
 description = "Simple Icons brand logos: long SVG path strings, public data (see README → Links page icons)"
 paths = ['''^src/(club|w8lbz)_minutes/simple_icons\.json$''']  # w8lbz_: the file's path before 0.20.0, still in the history
+
+[[allowlists]]
+description = "Screenshot manifest: SHA-256 fingerprints of the files each picture shows (demo/manifest.py), not keys"
+paths = ['''^docs/screenshots/manifest\.json$''']
