@@ -401,8 +401,10 @@
         ta.value = e.text;
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
             h("button", { class: "btn small ghost", title: "Remove", onclick: () => { evs.splice(i, 1); draw(); save(); } }, emo("✖️", "x"))),
-          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Starts"), date, time, cal, nodate),
-          h("div", { class: "row meta" }, h("span", { class: "evlabel" }, "Ends"), endDate, endTime, h("span", { class: "hint" }, "optional")),
+          h("div", { class: "when" }, h("span", { class: "evlabel" }, "Starts"), date, h("span", { class: "hint" }, "at"), time,
+            h("span", { class: "evlabel" }, "Ends"), endDate, h("span", { class: "hint" }, "at"), endTime),
+          h("p", { class: "hint" }, "The time and the end are optional."),
+          h("div", { class: "row meta" }, cal, nodate),
           twin ? h("p", { class: "duphint" }, `Possible duplicate: "${twin.title}" is on the calendar that day. If it's the same event, `,
             h("button", { class: "btn small ghost", title: "Replace this entry with the calendar's: its title, place, date, time and calendar", onclick: () => {
               Object.assign(e, { text: twin.title + (twin.where ? `, ${twin.where}` : ""), when: twin.when, until: twin.until, cal: twin.cal === "events" ? null : twin.cal });

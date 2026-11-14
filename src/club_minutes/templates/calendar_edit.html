@@ -9,11 +9,11 @@
 <label>Calendar <select name="cal">{% for k, label in cals.items() %}<option value="{{ k }}" {{ 'selected' if k == (f.cal or 'events') }}>{{ label }}</option>{% endfor %}</select></label>
 <p class="muted small">Club events are what the club runs or joins. Community is what's on in the area. Planning is for officers' dates, like the annual meeting.</p>
 <label>Title <input name="title" value="{{ f.title }}" maxlength="200" required></label>
-<fieldset><legend>Starts</legend><div class="row"><input type="date" name="date" value="{{ f.date }}" required aria-label="Start date">
-  <input type="time" name="time" value="{{ f.time }}" aria-label="Start time (optional)"></div>
+<fieldset><legend>Starts</legend><div class="pairgrid"><label>Date <input type="date" name="date" value="{{ f.date }}" required></label>
+  <label>Time <input type="time" name="time" value="{{ f.time }}"></label></div>
   <p class="muted small">Leave the time empty for an all-day event.</p></fieldset>
-<fieldset><legend>Ends</legend><div class="row"><input type="date" name="end_date" value="{{ f.end_date }}" aria-label="Last day (optional)">
-  <input type="time" name="end_time" value="{{ f.end_time }}" aria-label="End time (optional)"></div>
+<fieldset><legend>Ends</legend><div class="pairgrid"><label>Last day <input type="date" name="end_date" value="{{ f.end_date }}"></label>
+  <label>Time <input type="time" name="end_time" value="{{ f.end_time }}"></label></div>
   <p class="muted small">Optional. An end time alone means the same day; a later date for an event over several days. With a start time and no end, it's taken as 2 hours.</p></fieldset>
 <label>Time zone <input name="tz" list="zones" value="{{ f.tz or club_tz }}" autocomplete="off" spellcheck="false"></label>
 <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>

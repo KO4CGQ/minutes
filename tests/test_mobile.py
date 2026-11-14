@@ -302,3 +302,35 @@ def test_hovering_a_member_link_leaves_the_initials_alone(engine):
         underlined = page.evaluate("getComputedStyle(document.querySelector('a')).textDecorationColor")
         browser.close()
     assert underlined and before == hovered, "the link's hover underline shows inside the initials circle"
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_optional_date_and_time_boxes_can_be_cleared(engine):
+    """fields.js: an optional date or time box gets a Clear button (an iPhone fills a box in when tapped and its picker
+    can't empty it), shown only while there's a value; a required one gets none; boxes added later get one too."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    js = (Path(__file__).parents[1] / "src/club_minutes/static/fields.js").read_text()
+    html = ('<form><label>Starts <input type="date" name="start" required value="2026-11-13"></label>'
+            '<label>Due <input type="date" name="due" value="2026-11-20"></label>'
+            '<input type="time" name="t" aria-label="Start time"></form><div id="later"></div>')
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        page.set_content(html)
+        page.add_script_tag(content=js)
+        page.evaluate("window.changed = []; document.addEventListener('change', (e) => changed.push(e.target.name))")
+        assert page.locator("input[name=start] + .clearbox").count() == 0  # required: nothing to clear
+        assert page.get_by_role("button", name="Clear Due").is_visible()
+        assert not page.locator("input[name=t] + .clearbox").is_visible()  # empty: hidden until there's a time
+        page.get_by_role("button", name="Clear Due").click()  # the ✕ inside the box
+        assert page.input_value("input[name=due]") == "" and page.evaluate("changed") == ["due"]
+        assert not page.locator("input[name=due] + .clearbox").is_visible()
+        page.fill("input[name=t]", "19:30")
+        assert page.get_by_role("button", name="Clear Start time").is_visible()
+        page.evaluate("document.getElementById('later').innerHTML = '<input type=date name=added value=2026-12-01>'")
+        page.wait_for_timeout(50)
+        assert page.locator("input[name=added] + .clearbox").is_visible()  # built after the page loaded (the console)
+        browser.close()

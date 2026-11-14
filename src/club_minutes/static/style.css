@@ -644,3 +644,19 @@ form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-
 .rolelist .role h3 { margin: 0 0 .2rem; font-size: 1rem; } .rolelist .role p { margin: .2rem 0; }
 .permtable { width: 100%; border-collapse: collapse; font-size: .9rem; } .permtable th, .permtable td { text-align: left; vertical-align: top; padding: .35rem .5rem; border-bottom: 1px solid var(--border); }
 .rolelist ul.allows { margin: .1rem 0 .3rem; padding-left: 1.2rem; } .rolelist ul.allows li { margin: .05rem 0; }
+/* fields.js: a round ✕ inside the right edge of an optional date or time box, while it has a value (an iPhone fills a
+   box in when tapped and its picker can't empty it) */
+.clearwrap { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
+.clearwrap.block { display: flex; width: 100%; } .clearwrap > input { flex: 1 1 auto; min-width: 0; }
+.clearwrap:has(> button.clearbox:not([hidden])) > input { padding-right: 2.1rem; }
+button.clearbox { position: absolute; right: .45rem; top: 50%; transform: translateY(-50%); width: 1.35rem; height: 1.35rem;
+  padding: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--muted); font-size: .75rem; line-height: 1;
+  display: grid; place-items: center; cursor: pointer; }
+button.clearbox:hover, button.clearbox:focus-visible { background: var(--border-strong); color: var(--text); }
+button.clearbox[hidden] { display: none; }
+/* an empty date or time box keeps its size on iPhones, which otherwise shrink it to nothing */
+input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
+/* a date and a time side by side (the calendar event form): equal halves, the boxes lined up along the bottom */
+.pairgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem .8rem; align-items: end; max-width: 26rem; }
+.pairgrid > label { margin: 0; min-width: 0; } .pairgrid input, .pairgrid .clearwrap { width: 100%; min-width: 0; box-sizing: border-box; }
+.pairgrid .clearwrap { display: flex; }
