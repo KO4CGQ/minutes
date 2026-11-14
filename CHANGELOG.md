@@ -4,6 +4,9 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
+## Unreleased
+- Development only: the secret scan no longer allows the icons file's pre-1.0 path (the 0.x tags it lived in are deleted), and `dev/checks.sh` scans branches and tags only, as GitHub does (not local worktrees).
+
 ## 1.0.0 (2026-11-13)
 **Initial release.** Club Minutes has been redesigned so any amateur radio club can set it up and shape it to its own needs (its agenda, offices, dues, calendars and look) from the app. Earlier test versions (0.x) aren't listed here. From 1.0.0 on, settings, folders, services and command names stay the same from one version to the next; a change a club would have to act on waits for 2.0 (the developer guide's Compatibility section lists what that covers).
 

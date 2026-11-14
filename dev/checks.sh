@@ -34,7 +34,7 @@ if [ ! -x "$gl" ]; then
   echo "$sum  $CACHE/gitleaks.tgz" | sha256sum -c - >/dev/null
   tar xzf "$CACHE/gitleaks.tgz" -C "$CACHE" gitleaks && mv "$CACHE/gitleaks" "$gl" && rm "$CACHE/gitleaks.tgz"
 fi
-"$gl" git --redact --no-banner --log-opts=--all . || fail=1
+"$gl" git --redact --no-banner --log-opts="--branches --tags" . || fail=1  # not --all: that adds other worktrees' HEADs (the previews), which GitHub never sees
 
 step "CodeQL (security-extended, the committed files)"
 codeql=${CODEQL:-$CACHE/codeql/codeql}
