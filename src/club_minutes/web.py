@@ -197,9 +197,14 @@ templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"),
                              logo_class=lambda: f"logo bg-{branding.backing()}")  # what's behind it (Site)
 
 
+_THEME_CODE = (HERE / "theme.py").read_bytes()  # how the colours are made: a change there (an update) is a new file too
+
+
 def _theme_stamp() -> str:
+    """theme.css's ?v=: changes with the club's colours and with the app's way of making them, so after an update no
+    browser keeps a day-old copy (one kept recolouring the console's in-person buttons blue)."""
     import hashlib
-    return hashlib.sha1(json.dumps(branding.colours(), sort_keys=True).encode()).hexdigest()[:10]
+    return hashlib.sha1(json.dumps(branding.colours(), sort_keys=True).encode() + _THEME_CODE).hexdigest()[:10]
 
 
 # ---------------- login gate ----------------

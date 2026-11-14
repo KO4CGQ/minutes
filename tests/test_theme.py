@@ -114,3 +114,24 @@ def test_a_picked_top_bar_shows_in_dark_mode_too_dimmed():
     assert light["--nav-bg"] == "#7a3fb0" and hue(dark["--nav-bg"]) == hue("#7a3fb0")  # a purple bar is a dark purple bar
     assert colorsys.rgb_to_hls(*theme._rgb(dark["--nav-bg"]))[1] <= 0.225  # dimmed (to 0.22, give or take the hex rounding): a dark page keeps a dark bar
     assert theme.palette(theme.SHAPE_FROM)[1]["--nav-bg"] == theme.DARK["--nav-bg"]  # no bar picked: unchanged
+
+
+def test_attendance_colours_stay_put_whatever_the_club_picks():
+    """In person green, online blue, in light and dark: never recoloured (a blue club had both the same blue)."""
+    css = (Path(theme.__file__).parent / "static" / "style.css").read_text()
+    for main in (theme.DEFAULT, theme.SHAPE_FROM, "#7a3fb0", "#5a86c4"):
+        for p in theme.palette(main)[:2]:
+            assert not any(k.startswith(("--inperson", "--online")) for k in p), main
+    for block in re.findall(r"--inperson-bg: (#\w+); --inperson-edge: (#\w+); --online-bg: (#\w+); --online-edge: (#\w+)", css):
+        inperson_bg, inperson_edge, online_bg, online_edge = block
+        assert inperson_edge == "#7da04a" and online_edge == "#5a86c4" and inperson_bg != online_bg
+
+
+def test_theme_css_address_changes_with_the_app_too(monkeypatch):
+    """theme.css is cached for a day under ?v=: the stamp follows how the colours are made (theme.py), not only the
+    club's picks, so an update reaches browsers that keep their cache (Orion kept the old in-person blue)."""
+    from club_minutes import web
+    before = web._theme_stamp()
+    assert web._theme_stamp() == before  # the same app and colours: the same address, so the cache still works
+    monkeypatch.setattr(web, "_THEME_CODE", web._THEME_CODE + b"\n# changed")
+    assert web._theme_stamp() != before

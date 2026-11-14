@@ -11,7 +11,7 @@
   --info-soft: #e3e8f3; --ai: #6b5fb5; --ai-soft: #f1effb;
   --nav-bg: #15283e; --nav-text: #e0edf6; --nav-hover: rgba(255, 255, 255, .12); --nav-on: rgba(255, 255, 255, .2);
   --focus: rgba(39, 85, 130, .28); --mark: #fbe58a; --sheet-h: #95c0dc;
-  --inperson-bg: #c0d9ef; --inperson-edge: #4177a9; --online-bg: #d6e4f7; --online-edge: #5a86c4;
+  --inperson-bg: #dcebc4; --inperson-edge: #7da04a; --online-bg: #d6e4f7; --online-edge: #5a86c4;
   --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a; --chart-4: #eda100; --chart-5: #e87ba4; --chart-6: #008300; --chart-7: #6250d6; --chart-8: #e34948;  /* chart series, checked for colour blindness */
   --shadow: 0 1px 2px rgba(20, 30, 10, .06), 0 4px 16px rgba(20, 30, 10, .05);
   --shadow-pop: 0 10px 30px rgba(20, 30, 10, .18);
@@ -28,7 +28,7 @@
   --info-soft: #23304a; --ai: #a99cf0; --ai-soft: #262237;
   --nav-bg: #11151c; --nav-text: #d4e1ec; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
   --focus: rgba(95, 149, 206, .3); --mark: #6b5a12; --sheet-h: #1d314880;
-  --inperson-bg: #182941; --inperson-edge: #4177a9; --online-bg: #1e2f47; --online-edge: #5a86c4;
+  --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
   --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
@@ -45,7 +45,7 @@
     --info-soft: #23304a; --ai: #a99cf0; --ai-soft: #262237;
     --nav-bg: #11151c; --nav-text: #d4e1ec; --nav-hover: rgba(255, 255, 255, .08); --nav-on: rgba(255, 255, 255, .14);
     --focus: rgba(95, 149, 206, .3); --mark: #6b5a12; --sheet-h: #1d314880;
-    --inperson-bg: #182941; --inperson-edge: #4177a9; --online-bg: #1e2f47; --online-edge: #5a86c4;
+    --inperson-bg: #2c3d1c; --inperson-edge: #7da04a; --online-bg: #1e2f47; --online-edge: #5a86c4;
     --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500; --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
     --shadow-pop: 0 10px 30px rgba(0, 0, 0, .55);
