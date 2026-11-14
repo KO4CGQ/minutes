@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The checks GitHub runs on a pull request, here, before a push (docs/developers.md → Checks before a push):
 #   1. the tests (with ruff, shellcheck, zizmor and the browser tests) and the upgrade from the last release, as tests.yml;
-#   2. pip-audit on the locked packages, as security.yml;
+#   2. pip-audit on the locked packages, as security.yml, and a changelog line if the app changed, as changelog.yml;
 #   3. gitleaks at the version security.yml pins, checked against its checksum, on every branch and tag (as GitHub);
 #   4. CodeQL with the security-extended queries, Python and JavaScript, as codeql.yml, on the committed files.
 # CodeQL findings already reviewed as false positives are in dev/codeql-accepted.txt; anything else fails.
@@ -20,6 +20,9 @@ if [ "${1:-}" != "--quick" ]; then
   step "upgrade from the last release"
   dev/upgrade-check.sh || fail=1
 fi
+
+step "changelog line (if the app changed since origin/main)"
+dev/changelog-check.sh || fail=1
 
 step "pip-audit (the locked packages)"
 req=$(mktemp)

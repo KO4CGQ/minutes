@@ -1,0 +1,20 @@
+# A changelog line per pull request that changes the app (dev/changelog-check.sh). Its own workflow, so adding or
+# removing the `no-changelog` label re-runs only this, not the tests.
+name: Changelog
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+permissions:
+  contents: read
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0  # the base branch's history, to compare with
+          persist-credentials: false  # no token left on the runner for later steps
+      - run: dev/changelog-check.sh "origin/$BASE"
+        env:
+          BASE: ${{ github.base_ref }}
