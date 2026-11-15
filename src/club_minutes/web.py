@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import string
 import threading
 import time
@@ -71,7 +72,6 @@ from .club import (
     DATA,
     DATES,
     PERMISSIONS,
-    PICKED,
     PREVIEW,
     ROLES,
     STAGE,
@@ -79,6 +79,7 @@ from .club import (
     _agenda,
     _server_timezone,
     num,
+    office_list,
     one_line,
     show_date,
     valid_email,
@@ -321,13 +322,25 @@ def admin_mode(request: Request) -> bool:
 
 
 def privileged(request: Request) -> bool:
-    """Officers (the "oversee" permission), and admins while admin mode is on: the change log, undo, any business item."""
+    """Officers (the "oversee" permission), and admins while admin mode is on: Roster changes and undoing them."""
     return archive.club.may(getattr(request.state, "member", None), "oversee") or admin_mode(request)
+
+
+def moderates(request: Request) -> bool:
+    """The "moderate" permission (officers, as it ships), and admins in admin mode: any business item, motions and
+    suggestions, comments, pictures, the calendar change log."""
+    return archive.club.may(getattr(request.state, "member", None), "moderate") or admin_mode(request)
+
+
+def moderator(request: Request) -> str:
+    if not moderates(request):
+        raise HTTPException(403, "Only officers can do that.")
+    return request.state.member
 
 
 def leader(request: Request) -> str:
     if not (archive.club.can_lead(request.state.member) or admin_mode(request)):
-        raise HTTPException(403, "Only officers and minutes editors can lead a meeting.")
+        raise HTTPException(403, "Only officers and meeting leaders can lead a meeting.")
     return request.state.member
 
 
@@ -579,8 +592,8 @@ def owner_id(value: str | None) -> str | None:
 
 def manages_business(request: Request, meeting: str = "") -> bool:
     """Who changes any business item: officers (and admins in admin mode) on the Business page, and whoever
-    leads a meeting from its console (`meeting` set). Minutes editors don't get it on the Business page."""
-    return privileged(request) or bool(meeting and can_lead_now(request))
+    leads a meeting from its console (`meeting` set). Meeting leaders don't get it on the Business page."""
+    return moderates(request) or bool(meeting and can_lead_now(request))
 
 
 def _may_edit_item(request: Request, s: dict, iid: str, meeting: str = "") -> None:
@@ -649,7 +662,7 @@ def followups_after_submit(slug: str) -> None:
 
 
 @app.post("/business/suggest")
-def business_suggest(request: Request, meeting: str = Form(...), mid: str = Depends(officer)):
+def business_suggest(request: Request, meeting: str = Form(...), mid: str = Depends(moderator)):
     if not ai.configured(archive.club):
         raise HTTPException(404)
     get_meeting(meeting)
@@ -662,13 +675,13 @@ def business_suggest(request: Request, meeting: str = Form(...), mid: str = Depe
 
 @app.post("/business/suggestions/{sid}/accept")
 def suggestion_accept(request: Request, sid: str, text: str = Form(""), owner: str = Form(""), due: str = Form(""),
-                      mid: str = Depends(officer)):
+                      mid: str = Depends(moderator)):
     return business_change(request, lambda s: business.accept_suggestion(s, sid, mid, text or None, owner_id(owner) or "", due),
                            back="/business?tab=suggestions")
 
 
 @app.post("/business/suggestions/{sid}/dismiss")
-def suggestion_dismiss(request: Request, sid: str, mid: str = Depends(officer)):
+def suggestion_dismiss(request: Request, sid: str, mid: str = Depends(moderator)):
     return business_change(request, lambda s: business.dismiss_suggestion(s, sid, mid), back="/business?tab=suggestions")
 
 
@@ -695,7 +708,7 @@ def business_motion(request: Request, mover: str = Form(""), seconder: str = For
 
 @app.post("/business/{iid}/motion")
 def business_motion_edit(request: Request, iid: str, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
-                         result: str = Form(""), mid: str = Depends(officer)):
+                         result: str = Form(""), mid: str = Depends(moderator)):
     return business_change(request, lambda s: business.set_motion(s, archive.club, iid, mid, owner_id(mover),
                                                                   owner_id(seconder), what, result),
                            back=f"/business?tab=motions#i{iid}")
@@ -724,7 +737,7 @@ def business_comment(request: Request, iid: str, text: str = Form(...), back: st
 
 @app.post("/business/{iid}/comments/{cid}/delete")
 def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), mid: str = Depends(me)):
-    return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, privileged(request)),
+    return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, moderates(request)),
                            back=_back(back, iid, f"/business#i{iid}"))
 
 
@@ -781,7 +794,7 @@ _chow_lock = threading.Lock()
 
 def can_edit_chow(request: Request) -> bool:
     """Changing the schedule: officers (it's the Secretary's job day to day) and admins in admin mode.
-    Minutes editors see the member view; they record chow on meeting night from the console."""
+    Meeting leaders see the member view; they record chow on meeting night from the console."""
     return archive.club.may(request.state.member, "chow") or admin_mode(request)
 
 
@@ -1340,7 +1353,7 @@ def profile_photo_remove(mid: str = Depends(me)):
 
 
 @app.post("/members/{who}/photo/remove")
-def member_photo_remove(request: Request, who: str, mid: str = Depends(officer)):
+def member_photo_remove(request: Request, who: str, mid: str = Depends(moderator)):
     """Officers (and admins in admin mode) can take down someone's picture."""
     if avatars.remove(who):
         _log.info("%s removed the profile picture of %s", one_line(mid), one_line(who))
@@ -1789,9 +1802,9 @@ def member(request: Request, mid: str):
     elevated = admin_mode(request)
     contact = [(f, v if v and club.can_see(viewer, mid, f, elevated) else None, href) for f, (v, href) in values.items()]
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
-                contact=contact, is_me=viewer == mid, is_officer=privileged(request), is_officer_or_admin=privileged(request),
+                contact=contact, is_me=viewer == mid, is_officer=privileged(request), can_moderate=moderates(request),
                 can_view_as=elevated and mid != request.state.real_member,
-                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=[ROLES[k][0] for k in archive.club.roles(mid)])
+                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=archive.club.role_names(mid))
 
 
 STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
@@ -1810,7 +1823,7 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
     return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
                 tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
-                events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=[ROLES[k][0] for k in club.roles(who)])
+                events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=club.role_names(who))
 
 
 @app.post("/members/{who}/edit")
@@ -2004,7 +2017,7 @@ def guides_for(request: Request) -> dict:
     """The guides offered to this member: everyone gets the members guide, leaders, officers and admins the
     officers guide (it has admins' setup steps too), admins the server admin guide."""
     mid, admin = request.state.member, archive.club.is_admin(real_me(request))
-    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request), "server-admin": admin}
+    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or moderates(request), "server-admin": admin}
     return {g: t for g, t in GUIDES.items() if show[g]}
 
 
@@ -2400,7 +2413,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), perm_rows=[(label, [n for n, _h, ps in ROLES.values() if p in ps]) for p, label in PERMISSIONS.items()], regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=PERMISSIONS, regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
@@ -2585,29 +2598,24 @@ async def site_agenda(request: Request):
 
 
 def _role_rows(club) -> list[dict]:
-    """Roles tab: each role, what it allows, the offices that give it, and who has it."""
-    offs, keepers = offices.offices(club), set(club.roster_keepers)
-    given = {"officer": [o["title"] for o in offs if o["officer"]], "board": [o["title"] for o in offs],
-             "treasurer": [o["title"] for o in offs if "treasurer" in o["title"].lower()],
-             "roster_keeper": [o["title"] for o in offs if o["title"].lower() in keepers]}
-    by_name = sorted(club.members.values(), key=lambda m: m.name.lower())
-    return [{"key": k, "name": name, "how": how, "can": [PERMISSIONS[p] for p in perms], "offices": given.get(k, []),
-             "who": [m.id for m in by_name if k in club.roles(m.id)], "picked": k in PICKED,
-             "choices": [m.id for m in by_name if m.status.lower() not in ("inactive", "silent key") or getattr(m, k, False)]}
-            for k, (name, how, perms) in ROLES.items()]
+    """Roles tab: each role, what it allows, the offices that give it, the members picked for it, and who has it."""
+    by_name, table = sorted(club.members.values(), key=lambda m: m.name.lower()), club.role_table()
+    has = {m.id: club.roles(m.id, table) for m in by_name}
+    return [{**r, "key": k, "who": [m.id for m in by_name if k in has[m.id]],
+             "choices": [m.id for m in by_name if m.status.lower() not in ("inactive", "silent key") or m.id in r["members"]]}
+            for k, r in table.items()]
 
 
 def _office_rows(club) -> list[dict]:
-    """Offices tab rows: the club's offices (who holds each, whether its holders add members), then two empty rows."""
-    keepers = set(club.roster_keepers)
-    return ([{**o, "keeper": o["title"].lower() in keepers, "held": bool(offices.holders(club, o["title"]))} for o in offices.offices(club)]
-            + [{"title": "", "officer": False, "seats": 1, "keeper": False, "held": False}] * 2)
+    """Offices tab rows: the club's offices (who holds each), then an empty one (+ Add an office adds more)."""
+    return ([{**o, "held": bool(offices.holders(club, o["title"]))} for o in offices.offices(club)]
+            + [{"title": "", "officer": False, "seats": 1, "held": False}])
 
 
 @app.post("/admin/site/offices")
 async def site_offices(request: Request):
-    """Offices tab: the club's offices (an officer's office or a board seat, how many seats), and which offices' holders
-    add members to the roster. An office someone holds can't be removed or renamed here: hand it over first."""
+    """Offices tab: the club's offices (an officer's office or a board seat, how many seats). An office someone holds
+    can't be removed or renamed here: hand it over first. (Which offices add members is the Roster keeper role's.)"""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
     keys = (("", "offices"), ("", "roster_keepers"))
     try:
@@ -2625,7 +2633,7 @@ async def site_offices(request: Request):
                 seats = num(form.get(f"seats{i}"))
                 if seats is None or not 1 <= seats <= 20:
                     raise ValueError(f"Seats for {title}: a whole number from 1 to 20.")
-                rows.append({"title": title, "officer": bool(form.get(f"officer{i}")), "seats": seats, "keeper": bool(form.get(f"keeper{i}"))})
+                rows.append({"title": title, "officer": bool(form.get(f"officer{i}")), "seats": seats})
             if not rows:
                 raise ValueError("Keep at least one office.")
             gone = [o["title"] for o in offices.offices(club) if o["title"].lower() not in seen and offices.holders(club, o["title"])]
@@ -2634,33 +2642,50 @@ async def site_offices(request: Request):
                                  "over on the Offices page (Roster → Offices) before removing or renaming it here.")
             new_offices = [r["title"] if r["officer"] and r["seats"] == 1 else {"title": r["title"], "officer": r["officer"], "seats": r["seats"]}
                            for r in rows]
-            keepers = [r["title"] for r in rows if r["keeper"]]
-            if not keepers:
-                raise ValueError("Tick at least one office whose holders add members (usually the Secretary).")
-            same_offices = offices.offices(type("C", (), {"offices": club.yaml.get("offices") or []})()) == \
-                offices.offices(type("C", (), {"offices": new_offices})())
-            yaml_keepers = {str(x).lower() for x in club.yaml.get("roster_keepers") or ["Secretary", "Treasurer"]}
-            values = {("", "offices"): None if same_offices else new_offices,
-                      ("", "roster_keepers"): None if {k.lower() for k in keepers} == yaml_keepers else keepers}
+            values = {("", "offices"): None if office_list(club.yaml.get("offices") or []) == office_list(new_offices) else new_offices}
         club.save_site_settings(values)
     except ValueError as e:
         return RedirectResponse("/admin/site/roles?error=" + quote(str(e)), status_code=303)
-    _admin_log(request, site_offices="club.yaml" if form.get("back") else ", ".join(k.replace("roster_keepers", "who adds members")
-                                                                                  for (_, k), v in values.items() if v is not None) or "club.yaml")
+    _admin_log(request, site_offices="club.yaml" if form.get("back") or values[("", "offices")] is None else "offices")
     return RedirectResponse("/admin/site/roles?note=" + quote("Saved."), status_code=303)
 
 
 @app.post("/admin/site/roles")
 async def site_roles(request: Request):
-    """Roles tab: who has the roles given by hand (Minutes editor, Calendar editor). The rest follow the offices."""
+    """Roles tab: each role's name, what it allows, the offices that give it and the members picked for it; add a role
+    of the club's own, remove one (not a built-in), or put a built-in back as it ships. Admin stays outside: no role
+    gives it. Refused if a permission would be left with no role."""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
-    before = {k: {m.id for m in club.members.values() if getattr(m, k)} for k in PICKED}
-    picked = {k: [i for i in form.getlist(k) if i in club.members] for k in PICKED}
-    club.save_roles(picked)
-    changes = [f"{ROLES[k][0]} {'+' if add else '-'}{club.name(i)}" for k in PICKED
-               for add, ids in ((True, set(picked[k]) - before[k]), (False, before[k] - set(picked[k]))) for i in sorted(ids)]
-    _admin_log(request, site_roles=", ".join(changes) or "no change")
-    return RedirectResponse("/admin/site/roles?note=" + quote("Saved." if changes else "Nothing changed."), status_code=303)
+    before = club.role_table()
+    if (back := form.get("back")) in ROLES:  # Back to the built-in (its own form): name, permissions, offices; picks stay
+        table = {**before, back: {"name": ROLES[back][0], "perms": list(ROLES[back][1]),
+                                  "offices": club._default_offices(back), "members": before[back]["members"]}}
+    else:
+        keys = [k for k in form.getlist("key") if k in before][:60]
+        table = {k: {"name": form.get(f"name.{k}") or before[k]["name"], "perms": form.getlist(f"perms.{k}"),
+                     "offices": form.getlist(f"offices.{k}"), "members": form.getlist(f"members.{k}")}
+                 for k in keys if not (form.get(f"remove.{k}") and k not in ROLES)}
+        for k in ROLES:
+            table.setdefault(k, before[k])  # a hand-made request can't drop a built-in
+    if new := " ".join((form.get("new") or "").split())[:40]:
+        table["c" + secrets.token_hex(4)] = {"name": new, "perms": [], "offices": [], "members": []}
+    try:
+        club.save_roles(table)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/roles?error=" + quote(str(e)) + "#roles", status_code=303)
+    after, changes = club.role_table(), []
+    for k in dict.fromkeys([*before, *after]):
+        a, b = before.get(k), after.get(k)
+        if not b or not a:
+            changes.append(f"{'added' if b else 'removed'} {(b or a)['name']}")
+            continue
+        for f in ("name", "perms", "offices", "members"):
+            if a[f] != b[f]:
+                show = (lambda v: club.name(v)) if f == "members" else str
+                changes.append(f"{b['name']} {f}: " + (f"{a[f]} → {b[f]}" if f == "name" else ", ".join(
+                    [f"+{show(x)}" for x in b[f] if x not in a[f]] + [f"-{show(x)}" for x in a[f] if x not in b[f]])))
+    _admin_log(request, site_roles="; ".join(changes) or "no change")
+    return RedirectResponse("/admin/site/roles?note=" + quote("Saved." if changes else "Nothing changed.") + "#roles", status_code=303)
 
 
 @app.post("/admin/site/privacy")
@@ -2924,7 +2949,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
     return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
                 items=items, repeats=repeats, weekdays=[dt.date(2024, 1, 1 + (ws + i) % 7).strftime("%a") for i in range(7)],
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
-                can_edit=not public and can_edit_calendar_now(request), is_officer=not public and privileged(request),
+                can_edit=not public and can_edit_calendar_now(request), can_moderate=not public and moderates(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
                 timedelta=dt.timedelta, weeks=weeks, agenda_weeks=AGENDA_WEEKS)
 
@@ -2935,7 +2960,7 @@ def _feed_url(request: Request, path: str) -> str:
 
 
 @app.get("/calendar/changes", response_class=HTMLResponse)
-def calendar_changes(request: Request, p: str = Query("1", alias="page"), per: str = "", mid: str = Depends(officer)):
+def calendar_changes(request: Request, p: str = Query("1", alias="page"), per: str = "", mid: str = Depends(moderator)):
     """Who changed what on the club calendars (calendar-log.jsonl), newest first."""
     return page(request, "calendar_changes.html", pg=paginate(events.history(5000), p, per, 50), cals=events.CALS)
 
@@ -2993,7 +3018,7 @@ def can_edit_calendar_now(request: Request) -> bool:
 
 def _calendar_editor(request: Request) -> None:
     if not can_edit_calendar_now(request):
-        raise HTTPException(403, "Only leaders, minutes editors and calendar editors can change the club calendars.")
+        raise HTTPException(403, "Only members whose role allows it can change the club calendars.")
 
 
 def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
@@ -3172,7 +3197,7 @@ def roster_api(request: Request):
     former: dict[str, list[str]] = {}  # earlier callsigns (kept as aliases), so the bot can follow a callsign change
     for old, mid in archive.club.former_ids.items():
         former.setdefault(mid, []).append(old.upper())
-    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": m.officer, "former": sorted(former.get(m.id, []))}
+    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": "officer" in archive.club.roles(m.id), "former": sorted(former.get(m.id, []))}
             for m in sorted(archive.club.members.values(), key=lambda m: (m.last, m.first)) if m.status.lower() == "active"] if ok else []
     p = DATA / "api-log.jsonl"
     with p.open("a") as f:
@@ -3192,7 +3217,7 @@ def live_fragment(request: Request, slug: str):
     return templates.get_template("_minutes.html").render(m=get_meeting(slug), pdf=False, club=archive.club)
 
 
-# ---------------- leader console (officers + minutes editors) ----------------
+# ---------------- leader console (officers + meeting leaders) ----------------
 
 @app.get("/console", response_class=HTMLResponse)
 def console_home(request: Request, error: str = "", mid: str = Depends(leader)):

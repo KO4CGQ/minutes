@@ -61,45 +61,64 @@
 <form method="post" action="/admin/site/offices" class="profile siteoffices">
 <input type="hidden" name="rows" value="{{ office_rows|length }}">
 <div class="card sitesec"><h2>Offices {{ origin('.offices') }}</h2>
-<p class="hint"><b>Officer</b>: its holders are officers (they lead meetings, edit the minutes and calendars, see the Treasurer pages). Untick it for a board seat that isn't an officer, like a trustee. Every office is on the board. An office someone holds can't be removed or renamed here; hand it over on the Offices page first.</p>
-<div class="officegrid">
-<span class="muted small agh">Office</span><span class="muted small agh">Officer</span><span class="muted small agh">Seats</span><span class="muted small agh">Adds<br>members</span>
-{% for r in office_rows %}{% set i = loop.index0 %}
+<p class="hint"><b>Officer</b>: an officer's office (the Officer role starts with these). Untick it for a board seat that isn't an officer, like a trustee. Every office is on the board. An office someone holds can't be removed or renamed here; hand it over on the Offices page first.</p>
+<div class="officegrid" id="officegrid">
+<span class="muted small agh">Office</span><span class="muted small agh">Officer</span><span class="muted small agh">Seats</span>
+{% macro office_row(i, r) %}
 <input name="title{{ i }}" value="{{ r.title }}" maxlength="60" placeholder="{{ 'A new office' if not r.title }}" aria-label="Office"{{ ' readonly title="Held: hand it over on the Offices page to rename it"' if r.held }}>
 <input type="checkbox" name="officer{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }} is an officer's office"{{ ' checked' if r.officer }}>
 <input type="number" name="seats{{ i }}" value="{{ r.seats }}" min="1" max="20" aria-label="Seats for {{ r.title or 'the new office' }}">
-<input type="checkbox" name="keeper{{ i }}" value="1" aria-label="{{ r.title or 'The new office' }}: adds members"{{ ' checked' if r.keeper }}>
-{% endfor %}
+{% endmacro %}
+{% for r in office_rows %}{{ office_row(loop.index0, r) }}{% endfor %}
 </div>
-<p class="hint"><b>Adds members</b>: the holders can add members on the Roster page and change their details (usually the Secretary and the Treasurer). Admins, in admin mode, always can. Clear an office's name to remove it. Two empty rows are for new offices; Save, and two more appear. {{ origin('.roster_keepers') }}</p>
+<template id="t-office">{{ office_row('__i__', {'title': '', 'officer': False, 'seats': 1, 'held': False}) }}</template>
+<p><button type="button" class="btn small" data-add="t-office" data-next="{{ office_rows|length }}" hidden>+ Add an office</button></p>
+<p class="hint">Clear an office's name to remove it. What each office's holders may do is under Roles, below.</p>
 </div>
 <p class="row"><button class="btn">Save</button></p>
 </form>
-{% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices, and who adds members?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 <div class="card sitesec" id="roles"><h2>Roles</h2>
-<p class="hint">What each role allows, and who has it. A member with several roles may do everything any of them allows. Admins, in admin mode, may do everything; they're added on <a href="/admin">Admin</a> → Security.</p>
+<p class="hint">What each role allows, and who has it: the holders of the offices ticked, and the members picked. Only an office gives a role: other titles (Net Manager, say) give none, so pick that member instead. A member with several roles may do everything any of them allows. Only admins, in admin mode, change roles. Admin isn't a role: admins are added on <a href="/admin">Admin</a> → Security, and in admin mode may do everything.</p>
 <form method="post" action="/admin/site/roles" class="profile">
-<div class="rolelist">{% for r in role_rows %}
-<section class="role"><h3>{{ r.name }}</h3>
-  {% if r.can %}<p class="small"><b>Allows:</b></p><ul class="small allows">{% for c in r.can %}<li>{{ c[:1]|upper ~ c[1:] }}</li>{% endfor %}</ul>
-  {% else %}<p class="small"><b>Allows:</b> nothing yet; it marks who is on the board.</p>{% endif %}
-  {% if r.picked %}<p class="small"><b>Who:</b> members picked here{{ ' (officers have it already)' if r.key == 'minutes_editor' else ' (officers and minutes editors have it already)' }}.</p>
-  <details class="multi"><summary data-none="Nobody">{% for i in r.who %}{{ club.name(i) }}{{ ', ' if not loop.last }}{% else %}Nobody{% endfor %}</summary><div class="multi-list">
+<div class="rolelist">{% for r in role_rows %}{% set k = r.key %}
+<details class="role"><summary><b>{{ r.name }}</b> <span class="muted small">{{ r.who|length }} {{ 'member' if r.who|length == 1 else 'members' }} · {{ r.perms|length }} of {{ permissions|length }} permissions{{ ' · built-in' if r.builtin }}{{ ', changed' if r.edited and r.builtin }}</span></summary>
+  <input type="hidden" name="key" value="{{ k }}">
+  <label class="small">Name <input name="name.{{ k }}" value="{{ r.name }}" maxlength="40"></label>
+  <fieldset><legend class="small"><b>Allows</b></legend>
+  {% for p, label in permissions.items() %}<label class="check small"><input type="checkbox" name="perms.{{ k }}" value="{{ p }}"{{ ' checked' if p in r.perms }}> {{ label[:1]|upper ~ label[1:] }}</label>{% endfor %}
+  </fieldset>
+  <fieldset><legend class="small"><b>Given by these offices</b></legend>
+  {% for o in office_rows if o.title %}<label class="check small"><input type="checkbox" name="offices.{{ k }}" value="{{ o.title }}"{{ ' checked' if o.title in r.offices }}> {{ o.title }}</label>{% endfor %}
+  </fieldset>
+  <p class="small"><b>And these members:</b></p>
+  <details class="multi"><summary data-none="Nobody">{% for i in r.members %}{{ club.name(i) }}{{ ', ' if not loop.last }}{% else %}Nobody{% endfor %}</summary><div class="multi-list">
     {% if r.choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter members…" aria-label="Filter members" hidden>{% endif %}
-    <div class="multi-opts">{% for i in r.choices %}<label class="check"><input type="checkbox" name="{{ r.key }}" value="{{ i }}" data-label="{{ club.name(i) }}" {{ 'checked' if i in r.who }}> {{ club.name(i) }}</label>{% endfor %}</div>
+    <div class="multi-opts">{% for i in r.choices %}<label class="check"><input type="checkbox" name="members.{{ k }}" value="{{ i }}" data-label="{{ club.name(i) }}" {{ 'checked' if i in r.members }}> {{ club.name(i) }}</label>{% endfor %}</div>
   </div></details>
-  {% else %}<p class="small"><b>Given by:</b> {{ r.how[:1]|lower ~ r.how[1:] }}{% if r.offices %} ({{ r.offices|join(', ') }}){% else %}: none at the moment{% endif %}.</p>
-  <p class="small"><b>Who:</b> {% for i in r.who %}<span class="chip"><a href="/members/{{ i }}">{{ club.name(i) }}</a></span> {% else %}<span class="muted">nobody</span>{% endfor %}</p>{% endif %}
-</section>{% endfor %}</div>
+  <p class="small"><b>Who has it now:</b> {% for i in r.who %}<span class="chip"><a href="/members/{{ i }}">{{ club.name(i) }}</a></span> {% else %}<span class="muted">nobody</span>{% endfor %}</p>
+  {% if not r.builtin %}<label class="check small"><input type="checkbox" name="remove.{{ k }}" value="1"> Remove this role</label>
+  {% elif r.edited %}<p class="small"><button class="btn small ghost" form="roleback-{{ k }}">Back to the built-in</button></p>{% endif %}
+</details>{% endfor %}</div>
+<p class="row"><label>Add a role <input name="new" maxlength="40" placeholder="e.g. Net manager"></label></p>
+<p class="hint">Recording money always comes with looking at the Treasurer pages. Every permission needs at least one role: a save that would leave one with none is refused.</p>
 <p class="row"><button class="btn">Save</button></p>
 </form>
-</div>
-<div class="card sitesec"><h2>What each permission is</h2>
-<table class="permtable"><thead><tr><th>Permission</th><th>Roles that allow it</th></tr></thead><tbody>
-{% for label, names in perm_rows %}<tr><td>{{ label[:1]|upper ~ label[1:] }}</td><td>{{ (names + ['Admin'])|join(', ') }}</td></tr>{% endfor %}
-</tbody></table>
+{% for r in role_rows if r.builtin and r.edited %}<form id="roleback-{{ r.key }}" method="post" action="/admin/site/roles" data-confirm="Put {{ r.name }} back as it ships (its name, what it allows and its offices)? The members picked for it stay."><input type="hidden" name="back" value="{{ r.key }}"></form>{% endfor %}
 </div>
 {% include "_multi.html" %}
+<script nonce="{{ csp_nonce }}">
+// + Add an office: a row from the <template>, numbered after the others, and the row count the server reads raised
+for (const b of document.querySelectorAll("[data-add]")) {
+  b.hidden = false;
+  b.addEventListener("click", () => {
+    const i = +b.dataset.next; b.dataset.next = i + 1;
+    document.getElementById("officegrid").insertAdjacentHTML("beforeend", document.getElementById(b.dataset.add).innerHTML.replaceAll("__i__", i));
+    b.form.elements.rows.value = i + 1;
+    b.form.elements["title" + i].focus();
+  });
+}
+</script>
 {% elif tab == 'privacy' %}
 <p class="muted">Names that are never recorded. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/privacy" class="profile">

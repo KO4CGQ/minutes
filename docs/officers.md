@@ -1,16 +1,17 @@
 # Officers guide
 
-For officers, minutes editors, roster keepers, calendar editors and the Treasurer: running the club from the app. What every member sees is in the [members guide](members.md).
+For officers, meeting leaders, minutes editors, roster keepers, calendar editors and the Treasurer: running the club from the app. What every member sees is in the [members guide](members.md).
 
 ## 🔑 Who can do what
-What a member may do comes from their **roles**. Most roles follow the offices a member holds; an admin gives the other two on **Admin → Site → Roles**, which also lists what each role allows and who has it. A member's roles show on their page.
+What a member may do comes from their **roles**. A role is given by the offices a member holds (the whole office title: "Assistant Treasurer" isn't the Treasurer's office, and a title that isn't an office gives no role) and by members picked by hand. Admins set what each role allows, which offices give it and who is picked, and add the club's own roles, on **Admin → Site → Roles**. A member's roles show on their page. As each role ships:
 
-- 🏛️ **Officers** (holders of an officer's office) see every member's contact details, the change logs, and can undo profile changes; they lead meetings and edit the calendar too.
-- 🏛️ **Board members** (holders of any office) correct minutes already in the archive.
-- 🎙️ **Minutes editors** (given on Site → Roles) run the meeting console and edit the minutes and the calendar.
-- 📅 **Calendar editors** (given on Site → Roles, say the net manager) edit the calendar.
+- 🏛️ **Officers** (holders of an officer's office) see every member's contact details and Roster changes, and can undo profile changes; they moderate (any business item, motions and suggestions, comments, pictures, the calendar change log), lead meetings and edit the calendar too.
+- ✏️ **Minutes editors** (holders of any office) correct minutes already in the archive. A meeting's own leader and recorder may always correct its minutes.
+- 🎙️ **Meeting leaders** (picked on Site → Roles) run the meeting console and edit the minutes and the calendar.
+- 📅 **Calendar editors** (picked on Site → Roles, say the net manager) edit the calendar.
 - 📋 **Roster keepers** (holders of the offices that add members: the Secretary and Treasurer, unless the club picks others) edit the roster.
-- 💰 **The Treasurer** records money.
+- 📨 **The Secretary** gets the roster emails (new members, roster changes, the chow list).
+- 💰 **The Treasurer** records money, and sees the Treasurer pages.
 
 > [!TIP]
 > Admins can do all of the above while admin mode is on.

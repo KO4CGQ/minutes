@@ -52,7 +52,7 @@ Admin → **Site** changes most of the club's settings in the app, checked as yo
 | **Look** | The logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon, each with **Upload…** and **Reset** (the icons are made from the logo until one has its own). **Behind it**, so a dark logo on a see-through background still shows in dark mode. **Colours:** one main colour sets buttons, links, the top bar and the minutes' headings; the app makes light and dark palettes from it, checks every text colour is readable, and previews both before Save. |
 | **Club** | The app's name, the club's name and callsign, meeting day and time, time zone, and the weekly meeting's place and online link. A new day, time, place or link changes the calendar's meeting from the **Starting date** you pick. |
 | **Agenda** | The meeting's sections in order (built-in and the club's own), when a guest is invited to join, how many days before a reminder goes out. |
-| **Roles** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats; and whose holders add members to the roster (usually the Secretary and the Treasurer). Who holds each office is on Roster → Offices. Then the roles: what each allows, who has it, and who is a **Minutes editor** or **Calendar editor** (the two roles given by hand, not by an office). |
+| **Roles** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats. Who holds each office is on Roster → Offices. Then the roles, one card each: what it allows, the offices that give it (whole titles only), the members picked for it, and who has it now. Rename any role, add the club's own (**Add a role**), remove one of the club's own, or put a built-in **Back to the built-in**. A save that would leave a permission with no role is refused; recording money always comes with the Treasurer pages. Admin isn't a role and no role edit can give it. |
 | **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own) and election days. |
 | **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
 | **Dates** | How dates are written (US order unless changed). |
@@ -222,7 +222,7 @@ Once, for a club moving its chow list into the app: `club-minutes chow-import FI
 - **Email test mode:** `email: only_to:`.
 - **AI:** `ai: {model: ...}`, and the private never-record list.
 - **Offices:** `offices:`, the club's offices (a title with one seat, or `{title: Trustee, officer: false, seats: 3}` for a board seat).
-- **Roster keepers:** `roster_keepers:`, the titles that may edit the roster (`[Secretary, Treasurer]` by default; admins in admin mode always can).
+- **Roster keepers:** `roster_keepers:`, the offices the Roster keeper role starts with (`[Secretary, Treasurer]` by default; admins in admin mode always can). Once an admin changes that role on Site → Roles, the page wins.
 - **Starting links** for the Links page.
 
 People, their titles and who may lead come from the roster the app keeps, edited on the Roster pages.

@@ -174,30 +174,46 @@ class Member:
 
 
 # What a member may do, and the roles that allow it (Admin → Site → Roles). Each check in the app asks Club.may(member,
-# permission); admins, in admin mode, may do everything. In 1.0 the roles and what each allows are fixed; who has a
-# role comes from the offices they hold, or (Minutes editor, Calendar editor) from roles.json, set on Site → Roles.
+# permission); admins, in admin mode, may do everything (admin isn't a role, and no role edit can give it). A role is
+# given by whole office titles (exact, any capitals; titles that aren't offices give nothing) and by members picked by
+# hand; admins change both, and what each role allows, on Site → Roles (roles.json).
 PERMISSIONS = {
     "lead": "lead meetings and edit the minutes",
     "correct": "correct minutes already in the archive (a meeting's leader and recorder may correct its minutes too)",
     "calendar": "change the club calendars",
     "chow": "change the chow schedule",
     "contacts": "see every member's contact details",
-    "oversee": "see Roster changes and undo them, the calendar change log and business suggestions; change any business item; take down a picture",
+    "oversee": "see Roster changes and undo them",
+    "moderate": "change any business item, record motions, deal with business suggestions, delete comments, take down a picture, see the calendar change log",
     "treasurer": "look at the Treasurer pages",
-    "money": "record money and change the Treasurer settings",
+    "money": "record money and change the Treasurer settings (comes with looking at the Treasurer pages)",
     "members": "add members and change their details",
+    "roster_emails": "get the roster emails (new members, roster changes, the chow list)",
 }
-# key: (name, who has it, permissions)
-ROLES: dict[str, tuple[str, str, tuple[str, ...]]] = {
-    "officer": ("Officer", "Holders of an officer's office", ("lead", "calendar", "chow", "contacts", "oversee", "treasurer")),
-    "board": ("Board", "Holders of any office", ("correct",)),
-    "treasurer": ("Treasurer", "Holders of an office named Treasurer", ("money",)),
-    "roster_keeper": ("Roster keeper", "Holders of an office that adds members", ("members",)),
-    "minutes_editor": ("Minutes editor", "Members picked here", ("lead", "calendar")),
-    "calendar_editor": ("Calendar editor", "Members picked here", ("calendar",)),
+# The built-in roles: key: (name, what it allows until an admin changes it). The keys are older than the names:
+# "board" is Minutes editor and "minutes_editor" is Meeting leader (roles.json and the roster's columns keep the keys).
+ROLES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "officer": ("Officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer")),
+    "board": ("Minutes editor", ("correct",)),
+    "treasurer": ("Treasurer", ("treasurer", "money")),
+    "roster_keeper": ("Roster keeper", ("members",)),
+    "secretary": ("Secretary", ("roster_emails",)),
+    "minutes_editor": ("Meeting leader", ("lead", "calendar")),
+    "calendar_editor": ("Calendar editor", ("calendar",)),
 }
-PICKED = ("minutes_editor", "calendar_editor")  # roles given to members by hand (roles.json), not by an office
+PICKED = ("minutes_editor", "calendar_editor")  # built-in roles given only by hand (before roles.json: the roster's ticks)
+DEFAULT_OFFICES = ["President", "Vice President", "Secretary", "Treasurer"]
 
+
+
+def office_list(raw: list) -> list[dict]:
+    """[{title, officer, seats}]: club.yaml entries are a title (an officer's office, one seat) or
+    {title, officer: false, seats: 3} (e.g. the elected trustees). Empty: DEFAULT_OFFICES."""
+    out = []
+    for o in raw or DEFAULT_OFFICES:
+        o = {"title": o} if isinstance(o, str) else dict(o)
+        out.append({"title": str(o["title"]), "officer": bool(o.get("officer", True)), "seats": int(o.get("seats", 1))})
+    return out
 
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
@@ -447,37 +463,99 @@ class Club:
         return out
 
     # ---- permissions ----
-    @staticmethod
-    def _picked() -> dict[str, list[str]] | None:
+    def _picked(self) -> dict | None:
+        """roles.json, read again only when it changes (every permission check asks)."""
         p = DATA / "roles.json"
-        return json.loads(p.read_text()) if p.exists() else None
+        try:
+            key = (p, p.stat().st_mtime_ns)
+        except FileNotFoundError:
+            return None
+        if getattr(self, "_rj", (None, None))[0] != key:
+            self._rj = (key, json.loads(p.read_text()))
+        return self._rj[1]
 
-    def save_roles(self, picked: dict[str, list[str]]) -> None:
-        """Who has the roles given by hand (PICKED): {role: [member ids]}. Used at once."""
-        out = {k: sorted({self.canonical(i) for i in picked.get(k, []) if self.canonical(i) in self.members}) for k in PICKED}
+    def office_list(self) -> list[dict]:
+        return office_list(self.offices)
+
+    def _default_offices(self, key: str) -> list[str]:
+        offs = self.office_list()
+        pick = {"officer": lambda o: o["officer"], "board": lambda o: True,
+                "treasurer": lambda o: o["title"].lower() == "treasurer", "secretary": lambda o: o["title"].lower() == "secretary",
+                "roster_keeper": lambda o: o["title"].lower() in self.roster_keepers}.get(key, lambda o: False)
+        return [o["title"] for o in offs if pick(o)]
+
+    def role_table(self) -> dict[str, dict]:
+        """Every role, built-in first: {key: {name, perms, offices, members, builtin, edited}}. Offices are only the
+        club's current ones; a built-in role an admin hasn't changed follows today's offices."""
+        rj, offs = self._picked() or {}, {o["title"].lower(): o["title"] for o in self.office_list()}
+        table = rj.get("table") or {}
+        out = {}
+        for k in [*ROLES, *(k for k in table if k not in ROLES)]:
+            name, perms = ROLES.get(k, ("", ()))
+            t = table.get(k) or {}
+            # before roles.json, only the hand-given built-ins have picks: the roster's old ticks (never is_officer/is_board)
+            picked = rj.get(k) if k in rj else [m.id for m in self.members.values() if k in PICKED and getattr(m, k)]
+            out[k] = {"name": t.get("name") or name, "perms": [p for p in PERMISSIONS if p in t.get("perms", perms)],
+                      "offices": [offs[o.lower()] for o in t.get("offices", self._default_offices(k)) if o.lower() in offs],
+                      "members": [self.canonical(i) for i in picked or [] if self.canonical(i) in self.members],
+                      "builtin": k in ROLES, "edited": bool(t)}
+        return out
+
+    def save_roles(self, table: dict[str, dict]) -> None:
+        """Site → Roles: {key: {name, perms, offices, members}} for every role (a built-in left out is refused; a role
+        of the club's own left out is removed). Each built-in kept as it ships unless it differs. Used at once."""
+        if missing := [ROLES[k][0] for k in ROLES if k not in table]:
+            raise ValueError(f"The built-in roles can't be removed: {', '.join(missing)}.")
+        offs = {o["title"].lower(): o["title"] for o in self.office_list()}
+        names, out = set(), {}
+        for k, r in table.items():
+            name = " ".join(str(r.get("name") or "").split())[:40]
+            if not name:
+                raise ValueError("Every role needs a name.")
+            if name.lower() in names or name.lower() == "admin":
+                raise ValueError(f"Two roles can't both be called {name}.")
+            names.add(name.lower())
+            perms = {p for p in r.get("perms", []) if p in PERMISSIONS} | ({"treasurer"} if "money" in r.get("perms", []) else set())
+            out[k] = {"name": name, "perms": [p for p in PERMISSIONS if p in perms],
+                      "offices": [offs[o.lower()] for o in r.get("offices", []) if o.lower() in offs],
+                      "members": sorted({self.canonical(i) for i in r.get("members", []) if self.canonical(i) in self.members})}
+        if lost := [PERMISSIONS[p] for p in PERMISSIONS if not any(p in r["perms"] for r in out.values())]:
+            raise ValueError(f"No role would be allowed to {lost[0]}: give it to at least one role.")
+        rj = {k: r["members"] for k, r in out.items()}
+        rj["table"] = {k: {"name": r["name"], "perms": r["perms"], "offices": r["offices"]} for k, r in out.items()
+                       if k not in ROLES or (r["name"], tuple(r["perms"]), r["offices"])
+                       != (ROLES[k][0], tuple(p for p in PERMISSIONS if p in ROLES[k][1]), self._default_offices(k))}
         p = DATA / "roles.json"
         tmp = p.with_suffix(".tmp")
-        tmp.write_text(json.dumps(out, indent=1))
+        tmp.write_text(json.dumps(rj, indent=1))
         tmp.replace(p)
         for m in self.members.values():
             for k in PICKED:
-                setattr(m, k, m.id in out[k])
+                setattr(m, k, m.id in rj[k])
 
-    def roles(self, mid: str | None) -> list[str]:
-        """The member's roles (ROLES keys), in ROLES order. Admin isn't one: it's admin mode."""
+    def holds_office(self, mid: str | None) -> bool:
+        """Holds one of the club's offices (a whole title, any capitals): the board."""
+        m, offs = self.members.get(mid or ""), {o["title"].lower() for o in self.office_list()}
+        return bool(m) and any(t.strip().lower() in offs for t in (m.role or "").split(","))
+
+    def roles(self, mid: str | None, table: dict | None = None) -> list[str]:
+        """The member's roles (role_table keys), built-in first. Admin isn't one: it's admin mode."""
         m = self.members.get(mid or "")
         if not m:
             return []
-        has = {"officer": m.officer, "board": m.board, "treasurer": bool(m.role and "treasurer" in m.role.lower()),
-               "roster_keeper": bool(m.role and any(k in m.role.lower() for k in self.roster_keepers)),
-               "minutes_editor": m.minutes_editor, "calendar_editor": m.calendar_editor}
-        return [k for k in ROLES if has[k]]
+        held = {t.strip().lower() for t in (m.role or "").split(",")}
+        return [k for k, r in (table or self.role_table()).items() if m.id in r["members"] or held & {o.lower() for o in r["offices"]}]
+
+    def role_names(self, mid: str | None) -> list[str]:
+        t = self.role_table()
+        return [t[k]["name"] for k in self.roles(mid)]
 
     def may(self, mid: str | None, perm: str) -> bool:
         """Whether a member's roles allow `perm` (PERMISSIONS). The web app adds admins in admin mode."""
         if perm not in PERMISSIONS:
             raise KeyError(perm)
-        return any(perm in ROLES[k][2] for k in self.roles(mid))
+        t = self.role_table()
+        return any(perm in t[k]["perms"] for k in self.roles(mid, t))
 
     def can_lead(self, mid: str) -> bool:
         """Officers and minutes editors may lead a meeting and edit minutes."""
@@ -519,8 +597,8 @@ class Club:
 
     @property
     def secretaries(self) -> list[str]:
-        """Members whose title includes Secretary (they keep the roster)."""
-        return [m.id for m in self.members.values() if m.role and "secretary" in m.role.lower()]
+        """Who gets the roster emails (the "roster_emails" permission; the Secretary's office by default)."""
+        return [mid for mid in self.members if self.may(mid, "roster_emails")]
 
     @property
     def leaders(self) -> list[str]:

@@ -15,7 +15,7 @@ TZ = "America/New_York"
 
 def club():
     return Club(FIX / "test-club.yaml", roster=[
-        {"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "officer": True},
+        {"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "role": "President", "officer": True},
         {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "birthday": "11-05", "share": ["birthday"]},
         {"id": "n0cccc", "first": "Cal", "last": "Customer", "birthday": "11-20"},           # not shared
         {"id": "n0dddd", "first": "Dee", "last": "Dummy", "birthday": "11", "share": ["birthday"]}])  # month only

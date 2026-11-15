@@ -132,7 +132,7 @@ def test_roles_are_not_set_on_the_edit_page(env):
     assert (b.officer, b.board, b.calendar_editor, b.minutes_editor) == (False, False, False, False)
     c.post("/members/n0aaaa/edit", data={"tab": "titles"})
     assert (club.members["n0aaaa"].officer, club.members["n0aaaa"].board) == (True, True)  # the Secretary stays one
-    assert "roles: Officer, Board, Roster keeper." in c.get("/members/n0aaaa/edit?tab=titles").text
+    assert "roles: Officer, Minutes editor, Roster keeper, Secretary." in c.get("/members/n0aaaa/edit?tab=titles").text
     assert '<span class="chip">Roster keeper</span>' in c.get("/members/n0aaaa").text  # the member's page shows them
 
 

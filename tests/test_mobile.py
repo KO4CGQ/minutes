@@ -53,7 +53,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     from fastapi.testclient import TestClient
 
     from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True}])
     club.admins = {"n0admn"}
     from club_minutes import branding, theme, treasurer
     monkeypatch.setattr(branding, "DATA", tmp_path)  # the colours saved below stay in this test
@@ -162,7 +162,7 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
     from fastapi.testclient import TestClient
 
     from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True},
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True},
                                                {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"}])
     club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -203,7 +203,7 @@ def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_pat
     from fastapi.testclient import TestClient
 
     from club_minutes import business, web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True}])
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)

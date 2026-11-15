@@ -16,23 +16,16 @@ import secrets
 import time
 
 from . import auth, branding, profile
-from .club import ROSTER_CACHE, Club, roster_locked, show_date
+from .club import ROSTER_CACHE, Club, office_list, roster_locked, show_date
 from .membership import LOG_TAB
 from .roster import Sheet
 
 log = logging.getLogger("club_minutes.offices")
 TOOK, LEFT = "Took office", "Left office"
-DEFAULT = ["President", "Vice President", "Secretary", "Treasurer"]
 
 
 def offices(club: Club) -> list[dict]:
-    """[{title, officer, seats}]: club.yaml entries are a title (an officer's office, one seat) or
-    {title, officer: false, seats: 3} (e.g. the elected trustees)."""
-    out = []
-    for o in club.offices or DEFAULT:
-        o = {"title": o} if isinstance(o, str) else dict(o)
-        out.append({"title": str(o["title"]), "officer": bool(o.get("officer", True)), "seats": int(o.get("seats", 1))})
-    return out
+    return office_list(club.offices)
 
 
 def titles(role: str | None) -> list[str]:

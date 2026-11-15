@@ -120,7 +120,7 @@ def test_helpers():
 
 def test_can_see():
     club = Club(FIX / "test-club.yaml", roster=[
-        {"id": "o", "first": "O", "last": "Officer", "officer": True},
+        {"id": "o", "first": "O", "last": "Officer", "role": "President", "officer": True},
         {"id": "a", "first": "A", "last": "Member", "share": ["phone"]},
         {"id": "b", "first": "B", "last": "Member"}])
     assert club.can_see("b", "a", "phone") and not club.can_see("b", "a", "address")
@@ -293,7 +293,7 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[
         {"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN", "email": "ann@example.org"},
-        {"id": "tess", "first": "Tess", "last": "Treasurer", "officer": True, "phone": "419-555-0142"},
+        {"id": "tess", "first": "Tess", "last": "Treasurer", "role": "Treasurer", "officer": True, "phone": "419-555-0142"},
         {"id": "bob", "first": "Bob", "last": "Member", "phone": "419-555-0199"}])
     club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")

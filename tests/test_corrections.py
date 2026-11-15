@@ -24,6 +24,7 @@ ROSTER = [
 
 def archive(tmp_path) -> Archive:
     club = Club(FIX / "test-club.yaml", roster=ROSTER)
+    club.offices = ["President", "Vice President", "Secretary", "Treasurer", {"title": "Trustee", "officer": False, "seats": 3}]
     club.admins = {"n0admn"}
     Meeting(date=dt.date(2026, 10, 15), status="published", leader="doe", recorder="kim", in_person=["kim", "doe"],
             guests=[{"name": "Jane Guest", "notes": "(GMRS)  4th visit"}],

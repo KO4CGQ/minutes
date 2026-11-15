@@ -12,7 +12,7 @@ FIX = Path(__file__).parent / "fixtures"
 @pytest.fixture
 def a(tmp_path, monkeypatch):
     club = Club(FIX / "test-club.yaml",
-                roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "Jane@Example.org", "officer": True},
+                roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "Jane@Example.org", "role": "President", "officer": True},
                         {"id": "n0bbbb", "first": "Old", "last": "Timer", "email": "old@example.org", "status": "Silent Key"}])
     club.auth = {"rp_id": "localhost"}
     sent = []
