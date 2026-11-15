@@ -187,7 +187,9 @@ PERMISSIONS = {
     "moderate": "change any business item, record motions, deal with business suggestions, delete comments, take down a picture, see the calendar change log",
     "treasurer": "look at the Treasurer pages",
     "money": "record money and change the Treasurer settings (comes with looking at the Treasurer pages)",
-    "members": "add members and change their details",
+    "members": "add members and change their details (name, license class, phone, address, titles)",
+    "emails": "change another member's email (the new address confirms it first)",
+    "status": "change a member's status (Active, Inactive, Silent Key…)",
     "roster_emails": "get the roster emails (new members, roster changes, the chow list)",
 }
 # The built-in roles: key: (name, what it allows until an admin changes it). The keys are older than the names:
@@ -196,7 +198,7 @@ ROLES: dict[str, tuple[str, tuple[str, ...]]] = {
     "officer": ("Officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer")),
     "board": ("Minutes editor", ("correct",)),
     "treasurer": ("Treasurer", ("treasurer", "money")),
-    "roster_keeper": ("Roster keeper", ("members",)),
+    "roster_keeper": ("Roster keeper", ("members", "emails", "status")),
     "secretary": ("Secretary", ("roster_emails",)),
     "minutes_editor": ("Meeting leader", ("lead", "calendar")),
     "calendar_editor": ("Calendar editor", ("calendar",)),
@@ -549,6 +551,11 @@ class Club:
     def role_names(self, mid: str | None) -> list[str]:
         t = self.role_table()
         return [t[k]["name"] for k in self.roles(mid)]
+
+    def perms(self, mid: str | None) -> set[str]:
+        """Everything the member's roles allow."""
+        t = self.role_table()
+        return {p for k in self.roles(mid, t) for p in t[k]["perms"]}
 
     def may(self, mid: str | None, perm: str) -> bool:
         """Whether a member's roles allow `perm` (PERMISSIONS). The web app adds admins in admin mode."""

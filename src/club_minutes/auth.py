@@ -141,6 +141,8 @@ class Auth:
             self.db.execute("alter table events add column agent text")
         if "ip" not in {r["name"] for r in self.db.execute("pragma table_info(links)")}:  # added in 1.1.0
             self.db.execute("alter table links add column ip text")
+        if "by" not in {r["name"] for r in self.db.execute("pragma table_info(email_changes)")}:  # added in 1.1.0
+            self.db.execute("alter table email_changes add column by text")
         os.chmod(path, 0o600)
 
     # ---------------- sessions ----------------
@@ -318,9 +320,10 @@ class Auth:
         return bool(self.db.execute("select 1 from links where token_hash=?", (_hash(token),)).fetchone())
 
     # ---------------- email changes ----------------
-    def start_email_change(self, member: str, email: str, base_url: str | None = None) -> str | None:
-        """Email a confirmation link to the new address. Returns an error message, or None if sent."""
-        email = email.strip()
+    def start_email_change(self, member: str, email: str, base_url: str | None = None, by: str | None = None) -> str | None:
+        """Email a confirmation link to the new address; nothing changes until it's opened. `by`: a roster keeper
+        changing someone else's, whose old address is told at once. Returns an error message, or None if sent."""
+        email, by = email.strip(), by or member
         if not valid_email(email):
             return "That doesn't look like an email address."
         other = self.member_by_email(email)
@@ -331,23 +334,35 @@ class Auth:
                            (member, now - 3600)).fetchone()[0] >= EMAILS_PER_HOUR:
             return "Too many tries; please wait an hour."
         token = secrets.token_urlsafe(32)
-        self.db.execute("insert into email_changes values (?,?,?,?,?)",
-                        (_hash(token), member, email, now + LINK_MINUTES * 60, now))
-        url = f"{(base_url or self.base_url or '').rstrip('/')}/profile/email?t={token}"
-        send_email(email, f"Confirm your new {branding.name(self.club)} email", only_to=self.club.email_only_to(), to_self=True,
-                   body=f"Hi {self.club.members[member].first},\n\nTo use this address for {branding.name(self.club)} and the club "
-                   f"roster, open this link within {LINK_MINUTES} minutes:\n\n{url}\n\n"
-                   f"If you didn't ask for this, ignore this email and nothing changes.\n\n73,\n{branding.name(self.club)}")
+        self.db.execute("insert into email_changes (token_hash, member, email, expires, created, by) values (?,?,?,?,?,?)",
+                        (_hash(token), member, email, now + LINK_MINUTES * 60, now, by))
+        base, app, m = (base_url or self.base_url or "").rstrip("/"), branding.name(self.club), self.club.members[member]
+        if by == member:
+            send_email(email, f"Confirm your new {app} email", only_to=self.club.email_only_to(), to_self=True,
+                       body=f"Hi {m.first},\n\nTo use this address for {app} and the club roster, open this link within "
+                       f"{LINK_MINUTES} minutes:\n\n{base}/email/confirm?t={token}\n\n"
+                       f"If you didn't ask for this, ignore this email and nothing changes.\n\n73,\n{app}")
+            return None
+        who = self.club.name(by)
+        send_email(email, f"Confirm your new {app} email", only_to=self.club.email_only_to(),
+                   body=f"Hi {m.first},\n\n{who} is changing your email on the club roster to this address. If it's "
+                   f"yours, open this link within {LINK_MINUTES} minutes to confirm it:\n\n{base}/email/confirm?t={token}\n\n"
+                   f"If you don't know what this is, ignore this email and nothing changes.\n\n73,\n{app}")
+        if m.email:
+            send_email(m.email, f"Your {app} email is being changed", only_to=self.club.email_only_to(),
+                       body=f"Hi {m.first},\n\n{who} asked to change your email on the club roster from this address to "
+                       f"{email}. It changes only when that address confirms it, and then you're signed out everywhere.\n\n"
+                       f"If that's wrong, tell an officer or reply to this email.\n\n73,\n{app}")
         return None
 
-    def confirm_email_change(self, token: str) -> tuple[str, str] | None:
-        """(member, new email) for a valid link, which is then used up."""
-        row = self.db.execute("select member, email, expires from email_changes where token_hash=?",
+    def confirm_email_change(self, token: str) -> tuple[str, str, str] | None:
+        """(member, new email, who asked) for a valid link, which is then used up."""
+        row = self.db.execute("select member, email, expires, by from email_changes where token_hash=?",
                               (_hash(token),)).fetchone()
         self.db.execute("delete from email_changes where token_hash=?", (_hash(token),))
         if not row or row["expires"] < time.time():
             return None
-        return row["member"], row["email"]
+        return row["member"], row["email"], row["by"] or row["member"]
 
     # ---------------- passkeys ----------------
     def _challenge(self, kind: str, challenge: bytes, member: str | None = None) -> str:

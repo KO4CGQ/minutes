@@ -140,9 +140,9 @@ def test_email_change_needs_confirmation(tmp_path, monkeypatch):
     assert a.start_email_change("n0cccc", "not-an-email")
     assert a.start_email_change("n0cccc", "bob@new.example", base_url="https://x") is None
     (to, body), = sent
-    token = body.split("/profile/email?t=")[1].split()[0]
+    token = body.split("/email/confirm?t=")[1].split()[0]  # 1.0 sent /profile/email?t=, which was the Email page
     assert to == "bob@new.example"
-    assert a.confirm_email_change(token) == ("n0cccc", "bob@new.example")
+    assert a.confirm_email_change(token) == ("n0cccc", "bob@new.example", "n0cccc")
     assert a.confirm_email_change(token) is None  # one use
 
 

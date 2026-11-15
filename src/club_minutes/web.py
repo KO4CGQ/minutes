@@ -113,7 +113,7 @@ if not _log.handlers:
 COOKIE = "club_minutes_session"
 OLD_COOKIE = "w8lbz_session"  # shortcut: sign-ins from before 1.0.0 (the app's earlier name); drop once they've expired
 CHALLENGE_COOKIE = "club_minutes_pk"
-PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico",
+PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico", "/email/confirm",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
                 "/api/roster")  # its own token, and only from the server itself
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
@@ -500,10 +500,10 @@ def brand_picture(name: str):
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""):
+def login_page(request: Request, next: str = "/", sent: int = 0, error: str = "", note: str = ""):
     if request.state.member:
         return RedirectResponse(_safe_next(next), status_code=303)
-    return page(request, "login.html", next=_safe_next(next), sent=sent, error=error)
+    return page(request, "login.html", next=_safe_next(next), sent=sent, error=error, note=note[:200])
 
 
 @app.post("/login/email")
@@ -1400,16 +1400,25 @@ async def profile_save(request: Request, mid: str = Depends(me)):
     return RedirectResponse("/profile?saved=1", status_code=303)
 
 
-@app.get("/profile/email")
-def profile_email_confirm(request: Request, t: str = "", mid: str = Depends(me)):
+@app.get("/email/confirm", response_class=HTMLResponse)
+def email_confirm_page(request: Request, t: str = ""):
+    """A new address's confirmation link (the member's own change, or a roster keeper's). Signed in or not: the link
+    proves the address. A button, so a mail scanner opening the link changes nothing."""
+    return page(request, "email_confirm.html", t=t)
+
+
+@app.post("/email/confirm")
+def email_confirm(request: Request, t: str = Form("")):
     got = authn.confirm_email_change(t)
-    if not got or got[0] != mid:
-        return RedirectResponse("/profile?error=" + quote("That confirmation link is invalid or expired."), status_code=303)
+    if not got or got[0] not in archive.club.members:
+        return page(request, "email_confirm.html", t="", error="That confirmation link is invalid or expired.")
+    mid, email, by = got
     try:
-        profile.change(archive.club, mid, {"email": got[1]}, by=mid, url=base_url(request))
-    except SheetError as e:
-        return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
-    return RedirectResponse("/profile?saved=1", status_code=303)
+        profile.change(archive.club, mid, {"email": email}, by=by, url=base_url(request))
+    except (ValueError, SheetError) as e:
+        return page(request, "email_confirm.html", t="", error=str(e))
+    authn.end_all_sessions(mid)  # a session from before the change doesn't carry on
+    return RedirectResponse("/login?note=" + quote(f"Your email is now {email}. You're signed out everywhere: sign in again."), status_code=303)
 
 
 def roster_keeper(request: Request) -> str:
@@ -1811,7 +1820,8 @@ STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
 
 
 @app.get("/members/{who}/edit", response_class=HTMLResponse)
-def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, tab: str = "details", mid: str = Depends(roster_keeper)):
+def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, tab: str = "details", email_sent: str = "",
+                     mid: str = Depends(roster_keeper)):
     """Roster keepers (and admins in admin mode) edit what the roster sheet holds about a member."""
     if who not in archive.club.members:
         raise HTTPException(404)
@@ -1820,9 +1830,10 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
     office_titles = {o["title"] for o in offices.offices(club)}
     held = [t for t in offices.titles(m.role) if t in office_titles]  # shown, changed only on the Offices page
     in_use = {t for x in club.members.values() for t in offices.titles(x.role)} - office_titles
-    return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
+    return page(request, "member_edit.html", member=m, error=error, saved=saved, email_sent=email_sent[:200], classes=membership.CLASSES,
                 tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
+                no_email=may_change(request, who, "emails", "email"), no_status=may_change(request, who, "status", "status"),
                 events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=club.role_names(who))
 
 
@@ -1840,30 +1851,51 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
         except (ValueError, SheetError) as e:
             return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
         return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
-    first, last, email = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split()), f.get("email", "").strip()
+    first, last = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split())
+    email, status = f.get("email", m.email or "").strip(), f.get("status") or m.status  # a field they can't change isn't sent
+    new_email = email.lower() != (m.email or "").lower()
     try:
         if not first or not last or " " in first:
             raise ValueError("First and last name are both needed; put a middle name with the last name.")
-        if f.get("license_class") not in ("", *membership.CLASSES) or f.get("status") not in (*STATUSES, m.status):
+        if f.get("license_class") not in ("", *membership.CLASSES) or status not in (*STATUSES, m.status):
             raise ValueError("Pick a license class and status from the lists.")
-        if email and not valid_email(email):
+        if new_email and not valid_email(email):
             raise ValueError(f"{email} doesn't look like an email address.")
         for a in (x.strip() for x in f.get("aliases", "").split(",")):
             other = archive.club.former_ids.get(a.lower()) if CALLSIGN.match(a) else None
             if CALLSIGN.match(a) and (a.lower() in archive.club.members and a.lower() != who or other not in (None, who)):
                 raise ValueError(f"{a.upper()} is another member's callsign: it can't be one of {m.first}'s other spellings.")
-        # An address is a way to sign in (and an admin's, to confirm admin mode): only an admin changes an admin's.
-        if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
-            raise ValueError("Only an admin, in admin mode, can change an admin's email.")
-        new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
+        for changed, perm, what in ((new_email, "emails", "email"), (status != m.status, "status", "status")):
+            if changed and (err := may_change(request, who, perm, what)):
+                raise ValueError(err)
+        new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": status,
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
-               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
+               "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
         if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
             new["address"] = m.address or ""
         await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+        if new_email:  # waits for the new address to confirm it; the old one is told now
+            if err := await run_in_threadpool(authn.start_email_change, who, email, base_url(request), mid):
+                raise ValueError(err)
+            return RedirectResponse(_safe_next(back + "saved=1&email_sent=" + quote(email)), status_code=303)
     except (ValueError, SheetError) as e:
         return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
     return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
+
+
+def may_change(request: Request, who: str, perm: str, what: str) -> str | None:
+    """Changing another member's email or status: the permission, and never someone who can do more than you (an
+    admin, or a permission you lack). Admins in admin mode may change anyone. Returns why not, or None."""
+    club, mid = archive.club, request.state.member
+    if admin_mode(request):
+        return None
+    if not club.may(mid, perm):
+        return f"Your roles don't allow changing a member's {what}."
+    if club.is_admin(who) and who != mid:
+        return f"Only an admin, in admin mode, can change an admin's {what}."
+    if more := club.perms(who) - club.perms(mid):
+        return f"Locked: {club.members[who].first} can {PERMISSIONS[min(more)].split(' (')[0]}, which you can't."
+    return None
 
 
 def _edit_url(who: str, tab: str) -> str:

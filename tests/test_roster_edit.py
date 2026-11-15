@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from club_minutes import membership, profile, roster, web
+from club_minutes.auth import Auth
 from club_minutes.club import Club
 from club_minutes.store import Archive
 
@@ -27,9 +28,10 @@ def env(tmp_path, monkeypatch):
     for mod in (roster, profile):
         monkeypatch.setattr(mod, "DATA", tmp_path)
     sent = []
-    monkeypatch.setattr(profile.auth, "send_email", lambda to, subject, body, **kw: sent.append((to, subject)))
+    monkeypatch.setattr(profile.auth, "send_email", lambda to, subject, body, **kw: sent.append((to, subject, body)))
     club = Club(FIX / "test-club.yaml", roster=json.loads(cache.read_text()))
     monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
+    monkeypatch.setattr(web, "authn", Auth(club, tmp_path / "auth.sqlite"))
     who = {"id": "n0aaaa"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
     return club, tmp_path, sent, who, TestClient(web.app)
@@ -59,7 +61,7 @@ def test_keeper_edits_and_undo(env):
     assert row["is_officer"] is False and json.loads((tmp / "roster.json").read_text())[1]["first"] == "Robert"
     e = profile.history()[0]
     assert e["new"] == {"role": "Net Manager"}  # the Titles tab saved only its own field
-    assert any("bob@example.org" in to for to, _ in sent)  # the member is told
+    assert any("bob@example.org" in to for to, *_ in sent)  # the member is told
     profile.undo(club, e["id"], "n0aaaa")
     profile.undo(club, profile.history()[2]["id"], "n0aaaa")  # and the details change before it
     assert (b.name, b.role, b.aliases) == ("Bob Bloggs", None, ["Bobby"])
@@ -87,17 +89,57 @@ def test_only_roster_keepers(env):
     assert club.members["n0aaaa"].first == "Amy"
 
 
-def test_admins_email_needs_admin_mode(env, monkeypatch):
-    """A roster keeper can't point an admin's sign-in (and admin-mode confirmation) email at another inbox."""
-    club, _tmp, _, _who, c = env
-    club.admins = {"n0bbbb"}
+def _link(sent, to):
+    return next(b for t, _s, b in reversed(sent) if t == to).split("/email/confirm?t=")[1].split()[0]
+
+
+def test_another_members_email_waits_for_the_new_address(env):
+    """Stage test of 1.0.0, problem 4: a roster keeper changing another member's email no longer changes it; the new
+    address gets a link, the old one is told at once, and only the link (a button, so a mail scanner can't) changes it
+    and signs the member out everywhere. A made-up or used link changes nothing."""
+    club, _tmp, sent, _who, c = env
+    r = c.post("/members/n0bbbb/edit", data=form(email="bob@new.example.org"), follow_redirects=False)
+    assert "email_sent=bob%40new.example.org" in r.headers["location"] and club.members["n0bbbb"].email == "bob@example.org"
+    assert {t for t, _s, _b in sent} >= {"bob@new.example.org", "bob@example.org"}  # the new address, and the old one told
+    old = next(b for t, s_, b in sent if t == "bob@example.org" and "being changed" in s_)
+    assert "Amy Appleseed asked to change your email" in old and "bob@new.example.org" in old
+    s1 = web.authn.new_session("n0bbbb")
+    token = _link(sent, "bob@new.example.org")
+    anon = TestClient(web.app)
+    assert 'name="t" value="' + token in anon.get(f"/email/confirm?t={token}").text and club.members["n0bbbb"].email == "bob@example.org"
+    r = anon.post("/email/confirm", data={"t": token}, follow_redirects=False)
+    assert r.headers["location"].startswith("/login?note=") and club.members["n0bbbb"].email == "bob@new.example.org"
+    assert s1 and not web.authn.sessions("n0bbbb")  # every session ended
+    assert "invalid or expired" in anon.post("/email/confirm", data={"t": token}).text           # one use
+    assert "invalid or expired" in anon.post("/email/confirm", data={"t": "made-up"}).text
+
+
+def test_email_and_status_need_their_permissions_and_no_one_above_you(env, monkeypatch, tmp_path):
+    """Changing another member's email or status: its own permission (Roster keeper has both, as it ships), never for
+    someone who can do more than you (an admin, or a permission you lack), and admin mode may change anyone."""
+    from club_minutes import club as clubmod
+    club, _tmp, sent, _who, c = env
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    t = club.role_table()
+    club.save_roles({**t, "roster_keeper": {**t["roster_keeper"], "perms": ["members"]},
+                     "admin_helper": {"name": "Status helper", "perms": ["emails", "status"], "offices": [], "members": ["n0bbbb"]}})
+    r = c.post("/members/n0bbbb/edit", data=form(status="Inactive"), follow_redirects=False)
+    assert "allow%20changing%20a%20member%27s%20status" in r.headers["location"] and club.members["n0bbbb"].status == "Active"
+    page_ = c.get("/members/n0bbbb/edit").text
+    assert '<select name="status" disabled>' in page_ and 'name="email" value="bob@example.org" disabled' in page_
+    c.post("/members/n0bbbb/edit", data=form(phone="419-555-0102") | {"status": ""})  # disabled fields aren't sent: other details save
+    assert club.members["n0bbbb"].phone == "419-555-0102" and club.members["n0bbbb"].status == "Active"
+    club.save_roles({**club.role_table(), "roster_keeper": {**club.role_table()["roster_keeper"], "perms": ["members", "emails", "status"]}})
+    club.members["n0bbbb"].role = "Treasurer"  # Bob may now record money, which Amy (the Secretary) can't
     r = c.post("/members/n0bbbb/edit", data=form(email="mallory@example.org"), follow_redirects=False)
-    assert "Only%20an%20admin" in r.headers["location"] and club.members["n0bbbb"].email == "bob@example.org"
-    c.post("/members/n0bbbb/edit", data=form(phone="419-555-0102"))  # other details are fine
-    assert club.members["n0bbbb"].phone == "419-555-0102"
+    assert "Locked%3A%20Bob%20can%20record%20money%20and%20change%20the%20Treasurer%20settings%2C%20which%20you%20can%27t." in r.headers["location"] and not any(t == "mallory@example.org" for t, *_ in sent)
+    club.members["n0bbbb"].role = ""
+    club.admins = {"n0bbbb"}
+    r = c.post("/members/n0bbbb/edit", data=form(status="Inactive"), follow_redirects=False)
+    assert "Only%20an%20admin" in r.headers["location"] and club.members["n0bbbb"].status == "Active"
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     c.post("/members/n0bbbb/edit", data=form(email="bob@new.example.org"))
-    assert club.members["n0bbbb"].email == "bob@new.example.org"
+    assert any(t == "bob@new.example.org" for t, *_ in sent)  # admin mode: the link goes out (it still waits for it)
 
 
 def test_titles_are_picked_from_a_list_and_offices_stay_put(env):
@@ -154,3 +196,14 @@ def test_another_members_callsign_is_never_an_other_spelling(env):
     assert c2.canonical("n0bbbb") == "n0bbbb" and c2.canonical("n0oldx") == "n0oldx" and not c2.is_admin("n0aaaa")
     rows[1]["aliases"] = ["N0OLDX"]  # one member's own former callsign still works
     assert Club(FIX / "test-club.yaml", roster=rows[1:]).canonical("n0oldx") == "n0bbbb"
+
+
+def test_a_members_own_email_change_completes(env):
+    """In 1.0 the confirmation link went to /profile/email?t=…, which is the Email settings page, so a member's own
+    email change never happened. Now it's /email/confirm, and it signs them out everywhere."""
+    club, _tmp, sent, _who, c = env
+    r = c.post("/profile", data={"email": "amy@new.example.org"}, follow_redirects=False)
+    assert "email_sent=" in r.headers["location"] and club.members["n0aaaa"].email == "amy@example.org"
+    assert not any(t == "amy@example.org" and "being changed" in s_ for t, s_, _b in sent)  # her own change: no warning
+    TestClient(web.app).post("/email/confirm", data={"t": _link(sent, "amy@new.example.org")})
+    assert club.members["n0aaaa"].email == "amy@new.example.org"

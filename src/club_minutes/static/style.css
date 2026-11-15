@@ -73,6 +73,7 @@ input[type=text], input[type=search], input[type=email], input[type=tel], input[
 select, textarea {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm); padding: .45rem .65rem; }
+input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
 fieldset { min-width: 0; }  select { max-width: 100%; }  /* long option text ("Every year on the 1st Thursday of January") mustn't widen a phone page */
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
 input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1rem; height: 1rem; }

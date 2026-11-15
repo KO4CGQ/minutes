@@ -13,7 +13,7 @@ FIX = Path(__file__).parent / "fixtures"
 PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "email": "amy@example.org"},
           {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"},
           {"id": "n0offc", "first": "Ola", "last": "Officer", "role": "President", "officer": True, "email": "o@example.org"}]
-PUBLIC_GET = {"/login", "/favicon.ico", "/brand/theme.css", "/calendar/public", "/calendar/public.ics", "/calendar/feed/x.ics", "/api/roster", "/login/link",
+PUBLIC_GET = {"/login", "/email/confirm", "/favicon.ico", "/brand/theme.css", "/calendar/public", "/calendar/public.ics", "/calendar/feed/x.ics", "/api/roster", "/login/link",
               "/healthz"}
 
 
@@ -48,7 +48,7 @@ def test_a_signed_out_visitor_reaches_only_the_public_pages(app):
     anon = TestClient(web.app, client=("203.0.113.5", 5000))
     seen = 0
     for m, path in routes():
-        if path.startswith(("/login/email", "/auth/passkey/login/")):  # how you sign in: public by design (tested on their own)
+        if path.startswith(("/login/email", "/auth/passkey/login/", "/email/confirm")):  # public by design, behind a one-time token (tested on their own)
             continue
         r = anon.request(m, path, data={"x": "1"} if m == "POST" else None, follow_redirects=False)
         seen += 1
