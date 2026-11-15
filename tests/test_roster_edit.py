@@ -231,3 +231,20 @@ def test_the_last_active_admin_stays(env, monkeypatch, tmp_path):
     who["id"] = "n0aaaa"
     r = c.post("/admin/security/admins/remove", data={"member": "n0aaaa"})
     assert r.status_code == 400 and "last active admin" in r.text and club.active_admins == {"n0aaaa"}
+
+
+def test_an_email_change_is_checked_again_when_confirmed(env, monkeypatch, tmp_path):
+    """Security sweep: in the 15 minutes before the link is opened, the keeper may lose the permission, the member may
+    gain more than the keeper, or someone else may take the address. Then nothing changes."""
+    from club_minutes import club as clubmod
+    club, _tmp, sent, _who, c = env
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    c.post("/members/n0bbbb/edit", data=form(email="bob@new.example.org"))
+    club.members["n0bbbb"].role = "Treasurer"  # Bob may now record money; Amy can't
+    r = TestClient(web.app).post("/email/confirm", data={"t": _link(sent, "bob@new.example.org")})
+    assert "can record money" in r.text and "Nothing was changed" in r.text and club.members["n0bbbb"].email == "bob@example.org"
+    club.members["n0bbbb"].role = ""
+    c.post("/members/n0bbbb/edit", data=form(email="taken@example.org"))
+    club.members["n0aaaa"].email = "taken@example.org"
+    r = TestClient(web.app).post("/email/confirm", data={"t": _link(sent, "taken@example.org")})
+    assert "Another member uses that address now" in r.text and club.members["n0bbbb"].email == "bob@example.org"

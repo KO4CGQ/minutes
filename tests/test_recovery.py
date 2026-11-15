@@ -103,3 +103,25 @@ def test_the_pages_confirm_first_and_a_suspended_admin_cant_lift_it(club, tmp_pa
     club.save_suspended({"adm"})
     r = as_("adm").post("/admin/security/admins/lift", data={"member": "adm"})
     assert r.status_code == 404 and club.suspended == {"adm"}  # a suspended admin isn't one
+
+
+def test_no_suspension_without_the_new_admin(club):
+    """Security sweep: if the nominee is no longer active when the wait ends, it ends without touching any admin."""
+    recovery.start(club, "pres", "n0call", ["adm"], "", "https://x")
+    recovery.approve(club, "vp", "https://x")
+    recovery.approve(club, "sec", "https://x")
+    recovery.accept(club, "n0call", "https://x")
+    club.members["n0call"].status = "Inactive"
+    assert not recovery.tick(club, "https://x", now=9e12)
+    assert club.is_admin("adm") and not club.suspended and recovery.load() is None and "ended without changing" in club.sent[-1][2]
+
+
+def test_a_new_callsign_keeps_a_suspension_and_an_open_recovery(club, tmp_path):
+    """Security sweep: renaming a suspended admin (or the nominee) kept the old id in admins-suspended.json and
+    recovery.json, which lifted the suspension."""
+    from club_minutes import callsign
+    club.save_suspended({"adm"})
+    recovery.start(club, "pres", "n0call", [], "", "https://x")
+    callsign.rename_id("adm", "n0newa", tmp_path)
+    callsign.rename_id("n0call", "n0newc", tmp_path)
+    assert club.suspended == {"n0newa"} and recovery.load()["nominee"] == "n0newc"

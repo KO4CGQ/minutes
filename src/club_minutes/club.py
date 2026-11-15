@@ -591,7 +591,7 @@ class Club:
     def suspended(self) -> set[str]:
         """Admins suspended by a recovery: their admin rights don't count, club.yaml's included; another admin lifts it."""
         p = DATA / "admins-suspended.json"
-        return set(json.loads(p.read_text())) if p.exists() else set()
+        return {self.canonical(a) for a in json.loads(p.read_text())} if p.exists() else set()
 
     def save_suspended(self, ids: set[str]) -> None:
         p = DATA / "admins-suspended.json"

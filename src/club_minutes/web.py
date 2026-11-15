@@ -1553,6 +1553,11 @@ def email_confirm(request: Request, t: str = Form("")):
     if not got or got[0] not in archive.club.members:
         return page(request, "email_confirm.html", t="", error="That confirmation link is invalid or expired.")
     mid, email, by = got
+    other = authn.member_by_email(email)
+    err = ("Another member uses that address now." if other and other != mid else
+           None if by == mid or archive.club.is_admin(by) else why_not_change(archive.club, by, mid, "emails", "email"))
+    if err:  # things changed in the 15 minutes since it was asked for
+        return page(request, "email_confirm.html", t="", error=f"{err} Nothing was changed.")
     try:
         profile.change(archive.club, mid, {"email": email}, by=by, url=base_url(request))
     except (ValueError, SheetError) as e:
@@ -2028,9 +2033,11 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
 def may_change(request: Request, who: str, perm: str, what: str) -> str | None:
     """Changing another member's email or status: the permission, and never someone who can do more than you (an
     admin, or a permission you lack). Admins in admin mode may change anyone. Returns why not, or None."""
-    club, mid = archive.club, request.state.member
-    if admin_mode(request):
-        return None
+    return None if admin_mode(request) else why_not_change(archive.club, request.state.member, who, perm, what)
+
+
+def why_not_change(club, mid: str, who: str, perm: str, what: str) -> str | None:
+    """may_change without admin mode: also asked again when a new email is confirmed."""
     if not club.may(mid, perm):
         return f"Your roles don't allow changing a member's {what}."
     if club.is_admin(who) and who != mid:

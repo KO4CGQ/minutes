@@ -93,7 +93,7 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #   chow: true
 #   jitsi: true     # members join the club's Jitsi Meet server signed in from here (with the jitsi: block below)
 
-# Jitsi Meet sign-in (only with modules: jitsi). The secret is CLUB_MINUTES_JITSI_SECRET in /etc/club-minutes/env, the
+# Jitsi Meet sign-in (only with modules: jitsi). The secret is CLUB_MINUTES_JITSI_SECRET in /etc/club-minutes/env (32+ characters), the
 # same one the Jitsi server's Prosody has (server admin guide → Video meetings).
 # jitsi:
 #   domain: meet.example.org   # the club's Jitsi server

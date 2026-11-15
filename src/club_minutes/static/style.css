@@ -619,7 +619,7 @@ details.sitesec > summary::before { content: "›"; font-size: 1.3rem; line-heig
 details.sitesec[open] > summary::before { transform: rotate(90deg); }
 details.sitesec > summary h2 { margin: 0; } details.sitesec[open] > summary { margin-bottom: .7rem; }
 form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items: flex-start; padding: .45rem 0; margin: 0; }
-.sitesec label.check input { margin-top: .25rem; }
+.sitesec label.check input { margin-top: .25rem; flex: none; }  /* a wrapped label mustn't squeeze the box */
 .fmtgrid { display: grid; grid-template-columns: max-content minmax(8rem, 20rem) 1fr; gap: .5rem .8rem; align-items: center; }
 @media (max-width: 560px) { .fmtgrid { grid-template-columns: 1fr; } .fmtgrid span { margin-bottom: .4rem; } }
 .agendagrid { display: grid; grid-template-columns: auto 3.5rem minmax(10rem, 16rem) 1fr; gap: .45rem .7rem; align-items: center; }

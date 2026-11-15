@@ -34,7 +34,7 @@ def env(tmp_path, monkeypatch):
     c = Club(FIX / "test-club.yaml", roster=ROSTER)
     c.modules["jitsi"] = True
     c.yaml = {**c.yaml, "jitsi": {"domain": "meet.example.org", "app_id": "club-minutes", "room": "club"}}
-    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "a-test-secret-not-a-real-one")
+    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "a-test-secret-not-a-real-one-0123456789")
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", c)
@@ -50,7 +50,7 @@ def env(tmp_path, monkeypatch):
 def claims(location):
     jwt = location.split("?jwt=")[1]
     head, body, sig = jwt.split(".")
-    assert meet.sign(f"{head}.{body}".encode(), b"a-test-secret-not-a-real-one") == sig
+    assert meet.sign(f"{head}.{body}".encode(), b"a-test-secret-not-a-real-one-0123456789") == sig
     return json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
 
 
@@ -75,7 +75,9 @@ def test_signed_out_odd_rooms_and_off(env, monkeypatch):
     assert as_("n0call").get("/meet/" + "x" * 65, follow_redirects=False).status_code == 404
     monkeypatch.delenv("CLUB_MINUTES_JITSI_SECRET")
     assert as_("pres").get("/meet/club", follow_redirects=False).status_code == 404  # not set up: as if it weren't there
-    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "x")
+    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "too-short-to-be-safe")  # under 32: one captured token could crack it
+    assert as_("pres").get("/meet/club", follow_redirects=False).status_code == 404
+    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "x" * 40)
     c.modules["jitsi"] = False
     assert as_("pres").get("/meet", follow_redirects=False).status_code == 404
 

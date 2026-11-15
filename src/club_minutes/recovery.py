@@ -11,6 +11,8 @@ The limit: this guards against an admin with only app access. Anyone with the se
 """
 from __future__ import annotations
 
+import fcntl
+import functools
 import json
 import secrets
 import time
@@ -20,6 +22,20 @@ from .club import DATA, Club, show_date
 
 WAIT_DAYS, WAIT_DAYS_OBJECTED = 7, 14
 MOTION_MAX = 200
+
+
+def _locked(fn):
+    """Load-change-save under a file lock: the web app and the daily job (separate processes), and two officers at once."""
+    @functools.wraps(fn)
+    def run(*a, **kw):
+        DATA.mkdir(parents=True, exist_ok=True)
+        with open(DATA / "recovery.lock", "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                return fn(*a, **kw)
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+    return run
 
 
 def _path():
@@ -67,6 +83,7 @@ def state(club: Club, r: dict) -> dict:
     return {"officers": offs, "need": need, "have": len(approvals), "objected": objected, "ready_at": ready}
 
 
+@_locked
 def start(club: Club, by: str, nominee: str, suspend: list[str], motion: str, url: str) -> dict:
     if load():
         raise ValueError("A recovery is already under way: see it on this page.")
@@ -94,6 +111,7 @@ def _open(club: Club) -> dict:
     return r
 
 
+@_locked
 def approve(club: Club, by: str, url: str) -> dict:
     r = _open(club)
     if by not in officers(club):
@@ -105,6 +123,7 @@ def approve(club: Club, by: str, url: str) -> dict:
     return r
 
 
+@_locked
 def accept(club: Club, by: str, url: str) -> dict:
     r = _open(club)
     if by != r["nominee"]:
@@ -116,6 +135,7 @@ def accept(club: Club, by: str, url: str) -> dict:
     return r
 
 
+@_locked
 def object_(club: Club, by: str, url: str) -> dict:
     """An admin (in admin mode) objects: two-thirds and 14 days from then on. It can't stop it."""
     r = _open(club)
@@ -130,6 +150,7 @@ def object_(club: Club, by: str, url: str) -> dict:
     return r
 
 
+@_locked
 def cancel(club: Club, by: str, url: str) -> None:
     r = _open(club)
     if by != r["by"]:
@@ -138,6 +159,7 @@ def cancel(club: Club, by: str, url: str) -> None:
     _tell(club, "Recovering admin access: called off", f"{club.name(by)} called off the recovery.", r, url)
 
 
+@_locked
 def tick(club: Club, url: str, now: float | None = None) -> bool:
     """Complete it once the wait is over (the daily job, and each view of the page). True if it completed."""
     r = load()
@@ -146,8 +168,13 @@ def tick(club: Club, url: str, now: float | None = None) -> bool:
     st = state(club, r)
     if not st["ready_at"] or (now or time.time()) < st["ready_at"]:
         return False
-    if r["nominee"] in club.members and club.members[r["nominee"]].status.lower() == "active":
-        club.save_app_admins(club.app_admins | {r["nominee"]})
+    n = club.members.get(r["nominee"])
+    if not n or n.status.lower() != "active":  # never suspend admins without the new one: the club would be locked out
+        _save(None)
+        _tell(club, "Recovering admin access: ended", f"{club.name(r['nominee'])} is no longer an active member, so the "
+              "recovery ended without changing any admin. An officer can start a new one.", r, url)
+        return False
+    club.save_app_admins(club.app_admins | {r["nominee"]})
     club.save_suspended(club.suspended | set(r["suspend"]))
     _save(None)
     _tell(club, "Recovering admin access: done", f"{club.name(r['nominee'])} is now an admin." + (

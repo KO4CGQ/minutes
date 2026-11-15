@@ -24,7 +24,7 @@ ROOM = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 def settings(club: Club) -> dict | None:
     """{domain, app_id, room} when Jitsi is on and set up (club.yaml's jitsi: block and the secret); else None."""
     j = club.yaml.get("jitsi") or {}
-    if not club.has("jitsi") or not j.get("domain") or not j.get("app_id") or not secret():
+    if not club.has("jitsi") or not j.get("domain") or not j.get("app_id") or len(secret()) < 32:  # a short secret can be guessed from one token
         return None
     return {"domain": str(j["domain"]).strip().strip("/"), "app_id": str(j["app_id"]), "room": str(j.get("room") or "club")}
 
