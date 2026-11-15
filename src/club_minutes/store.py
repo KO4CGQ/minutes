@@ -92,6 +92,10 @@ class Archive:
         c = self.club.canonical
         m.in_person = [c(x) for x in m.in_person]
         m.remote = [c(x) for x in m.remote]
+        m.leader, m.recorder = m.leader and c(m.leader), m.recorder and c(m.recorder)  # who may correct them
+        m.corrections = [{**x, "by": c(x["by"])} if x.get("by") else x for x in m.corrections]
+        if m.reviewed and m.reviewed.get("by"):
+            m.reviewed = {**m.reviewed, "by": c(m.reviewed["by"])}
         for items in m.sections.values():
             for it in items:
                 if it.member:

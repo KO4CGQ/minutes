@@ -325,7 +325,7 @@ def test_console_saves_of_the_wrong_shape_or_size_are_refused_and_attendance_is_
     a = archive_with_prev(tmp_path)
     a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
         {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True},
-        {"id": "w0new", "first": "Sam", "last": "Kim", "aliases": ["N0OLDE"]},
+        {"id": "w0demo", "first": "Sam", "last": "Kim", "aliases": ["N0OLDE"]},
         {"id": "roe", "first": "Ray", "last": "Roe", "status": "Inactive"}])
     monkeypatch.setattr(web, "archive", a)
     auth = Auth(a.club, tmp_path / "auth.sqlite")
@@ -344,5 +344,5 @@ def test_console_saves_of_the_wrong_shape_or_size_are_refused_and_attendance_is_
           "state": {}, "tab": "j"}
     assert t.put(url, json=ok).status_code == 200
     m = a.by_slug[m.slug]
-    assert m.in_person == ["doe", "w0new", "roe"] and m.remote == []   # an Inactive member and an old callsign kept
+    assert m.in_person == ["doe", "w0demo", "roe"] and m.remote == []   # an Inactive member and an old callsign kept
     assert m.guests == [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}] and m.visitors == 2

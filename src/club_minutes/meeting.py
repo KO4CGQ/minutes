@@ -179,7 +179,9 @@ class Meeting:
         d = root / self.slug
         d.mkdir(parents=True, exist_ok=True)
         p = d / "minutes.md"
-        p.write_text(self.to_markdown())
+        tmp = d / "minutes.md.tmp"
+        tmp.write_text(self.to_markdown())
+        tmp.replace(p)  # a crash mid-write leaves the old minutes, never half of them
         return p
 
     @classmethod

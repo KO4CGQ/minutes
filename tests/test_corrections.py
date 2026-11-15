@@ -292,3 +292,20 @@ def test_import_correction_keeps_the_original_as_version_1(tmp_path, monkeypatch
     assert corrections.load_version(a, m.slug, 1).items("Old Business")[0].text == "Fox hunt moved to the 20th"
     with pytest.raises(ValueError, match="version 1"):  # only once
         importer.import_correction(a, dt.date(2025, 10, 23), fixed, "roe", "again")
+
+
+def test_a_correction_that_fails_to_save_changes_nothing(tmp_path, monkeypatch):
+    """Data & reliability sweep: the archive's own copy was changed before saving; a failed save left it saying
+    version 2 while the disk said 1. And a renamed member keeps the right to correct (recorder via canonical)."""
+    a = archive(tmp_path)
+    new = a.by_slug["2026-10-15"]
+    fixed = Meeting(date=new.date, status=new.status, in_person=new.in_person, guests=new.guests,
+                    sections={**new.sections, "Old Business": [Item("Patches: passed")]})
+    monkeypatch.setattr(Meeting, "save", lambda self, root: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        corrections.correct(a, "2026-10-15", "kim", "fix", 1, fixed, False)
+    assert a.by_slug["2026-10-15"].version == 1 and not a.by_slug["2026-10-15"].corrections
+    a.club.former_ids["n0kimo"] = "kim"
+    m = a.by_slug["2026-10-15"]
+    m.recorder = "n0kimo"
+    assert a._canonicalize(m).recorder == "kim"

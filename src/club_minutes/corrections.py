@@ -69,8 +69,10 @@ def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new
         m.corrections = [*m.corrections, {"version": m.version, "at": int(time.time()), "by": by, "reason": reason, "notice": notice}]
         if m.status == "imported" and not m.reviewed:
             m.reviewed = {"by": by, "at": int(time.time())}
-        m.save(archive.root)
-        archive.reload()
+        try:
+            m.save(archive.root)
+        finally:
+            archive.reload()  # m is the archive's own: if the save failed, back to what's on disk
         return archive.by_slug[slug]
 
 
