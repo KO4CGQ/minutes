@@ -166,8 +166,8 @@ class Auth:
                 f"select ip from events where at>? and ip is not null and kind not in ({','.join('?' * len(NOT_COUNTED))})",
                 (now - 3600, *NOT_COUNTED)))
             if n >= BAN_AFTER:
-                self.ban(ip, BAN_HOURS, f"{n} failed sign-in attempts in an hour", "automatic")
-                log.warning("banned %s after %d failed sign-in attempts", ip, n)
+                self.ban(ip, BAN_HOURS, f"{n} failed sign-ins or scanner probes in an hour", "automatic")
+                log.warning("banned %s after %d failed sign-ins or scanner probes", ip, n)
 
     def banned(self, ip: str | None) -> bool:
         if not ip:
