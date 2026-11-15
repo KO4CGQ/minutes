@@ -197,8 +197,12 @@ def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, mo
     c.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
     assert c.get("/admin/security").status_code == 404                  # not an admin
     a.ban("testclient", None, "test", "n0aaaa")                           # the test client's "address"
+    monkeypatch.setattr(web.archive, "club", club)
+    assert c.get("/profile").status_code == 200                          # signed in: a ban doesn't stop members
+    c.cookies.clear()
     r = c.get("/login")
-    assert r.status_code == 403 and "blocked" in r.text
+    assert r.status_code == 403 and "blocked" in r.text                  # signing in from it does
+    assert c.get("/calendar/public").status_code != 403                  # the public calendar stays open
     assert web.device("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36") == "Chrome on Windows"
     assert [web.where(x) for x in ("9.9.9.9", "192.168.1.5", "100.64.0.5", "127.0.0.1")] == \
         ["internet", "LAN", "tailnet", "this server"]
@@ -385,3 +389,35 @@ def test_email_me_a_link_answers_before_the_email_is_sent(monkeypatch):
         await web.app(scope, receive, noted)
     r = TestClient(watch).post("/login/email", data={"email": "amy@example.org"}, follow_redirects=False)
     assert r.status_code == 303 and order == ["reply finished", "email sent"]
+
+
+def test_ipv6_bans_cover_the_64_and_old_bans_still_hold(a):
+    for i in range(auth_mod.BAN_AFTER):                                  # failures spread over one home's /64
+        a.event("bad_link", f"2001:4860:1:2::{i + 1:x}")
+    assert a.banned("2001:4860:1:2:ffff::9") and not a.banned("2001:4860:1:3::1")
+    assert a.bans()[0]["ip"] == "2001:4860:1:2::/64"                   # the Security page shows the block
+    a.unban("2001:4860:1:2::/64")
+    assert not a.banned("2001:4860:1:2::1")
+    a.ban("2001:4860:9:9::5", None, "by hand", "n0aaaa")                 # an admin's IPv6 ban covers the /64 too
+    assert a.banned("2001:4860:9:9::77")
+    a.unban("2001:4860:9:9::5")                                          # unbanning by an address in it lifts it
+    assert not a.banned("2001:4860:9:9::77")
+    a.db.execute("insert into bans values ('2001:4860:7:7::1', 0, null, 'from 1.0', 'automatic')")  # 1.0 kept the address
+    assert a.banned("2001:4860:7:7::1")
+    assert auth_mod.ban_key("9.9.9.9") == "9.9.9.9"
+
+
+def test_old_links_dont_count_toward_a_ban_made_up_ones_do(a, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web, "authn", a)
+    c = TestClient(web.app)
+    a.send_link("jane@example.org")
+    t = link_token(a.sent[0][1])
+    assert c.get(f"/login/link?t={t}", follow_redirects=False).status_code == 303   # signs in
+    c.cookies.clear()
+    r = c.get(f"/login/link?t={t}")                                     # used: "expired or already used"
+    assert "expired or was already used" in r.text and not a.events()
+    c.get("/login/link?t=made-up")
+    assert [e["kind"] for e in a.events()] == ["bad_link"]

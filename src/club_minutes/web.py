@@ -216,9 +216,6 @@ def _session_token(request: Request) -> str | None:
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
-    if authn.banned(client_ip(request)):
-        return HTMLResponse("This address has been blocked after repeated failed sign-ins. "
-                            "If that's a mistake, ask a club officer.", status_code=403)
     archive.club.refresh()  # pick up a roster sync without a restart
     token = _session_token(request)
     real = authn.member_for(token)
@@ -230,6 +227,11 @@ async def require_login(request: Request, call_next):
     request.state.member = request.state.viewing_as or real
     authmod.ACTOR.set(getattr(archive.club.members.get(real or ""), "email", None) or None)  # stage: their email only
     path = request.url.path
+    # A ban stops signing in, not members already signed in (an address can be the clubhouse's or a phone carrier's)
+    if not real and not path.startswith(("/calendar/public", "/calendar/feed/", "/static/", "/brand/", "/favicon.ico")) \
+            and authn.banned(client_ip(request)):
+        return HTMLResponse("This address has been blocked after repeated failed sign-ins. "
+                            "If that's a mistake, ask a club officer.", status_code=403)
     if request.state.viewing_as:
         request.state.admin_until = None  # their permissions, not the admin's
         if path.startswith(("/account", "/profile/email", "/logout", "/auth/")) or (
@@ -483,7 +485,8 @@ def login_email(request: Request, background: BackgroundTasks, email: str = Form
 def login_link(request: Request, t: str = ""):
     used = authn.use_link(t)
     if not used:
-        authn.event("bad_link", client_ip(request), agent=request.headers.get("user-agent", ""))
+        if not authn.link_issued(t):  # an old link isn't an attack; a made-up one counts toward a ban
+            authn.event("bad_link", client_ip(request), agent=request.headers.get("user-agent", ""))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
@@ -2019,6 +2022,7 @@ def where(ip: str | None) -> str:
 
 templates.env.filters["device"] = device
 templates.env.filters["where"] = where
+templates.env.filters["ban_key"] = authmod.ban_key
 
 
 def _security_admin(request: Request) -> str:
@@ -2197,7 +2201,7 @@ def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), re
         ip = str(ipaddress.ip_address(ip.strip()))
     except ValueError:
         raise HTTPException(400, "That isn't an IP address.")
-    if ip == client_ip(request) or ipaddress.ip_address(ip).is_loopback:
+    if authmod.ban_key(ip) == authmod.ban_key(client_ip(request) or "") or ipaddress.ip_address(ip).is_loopback:
         raise HTTPException(400, "That's the address you're using (or this server); banning it would lock you out.")
     authn.ban(ip, hours or None, reason or "banned by an admin", mid)
     _admin_log(request, ban=ip, hours=hours or None)

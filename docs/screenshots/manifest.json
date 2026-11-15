@@ -235,7 +235,7 @@
   "templates/meeting.html": "a429d7d3c3b13b2521d901eb5eeb7412958b9f4c2e2cec787989f56de177bce7",
   "templates/member_edit.html": "86a65fcf6ed818df962166c521dd4c4b552909b8f0e39b8b8ee189fe9ee034e6",
   "templates/offices.html": "e53e7f4e186c004d707fa2ea3b185bbcd8e6c74ebb6df97d45a3a2d1b2b6b4cb",
-  "templates/security.html": "cf06e2dfa262559d6dc1ad4f1e66322f39e96466182284691beba7d5dad37471",
+  "templates/security.html": "46ba0fc447466bc1f057e00dfb0636b9e8653f5b3cb4c25b6caa32a1a67b3abb",
   "templates/site.html": "da6f2402323070adf68f6ae0978e87ed64fb3136cfb7cc12e8ac1318256c0e56",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "3a4f7ff5a88b5176441a6c10d6157b0908809211a69a46d85f7565a6e470e25c"

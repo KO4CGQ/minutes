@@ -82,7 +82,7 @@ create table if not exists bans (ip text primary key, at integer not null, until
 BAN_AFTER = 10          # failed sign-in attempts from one internet address in an hour...
 BAN_HOURS = 24          # ...ban it for this long (admins can lift it on the Security page)
 EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the roster",
-               "link_limit": "Sign-in link limit reached", "bad_link": "Used, expired or made-up sign-in link",
+               "link_limit": "Sign-in link limit reached", "bad_link": "A sign-in link the app never sent",
                "passkey_failed": "Passkey sign-in failed"}
 
 
@@ -93,6 +93,16 @@ def _public(ip: str) -> bool:
         return ipaddress.ip_address(ip).is_global
     except ValueError:
         return False
+
+
+def ban_key(ip: str) -> str:
+    """What a ban covers: an IPv4 address, or an IPv6 address's /64 (a home gets billions of addresses)."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip  # already a block (2001:db8:1:2::/64), or not an address
+    return str(ipaddress.ip_network(f"{a}/64", strict=False)) if a.version == 6 else str(a)
 
 
 def _hash(token: str) -> str:
@@ -148,7 +158,9 @@ class Auth:
         self.db.execute("insert into events (at, ip, kind, member, detail, agent) values (?,?,?,?,?,?)",
                         (now, ip, kind, member, detail[:200], (agent or "")[:300]))
         if ip and _public(ip) and not self.banned(ip):
-            n = self.db.execute("select count(*) from events where ip=? and at>?", (ip, now - 3600)).fetchone()[0]
+            key = ban_key(ip)
+            n = sum(ban_key(r[0]) == key for r in self.db.execute("select ip from events where at>? and ip is not null",
+                                                                  (now - 3600,)))
             if n >= BAN_AFTER:
                 self.ban(ip, BAN_HOURS, f"{n} failed sign-in attempts in an hour", "automatic")
                 log.warning("banned %s after %d failed sign-in attempts", ip, n)
@@ -156,16 +168,16 @@ class Auth:
     def banned(self, ip: str | None) -> bool:
         if not ip:
             return False
-        row = self.db.execute("select until from bans where ip=?", (ip,)).fetchone()
-        return bool(row and (row["until"] is None or row["until"] > time.time()))
+        return bool(self.db.execute("select 1 from bans where ip in (?,?) and (until is null or until>?)",  # a 1.0 ban: the address
+                                    (ban_key(ip), ip, time.time())).fetchone())
 
     def ban(self, ip: str, hours: int | None, reason: str, by: str) -> None:
         now = int(time.time())
         self.db.execute("insert or replace into bans values (?,?,?,?,?)",
-                        (ip, now, now + hours * 3600 if hours else None, reason[:200], by))
+                        (ban_key(ip), now, now + hours * 3600 if hours else None, reason[:200], by))
 
     def unban(self, ip: str) -> None:
-        self.db.execute("delete from bans where ip=?", (ip,))
+        self.db.execute("delete from bans where ip in (?,?)", (ip, ban_key(ip)))
 
     def bans(self) -> list[sqlite3.Row]:
         return self.db.execute("select * from bans where until is null or until>? order by at desc", (time.time(),)).fetchall()
@@ -295,6 +307,11 @@ class Auth:
             return None
         self.db.execute("update links set used=1 where token_hash=?", (_hash(token),))
         return row["member"], row["next"] or "/"
+
+    def link_issued(self, token: str) -> bool:
+        """An old or used link (members click those all the time), not a made-up one. `links` is never pruned; if it
+        ever is, keep 90 days."""
+        return bool(self.db.execute("select 1 from links where token_hash=?", (_hash(token),)).fetchone())
 
     # ---------------- email changes ----------------
     def start_email_change(self, member: str, email: str, base_url: str | None = None) -> str | None:

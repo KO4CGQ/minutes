@@ -115,7 +115,7 @@ systemctl start club-minutes
 `restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same.
 
 ## 🔒 Security
-The app blocks web visitors itself after repeated failed sign-ins (Admin → Security). On **Failed attempts**, **Details** shows each attempt's device and browser, and a banned address links to its ban.
+The app blocks web visitors itself after repeated failed sign-ins (Admin → Security): 10 in an hour from one internet address bans it from signing in for 24 hours (LAN and tailnet addresses never are). Members already signed in from it keep working, and the public calendar stays open, since a clubhouse or a phone carrier puts many people behind one address. An old or used sign-in link doesn't count, only one the app never sent. An IPv6 ban covers the address's whole /64 block (shown as, say, `2001:db8:1:2::/64`), since a home gets billions of addresses. On **Failed attempts**, **Details** shows each attempt's device and browser, and a banned address links to its ban.
 
 **Upload limit:** Security → **Server** → **Largest upload** (1–100 MB, 10 by default), for profile pictures and calendar imports. A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
 
