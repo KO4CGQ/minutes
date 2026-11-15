@@ -220,20 +220,6 @@ def test_failed_attempts_from_before_1_0_get_the_browser_column(tmp_path):
     assert [r["agent"] for r in a.events()] == ["Firefox/150", None]
 
 
-def test_sign_in_from_before_the_rename_still_works(tmp_path, monkeypatch):
-    from fastapi.testclient import TestClient
-
-    from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
-    a = Auth(club, tmp_path / "auth.sqlite")
-    monkeypatch.setattr(web, "authn", a)
-    monkeypatch.setattr(web.archive, "club", club)
-    c = TestClient(web.app)
-    c.cookies.set(web.OLD_COOKIE, a.new_session("n0aaaa"))  # set by 0.19.0 or earlier
-    assert c.get("/profile", follow_redirects=False).status_code == 200
-    r = c.post("/logout", follow_redirects=False)
-    assert web.OLD_COOKIE in r.headers.get("set-cookie", "") and not a.all_sessions()
-
 def test_security_page_tabs(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 

@@ -112,7 +112,6 @@ if not _log.handlers:
     _log.propagate = False
 
 COOKIE = "club_minutes_session"
-OLD_COOKIE = "w8lbz_session"  # shortcut: sign-ins from before 1.0.0 (the app's earlier name); drop once they've expired
 CHALLENGE_COOKIE = "club_minutes_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico", "/email/confirm",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
@@ -214,7 +213,7 @@ def _theme_stamp() -> str:
 # ---------------- login gate ----------------
 
 def _session_token(request: Request) -> str | None:
-    return request.cookies.get(COOKIE) or request.cookies.get(OLD_COOKIE)
+    return request.cookies.get(COOKIE)
 
 
 # Addresses only attack tools ask for: other apps' admin pages, secrets files, scripts this app never has.
@@ -534,7 +533,6 @@ def logout(request: Request):
     authn.end_session(_session_token(request))
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE)
-    response.delete_cookie(OLD_COOKIE)
     return response
 
 
