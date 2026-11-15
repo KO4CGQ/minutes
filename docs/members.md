@@ -27,6 +27,8 @@ Your name menu → **Your profile**:
 ## 📝 Minutes and search
 **Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights, calendar events and these guides. A name also finds its common nicknames (Richard, Rich, Rick and Dick find each other, member or not), and a member's name its other spellings from the roster; a typo is caught when nothing else is found.
 
+Minutes can be corrected after the meeting. A corrected meeting's footer says which version it is, who corrected it, when and why, with a link to the version before; you get an email listing what changed, the same way you get the minutes. Imported minutes (from before the app) say whether someone has reviewed them.
+
 ![A meeting's minutes](screenshots/minutes.png)
 
 ## 🍲 Chow

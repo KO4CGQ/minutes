@@ -49,6 +49,7 @@ from . import (
     calview,
     chow,
     console,
+    corrections,
     events,
     limits,
     membership,
@@ -1613,12 +1614,81 @@ def index(request: Request, period: str = "", p: str = Query("1", alias="page"),
     return page(request, "index.html", pg=paginate(ms, p, per), years=years(), period=period, label=label)
 
 
-@app.get("/meetings/{slug}", response_class=HTMLResponse)
-def view(request: Request, slug: str):
+def _version(slug: str, v: str):
+    """The minutes, or with ?v=1 an earlier version of them (404 for any other v)."""
     m = get_meeting(slug)
+    if not v:
+        return m
+    old = corrections.load_version(archive, slug, num(v) or 0)
+    if not old:
+        raise HTTPException(404, "No such version of these minutes")
+    return old
+
+
+@app.get("/meetings/{slug}", response_class=HTMLResponse)
+def view(request: Request, slug: str, v: str = ""):
+    current, m = get_meeting(slug), _version(slug, v)
     has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
-    return page(request, "meeting.html", m=m, has_original=has_original,
-                emailed=console.email_status(archive, slug))
+    return page(request, "meeting.html", m=m, current=current, has_original=has_original,
+                emailed=console.email_status(archive, slug),
+                notice=console.email_status(archive, slug, f"emailed.v{current.version}.json") if current.version > 1 else None,
+                can_correct=corrections.may_correct(archive.club, current, request.state.member, admin_mode(request)))
+
+
+def _corrector(request: Request, slug: str):
+    m = get_meeting(slug)
+    if m.status == "draft":
+        raise HTTPException(409, "These minutes are still open in the console.")
+    if not corrections.may_correct(archive.club, m, request.state.member, admin_mode(request)):
+        raise HTTPException(403, "Only the meeting's leader or recorder, a board member, or an admin can correct these minutes.")
+    return m
+
+
+@app.get("/meetings/{slug}/correct", response_class=HTMLResponse)
+def correct_page(request: Request, slug: str, error: str = ""):
+    m = _corrector(request, slug)
+    return page(request, "correct.html", m=m, error=error, attendance=corrections.attendance_rows(archive, m),
+                sections=m.section_order(archive.club.sections()), reason_max=corrections.REASON_MAX)
+
+
+@app.post("/meetings/{slug}/correct/preview", response_class=HTMLResponse)
+async def correct_preview(request: Request, slug: str):
+    """The changes side by side before saving; Save sends the same fields on to /correct."""
+    m = _corrector(request, slug)
+    form = await request.form()
+    return page(request, "correct_preview.html", m=m, words=corrections.words, rows=corrections.diff(m, corrections.from_form(archive, m, form), archive.club),
+                fields=[(k, v) for k, v in form.multi_items() if isinstance(v, str)],
+                reason=" ".join(str(form.get("reason") or "").split()), notice=bool(form.get("notice")))
+
+
+@app.post("/meetings/{slug}/correct")
+async def correct_save(request: Request, background: BackgroundTasks, slug: str):
+    m = _corrector(request, slug)
+    form = await request.form()
+    new = corrections.from_form(archive, m, form)
+    what = corrections.changes(m, new, archive.club)
+    notice = bool(form.get("notice"))
+    try:
+        m = corrections.correct(archive, slug, request.state.member, str(form.get("reason") or ""),
+                                num(str(form.get("version") or "")) or 0, new, notice)
+    except ValueError as e:
+        return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
+    _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice)
+    if notice:
+        background.add_task(corrections.email_notice, archive, slug, what, lambda: render_pdf(archive.by_slug[slug]),
+                            f"{base_url(request)}/meetings/{slug}")
+    return RedirectResponse(f"/meetings/{m.slug}", status_code=303)
+
+
+@app.post("/meetings/{slug}/reviewed")
+def mark_reviewed(request: Request, slug: str):
+    m = _corrector(request, slug)
+    try:
+        corrections.mark_reviewed(archive, slug, request.state.member)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    _admin_log(request, reviewed=slug)
+    return RedirectResponse(f"/meetings/{m.slug}", status_code=303)
 
 
 def html_to_pdf(template: str, **ctx) -> bytes:
@@ -1631,13 +1701,13 @@ def html_to_pdf(template: str, **ctx) -> bytes:
 
 
 def render_pdf(m) -> tuple[str, bytes]:
-    """(file name, PDF bytes) for submitted minutes."""
-    return f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes.pdf".lower(), html_to_pdf("minutes_doc.html", m=m)
+    """(file name, PDF bytes) for submitted minutes: 15-oct-26-minutes.pdf, or -v2.pdf for a corrected version."""
+    return corrections.pdf_name(m), html_to_pdf("minutes_doc.html", m=m, current=archive.by_slug.get(m.slug, m))
 
 
 @app.get("/meetings/{slug}/minutes.pdf")
-def pdf(request: Request, slug: str):
-    m = get_meeting(slug)
+def pdf(request: Request, slug: str, v: str = ""):
+    m = _version(slug, v)
     if m.status == "draft":
         raise HTTPException(409, "This meeting is still in progress; the PDF is available once the minutes are submitted.")
     fname, data = render_pdf(m)
@@ -2082,7 +2152,9 @@ def admin_action(e: dict) -> str:
              "site_privacy": lambda v: "Never-recorded names back to club.yaml's" if v == "club.yaml" else "Changed the never-recorded names",
              "site_bylaws": lambda v: "Bylaws settings back to club.yaml's" if v == "club.yaml" else f"Bylaws: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
-             "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
+             "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin",
+             "corrected": lambda v: f"Corrected the minutes of {v.replace(' v', ' (version ')})", "reason": lambda v: f"why: {v}",
+             "notice": lambda v: "members told" if v else "no notice sent", "reviewed": lambda v: f"Marked the imported minutes of {v} reviewed"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
 
@@ -3145,7 +3217,7 @@ def console_start(date: str = Form(...), leader_id: str = Form("", alias="leader
 @app.get("/console/{slug}", response_class=HTMLResponse)
 def console_page(request: Request, slug: str, mid: str = Depends(leader)):
     m = get_meeting(slug)
-    if m.status == "published":
+    if m.status != "draft":  # submitted or imported: corrected on its page, never in the console
         return RedirectResponse(f"/meetings/{slug}", status_code=303)
     ctx = console.context(archive, m)
     return page(request, "console.html", m=m, data=json.dumps(ctx).replace("<", "\\u003c"),  # "</script>" in any text can't end the script
@@ -3224,7 +3296,10 @@ def email_minutes(slug: str, url: str) -> None:
 def console_submit(request: Request, background: BackgroundTasks, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     _held_by_other(slug, None, mid)
-    console.submit(archive, slug, by=mid)
+    try:
+        console.submit(archive, slug, by=mid)
+    except ValueError as e:  # already in the archive: never rebuilt or emailed again
+        raise HTTPException(409, str(e))
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)

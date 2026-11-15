@@ -71,11 +71,15 @@ def release(slug: str, tab: str) -> None:
 
 
 def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None = None) -> Meeting:
-    """Start the minutes of a meeting, or open them if that date's are already there. Only one meeting is open at a
-    time: with another still in progress (say, last week's never submitted), it has to be submitted or discarded first."""
+    """Start the minutes of a meeting, or open them if that date's draft is already there. Only one meeting is open at a
+    time: with another still in progress (say, last week's never submitted), it has to be submitted or discarded first.
+    Minutes already in the archive (submitted or imported) never reopen here: they're corrected on their page."""
     with _starting:
-        if date.isoformat() in archive.by_slug:
-            return archive.by_slug[date.isoformat()]
+        if (m := archive.by_slug.get(date.isoformat())):
+            if m.status != "draft":
+                raise ValueError(f"{show_date(date, 'long')}'s minutes are already in the archive. To fix something, "
+                                 "use Correct these minutes on that page.")
+            return m
         if (open_ := [m for m in archive.meetings if m.status == "draft"]):
             raise ValueError(f"The minutes of {show_date(open_[0].date, 'long')} are still open: continue them, or discard them, "
                              "before starting another meeting.")
@@ -332,8 +336,7 @@ class Unreadable(Exception):
 def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     """Save the console's full meeting state (last write wins)."""
     m = archive.by_slug[slug]
-    if m.status == "published":
-        raise ValueError("Minutes already submitted")
+    _draft(m)
     d, club = data["meeting"], archive.club
 
     def members(v) -> list[str]:  # roster ids only, any status; an old callsign becomes the current one
@@ -372,8 +375,16 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     return archive.by_slug[slug]
 
 
+def _draft(m: Meeting) -> None:
+    """The console only works on drafts: minutes in the archive are changed by a correction (corrections.py), which
+    keeps the old version, never by the console (whose submit would rebuild sections from today and email the club)."""
+    if m.status != "draft":
+        raise ValueError("These minutes are already in the archive. To fix something, use Correct these minutes on their page.")
+
+
 def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
     m = archive.by_slug[slug]
+    _draft(m)
     # Upcoming Chow comes from the chow schedule as it stands now: tonight's chow, tonight's changes, what's next.
     if archive.club.has("chow"):
         m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
@@ -390,8 +401,7 @@ def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
 def discard(archive: Archive, slug: str, by: str | None = None) -> None:
     """Delete a draft (e.g. a practice run). Submitted minutes can't be discarded."""
     m = archive.by_slug[slug]
-    if m.status != "draft":
-        raise ValueError("Only drafts can be discarded")
+    _draft(m)
     shutil.rmtree(archive.root / slug)
     _holds.pop(slug, None)
     if by:
@@ -409,9 +419,28 @@ def recipients(archive: Archive, how: str | None = None) -> list[str]:
                    if prefs.wants(m.id, "minutes") in ((how,) if how else ("pdf", "link"))}, key=str.lower)
 
 
-def email_status(archive: Archive, slug: str) -> dict | None:
-    p = archive.root / slug / "emailed.json"
+def email_status(archive: Archive, slug: str, name: str = "emailed.json") -> dict | None:
+    p = archive.root / slug / name
     return json.loads(p.read_text()) if p.exists() else None
+
+
+def send_to_members(archive: Archive, slug: str, subject: str, body: str, pdf_note: str, make_pdf, reply_to, name: str) -> dict:
+    """Email members who want the PDF (attached, from make_pdf()) and those who want a link (body less pdf_note). Test
+    mode (email.only_to) applies. The outcome, or the error, is kept in the meeting's folder as `name`."""
+    club = archive.club
+    to, links = recipients(archive, "pdf"), recipients(archive, "link")
+    try:
+        pdf = make_pdf() if to else None
+        sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],
+                               only_to=club.email_only_to(), reply_to=reply_to) if to else 0
+        sent += auth.send_email(links, subject, body.replace(pdf_note, "").replace("a link instead of the PDF", "the PDF attached instead"),
+                                only_to=club.email_only_to(), reply_to=reply_to) if links else 0
+        status = {"at": int(time.time()), "sent": sent, "roster": len(to) + len(links), "test_mode": club.email_only_to() is not None}
+    except Exception as e:
+        log.exception("emailing %s failed", subject)
+        status = {"at": int(time.time()), "error": str(e)}
+    (archive.root / slug / name).write_text(json.dumps(status))
+    return status
 
 
 def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
@@ -423,7 +452,6 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
         return done
     m = archive.by_slug[slug]
     club = archive.club
-    to, links = recipients(archive, "pdf"), recipients(archive, "link")
     leader = club.members.get(m.leader or "")
     recorder = club.members.get(m.recorder or "") if m.recorder != m.leader else None
     writer = recorder or leader  # replies (corrections) go to whoever took the minutes
@@ -435,18 +463,7 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
             f"Replies go to {writer.first if writer and writer.email else 'the club'}.\n\n"
             f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.label}")
     subject, reply_to = f"{club.label} meeting minutes, {date}", writer.email if writer and writer.email else None
-    try:
-        pdf = make_pdf() if to else None
-        sent = auth.send_email(to, subject, body, attachments=[(pdf[0], pdf[1], "application/pdf")],
-                               only_to=club.email_only_to(), reply_to=reply_to) if to else 0
-        sent += auth.send_email(links, subject, body.replace(" The PDF is attached.", "").replace("a link instead of the PDF", "the PDF attached instead"), only_to=club.email_only_to(),
-                                reply_to=reply_to) if links else 0
-        status = {"at": int(time.time()), "sent": sent, "roster": len(to) + len(links), "test_mode": club.email_only_to() is not None}
-    except Exception as e:
-        log.exception("emailing the minutes of %s failed", slug)
-        status = {"at": int(time.time()), "error": str(e)}
-    (archive.root / slug / "emailed.json").write_text(json.dumps(status))
-    return status
+    return send_to_members(archive, slug, subject, body, " The PDF is attached.", make_pdf, reply_to, "emailed.json")
 
 
 def chow_tonight(archive: Archive, m: Meeting) -> dict:

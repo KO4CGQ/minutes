@@ -687,3 +687,30 @@ input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
   .startform label > * { width: 100%; min-width: 0; box-sizing: border-box; }
   .startform .btn { grid-column: 1 / -1; margin-top: .3rem; padding-block: .7rem; justify-content: center; text-align: center; }
 }
+/* Correct these minutes: each item's box grows with its text; the attendance radios centred under their heading */
+form.correct textarea { width: 100%; field-sizing: content; min-height: 2.6em; font-weight: normal; }
+form.correct details.sec { margin: 0 0 .8rem; padding: .6rem 1.15rem; }
+form.correct details.sec > summary { cursor: pointer; font-weight: 600; list-style: none; padding: .2rem 0; }
+form.correct details.sec > summary::-webkit-details-marker { display: none; }
+form.correct details.sec > summary::after { content: " ▾"; color: var(--muted); } form.correct details.sec[open] > summary::after { content: " ▴"; }
+form.correct details.sec[open] > summary { margin-bottom: .6rem; } form.correct details.sec > summary .muted { font-weight: normal; margin-left: .3rem; }
+.att-edit td:not(:first-child), .att-edit th:not(:first-child) { text-align: center; }
+form.correct fieldset.guest { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: .5rem .9rem .7rem; margin: 0 0 .7rem; }
+form.correct fieldset.guest legend { font-weight: 600; padding: 0 .3rem; }
+form.correct .item { display: flex; gap: .4rem; align-items: flex-start; flex-wrap: wrap; margin: 0 0 .5rem; } form.correct .item textarea { flex: 1 1 16rem; }
+form.correct .item .hint { flex-basis: 100%; margin: 0; }
+/* the preview of a correction: version now | new version, like a side-by-side diff */
+table.diff { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0 0 1.2rem; background: var(--surface); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+table.diff th, table.diff td { padding: .4rem .7rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+table.diff td.old { border-right: 1px solid var(--border); } table.diff th.part { background: var(--surface-2); }
+table.diff tr.same td { color: var(--muted); }
+table.diff tr.removed td.old, table.diff del { background: var(--danger-soft); color: var(--danger-text); }
+table.diff tr.added td.new, table.diff ins { background: color-mix(in srgb, #2e7d32 22%, var(--surface)); }
+table.diff del, table.diff ins { border-radius: 3px; padding: 0 .1em; } table.diff ins { text-decoration: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Remove: a checkbox that strikes the row out (and back) */
+form.correct .rm input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+form.correct .rm:has(:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+form.correct .rm .on, form.correct .rm:has(:checked) .off { display: none; } form.correct .rm:has(:checked) .on { display: inline; }
+form.correct :is(.item, .guest):has(> .rm :checked) :is(textarea, input:not([type=checkbox])) { text-decoration: line-through; opacity: .5; }
+form.correct .rm { width: fit-content; }

@@ -178,6 +178,7 @@ class Member:
 # role comes from the offices they hold, or (Minutes editor, Calendar editor) from roles.json, set on Site → Roles.
 PERMISSIONS = {
     "lead": "lead meetings and edit the minutes",
+    "correct": "correct minutes already in the archive (a meeting's leader and recorder may correct its minutes too)",
     "calendar": "change the club calendars",
     "chow": "change the chow schedule",
     "contacts": "see every member's contact details",
@@ -189,7 +190,7 @@ PERMISSIONS = {
 # key: (name, who has it, permissions)
 ROLES: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "officer": ("Officer", "Holders of an officer's office", ("lead", "calendar", "chow", "contacts", "oversee", "treasurer")),
-    "board": ("Board", "Holders of any office", ()),
+    "board": ("Board", "Holders of any office", ("correct",)),
     "treasurer": ("Treasurer", "Holders of an office named Treasurer", ("money",)),
     "roster_keeper": ("Roster keeper", "Holders of an office that adds members", ("members",)),
     "minutes_editor": ("Minutes editor", "Members picked here", ("lead", "calendar")),

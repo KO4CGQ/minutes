@@ -6,6 +6,7 @@ For officers, minutes editors, roster keepers, calendar editors and the Treasure
 What a member may do comes from their **roles**. Most roles follow the offices a member holds; an admin gives the other two on **Admin → Site → Roles**, which also lists what each role allows and who has it. A member's roles show on their page.
 
 - 🏛️ **Officers** (holders of an officer's office) see every member's contact details, the change logs, and can undo profile changes; they lead meetings and edit the calendar too.
+- 🏛️ **Board members** (holders of any office) correct minutes already in the archive.
 - 🎙️ **Minutes editors** (given on Site → Roles) run the meeting console and edit the minutes and the calendar.
 - 📅 **Calendar editors** (given on Site → Roles, say the net manager) edit the calendar.
 - 📋 **Roster keepers** (holders of the offices that add members: the Secretary and Treasurer, unless the club picks others) edit the roster.
@@ -53,6 +54,10 @@ What a member may do comes from their **roles**. Most roles follow the offices a
 
 ## 🎙️ At the meeting
 The leader console's **Upcoming Events** step lists what's on until the next meeting, to read out. **+ Add** puts one in the minutes. **Use the calendar's** swaps a typed entry for the calendar's own, so it shows once. Events you add in the minutes go on the calendar you pick beside them (Club events unless you change it).
+
+✏️ **Correct these minutes**, on a meeting's page, fixes minutes already in the archive (the console only works on a meeting in progress). The meeting's leader and recorder can, and so can any board member and an admin in admin mode. Open a part (attendance, guests, any section) to change it; **+ Add** adds a guest or an item left out, **Remove** takes one out (click again to keep it). Say why in a line ("Corrected a misspelled name"), then **Preview the changes**: the version now and the new one side by side, removed lines in red, added ones in green, and in a changed line the words that changed. Saving makes a new version: the old one stays readable, linked from the footer, which shows who corrected it and why. **Send the corrected minutes to members** (ticked) emails them what changed; untick it for something no one needs telling about, and the footer says "no notice sent". Old Business and Upcoming Chow are the text read that night: correcting them doesn't change the business items or the chow schedule.
+
+Imported minutes (from before the app) say "not yet reviewed" until someone reads them against the original: **Mark as reviewed** if nothing needs fixing, or correct them, which reviews them too.
 
 ## 🍲 Chow
 Only if the club has the chow module (an admin turns it on under Admin → Site → Features). **Chow** in the menu.
