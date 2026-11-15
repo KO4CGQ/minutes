@@ -152,7 +152,7 @@ class Auth:
         self.db.execute("insert into sessions (token_hash, member, created, expires, agent, ip, method) values (?,?,?,?,?,?,?)",
                         (_hash(token), member, now, now + self.session_days * 86400, agent[:200], ip, method))
         if method:  # a real sign-in (tests and tools make sessions without one)
-            self.db.execute("insert into signins values (?,?,?,?,?)", (now, member, method, ip, agent[:200]))
+            self.db.execute("insert into signins (at, member, method, ip, agent) values (?,?,?,?,?)", (now, member, method, ip, agent[:200]))
         return token
 
     # ---------------- security log and bans (the admin Security page) ----------------
@@ -179,7 +179,7 @@ class Auth:
 
     def ban(self, ip: str, hours: int | None, reason: str, by: str) -> None:
         now = int(time.time())
-        self.db.execute("insert or replace into bans values (?,?,?,?,?)",
+        self.db.execute("insert or replace into bans (ip, at, until, reason, by) values (?,?,?,?,?)",
                         (ban_key(ip), now, now + hours * 3600 if hours else None, reason[:200], by))
 
     def unban(self, ip: str) -> None:
@@ -377,7 +377,7 @@ class Auth:
     def _challenge(self, kind: str, challenge: bytes, member: str | None = None) -> str:
         cid = secrets.token_urlsafe(16)
         self.db.execute("delete from challenges where expires<?", (time.time(),))
-        self.db.execute("insert into challenges values (?,?,?,?,?)",
+        self.db.execute("insert into challenges (id, challenge, member, kind, expires) values (?,?,?,?,?)",
                         (cid, challenge, member, kind, int(time.time()) + CHALLENGE_SECONDS))
         return cid
 

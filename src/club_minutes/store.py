@@ -92,7 +92,7 @@ class Archive:
         ]
         rows += [(m.slug, "Guests", "", f"{g['name']} {g.get('callsign', '')} {g.get('notes', '')}")
                  for m in self.meetings for g in m.guests]
-        self.db.executemany("insert into docs values (?,?,?,?)", rows)
+        self.db.executemany("insert into docs (slug, section, member, text) values (?,?,?,?)", rows)
         self.db.execute("create virtual table vocab using fts5vocab(docs, 'row')")
 
     def _canonicalize(self, m: Meeting) -> Meeting:

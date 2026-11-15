@@ -53,7 +53,7 @@ def test_doc_links_lead_somewhere():
 
 # Public repo: examples are fictional (docs/developers.md). Allowed: the copyright holder's callsign, the app's earlier
 # name, callsigns with a four-letter suffix (never issued, like N0CALL), reserved addresses (RFC 2606) and 555-01xx.
-CALLSIGN = re.compile(r"\b[AKNW][A-Z]?[0-9][A-Z]{1,3}\b")
+CALLSIGN = re.compile(r"(?<!-)\b[AKNW][A-Z]?[0-9][A-Z]{1,3}\b(?!-)", re.IGNORECASE)  # either case (ids are lowercase); not a piece of a uuid
 OK_CALLS = {"KO4CGQ", "W8LBZ", "W3PD"}  # W3PD: a group in an example backup passphrase
 EMAIL = re.compile(r"[\w.%+-]+@([\w-]+(?:\.[\w-]+)+)")
 OK_DOMAINS = re.compile(r"(?:.*\.)?(example(\.(org|com|net))?|test|invalid|localhost)$|google\.com$", re.IGNORECASE)  # google.com: calendar ids in .ics tests
@@ -72,7 +72,7 @@ def test_no_real_looking_contact_details():
             text = p.read_text()
         except UnicodeDecodeError:
             continue
-        bad += [f"{f}: callsign {c}" for c in set(CALLSIGN.findall(text)) - OK_CALLS]
+        bad += [f"{f}: callsign {c}" for c in {c.upper() for c in CALLSIGN.findall(text)} - OK_CALLS]
         bad += [f"{f}: email domain {d}" for d in {d for d in EMAIL.findall(text) if not OK_DOMAINS.match(d)}]
         bad += [f"{f}: phone {a}-{b}" for a, b in set(PHONE.findall(text)) if not (a == "555" and b.startswith("01"))]
     assert not bad, "use fictional examples (Jane Doe, N0CALL, example.org, 555-0100 to 555-0199): " + "; ".join(sorted(bad))

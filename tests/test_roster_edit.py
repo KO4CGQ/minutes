@@ -37,6 +37,18 @@ def env(tmp_path, monkeypatch):
     return club, tmp_path, sent, who, TestClient(web.app)
 
 
+def test_no_member_can_be_reached_under_another_members_callsign():
+    """Listing someone else's callsign (or one two members both list) in 'Other spellings' never makes you them."""
+    people = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "aliases": ["N0BBBB", "N0OLDA"]},
+              {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "aliases": ["N0OLDA", "N0OLDB"]},
+              {"id": "n0cccc", "first": "Cy", "last": "Cole"}]
+    club = Club(FIX / "test-club.yaml", roster=people)
+    for m in club.members.values():
+        assert club.canonical(m.id) == m.id
+    assert not set(club.former_ids) & set(club.members)
+    assert club.former_ids == {"n0oldb": "n0bbbb"}
+
+
 def form(**over):
     f = {"first": "Bob", "last": "Bloggs", "license_class": "Technician", "status": "Active", "email": "bob@example.org",
          "phone": "", "address": "", "role": "", "aliases": "Bobby"}

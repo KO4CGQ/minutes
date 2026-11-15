@@ -715,3 +715,32 @@ def test_the_sign_in_pages_note_is_a_code(app):
     anon = TestClient(web.app, client=("203.0.113.5", 5000))
     assert "Your email has changed" in anon.get("/login?note=email").text
     assert "Call+555-0100" not in anon.get("/login?note=Call+555-0100+now").text and "555-0100" not in anon.get("/login?note=Call%20555-0100").text
+PUBLIC_POST = {"/login/email", "/auth/passkey/login/begin", "/auth/passkey/login/finish"}  # sign-in: a one-time token or a passkey
+
+
+def test_every_post_refuses_a_request_from_another_site(app):
+    """A page on another site (or a sibling host) can't make a signed-in member change anything: no POST route is left out."""
+    t = app("n0bbbb")
+    seen = 0
+    for m, path in routes():
+        if m != "POST" or path in PUBLIC_POST or path.startswith(("/login/email", "/auth/passkey/login/", "/email/confirm")):
+            continue
+        for h in ({"Origin": "https://evil.example"}, {"Sec-Fetch-Site": "cross-site"}):
+            r = t.post(path, data={"x": "1"}, headers=h, follow_redirects=False)
+            assert r.status_code == 403 and "another site" in r.text, (path, h, r.status_code)
+        seen += 1
+    assert seen > 50
+
+
+def test_the_public_routes_are_a_fixed_list(app):
+    """A new page or action a signed-out visitor can reach fails here until it's added to the lists on purpose."""
+    anon = TestClient(web.app, client=("203.0.113.7", 5000))
+    reached = set()
+    for m, path in routes():
+        if m == "POST" and path.startswith(("/login/email", "/auth/passkey/login/", "/email/confirm")):
+            continue  # the sign-in ones, listed in PUBLIC_POST
+        r = anon.request(m, path, data={"x": "1"} if m == "POST" else None, follow_redirects=False)
+        if not (r.status_code in (303, 401, 404) and r.headers.get("location", "/login").startswith("/login")):
+            reached.add((m, path))
+    assert {p for m, p in reached if m == "GET"} <= PUBLIC_GET, sorted(reached)
+    assert {p for m, p in reached if m == "POST"} <= PUBLIC_POST, sorted(reached)
