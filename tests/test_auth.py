@@ -337,3 +337,22 @@ def test_admin_step_up_needs_user_verification_but_sign_in_doesnt(tmp_path):
     assert a.authenticate(cid, key.assertion(opts, 0x05), kind="step-up", member="n0admn") == "n0admn"  # verified
     cid, opts = a.authentication_options()
     assert a.authenticate(cid, key.assertion(opts, 0x01)) == "n0admn"                    # sign-in: a tap is enough
+
+
+def test_email_me_a_link_answers_before_the_email_is_sent(monkeypatch):
+    """FIXES → b: the sign-in email goes out after the reply, so a member's address (an email to send, ~1.3 s) and anyone
+    else's answer in the same time and the page can't be used to find out who's a member."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    order = []
+    monkeypatch.setattr(web.authn, "send_link", lambda *a, **k: order.append("email sent"))
+
+    async def watch(scope, receive, send):  # the app, noting when the reply is finished
+        async def noted(msg):
+            await send(msg)
+            if msg["type"] == "http.response.body" and not msg.get("more_body"):
+                order.append("reply finished")
+        await web.app(scope, receive, noted)
+    r = TestClient(watch).post("/login/email", data={"email": "amy@example.org"}, follow_redirects=False)
+    assert r.status_code == 303 and order == ["reply finished", "email sent"]

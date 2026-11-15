@@ -472,8 +472,10 @@ def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""
 
 
 @app.post("/login/email")
-def login_email(request: Request, email: str = Form(...), next: str = Form("/")):
-    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request), agent=request.headers.get("user-agent", ""))
+def login_email(request: Request, background: BackgroundTasks, email: str = Form(...), next: str = Form("/")):
+    # After the reply: a member's address (an email to send) and anyone else's must answer alike, or the time tells
+    background.add_task(authn.send_link, email, next, base_url=base_url(request), ip=client_ip(request),
+                        agent=request.headers.get("user-agent", ""))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
