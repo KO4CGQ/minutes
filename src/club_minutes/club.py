@@ -582,7 +582,20 @@ class Club:
 
     @property
     def all_admins(self) -> set[str]:
-        return {self.canonical(a) for a in self.admins | self.app_admins}  # club.yaml may still have an old call
+        """club.yaml's and the app's admins, less any suspended by the officers (recovery.py)."""
+        return {self.canonical(a) for a in self.admins | self.app_admins} - self.suspended  # club.yaml may still have an old call
+
+    @property
+    def suspended(self) -> set[str]:
+        """Admins suspended by a recovery: their admin rights don't count, club.yaml's included; another admin lifts it."""
+        p = DATA / "admins-suspended.json"
+        return set(json.loads(p.read_text())) if p.exists() else set()
+
+    def save_suspended(self, ids: set[str]) -> None:
+        p = DATA / "admins-suspended.json"
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(sorted(ids)))
+        tmp.replace(p)
 
     @property
     def active_admins(self) -> set[str]:

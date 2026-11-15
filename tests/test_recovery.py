@@ -1,0 +1,105 @@
+"""Recover admin access by the officers (FIXES → Problem 5): a majority (at least 2) and the nominee's acceptance,
+then 7 days; an admin's objection makes it two-thirds and 14 days; every member told; suspended admins don't count."""
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from club_minutes import auth as authmod
+from club_minutes import club as clubmod
+from club_minutes import recovery, web
+from club_minutes.auth import Auth
+from club_minutes.club import Club
+
+FIX = Path(__file__).parent / "fixtures"
+ROSTER = [{"id": i, "first": f, "last": "Doe", "email": f"{i}@example.org", "role": r} for i, f, r in (
+    ("pres", "Jane", "President"), ("vp", "John", "Vice President"), ("sec", "Sam", "Secretary"), ("tre", "Tess", "Treasurer"),
+    ("tru", "Terry", "Trustee"), ("n0call", "Pat", None), ("adm", "Ann", None))]
+DAY = 86400
+
+
+@pytest.fixture
+def club(tmp_path, monkeypatch):
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(recovery, "DATA", tmp_path)
+    sent = []
+    monkeypatch.setattr(authmod, "send_email", lambda to, subject, body, **kw: sent.append((to, subject, body)))
+    c = Club(FIX / "test-club.yaml", roster=ROSTER)
+    c.offices = ["President", "Vice President", "Secretary", "Treasurer", {"title": "Trustee", "officer": False, "seats": 3}]
+    c.admins = {"adm"}
+    c.sent = sent
+    return c
+
+
+def test_majority_acceptance_and_the_wait(club):
+    assert recovery.officers(club) == ["pres", "sec", "tre", "vp"]  # the trustee isn't an officer
+    with pytest.raises(ValueError, match="Only an officer"):
+        recovery.start(club, "n0call", "n0call", [], "", "https://x")
+    r = recovery.start(club, "pres", "n0call", ["adm"], "Approved at the board meeting of Nov 1", "https://x")
+    assert len(club.sent[-1][0]) == 7 and "Pat Doe to become an admin, and Ann Doe suspended" in club.sent[-1][2]  # everyone
+    with pytest.raises(ValueError, match="already under way"):
+        recovery.start(club, "vp", "tru", [], "", "https://x")
+    with pytest.raises(ValueError, match="Only an officer"):
+        recovery.approve(club, "tru", "https://x")
+    recovery.approve(club, "vp", "https://x")
+    st = recovery.state(club, recovery.load())
+    assert (st["need"], st["have"], st["ready_at"]) == (3, 2, None)  # a majority of 4 is 3
+    recovery.approve(club, "sec", "https://x")
+    assert recovery.state(club, recovery.load())["ready_at"] is None  # not accepted yet
+    with pytest.raises(ValueError, match="Only the member named"):
+        recovery.accept(club, "vp", "https://x")
+    recovery.accept(club, "n0call", "https://x")
+    ready = recovery.state(club, recovery.load())["ready_at"]
+    assert ready == recovery.load()["accepted"] + 7 * DAY and r["by"] == "pres"  # the acceptance came last
+    assert not recovery.tick(club, "https://x", now=ready - 60) and recovery.load()  # not before the wait
+    assert recovery.tick(club, "https://x", now=ready + 1)
+    assert club.is_admin("n0call") and not club.is_admin("adm") and club.suspended == {"adm"} and recovery.load() is None
+    assert "adm@example.org" in club.sent[-1][0] and "only another admin can lift that" in club.sent[-1][2]
+
+
+def test_an_objection_raises_it_to_two_thirds_and_14_days(club):
+    recovery.start(club, "pres", "n0call", [], "", "https://x")
+    recovery.approve(club, "vp", "https://x")
+    recovery.approve(club, "sec", "https://x")
+    recovery.accept(club, "n0call", "https://x")
+    with pytest.raises(ValueError, match="Only an admin"):
+        recovery.object_(club, "tre", "https://x")
+    recovery.object_(club, "adm", "https://x")
+    st = recovery.state(club, recovery.load())
+    assert st["need"] == 3 and st["objected"]  # two-thirds of 4, rounded up, is 3: still met
+    assert st["ready_at"] == recovery.load()["accepted"] + 14 * DAY
+    assert "two-thirds" in club.sent[-1][2]
+
+
+def test_two_officers_at_least_and_calling_it_off(club):
+    club.offices = ["President", {"title": "Trustee", "officer": False, "seats": 3}]  # one officer only
+    recovery.start(club, "pres", "n0call", [], "", "https://x")
+    recovery.accept(club, "n0call", "https://x")
+    assert recovery.state(club, recovery.load())["need"] == 2 and not recovery.tick(club, "https://x", now=9e12)
+    with pytest.raises(ValueError, match="who started it"):
+        recovery.cancel(club, "n0call", "https://x")
+    recovery.cancel(club, "pres", "https://x")
+    assert recovery.load() is None and "called off" in club.sent[-1][2]
+
+
+def test_the_pages_confirm_first_and_a_suspended_admin_cant_lift_it(club, tmp_path, monkeypatch):
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+
+    def as_(who):
+        t = TestClient(web.app, client=("203.0.113.6", 5000))
+        t.cookies.set(web.COOKIE, a.new_session(who))
+        return t
+    pres = as_("pres")
+    assert "Make this member an admin" in pres.get("/recover").text
+    assert "Make this member an admin" not in as_("n0call").get("/recover").text  # members see where it stands, no form
+    r = pres.post("/recover/act", data={"do": "start", "nominee": "n0call"}, follow_redirects=False)
+    assert r.headers["location"] == "/recover/confirm" and recovery.load() is None  # confirm it's you first
+    monkeypatch.setattr(web, "_recover_confirmed", lambda request: True)
+    pres.post("/recover/act", data={"do": "start", "nominee": "n0call", "suspend": ["adm"]})
+    assert recovery.load()["nominee"] == "n0call"
+    assert "Approve" not in pres.get("/recover").text.split("<form")[1].split("</form>")[0]  # the starter already counts
+    club.save_suspended({"adm"})
+    r = as_("adm").post("/admin/security/admins/lift", data={"member": "adm"})
+    assert r.status_code == 404 and club.suspended == {"adm"}  # a suspended admin isn't one

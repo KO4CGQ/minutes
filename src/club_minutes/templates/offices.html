@@ -42,4 +42,5 @@ document.querySelectorAll("button.act[data-panel]").forEach((b) => b.addEventLis
 }));
 document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => (b.closest(".panel").hidden = true)));
 </script>{% endif %}
+<p class="muted small">Can't reach the club's admins, or one is working against the club? The officers can <a href="/recover">recover admin access</a>.</p>
 {% endblock %}

@@ -152,6 +152,10 @@ def main() -> None:
         club = Club()
         url = f"https://{club.auth.get('rp_id')}"
         today = dt.date.today()
+        if not a.dry_run:
+            from . import recovery
+            if recovery.tick(club, url):
+                print("recovered admin access (recovery.py)")
         with business.locked():
             s = business.load()
             due = business.due_reminders(s, today, int(club.info.get("remind_days_before", 3)))

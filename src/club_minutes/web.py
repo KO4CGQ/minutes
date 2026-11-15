@@ -57,6 +57,7 @@ from . import (
     offices,
     prefs,
     profile,
+    recovery,
     regions,
     theme,
     treasurer,
@@ -1205,6 +1206,122 @@ def admin_confirm_link(request: Request, t: str = "", next: str = "/", mid: str 
                                 + "&next=" + quote(_safe_next(next)), status_code=303)
     _admin_on(request, mid, "email")
     return RedirectResponse(_safe_next(next), status_code=303)
+
+
+# ---------------- recover admin access (officers; recovery.py) ----------------
+
+_recover_ok: dict[str, float] = {}  # session token hash -> until: confirmed it's them (as for admin mode), for 5 minutes
+
+
+def _recover_confirmed(request: Request) -> bool:
+    return _recover_ok.get(authmod._hash(_session_token(request) or ""), 0) > time.time()
+
+
+def _recover_mark(request: Request) -> None:
+    _recover_ok[authmod._hash(_session_token(request) or "")] = time.time() + 300
+
+
+@app.get("/recover", response_class=HTMLResponse)
+def recover_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):
+    """Where a recovery stands, for every member (they're all told); officers start or approve it, the nominee accepts,
+    admins (in admin mode) object."""
+    club = archive.club
+    recovery.tick(club, base_url(request))
+    r = recovery.load()
+    return page(request, "recover.html", r=r, st=recovery.state(club, r) if r else None, officers=recovery.officers(club),
+                is_officer=mid in recovery.officers(club), error=error, note=note, wait=recovery.WAIT_DAYS,
+                wait_objected=recovery.WAIT_DAYS_OBJECTED, ts=lambda t: dt.datetime.fromtimestamp(t).strftime("%b %-d, %Y %-I:%M %p"),
+                members=sorted((m for m in club.members.values() if m.status.lower() == "active"), key=lambda m: (m.last, m.first)))
+
+
+@app.post("/recover/act")
+async def recover_act(request: Request, mid: str = Depends(real_me)):
+    """start, approve, accept, cancel (after confirming it's them, at most 5 minutes before), or object (an admin in
+    admin mode)."""
+    form, club, url = await request.form(), archive.club, base_url(request)
+    do = form.get("do")
+    if do not in ("start", "approve", "accept", "cancel", "object"):
+        raise HTTPException(400)
+    if do == "object" and not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/recover", status_code=303)
+    if do != "object" and not _recover_confirmed(request):
+        return RedirectResponse("/recover/confirm", status_code=303)
+    try:
+        if do == "start":
+            recovery.start(club, mid, form.get("nominee", ""), form.getlist("suspend"), form.get("motion", ""), url)
+        elif do == "object":
+            recovery.object_(club, mid, url)
+        else:
+            {"approve": recovery.approve, "accept": recovery.accept, "cancel": recovery.cancel}[do](club, mid, url)
+    except ValueError as e:
+        return RedirectResponse("/recover?error=" + quote(str(e)), status_code=303)
+    _admin_log(request, recovery=do)
+    return RedirectResponse("/recover?note=" + quote("Done. Every member has been told."), status_code=303)
+
+
+@app.get("/recover/confirm", response_class=HTMLResponse)
+def recover_confirm(request: Request, sent: int = 0, error: str = "", mid: str = Depends(real_me)):
+    passkey = request.url.hostname == authn.rp_id and bool(authn.passkeys(mid))
+    return page(request, "admin_confirm.html", next="/recover", passkey=passkey, sent=sent, error=error, base="/recover/confirm",
+                heading="Confirm it's you", why="Starting, approving or accepting a recovery of admin access needs you "
+                "to confirm it's really you, as admins do for admin mode. It lasts 5 minutes.", email=archive.club.members[mid].email)
+
+
+@app.post("/recover/confirm/options")
+def recover_confirm_options(mid: str = Depends(real_me)):
+    cid, options = authn.step_up_options(mid)
+    response = Response(options, media_type="application/json")
+    response.set_cookie(CHALLENGE_COOKIE, cid, max_age=300, httponly=True, samesite="strict", secure=True)
+    return response
+
+
+@app.post("/recover/confirm/verify")
+async def recover_confirm_verify(request: Request, mid: str = Depends(real_me)):
+    body = await _json(request)
+    try:
+        authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"], kind="step-up", member=mid)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e))
+    _recover_mark(request)
+    return {"ok": True, "next": "/recover"}
+
+
+@app.post("/recover/confirm/email")
+def recover_confirm_email(request: Request, mid: str = Depends(real_me)):
+    m = archive.club.members[mid]
+    if not m.email:
+        raise HTTPException(400, "There's no email address for you on the roster.")
+    url = f"{base_url(request)}/recover/confirm/link?t={authn.step_up_link(mid)}"
+    if PREVIEW:
+        return RedirectResponse(url, status_code=303)
+    authmod.send_email(m.email, "Confirm it's you", f"Hi {m.first},\n\nSomeone signed in as you asked to confirm it's you, to "
+                       f"act on a recovery of admin access in {branding.name(archive.club)}. If that was you, open this link in the "
+                       f"same browser within 5 minutes:\n\n{url}\n\nIf it wasn't you, don't open it, and sign out your other "
+                       f"sessions on your profile page.\n\n73,\n{branding.name(archive.club)}")
+    return RedirectResponse("/recover/confirm?sent=1", status_code=303)
+
+
+@app.get("/recover/confirm/link")
+def recover_confirm_link(request: Request, t: str = "", mid: str = Depends(real_me)):
+    if not authn.use_step_up_link(t, mid):
+        return RedirectResponse("/recover/confirm?error=" + quote("That link has expired or was already used."), status_code=303)
+    _recover_mark(request)
+    return RedirectResponse("/recover", status_code=303)
+
+
+@app.post("/admin/security/admins/lift")
+def admins_lift(request: Request, member: str = Form("")):
+    """Lift a suspension from a recovery: another admin, in admin mode (a suspended admin isn't one)."""
+    _security_admin(request)
+    club = archive.club
+    if member not in club.suspended:
+        raise HTTPException(400)
+    before = club.all_admins
+    club.save_suspended(club.suspended - {member})
+    _admin_log(request, admin_unsuspended=member)
+    _tell_admins(request, before, f"{club.name(member)}'s admin suspension was lifted",
+                 f"{club.name(request.state.real_member)} lifted the suspension of {club.name(member)} as an admin.")
+    return RedirectResponse("/admin/security/admins?note=" + quote(f"{club.name(member)} is an admin again."), status_code=303)
 
 
 # ---------------- updating the app (admins, admin mode) ----------------

@@ -70,8 +70,9 @@
 <td>{{ 'in the app' if a in club.app_admins else 'on the server (club.yaml)' }}</td>
 <td>{% if a in club.app_admins and all|length > 1 %}<form method="post" action="/admin/security/admins/remove" class="inline" data-confirm="Remove {{ club.name(a) }} as an admin? The other admins get an email."><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Remove</button></form>{% endif %}</td></tr>{% endfor %}
 </tbody></table>
+{% if club.suspended %}<p><b>Suspended</b> by the officers (<a href="/recover">Recover admin access</a>): {% for a in club.suspended|by_last_name %}{{ club.name(a) }} <form method="post" action="/admin/security/admins/lift" class="inline" data-confirm="Lift {{ club.name(a) }}'s suspension, so they're an admin again?"><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Lift</button></form>{% endfor %}</p>{% endif %}
 <form method="post" action="/admin/security/admins/add" class="inline"><label>Make an admin <select name="member" required><option value="">Pick a member</option>
-{% for m in club.members|by_last_name if m not in all %}<option value="{{ m }}"{{ ' selected' if m == add }}>{{ club.name(m) }}</option>{% endfor %}</select></label>
+{% for m in club.members|by_last_name if m not in all and m not in club.suspended %}<option value="{{ m }}"{{ ' selected' if m == add }}>{{ club.name(m) }}</option>{% endfor %}</select></label>
 <button class="btn small">Make admin</button></form>
 <p class="hint">Admins can turn on admin mode: all contact details, offices, updates, backups and this page. Making someone an admin asks you to confirm it's you (passkey or emailed link) unless you just did; each change is in Admin actions and emailed to the other admins. Admins set on the server stay until they're taken out of club.yaml there.</p>
 
