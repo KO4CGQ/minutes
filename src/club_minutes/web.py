@@ -53,6 +53,7 @@ from . import (
     corrections,
     events,
     limits,
+    meet,
     membership,
     offices,
     prefs,
@@ -1204,6 +1205,30 @@ def admin_confirm_link(request: Request, t: str = "", next: str = "/", mid: str 
                                 + "&next=" + quote(_safe_next(next)), status_code=303)
     _admin_on(request, mid, "email")
     return RedirectResponse(_safe_next(next), status_code=303)
+
+
+# ---------------- Jitsi Meet sign-in (an optional module; meet.py) ----------------
+
+@app.get("/meet")
+def meet_home(request: Request, mid: str = Depends(real_me)):
+    """The club's video meeting room (the Jitsi server's bare address comes here, so nobody starts a random room)."""
+    s = meet.settings(archive.club)
+    if not s:
+        raise HTTPException(404)
+    return RedirectResponse(f"/meet/{s['room']}", status_code=303)
+
+
+@app.get("/meet/{room}")
+def meet_room(request: Request, room: str, mid: str = Depends(real_me)):
+    """Signed-in members only (others get the sign-in page, then come back): a token for this room, minutes long,
+    hosting if their roles allow it, and on to the Jitsi server. Never while viewing the app as someone else."""
+    s = meet.settings(archive.club)
+    if not s or not meet.ROOM.match(room):
+        raise HTTPException(404)
+    if request.state.viewing_as:
+        raise HTTPException(403, "Stop viewing the app as another member first: you'd join as them.")
+    host = archive.club.may(mid, "meet_host") or admin_mode(request)
+    return RedirectResponse(f"https://{s['domain']}/{room}?jwt={meet.token(archive.club, mid, room, host)}", status_code=303)
 
 
 # ---------------- recover admin access (officers; recovery.py) ----------------
@@ -2562,7 +2587,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=PERMISSIONS, regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
@@ -2746,6 +2771,11 @@ async def site_agenda(request: Request):
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
+def _shown_perms(club) -> dict[str, str]:
+    """The permissions Site → Roles shows: a module's only while it's on (Jitsi's meet_host)."""
+    return {p: label for p, label in PERMISSIONS.items() if p != "meet_host" or club.has("jitsi")}
+
+
 def _role_rows(club) -> list[dict]:
     """Roles tab: each role, what it allows, the offices that give it, the members picked for it, and who has it."""
     by_name, table = sorted(club.members.values(), key=lambda m: m.name.lower()), club.role_table()
@@ -2811,7 +2841,8 @@ async def site_roles(request: Request):
                                   "offices": club._default_offices(back), "members": before[back]["members"]}}
     else:
         keys = [k for k in form.getlist("key") if k in before][:60]
-        table = {k: {"name": form.get(f"name.{k}") or before[k]["name"], "perms": form.getlist(f"perms.{k}"),
+        hidden = [p for p in PERMISSIONS if p not in _shown_perms(club)]  # not on the page: kept as they were
+        table = {k: {"name": form.get(f"name.{k}") or before[k]["name"], "perms": form.getlist(f"perms.{k}") + [p for p in before[k]["perms"] if p in hidden],
                      "offices": form.getlist(f"offices.{k}"), "members": form.getlist(f"members.{k}")}
                  for k in keys if not (form.get(f"remove.{k}") and k not in ROLES)}
         for k in ROLES:

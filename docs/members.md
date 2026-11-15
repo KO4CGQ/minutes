@@ -39,6 +39,9 @@ Minutes can be corrected after the meeting. A corrected meeting's footer says wh
 
 ![Business: the club's open items](screenshots/business.png)
 
+## 🎥 Video meeting
+If the club runs its own Jitsi Meet server, **Video meeting** in the menu takes you into the club's room, already signed in as you: no other password. Officers and meeting leaders host; guests without an account wait in the lobby until a host lets them in.
+
 ## 📅 Calendar
 **Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
 

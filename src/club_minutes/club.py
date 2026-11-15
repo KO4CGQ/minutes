@@ -109,7 +109,8 @@ def _agenda(raw) -> list[dict]:
 
 # Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
 # chow: a rotation of members bringing food to meetings (the Chow page, reminders, the console's step, a missed-night fee).
-MODULES = {"chow": False}
+# jitsi: members join the club's own Jitsi Meet server signed in from here (meet.py; needs the jitsi: block and its secret).
+MODULES = {"chow": False, "jitsi": False}
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,4}$", re.IGNORECASE)  # 4 letters: some countries issue them, and examples like N0CALL can't be anyone's
 
 
@@ -191,16 +192,17 @@ PERMISSIONS = {
     "emails": "change another member's email (the new address confirms it first)",
     "status": "change a member's status (Active, Inactive, Silent Key…)",
     "roster_emails": "get the roster emails (new members, roster changes, the chow list)",
+    "meet_host": "host video meetings (Jitsi: start a room, let guests in from the lobby)",
 }
 # The built-in roles: key: (name, what it allows until an admin changes it). The keys are older than the names:
 # "board" is Minutes editor and "minutes_editor" is Meeting leader (roles.json and the roster's columns keep the keys).
 ROLES: dict[str, tuple[str, tuple[str, ...]]] = {
-    "officer": ("Officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer")),
+    "officer": ("Officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer", "meet_host")),
     "board": ("Minutes editor", ("correct",)),
     "treasurer": ("Treasurer", ("treasurer", "money")),
     "roster_keeper": ("Roster keeper", ("members", "emails", "status")),
     "secretary": ("Secretary", ("roster_emails",)),
-    "minutes_editor": ("Meeting leader", ("lead", "calendar")),
+    "minutes_editor": ("Meeting leader", ("lead", "calendar", "meet_host")),
     "calendar_editor": ("Calendar editor", ("calendar",)),
 }
 PICKED = ("minutes_editor", "calendar_editor")  # built-in roles given only by hand (before roles.json: the roster's ticks)

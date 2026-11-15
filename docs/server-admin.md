@@ -201,6 +201,14 @@ Admin → **Stage sync** shows the last sync, **Sync now**, and **Pause nightly 
 >
 > (the bare `OnCalendar=` clears the 03:00), then `systemctl daemon-reload && systemctl restart club-stage-sync.timer`. Updates keep it.
 
+## 🎥 Video meetings (Jitsi, optional)
+Members can join the club's own [Jitsi Meet](https://jitsi.org/jitsi-meet/) server signed in from here: the app hands Jitsi a token saying who they are and whether they host, so Jitsi needs no passwords of its own, and passkeys reach it. Off unless club.yaml turns it on; nothing about it shows otherwise.
+
+- **club.yaml:** `modules: {jitsi: true}` and a `jitsi:` block with `domain` (the Jitsi server), `app_id`, and `room` (the room **Video meeting** in the menu opens; default `club`). The shared secret is `CLUB_MINUTES_JITSI_SECRET` in `/etc/club-minutes/env` (a long random string; never in club.yaml).
+- **The Jitsi server:** Prosody's token authentication (`jitsi-meet-tokens`) with the same app ID and secret, `allow_empty_token = false` on the main domain and the anonymous guest domain kept; the jitsi-contrib `token_affiliation` module (the host comes from the token) and `token_lobby_autostart` (the lobby on by default). Point its nginx's bare address (`/`) at this app's `/meet`, so nobody gets Jitsi's "start a meeting" page. (W8LBZ's setup is in its infra repo.)
+- **Who hosts:** the "host video meetings" permission on Site → Roles (shown while Jitsi is on; Officer and Meeting leader have it as they ship), and admins in admin mode. Other signed-in members join without the lobby; anyone not signed in is a guest who waits for a host.
+- **`/meet/<room>`:** signed-in members only (others sign in, then come back); the token works for that room only and expires in 5 minutes (it only has to open the room).
+
 ## 🔌 Roster API
 For the club's other tools on the same server (the Discord bot): `GET /api/roster` returns active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON.
 
