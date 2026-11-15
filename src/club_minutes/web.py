@@ -214,6 +214,18 @@ def _session_token(request: Request) -> str | None:
     return request.cookies.get(COOKIE) or request.cookies.get(OLD_COOKIE)
 
 
+# Addresses only attack tools ask for: other apps' admin pages, secrets files, scripts this app never has.
+PROBE = re.compile(r"^/(\.(env|git|aws|ssh|svn|htaccess|DS_Store)|wp-|wordpress|phpmyadmin|pma/|xmlrpc|cgi-bin|vendor/|"
+                   r"actuator|server-status|boaform|HNAP1|owa/|autodiscover|solr/|druid/)|\.(php|aspx?|jsp|cgi|env)$", re.IGNORECASE)
+
+
+def _security_event(request: Request, kind: str) -> None:
+    """Log a hostile or refused request on the Security page: what was tried, from where, by which member if any."""
+    who = getattr(request.state, "real_member", None) or authn.member_for(_session_token(request))
+    authn.event(kind, client_ip(request), who, f"{request.method} {request.url.path}"[:200],
+                agent=request.headers.get("user-agent", ""))
+
+
 @app.middleware("http")
 async def require_login(request: Request, call_next):
     archive.club.refresh()  # pick up a roster sync without a restart
@@ -232,6 +244,9 @@ async def require_login(request: Request, call_next):
             and authn.banned(client_ip(request)):
         return HTMLResponse("This address has been blocked after repeated failed sign-ins. "
                             "If that's a mistake, ask a club officer.", status_code=403)
+    if not real and PROBE.search(path):  # before the sign-in redirect, which every unknown address gets
+        _security_event(request, "probe")
+        return HTMLResponse("Not Found", status_code=404)
     if request.state.viewing_as:
         request.state.admin_until = None  # their permissions, not the admin's
         if path.startswith(("/account", "/profile/email", "/logout", "/auth/")) or (
@@ -253,6 +268,7 @@ async def upload_limit(request: Request, call_next):
     """Turn away a request bigger than the admin's upload limit before reading it (a huge upload would fill the disk)."""
     size = request.headers.get("content-length", "")
     if (num(size) or 0) > limits.max_upload() + limits.FORM_ROOM:
+        _security_event(request, "too_big")
         return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
                             status_code=413)
     return await call_next(request)
@@ -266,6 +282,7 @@ async def same_origin_only(request: Request, call_next):
         origin = request.headers.get("origin")
         if (request.headers.get("sec-fetch-site") in ("cross-site", "same-site")
                 or (origin is not None and urlsplit(origin).netloc != request.headers.get("host", ""))):
+            _security_event(request, "cross_site")
             return HTMLResponse("That came from another site, so it was refused. Open the app itself and try again.", status_code=403)
     return await call_next(request)
 
@@ -338,6 +355,8 @@ def passkey_here(request: Request, response: Response, member: str) -> Response:
 async def http_error(request: Request, exc: StarletteHTTPException):
     """A page, not a line of JSON, when a browser opens an address that isn't there (or isn't allowed); the
     app's own scripts ask for JSON and still get it."""
+    if exc.status_code == 403 and request.method not in ("GET", "HEAD") and getattr(request.state, "real_member", None):
+        _security_event(request, "refused")  # a member trying something their role doesn't allow
     if request.method == "GET" and "text/html" in request.headers.get("accept", "") and exc.status_code in (403, 404):
         r = page(request, "error.html", code=exc.status_code, detail=exc.detail if exc.status_code == 403 else "")
         r.status_code = exc.status_code

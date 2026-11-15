@@ -421,3 +421,52 @@ def test_old_links_dont_count_toward_a_ban_made_up_ones_do(a, tmp_path, monkeypa
     assert "expired or was already used" in r.text and not a.events()
     c.get("/login/link?t=made-up")
     assert [e["kind"] for e in a.events()] == ["bad_link"]
+
+
+def test_hostile_requests_are_logged_and_only_probes_count_toward_a_ban(a, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", a.club)
+    monkeypatch.setattr(web, "client_ip", lambda request: "9.9.9.9")
+    out = TestClient(web.app, base_url="https://testserver")
+    kinds = lambda: sorted((e["kind"], e["detail"]) for e in a.events())
+    assert out.get("/.env").status_code == 404 and out.get("/wp-login.php").status_code == 404
+    assert out.get("/no-such-page", follow_redirects=False).status_code == 303   # an ordinary unknown address: just the sign-in page
+    assert kinds() == [("probe", "GET /.env"), ("probe", "GET /wp-login.php")]   # not the ordinary one
+    me = TestClient(web.app, base_url="https://testserver")
+    me.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
+    assert me.post("/logout", headers={"origin": "https://evil.example"}).status_code == 403
+    assert me.post("/roster/new", data={"first": "X"}).status_code in (403, 404)       # above a plain member's role
+    monkeypatch.setattr(web.limits, "max_upload", lambda: 10)
+    assert me.post("/upload", content=b"x" * (web.limits.FORM_ROOM + 100)).status_code == 413
+    got = [k for k, _ in kinds()]
+    assert "cross_site" in got and "too_big" in got
+    for _ in range(20):
+        me.post("/logout", headers={"origin": "https://evil.example"})               # never counted: the victim's address
+    assert not a.banned("9.9.9.9")
+    for _ in range(8):
+        out.get("/.git/config")
+    assert a.banned("9.9.9.9")                                                       # 10 probes in an hour
+
+
+def test_a_member_refused_an_action_is_logged(a, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", a.club)
+    me = TestClient(web.app, base_url="https://testserver")
+    me.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
+
+    @web.app.post("/test-refused")
+    def _refused():
+        raise web.HTTPException(403, "Only the Treasurer can do that.")
+    try:
+        assert me.post("/test-refused").status_code == 403
+        assert me.get("/test-refused").status_code == 405
+    finally:
+        web.app.router.routes.pop()
+    (e,) = a.events()
+    assert (e["kind"], e["member"], e["detail"]) == ("refused", "n0aaaa", "POST /test-refused")

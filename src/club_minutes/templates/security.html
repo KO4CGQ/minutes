@@ -34,11 +34,11 @@
 
 {% endif %}
 {% if tab == 'failed' %}
-<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned for {{ ban_hours }} hours. LAN and tailnet addresses are never banned automatically.</p>
+<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned from signing in for {{ ban_hours }} hours; requests sent from another site's page, actions a member isn't allowed and oversized uploads are listed but never count. LAN and tailnet addresses are never banned automatically.</p>
 {% if events %}{% set banned = bans|map(attribute='ip')|list %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
 {% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td><span class="ip">{{ e.ip }}</span> <span class="muted">{{ e.ip|where }}</span></td>
 <td class="evacts"><button type="button" class="btn small ghost" popovertarget="ev{{ loop.index }}">Details</button>
-{% if not e.ip %}{% elif e.ip|ban_key in banned %}<a class="small" href="/admin/security/bans">Banned</a>{% elif e.ip == my_ip %}<span class="muted small">You</span>{% else %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}
+{% if not e.ip or e.kind == 'cross_site' %}{% elif e.ip|ban_key in banned %}<a class="small" href="/admin/security/bans">Banned</a>{% elif e.ip == my_ip %}<span class="muted small">You</span>{% else %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}
 <div popover id="ev{{ loop.index }}" class="modal" aria-labelledby="ev{{ loop.index }}-t"><button type="button" class="calclose" popovertarget="ev{{ loop.index }}" popovertargetaction="hide" aria-label="Close">{{ emoji('✖️', 'x') }}</button>
 <div class="body"><h2 id="ev{{ loop.index }}-t">{{ event_names.get(e.kind, e.kind) }}</h2><dl class="evinfo">
 <dt>When</dt><dd>{{ e.at|tsfull }}</dd>

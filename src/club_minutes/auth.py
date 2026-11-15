@@ -83,7 +83,10 @@ BAN_AFTER = 10          # failed sign-in attempts from one internet address in a
 BAN_HOURS = 24          # ...ban it for this long (admins can lift it on the Security page)
 EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the roster",
                "link_limit": "Sign-in link limit reached", "bad_link": "A sign-in link the app never sent",
-               "passkey_failed": "Passkey sign-in failed"}
+               "passkey_failed": "Passkey sign-in failed", "probe": "Scanner probe (an address only attack tools ask for)",
+               "cross_site": "Refused: sent from another site's page", "refused": "Refused: not allowed for this member",
+               "too_big": "Refused: upload over the size limit"}
+NOT_COUNTED = ("cross_site", "refused", "too_big")  # logged, never toward a ban: a cross-site request carries the victim's address
 
 
 def _public(ip: str) -> bool:
@@ -152,15 +155,16 @@ class Auth:
 
     # ---------------- security log and bans (the admin Security page) ----------------
     def event(self, kind: str, ip: str | None, member: str | None = None, detail: str = "", agent: str = "") -> None:
-        """Record a failed or suspicious sign-in attempt (and the browser's user agent); ban an internet address
-        after BAN_AFTER in an hour."""
+        """Record a failed sign-in attempt or hostile request (and the browser's user agent); ban an internet address
+        after BAN_AFTER in an hour, NOT_COUNTED kinds aside."""
         now = int(time.time())
         self.db.execute("insert into events (at, ip, kind, member, detail, agent) values (?,?,?,?,?,?)",
                         (now, ip, kind, member, detail[:200], (agent or "")[:300]))
-        if ip and _public(ip) and not self.banned(ip):
+        if ip and _public(ip) and kind not in NOT_COUNTED and not self.banned(ip):
             key = ban_key(ip)
-            n = sum(ban_key(r[0]) == key for r in self.db.execute("select ip from events where at>? and ip is not null",
-                                                                  (now - 3600,)))
+            n = sum(ban_key(r[0]) == key for r in self.db.execute(
+                f"select ip from events where at>? and ip is not null and kind not in ({','.join('?' * len(NOT_COUNTED))})",
+                (now - 3600, *NOT_COUNTED)))
             if n >= BAN_AFTER:
                 self.ban(ip, BAN_HOURS, f"{n} failed sign-in attempts in an hour", "automatic")
                 log.warning("banned %s after %d failed sign-in attempts", ip, n)
