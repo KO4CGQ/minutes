@@ -114,3 +114,60 @@ Only if the club has the chow module (an admin turns it on under Admin → Site 
 
 > [!NOTE]
 > Not a bookkeeping system: no account balances or transfers yet.
+
+## 🛡️ Choosing an admin
+Admins can see and change everything in the app while admin mode is on: every member's contact details, the roles,
+the backups, the updates and the Security page. A **server admin** also signs in to the server itself, so can read
+every file there. Choose them the way the club would choose who holds its bank card.
+
+**How many.** At least two, so the club isn't locked out if one is unavailable (the Admin page warns while there's
+only one). They needn't be officers. If the club ever can't reach its admins, the officers can make a new one:
+**Recover admin access** (above, under The roster).
+
+**Who.** A member the club trusts with every member's personal details, who will be around for a while, and who is:
+
+- **Careful with accounts:** a password manager, a different password for everything, a passkey or two-step sign-in on
+  their own email (their email is a way into admin mode), a screen lock on their phone, and never sharing a sign-in.
+- **Security-minded:** suspicious of unexpected links and requests (an "officer" emailing to ask for someone's
+  details, say), and quick to tell the club when something looks wrong.
+- **Comfortable with the app** (an app admin), or **also with a command line** (a server admin): signing in to the
+  server over SSH, pasting the commands the [server admin guide](server-admin.md) gives, and reading a log. Updates and
+  backups run from the Admin page, so day to day a server admin rarely needs the command line; it's for when
+  something goes wrong.
+
+**Before they start** (a checklist for the officers and the new admin):
+
+1. They read the [server admin guide](server-admin.md) (a server admin) or its Admin mode and Security parts (an app admin).
+2. On a test copy, if the club has one (a staging server): turn on admin mode, change a role and put it back, view
+   the app as a member, and (a server admin) restore a backup into an empty folder and run an update.
+3. They know the club's rules for its IT: who else holds each password (two people for each), where the backup
+   passphrase is kept, and who they answer to.
+4. They sign the club's admin agreement (below), kept with the club's records.
+5. An existing admin adds them on Admin → Security → Admins; they confirm they can turn on admin mode.
+
+**When an admin steps down:** add the successor first (the last active admin can't be removed), hand over or
+change the passwords they held, and remove them on Admin → Security → Admins.
+
+### An admin agreement (a template)
+Adapt it to the club's bylaws and records; it isn't legal advice.
+
+> **[Club name] — Club Minutes administrator agreement**
+>
+> I, **[name, callsign]**, agree to serve as an administrator of the club's Club Minutes app
+> (☐ app admin ☐ server admin) from **[date]**, and that:
+>
+> 1. I'll use admin access only for club business, and only what the job needs.
+> 2. Members' personal details (contact details, birthdays, dues, attendance) are confidential: I won't copy, share or
+>    keep them outside the app, except the club's own backups.
+> 3. I'll keep my accounts secure: a unique password in a password manager, a passkey or two-step sign-in on the email
+>    I use for the club, and I won't share my sign-in.
+> 4. I'll tell **[the President / the Board]** within **[24 hours]** of anything that may have exposed club data or
+>    my access (a lost phone, a suspicious sign-in, a mistake).
+> 5. When I step down, or if the Board asks, I'll hand over what I hold (passwords, keys, the backup passphrase) and
+>    help add a successor. I understand the officers can recover admin access without me if they need to.
+>
+> Signed: ____________________ Date: __________
+>
+> For the club (President): ____________________ Date: __________
+>
+> Witness (Secretary): ____________________ Date: __________
