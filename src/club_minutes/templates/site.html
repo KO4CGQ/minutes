@@ -74,15 +74,15 @@
 <template id="t-office">{{ office_row('__i__', {'title': '', 'officer': False, 'seats': 1, 'held': False}) }}</template>
 <p><button type="button" class="btn small" data-add="t-office" data-next="{{ office_rows|length }}" hidden>+ Add an office</button></p>
 <p class="hint">Clear an office's name to remove it. What each office's holders may do is under Roles, below.</p>
-</div>
 <p class="row"><button class="btn">Save</button></p>
+</div>
 </form>
 {% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 <div class="card sitesec" id="roles"><h2>Roles</h2>
 <p class="hint">What each role allows, and who has it: the holders of the offices ticked, and the members picked. Only an office gives a role: other titles (Net Manager, say) give none, so pick that member instead. A member with several roles may do everything any of them allows. Only admins, in admin mode, change roles. Admin isn't a role: admins are added on <a href="/admin">Admin</a> → Security, and in admin mode may do everything.</p>
 <form method="post" action="/admin/site/roles" class="profile">
 <div class="rolelist">{% for r in role_rows %}{% set k = r.key %}
-<details class="role"><summary><b>{{ r.name }}</b> <span class="muted small">{{ r.who|length }} {{ 'member' if r.who|length == 1 else 'members' }} · {{ r.perms|length }} of {{ permissions|length }} permissions{{ ' · built-in' if r.builtin }}{{ ', changed' if r.edited and r.builtin }}</span></summary>
+<details class="role"><summary><b>{{ r.name }}</b><br><span class="muted small">{{ r.who|length }} {{ 'member' if r.who|length == 1 else 'members' }} · {{ r.perms|length }} of {{ permissions|length }} permissions{{ ' · built-in' if r.builtin }}{{ ', changed' if r.edited and r.builtin }}</span></summary>
   <input type="hidden" name="key" value="{{ k }}">
   <label class="small">Name <input name="name.{{ k }}" value="{{ r.name }}" maxlength="40"></label>
   <fieldset><legend class="small"><b>Allows</b></legend>
