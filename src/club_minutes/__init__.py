@@ -4,11 +4,22 @@ import os
 from pathlib import Path
 
 
+def dt_date(s: str):
+    import datetime as dt
+    return dt.date.fromisoformat(s)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="club-minutes")
     sub = ap.add_subparsers(dest="cmd", required=True)
     imp = sub.add_parser("import", help="import historical minutes (PDFs + *CORRECTED*.txt) into the archive")
     imp.add_argument("src", type=Path)
+    ic = sub.add_parser("import-correction", help="imported minutes corrected later: the original PDF stays version 1, this PDF becomes version 2 (no notice)")
+    ic.add_argument("date", help="YYYY-MM-DD")
+    ic.add_argument("pdf", type=Path, help="the corrected minutes, as a PDF")
+    ic.add_argument("--by", required=True, help="callsign of who corrected them (e.g. the Secretary)")
+    ic.add_argument("--reason", required=True, help="a line members see with the minutes")
+    ic.add_argument("--on", type=dt_date, help="YYYY-MM-DD they were really corrected (the footer's date); default today")
     sub.add_parser("roster", help="rebuild the roster cache (roster.json) from the roster (roster-sheet.json)")
     lk = sub.add_parser("login-link", help="print a one-time sign-in link for a member (admin recovery)")
     lk.add_argument("who", help="callsign, or the member's email")
@@ -56,6 +67,16 @@ def main() -> None:
         from .importer import import_archive
         ms = import_archive(a.src)
         print(f"imported {len(ms)} meetings")
+    elif a.cmd == "import-correction":
+        import datetime as dt
+
+        from .importer import import_correction
+        from .store import Archive
+        try:
+            m = import_correction(Archive(), dt.date.fromisoformat(a.date), a.pdf, a.by.lower(), a.reason, a.on)
+        except ValueError as e:
+            raise SystemExit(str(e)) from None
+        print(f"{m.slug}: now version {m.version}. Restart the web service so it picks it up.")
     elif a.cmd == "backup":
         from . import backup
         from .club import Club

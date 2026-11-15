@@ -8,6 +8,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh     # once
 uv sync
 uv run club-minutes roster                          # rebuild data/roster.json from data/roster-sheet.json
 uv run club-minutes import archive                  # optional: (re)build data/ from old minutes in archive/ (importer.py)
+uv run club-minutes import-correction 2026-10-01 corrected.pdf --by N0CALL --reason "…" --on 2026-10-08  # imported minutes corrected later: original PDF = v1, this = v2, no notice
 uv run club-minutes serve --host 0.0.0.0 --port 8765
 uv run playwright install chromium firefox webkit   # once: the browser tests run in each (one not installed is skipped)
 sudo .venv/bin/playwright install-deps              # once, on Linux: the libraries Firefox and WebKit need

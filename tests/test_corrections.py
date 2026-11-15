@@ -266,3 +266,28 @@ def test_rows_added_and_removed_in_the_browser_and_the_preview(tmp_path, monkeyp
 def test_a_changed_line_marks_the_words_that_changed():
     old, new = corrections.words("Jane seconded <it>, not John", "John seconded <it>, not Jane")
     assert old == "<del>Jane</del> seconded &lt;it&gt;, not <del>John</del>" and new == "<ins>John</ins> seconded &lt;it&gt;, not <ins>Jane</ins>"
+
+
+def test_import_correction_keeps_the_original_as_version_1(tmp_path, monkeypatch):
+    from club_minutes import importer
+    a = archive(tmp_path)
+    orig = (FIX / "old-format.txt").read_text().replace("Date:5 Nov 2026", "Date:23 Oct 2025")
+    (tmp_path / "2025-10-23" / "original.pdf").write_text(orig)
+    fixed = tmp_path / "fixed.pdf"
+    fixed.write_text(orig.replace("Fox hunt moved to the 20th", "Fox hunt moved to the 21st"))
+    monkeypatch.setattr(importer, "pdf_text", lambda p: Path(p).read_text())  # the text files stand in for PDFs
+    with pytest.raises(ValueError, match="roster"):
+        importer.import_correction(a, dt.date(2025, 10, 23), fixed, "nobody", "x")
+    other = tmp_path / "other.pdf"
+    other.write_text((FIX / "old-format.txt").read_text())
+    with pytest.raises(ValueError, match="Date line says 2026-11-05, not 2025-10-23"):  # another meeting's PDF
+        importer.import_correction(a, dt.date(2025, 10, 23), other, "roe", "x")
+    m = importer.import_correction(a, dt.date(2025, 10, 23), fixed, "ROE", "The Secretary's corrected minutes",
+                                   on=dt.date(2025, 10, 30))
+    assert dt.date.fromtimestamp(m.corrections[0]["at"]) == dt.date(2025, 10, 30)
+    assert m.source == "23-oct-25-minutes.pdf" and m.note is None
+    assert (m.version, m.status, m.corrections[0]["by"], m.corrections[0]["notice"]) == (2, "imported", "roe", False)
+    assert m.items("Old Business")[0].text == "Fox hunt moved to the 21st"
+    assert corrections.load_version(a, m.slug, 1).items("Old Business")[0].text == "Fox hunt moved to the 20th"
+    with pytest.raises(ValueError, match="version 1"):  # only once
+        importer.import_correction(a, dt.date(2025, 10, 23), fixed, "roe", "again")
