@@ -584,6 +584,11 @@ class Club:
     def all_admins(self) -> set[str]:
         return {self.canonical(a) for a in self.admins | self.app_admins}  # club.yaml may still have an old call
 
+    @property
+    def active_admins(self) -> set[str]:
+        """Admins who can still sign in (an Inactive or Silent Key admin can't, so they don't count)."""
+        return {a for a in self.all_admins if a in self.members and self.members[a].status.lower() == "active"}
+
     def save_app_admins(self, ids: set[str]) -> None:
         p = DATA / "admins.json"
         tmp = p.with_suffix(".tmp")

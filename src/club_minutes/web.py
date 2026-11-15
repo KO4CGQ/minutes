@@ -1868,6 +1868,8 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
         for changed, perm, what in ((new_email, "emails", "email"), (status != m.status, "status", "status")):
             if changed and (err := may_change(request, who, perm, what)):
                 raise ValueError(err)
+        if status.lower() != "active" and not archive.club.active_admins - {who} and who in archive.club.active_admins:
+            raise ValueError(f"{m.first} is the last active admin: add another admin first, so the club isn't locked out.")
         new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": status,
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
                "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
@@ -2227,7 +2229,7 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
         upd = None if STAGE else updates.available()
     except Exception:  # GitHub not reachable: just don't say  # noqa: BLE001
         upd = None
-    return page(request, "admin.html", failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
+    return page(request, "admin.html", only_admin=len(archive.club.active_admins) == 1, failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
                 passphrase_set=len(os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE", "")) >= 12, upd=upd,
                 stage_last=json.loads(sp.read_text()) if STAGE and sp.exists() else None)
 
@@ -2320,8 +2322,8 @@ def admins_remove(request: Request, member: str = Form("")):
     if member not in club.app_admins:
         raise HTTPException(400, "Only admins added here can be removed here; those in club.yaml are changed on the server.")
     before = club.all_admins
-    if before == {member}:
-        raise HTTPException(400, "That's the last admin: add another first.")
+    if not club.active_admins - {member}:
+        raise HTTPException(400, "That's the last active admin: add another first, so the club isn't locked out.")
     club.save_app_admins(club.app_admins - {member})
     _admin_log(request, admin_removed=member)
     _tell_admins(request, before, f"{club.name(member)} is no longer an admin",

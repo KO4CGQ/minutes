@@ -81,7 +81,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 ## 🛡️ Admin mode
 Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged. Turning it on asks you to confirm it's you: with a passkey that checks your PIN, fingerprint or face (a security key that only takes a tap isn't enough here, though it still signs you in), or with a link emailed to you.
 
-- **Who's an admin:** callsigns under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins, and the last admin can't be removed.
+- **Who's an admin:** callsigns under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins. There's always an active admin: the last one can't be removed, or set Inactive or Silent Key (an Inactive admin can't sign in, so doesn't count), and the Admin page warns while there's only one. To step down, add a successor first. Only an admin in admin mode changes an admin's email or status.
 - Admins in club.yaml can only be removed there, so whoever has the server can always get back in.
 - **View the app as …** (on a member's page): the app as that member sees it, read-only, until **Stop** or admin mode ends. Also logged.
 

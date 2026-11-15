@@ -207,3 +207,27 @@ def test_a_members_own_email_change_completes(env):
     assert not any(t == "amy@example.org" and "being changed" in s_ for t, s_, _b in sent)  # her own change: no warning
     TestClient(web.app).post("/email/confirm", data={"t": _link(sent, "amy@new.example.org")})
     assert club.members["n0aaaa"].email == "amy@new.example.org"
+
+
+def test_the_last_active_admin_stays(env, monkeypatch, tmp_path):
+    """Stage test of 1.0.0, problem 5: the last active admin can't be set Inactive or Silent Key (even by themselves, in
+    admin mode) or removed; an Inactive admin doesn't count; the Admin page warns while there's only one."""
+    from club_minutes import club as clubmod
+    club, _tmp, _sent, who, c = env
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    club.admins = {"n0bbbb"}
+    for s in ("Inactive", "Silent Key"):
+        r = c.post("/members/n0bbbb/edit", data=form(status=s), follow_redirects=False)
+        assert "last%20active%20admin" in r.headers["location"] and club.members["n0bbbb"].status == "Active", s
+    who["id"] = "n0bbbb"
+    assert "You're the only active admin" in c.get("/admin").text
+    club.save_app_admins({"n0aaaa"})
+    assert "You're the only active admin" not in c.get("/admin").text
+    assert c.post("/admin/security/admins/remove", data={"member": "n0aaaa"}, follow_redirects=False).status_code == 303
+    club.save_app_admins({"n0aaaa"})
+    c.post("/members/n0bbbb/edit", data=form(status="Inactive"))  # two active admins: one may go
+    assert club.members["n0bbbb"].status == "Inactive" and club.active_admins == {"n0aaaa"}
+    who["id"] = "n0aaaa"
+    r = c.post("/admin/security/admins/remove", data={"member": "n0aaaa"})
+    assert r.status_code == 400 and "last active admin" in r.text and club.active_admins == {"n0aaaa"}
