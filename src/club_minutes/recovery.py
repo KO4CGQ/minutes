@@ -11,6 +11,7 @@ The limit: this guards against an admin with only app access. Anyone with the se
 """
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import functools
 import json
@@ -25,17 +26,24 @@ LAPSE_DAYS = 30  # not approved and accepted by then: it ends by itself, so one 
 MOTION_MAX = 200
 
 
+@contextlib.contextmanager
+def locked():
+    """One lock for who's an admin: recovery steps, the daily job completing one, Admins add/remove/lift and a new
+    callsign (separate processes, and two officers at once), so none of them undoes another's change."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "recovery.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def _locked(fn):
-    """Load-change-save under a file lock: the web app and the daily job (separate processes), and two officers at once."""
     @functools.wraps(fn)
     def run(*a, **kw):
-        DATA.mkdir(parents=True, exist_ok=True)
-        with open(DATA / "recovery.lock", "w") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            try:
-                return fn(*a, **kw)
-            finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
+        with locked():
+            return fn(*a, **kw)
     return run
 
 
@@ -197,11 +205,11 @@ def tick(club: Club, url: str, now: float | None = None) -> bool:
     club.save_app_admins(club.app_admins | {r["nominee"]})
     club.save_suspended(club.suspended | set(r["suspend"]))
     _save(None)
+    with (DATA / "admin-log.jsonl").open("a") as f:  # logged first: a mail error mustn't lose it
+        f.write(json.dumps({"at": int(time.time()), "member": r["by"], "recovery_done": r["nominee"], "suspended": r["suspend"]}) + "\n")
     _tell(club, "Recovering admin access: done", f"{club.name(r['nominee'])} is now an admin." + (
         f" {', '.join(club.name(a) for a in r['suspend'])} {'is' if len(r['suspend']) == 1 else 'are'} suspended as admin; "
         "only another admin can lift that." if r["suspend"] else ""), r, url)
-    with (DATA / "admin-log.jsonl").open("a") as f:
-        f.write(json.dumps({"at": int(time.time()), "member": r["by"], "recovery_done": r["nominee"], "suspended": r["suspend"]}) + "\n")
     return True
 
 

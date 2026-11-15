@@ -426,3 +426,12 @@ def test_anydate_formats_dates_and_leaves_typed_text():
     assert anydate("2025-07-25") != "2025-07-25"
     assert anydate("2026-11-05T19:30") == anydate("2026-11-05")
     assert anydate("spring 2019") == "spring 2019" and anydate("2025-13-45") == "2025-13-45" and anydate(None) == ""
+
+
+def test_one_unreadable_minutes_file_doesnt_stop_the_archive(tmp_path, m):
+    """Data sweep: Archive.reload parsed every file unguarded, so one bad file stopped the app."""
+    from club_minutes.store import Archive
+    m.save(tmp_path)
+    (tmp_path / "2026-01-01").mkdir()
+    (tmp_path / "2026-01-01" / "minutes.md").write_bytes(b"---\n: [unclosed\n---\n\xff")
+    assert [x.slug for x in Archive(tmp_path, club).meetings] == [m.slug]

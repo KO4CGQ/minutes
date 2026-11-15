@@ -34,7 +34,7 @@
 
 {% endif %}
 {% if tab == 'failed' %}
-<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned from signing in for {{ ban_hours }} hours; requests sent from another site's page, actions a member isn't allowed and oversized uploads are listed but never count. LAN and tailnet addresses are never banned automatically.</p>
+<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned from signing in for {{ ban_hours }} hours. Requests sent from another site's page, actions a member isn't allowed and oversized uploads are listed here, but never count. LAN and tailnet addresses are never banned automatically.</p>
 {% if events %}{% set banned = bans|map(attribute='ip')|list %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
 {% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td><span class="ip">{{ e.ip }}</span> <span class="muted">{{ e.ip|where }}</span></td>
 <td class="evacts"><button type="button" class="btn small ghost" popovertarget="ev{{ loop.index }}">Details</button>
@@ -70,7 +70,8 @@
 <td>{{ 'in the app' if a in club.app_admins else 'on the server (club.yaml)' }}</td>
 <td>{% if a in club.app_admins and all|length > 1 %}<form method="post" action="/admin/security/admins/remove" class="inline" data-confirm="Remove {{ club.name(a) }} as an admin? The other admins get an email."><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Remove</button></form>{% endif %}</td></tr>{% endfor %}
 </tbody></table>
-{% if club.suspended %}<p><b>Suspended</b> by the officers (<a href="/recover">Recover admin access</a>): {% for a in club.suspended|by_last_name %}{{ club.name(a) }} <form method="post" action="/admin/security/admins/lift" class="inline" data-confirm="Lift {{ club.name(a) }}'s suspension, so they're an admin again?"><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Lift</button></form>{% endfor %}</p>{% endif %}
+{% if club.suspended %}<p><b>Suspended</b> by the officers (<a href="/recover">Recover admin access</a>):</p>
+<ul>{% for a in club.suspended|by_last_name %}<li>{{ club.name(a) }} <form method="post" action="/admin/security/admins/lift" class="inline" data-confirm="Lift {{ club.name(a) }}'s suspension, so they're an admin again?"><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Lift <span class="sr">{{ club.name(a) }}'s suspension</span></button></form></li>{% endfor %}</ul>{% endif %}
 <form method="post" action="/admin/security/admins/add" class="inline"><label>Make an admin <select name="member" required><option value="">Pick a member</option>
 {% for m in club.members|by_last_name if m not in all and m not in club.suspended %}<option value="{{ m }}"{{ ' selected' if m == add }}>{{ club.name(m) }}</option>{% endfor %}</select></label>
 <button class="btn small">Make admin</button></form>

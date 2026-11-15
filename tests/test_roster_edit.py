@@ -270,3 +270,18 @@ def test_office_holders_identity_is_for_admins(env, monkeypatch, tmp_path):
     assert "holds an office, so an admin changes their callsign" in c.get("/members/n0bbbb/edit?tab=callsign").text
     c.post("/members/n0bbbb/edit", data=form(phone="419-555-0103") | {"email": "bob@example.org", "status": "Active"})
     assert club.members["n0bbbb"].phone == "419-555-0103"
+
+
+def test_the_confirm_page_shows_the_address_and_a_failed_check_keeps_the_link(env):
+    """UI/UX and data sweeps: the page says which address it's confirming; a check that fails leaves the link usable
+    (it's spent only once the change is saved); the sign-in page's note is a code, never text from the link."""
+    club, _tmp, sent, _who, c = env
+    c.post("/members/n0bbbb/edit", data=form(email="bob@new.example.org"))
+    tok = _link(sent, "bob@new.example.org")
+    anon = TestClient(web.app)
+    assert "Use <b>bob@new.example.org</b>" in anon.get(f"/email/confirm?t={tok}").text
+    club.members["n0aaaa"].email = "bob@new.example.org"
+    assert "Another member uses that address now" in anon.post("/email/confirm", data={"t": tok}).text
+    club.members["n0aaaa"].email = "amy@example.org"
+    r = anon.post("/email/confirm", data={"t": tok}, follow_redirects=False)  # the same link, now it works
+    assert r.headers["location"] == "/login?note=email" and club.members["n0bbbb"].email == "bob@new.example.org"

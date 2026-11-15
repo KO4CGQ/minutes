@@ -1,9 +1,9 @@
 {% extends "base.html" %}{% block title %}Correct the minutes, {{ m.date|listdate }}{% endblock %}{% block crumb %}{{ back('/meetings/' ~ m.slug, m.date|listdate) }}{% endblock %}{% block body %}
 <h1>Correct the minutes of {{ m.date|longdate }}</h1>
-<p class="muted">Open a part to change it, then preview the changes before saving. Saving makes these minutes version {{ m.version + 1 }}. Version {{ m.version }} is kept and linked from the new one, whose footer shows who corrected it and why. Old Business and Upcoming Chow are the text from that night: changing them here doesn't change the tracked business items or the chow schedule.</p>
+<p class="muted">Open a part, change it, then preview. Saving makes version {{ m.version + 1 }}; version {{ m.version }} is kept.</p>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 {# Remove is a checkbox that strikes a row out (style.css, :has), so it can be undone; + Add copies the list's <template> #}
-{% macro remove(name) %}<label class="btn small ghost rm"><input type="checkbox" name="{{ name }}-rm" value="1"><span class="off">Remove</span><span class="on">Keep it</span></label>{% endmacro %}
+{% macro remove(name, what) %}<label class="btn small ghost rm"><input type="checkbox" name="{{ name }}-rm" value="1"><span class="off">Remove</span><span class="on">Keep it</span><span class="sr"> {{ what }}</span></label>{% endmacro %}
 {% macro guest(i, g, label) %}<fieldset class="guest"><legend>{{ label }}</legend>
   <div class="formrow">
     <label>Name <input name="g{{ i }}-name" value="{{ g.name or '' }}" maxlength="120"></label>
@@ -11,11 +11,11 @@
     <label class="check"><input type="checkbox" name="g{{ i }}-online" value="1" {{ 'checked' if g.online }}> Online</label>
   </div>
   <label>Notes <input name="g{{ i }}-notes" value="{{ g.notes or '' }}" maxlength="200"></label>
-  {{ remove('g' ~ i) }}
+  {{ remove('g' ~ i, label) }}
 </fieldset>{% endmacro %}
 {% macro item(n, j, sec, text='', hint='', new=false) %}<div class="item">{% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
   <textarea name="s{{ n }}-{{ j }}" rows="1" aria-label="{{ sec }}, {{ 'a new item' if new else 'item ' ~ (j + 1) }}"{% if new %} placeholder="The item left out"{% endif %}>{{ text }}</textarea>
-  {{ remove('s' ~ n ~ '-' ~ j) }}</div>{% endmacro %}
+  {{ remove('s' ~ n ~ '-' ~ j, sec ~ ', ' ~ ('the new item' if new else 'item ' ~ (j + 1))) }}</div>{% endmacro %}
 <form method="post" action="/meetings/{{ m.slug }}/correct/preview" class="modern correct">
   <input type="hidden" name="version" value="{{ m.version }}">
 
@@ -35,6 +35,7 @@
 
   {% for sec in sections %}{% set n = loop.index0 %}{% set items = m.items(sec) %}
   <details class="card sec"><summary>{{ sec }} <span class="muted">{{ items|length }}</span></summary>
+    {% if sec in ('Old Business', 'Upcoming Chow') %}<p class="hint">The text read that night: changing it here doesn't change the {{ 'tracked business items' if sec == 'Old Business' else 'chow schedule' }}.</p>{% endif %}
     {% for it in items %}{{ item(n, loop.index0, sec, it.text, club.name(it.member) if it.member else it.shown[:it.shown|length - it.text|length - 2] if it.when else '') }}{% endfor %}
     <template id="t-s{{ n }}">{{ item(n, '__i__', sec, new=true) }}</template>
     <button type="button" class="btn small" data-add="t-s{{ n }}" data-next="{{ items|length }}">+ Add an item</button>

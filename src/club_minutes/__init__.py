@@ -156,6 +156,9 @@ def main() -> None:
             from . import recovery
             if recovery.tick(club, url):
                 print("recovered admin access (recovery.py)")
+            from .auth import Auth
+            if n := Auth(club).prune():
+                print(f"pruned {n} old sign-in records")
         with business.locked():
             s = business.load()
             due = business.due_reminders(s, today, int(club.info.get("remind_days_before", 3)))

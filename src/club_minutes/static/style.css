@@ -630,6 +630,7 @@ form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items:
 .rolelist details.role { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: .5rem .9rem; }
 .rolelist details.role[open] > summary { margin-bottom: .4rem; } .rolelist .role p { margin: .3rem 0; }
 .rolelist .role summary { cursor: pointer; } .rolelist .role summary span { display: inline-block; margin-left: 1.1em; } .rolelist .role fieldset { margin: .5rem 0; }
+.rolelist details.role:has(.rmrole input:checked) > summary { text-decoration: line-through; opacity: .6; }  /* removed on Save */
 .rolelist .role fieldset label.check { display: flex; gap: .4rem; margin: .15rem 0; }
 .officegrid input[type=number] { width: 4rem; } .officegrid input[readonly] { background: var(--surface-2); }
 @media (max-width: 560px) { .officegrid { gap: .45rem .6rem; } .officegrid .agh { font-size: .7rem; line-height: 1.2; } }
@@ -708,7 +709,8 @@ table.diff td.old { border-right: 1px solid var(--border); } table.diff th.part 
 table.diff tr.same td { color: var(--muted); }
 table.diff tr.removed td.old, table.diff del { background: var(--danger-soft); color: var(--danger-text); }
 table.diff tr.added td.new, table.diff ins { background: color-mix(in srgb, #2e7d32 22%, var(--surface)); }
-table.diff del, table.diff ins { border-radius: 3px; padding: 0 .1em; } table.diff ins { text-decoration: none; }
+table.diff del, table.diff ins { border-radius: 3px; padding: 0 .1em; } table.diff ins { text-decoration: underline; }  /* not by colour alone */
+table.att-edit input[type=radio] { width: 1.5rem; height: 1.5rem; }  /* a bigger target for older fingers */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Remove: a checkbox that strikes the row out (and back) */
 form.correct .rm input { position: absolute; opacity: 0; width: 1px; height: 1px; }

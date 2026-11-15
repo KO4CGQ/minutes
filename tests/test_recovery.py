@@ -141,3 +141,18 @@ def test_it_lapses_after_30_days_and_a_majority_can_call_it_off(club):
     assert not recovery.cancel(club, "sec", "https://x")
     assert recovery.cancel(club, "tre", "https://x") and recovery.load() is None
     assert "a majority of the officers" in club.sent[-1][2]
+
+
+def test_each_emailed_link_works_only_for_what_it_was_sent_for(club, tmp_path):
+    a = Auth(club, tmp_path / "auth.sqlite")
+    admin_link, recover_link = a.step_up_link("pres"), a.step_up_link("pres", "recover-email")
+    assert not a.use_step_up_link(admin_link, "pres", "recover-email") and not a.use_step_up_link(recover_link, "pres")
+    assert a.use_step_up_link(a.step_up_link("pres", "recover-email"), "pres", "recover-email")
+
+
+def test_old_sign_in_records_are_pruned(club, tmp_path):
+    import time
+    a = Auth(club, tmp_path / "auth.sqlite")
+    a.db.execute("insert into events (at, ip, kind) values (?, ?, ?)", (int(time.time()) - 91 * DAY, "203.0.113.9", "bad_link"))
+    a.db.execute("insert into events (at, ip, kind) values (?, ?, ?)", (int(time.time()), "203.0.113.9", "bad_link"))
+    assert a.prune() == 1 and len(a.events()) == 1

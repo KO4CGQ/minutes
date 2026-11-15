@@ -355,14 +355,23 @@ class Auth:
                        f"If that's wrong, tell an officer or reply to this email.\n\n73,\n{app}")
         return None
 
-    def confirm_email_change(self, token: str) -> tuple[str, str, str] | None:
-        """(member, new email, who asked) for a valid link, which is then used up."""
+    def email_change(self, token: str) -> tuple[str, str, str] | None:
+        """(member, new email, who asked) for a valid link, not used up: use_email_change once the change is saved, so a
+        check that fails (or a roster that can't be written) doesn't spend it."""
         row = self.db.execute("select member, email, expires, by from email_changes where token_hash=?",
                               (_hash(token),)).fetchone()
-        self.db.execute("delete from email_changes where token_hash=?", (_hash(token),))
         if not row or row["expires"] < time.time():
             return None
         return row["member"], row["email"], row["by"] or row["member"]
+
+    def use_email_change(self, token: str) -> None:
+        self.db.execute("delete from email_changes where token_hash=?", (_hash(token),))
+
+    def confirm_email_change(self, token: str) -> tuple[str, str, str] | None:
+        """email_change, used up at once."""
+        got = self.email_change(token)
+        self.use_email_change(token)
+        return got
 
     # ---------------- passkeys ----------------
     def _challenge(self, kind: str, challenge: bytes, member: str | None = None) -> str:
@@ -419,13 +428,21 @@ class Auth:
                                                user_verification=UserVerificationRequirement.REQUIRED)
         return self._challenge("step-up", opts.challenge, member), options_to_json(opts)
 
-    def step_up_link(self, member: str) -> str:
-        """For an admin without a passkey here: a one-time code, emailed, that only works for them."""
-        return self._challenge("step-up-email", b"", member)
+    def step_up_link(self, member: str, kind: str = "step-up-email") -> str:
+        """For a member without a passkey here: a one-time code, emailed, that only works for them, and only for what it
+        was sent for (admin mode, or "recover-email" for a recovery step)."""
+        return self._challenge(kind, b"", member)
 
-    def use_step_up_link(self, cid: str, member: str) -> bool:
-        ch = self._take_challenge(cid, "step-up-email")
+    def use_step_up_link(self, cid: str, member: str, kind: str = "step-up-email") -> bool:
+        ch = self._take_challenge(cid, kind)
         return bool(ch and ch["member"] == member)
+
+    def prune(self, days: int = 90) -> int:
+        """The daily job: sign-in links, failed attempts and stale challenges older than `days` go (they hold addresses
+        and devices). Sessions and bans expire on their own."""
+        old = time.time() - days * 86400
+        return sum(self.db.execute(f"delete from {t} where {c}<?", (old,)).rowcount
+                   for t, c in (("links", "created"), ("events", "at"), ("challenges", "expires")))
 
     def authenticate(self, cid: str | None, credential: dict, kind: str = "login", member: str | None = None) -> str:
         ch = self._take_challenge(cid, kind)

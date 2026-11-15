@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import functools
+import hashlib
 import itertools
 import json
 import logging
@@ -504,7 +505,10 @@ def brand_picture(name: str):
 def login_page(request: Request, next: str = "/", sent: int = 0, error: str = "", note: str = ""):
     if request.state.member:
         return RedirectResponse(_safe_next(next), status_code=303)
-    return page(request, "login.html", next=_safe_next(next), sent=sent, error=error, note=note[:200])
+    return page(request, "login.html", next=_safe_next(next), sent=sent, error=error, note=LOGIN_NOTES.get(note, ""))
+
+
+LOGIN_NOTES = {"email": "Your email has changed, and you're signed out everywhere: sign in again."}  # codes, never text from the link
 
 
 @app.post("/login/email")
@@ -1241,7 +1245,10 @@ def _recover_confirmed(request: Request) -> bool:
 
 
 def _recover_mark(request: Request) -> None:
-    _recover_ok[authmod._hash(_session_token(request) or "")] = time.time() + 300
+    now = time.time()
+    for k in [k for k, until in _recover_ok.items() if until < now]:  # gone once expired
+        del _recover_ok[k]
+    _recover_ok[authmod._hash(_session_token(request) or "")] = now + 300
 
 
 @app.get("/recover", response_class=HTMLResponse)
@@ -1314,7 +1321,7 @@ def recover_confirm_email(request: Request, mid: str = Depends(real_me)):
     m = archive.club.members[mid]
     if not m.email:
         raise HTTPException(400, "There's no email address for you on the roster.")
-    url = f"{base_url(request)}/recover/confirm/link?t={authn.step_up_link(mid)}"
+    url = f"{base_url(request)}/recover/confirm/link?t={authn.step_up_link(mid, 'recover-email')}"
     if PREVIEW:
         return RedirectResponse(url, status_code=303)
     authmod.send_email(m.email, "Confirm it's you", f"Hi {m.first},\n\nSomeone signed in as you asked to confirm it's you, to "
@@ -1326,7 +1333,7 @@ def recover_confirm_email(request: Request, mid: str = Depends(real_me)):
 
 @app.get("/recover/confirm/link")
 def recover_confirm_link(request: Request, t: str = "", mid: str = Depends(real_me)):
-    if not authn.use_step_up_link(t, mid):
+    if not authn.use_step_up_link(t, mid, "recover-email"):  # an admin-mode link doesn't work here, nor the other way
         return RedirectResponse("/recover/confirm?error=" + quote("That link has expired or was already used."), status_code=303)
     _recover_mark(request)
     return RedirectResponse("/recover", status_code=303)
@@ -1340,7 +1347,8 @@ def admins_lift(request: Request, member: str = Form("")):
     if member not in club.suspended:
         raise HTTPException(400)
     before = club.all_admins
-    club.save_suspended(club.suspended - {member})
+    with recovery.locked():
+        club.save_suspended(club.suspended - {member})
     _admin_log(request, admin_unsuspended=member)
     _tell_admins(request, before, f"{club.name(member)}'s admin suspension was lifted",
                  f"{club.name(request.state.real_member)} lifted the suspension of {club.name(member)} as an admin.")
@@ -1544,12 +1552,14 @@ async def profile_save(request: Request, mid: str = Depends(me)):
 def email_confirm_page(request: Request, t: str = ""):
     """A new address's confirmation link (the member's own change, or a roster keeper's). Signed in or not: the link
     proves the address. A button, so a mail scanner opening the link changes nothing."""
-    return page(request, "email_confirm.html", t=t)
+    got = authn.email_change(t)
+    return page(request, "email_confirm.html", t=t if got else "", email=got[1] if got else "",
+                error="" if got else "That confirmation link is invalid or expired.")
 
 
 @app.post("/email/confirm")
 def email_confirm(request: Request, t: str = Form("")):
-    got = authn.confirm_email_change(t)
+    got = authn.email_change(t)
     if not got or got[0] not in archive.club.members:
         return page(request, "email_confirm.html", t="", error="That confirmation link is invalid or expired.")
     mid, email, by = got
@@ -1562,8 +1572,9 @@ def email_confirm(request: Request, t: str = Form("")):
         profile.change(archive.club, mid, {"email": email}, by=by, url=base_url(request))
     except (ValueError, SheetError) as e:
         return page(request, "email_confirm.html", t="", error=str(e))
+    authn.use_email_change(t)
     authn.end_all_sessions(mid)  # a session from before the change doesn't carry on
-    return RedirectResponse("/login?note=" + quote(f"Your email is now {email}. You're signed out everywhere: sign in again."), status_code=303)
+    return RedirectResponse("/login?note=email", status_code=303)
 
 
 def roster_keeper(request: Request) -> str:
@@ -1843,8 +1854,8 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
     what = corrections.changes(m, new, archive.club, private)
     notice = bool(form.get("notice"))
     try:
-        m = corrections.correct(archive, slug, request.state.member, str(form.get("reason") or ""),
-                                num(str(form.get("version") or "")) or 0, new, notice, private)
+        m = await run_in_threadpool(corrections.correct, archive, slug, request.state.member, str(form.get("reason") or ""),
+                                    num(str(form.get("version") or "")) or 0, new, notice, private)  # file writes and a reload: off the event loop
     except ValueError as e:
         return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
     _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
@@ -2090,7 +2101,7 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
     try:
         if err := may_change(request, who, "members", "callsign"):
             raise ValueError(err)
-        with business.locked(), events.locked(), _chow_lock:  # nothing else writes those files meanwhile
+        with business.locked(), events.locked(), _chow_lock, recovery.locked():  # nothing else writes those files meanwhile
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
     except (ValueError, SheetError, backup.BackupError) as e:
@@ -2469,7 +2480,8 @@ def admins_add(request: Request, member: str = Form("")):
     if confirmed < time.time() - FRESH_SECONDS:
         return RedirectResponse("/admin/confirm?next=" + quote(f"/admin/security/admins?add={member}"), status_code=303)
     before = club.all_admins
-    club.save_app_admins(club.app_admins | {member})
+    with recovery.locked():
+        club.save_app_admins(club.app_admins | {member})
     _admin_log(request, admin_added=member)
     _tell_admins(request, before, f"{club.name(member)} is now an admin", f"{club.name(mid)} made {club.name(member)} an admin of "
                  f"{branding.name(club)}. If that's a surprise, ask {club.members[mid].first} about it.")
@@ -2484,7 +2496,8 @@ def admins_remove(request: Request, member: str = Form("")):
     before = club.all_admins
     if not club.active_admins - {member}:
         raise HTTPException(400, "That's the last active admin: add another first, so the club isn't locked out.")
-    club.save_app_admins(club.app_admins - {member})
+    with recovery.locked():
+        club.save_app_admins(club.app_admins - {member})
     _admin_log(request, admin_removed=member)
     _tell_admins(request, before, f"{club.name(member)} is no longer an admin",
                  f"{club.name(mid)} removed {club.name(member)} as an admin of {branding.name(club)}.")
@@ -2607,7 +2620,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), roles_stamp=_roles_stamp(), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
@@ -2791,6 +2804,12 @@ async def site_agenda(request: Request):
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
+def _roles_stamp() -> str:
+    """roles.json as the page saw it, so a save from an out-of-date page can't drop what another admin added."""
+    p = DATA / "roles.json"
+    return hashlib.sha256(p.read_bytes()).hexdigest()[:16] if p.exists() else "none"
+
+
 def _shown_perms(club) -> dict[str, str]:
     """The permissions Site → Roles shows: a module's only while it's on (Jitsi's meet_host)."""
     return {p: label for p, label in PERMISSIONS.items() if p != "meet_host" or club.has("jitsi")}
@@ -2817,6 +2836,7 @@ async def site_offices(request: Request):
     can't be removed or renamed here: hand it over first. (Which offices add members is the Roster keeper role's.)"""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
     keys = (("", "offices"), ("", "roster_keepers"))
+    had = {o["title"].lower() for o in offices.offices(club)}
     try:
         if form.get("back"):
             values = dict.fromkeys(keys)
@@ -2846,7 +2866,10 @@ async def site_offices(request: Request):
     except ValueError as e:
         return RedirectResponse("/admin/site/roles?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_offices="club.yaml" if form.get("back") or values[("", "offices")] is None else "offices")
-    return RedirectResponse("/admin/site/roles?note=" + quote("Saved."), status_code=303)
+    new = {o["title"].lower(): o["title"] for o in offices.offices(club) if o["title"].lower() not in had}
+    held = sorted({(new[t.lower()], club.name(m.id)) for m in club.members.values() for t in offices.titles(m.role) if t.lower() in new})
+    note = "Saved." + "".join(f" {who} already had “{title}” as a title, so now holds that office (and its roles)." for title, who in held)
+    return RedirectResponse("/admin/site/roles?note=" + quote(note), status_code=303)
 
 
 @app.post("/admin/site/roles")
@@ -2856,6 +2879,9 @@ async def site_roles(request: Request):
     gives it. Refused if a permission would be left with no role."""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
     before = club.role_table()
+    if form.get("stamp") is not None and form.get("stamp") != _roles_stamp():
+        return RedirectResponse("/admin/site/roles?error=" + quote("Someone changed the roles while you had this page open: "
+                                "here they are now. Make your change again.") + "#roles", status_code=303)
     if (back := form.get("back")) in ROLES:  # Back to the built-in (its own form): name, permissions, offices; picks stay
         table = {**before, back: {"name": ROLES[back][0], "perms": list(ROLES[back][1]),
                                   "offices": club._default_offices(back), "members": before[back]["members"]}}

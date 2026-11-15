@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import difflib
 import html
+import logging
 import re
 import sqlite3
 from collections import defaultdict
@@ -66,6 +67,9 @@ def spellings(club: Club) -> dict[str, set[str]]:
     return out
 
 
+log = logging.getLogger("club_minutes.store")
+
+
 class Archive:
     def __init__(self, root: Path = MEETINGS, club: Club | None = None):
         self.root = root
@@ -73,8 +77,12 @@ class Archive:
         self.reload()
 
     def reload(self) -> None:
-        paths = sorted(self.root.glob("*/minutes.md"), reverse=True)
-        self.meetings: list[Meeting] = [self._canonicalize(Meeting.load(p)) for p in paths]
+        self.meetings: list[Meeting] = []
+        for p in sorted(self.root.glob("*/minutes.md"), reverse=True):
+            try:
+                self.meetings.append(self._canonicalize(Meeting.load(p)))
+            except Exception:  # one unreadable file mustn't take the whole archive (and the app) down
+                log.exception("skipped unreadable minutes %s", p)
         self.by_slug = {m.slug: m for m in self.meetings}
         self.db = sqlite3.connect(":memory:", check_same_thread=False)
         self.db.execute("create virtual table docs using fts5(slug unindexed, section unindexed, member unindexed, text, tokenize='porter')")

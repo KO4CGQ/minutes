@@ -1,5 +1,7 @@
 """Whole-app security checks: every route for a signed-out visitor, officer pages for a member, members' own-only actions,
 post-sign-in redirects, and bad input that used to be a server error."""
+import re
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -678,3 +680,38 @@ def test_moderating_is_its_own_permission(app, tmp_path, monkeypatch):
     m = app("n0bbbb")
     assert m.get("/calendar/changes").status_code == 200 and m.get("/roster/changes").status_code == 403
     assert c.may("n0bbbb", "moderate") and not c.may("n0bbbb", "oversee")
+
+
+def test_a_roles_save_from_an_out_of_date_page_is_refused(app, tmp_path, monkeypatch):
+    """Data sweep: admin A's open page would have dropped a role admin B added meanwhile."""
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    admin = app("n0offc")
+    stamp = re.search(r'name="stamp" value="(\w+)"', admin.get("/admin/site/roles").text).group(1)
+    admin.post("/admin/site/roles", data=_roles_form(c) | {"new": "Net manager", "stamp": stamp})  # B adds a role
+    r = admin.post("/admin/site/roles", data=_roles_form(c, ) | {"stamp": stamp}, follow_redirects=False)  # A, from the old page
+    assert "changed%20the%20roles" in r.headers["location"] and any(x["name"] == "Net manager" for x in c.role_table().values())
+
+
+def test_a_new_office_says_who_already_had_its_title(app, tmp_path, monkeypatch):
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c = web.archive.club
+    c.save_app_admins({"n0offc"})
+    c.members["n0bbbb"].role = "Webmaster"  # a free title a roster keeper typed
+    rows = {"rows": "5"} | {f"title{i}": t for i, t in enumerate(("President", "Vice President", "Secretary", "Treasurer", "Webmaster"))} \
+        | {f"seats{i}": "1" for i in range(5)} | {f"officer{i}": "1" for i in range(4)}
+    r = app("n0offc").post("/admin/site/offices", data=rows, follow_redirects=False)
+    assert "already%20had" in r.headers["location"] and "Webmaster" in urllib.parse.unquote(r.headers["location"])
+
+
+def test_the_sign_in_pages_note_is_a_code(app):
+    """Privacy sweep: ?note= showed any text from the link on the sign-in page (escaped, but phishing text)."""
+    anon = TestClient(web.app, client=("203.0.113.5", 5000))
+    assert "Your email has changed" in anon.get("/login?note=email").text
+    assert "Call+555-0100" not in anon.get("/login?note=Call+555-0100+now").text and "555-0100" not in anon.get("/login?note=Call%20555-0100").text

@@ -180,19 +180,19 @@ class Member:
 # hand; admins change both, and what each role allows, on Site → Roles (roles.json).
 PERMISSIONS = {
     "lead": "lead meetings and edit the minutes",
-    "correct": "correct minutes already in the archive (a meeting's leader and recorder may correct its minutes too)",
+    "correct": "correct minutes in the archive",
     "calendar": "change the club calendars",
     "chow": "change the chow schedule",
     "contacts": "see every member's contact details",
     "oversee": "see Roster changes and undo them",
-    "moderate": "change any business item, record motions, deal with business suggestions, delete comments, take down a picture, see the calendar change log",
+    "moderate": "moderate: any business item, motions, suggestions, comments, pictures, the calendar log",
     "treasurer": "look at the Treasurer pages",
-    "money": "record money and change the Treasurer settings (comes with looking at the Treasurer pages)",
-    "members": "add members and change their details (name, license class, phone, address, titles)",
-    "emails": "change another member's email (the new address confirms it first)",
-    "status": "change a member's status (Active, Inactive, Silent Key…)",
-    "roster_emails": "get the roster emails (new members, roster changes, the chow list)",
-    "meet_host": "host video meetings (Jitsi: start a room, let guests in from the lobby)",
+    "money": "record money and change the Treasurer settings",
+    "members": "add members and edit their details",
+    "emails": "change another member's email",
+    "status": "change a member's status",
+    "roster_emails": "get the roster emails",
+    "meet_host": "host video meetings",
 }
 # The built-in roles: key: (name, what it allows until an admin changes it). The keys are older than the names:
 # "board" is Minutes editor and "minutes_editor" is Meeting leader (roles.json and the roster's columns keep the keys).
