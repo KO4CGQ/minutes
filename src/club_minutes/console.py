@@ -325,23 +325,46 @@ def _span(when, until) -> tuple[str | None, str | None]:
     return when, until if until > when else None
 
 
+class Unreadable(Exception):
+    """A console save that isn't the shape the console sends (a 400)."""
+
+
 def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     """Save the console's full meeting state (last write wins)."""
     m = archive.by_slug[slug]
     if m.status == "published":
         raise ValueError("Minutes already submitted")
-    d = data["meeting"]
-    m.leader = d.get("leader") or m.leader
-    m.in_person = list(dict.fromkeys(d.get("in_person", [])))
-    m.remote = [x for x in dict.fromkeys(d.get("remote", [])) if x not in m.in_person]
-    m.guests = [{k: v for k, v in g.items() if k in ("name", "callsign", "notes", "online") and v}
-                for g in d.get("guests", []) if g.get("name", "").strip()]
-    m.guests = [g for g in m.guests if not archive.club.is_redacted(g["name"])]
-    m.visitors = max(0, int(d.get("visitors") or 0))
-    m.sections = {s: [Item(i["text"].strip(), i.get("member") or None, *_span(i.get("when"), i.get("until")),
-                           i.get("cal") if i.get("cal") in ("community", "planning") else None)
-                      for i in d.get("sections", {}).get(s, []) if i.get("text", "").strip()]
-                  for s in m.section_order(archive.club.sections())}  # only sections these minutes have: no others from the browser
+    d, club = data["meeting"], archive.club
+
+    def members(v) -> list[str]:  # roster ids only, any status; an old callsign becomes the current one
+        return [x for x in dict.fromkeys(club.canonical(x) for x in v if isinstance(x, str)) if x in club.members]
+
+    def text(v) -> str:
+        if not isinstance(v, str):
+            raise TypeError
+        return v.strip()
+    try:  # everything read first: a save of the wrong shape changes nothing
+        leader = d.get("leader")
+        if leader is not None and not isinstance(leader, str):
+            raise TypeError
+        in_person = members(d.get("in_person") or [])
+        remote = [x for x in members(d.get("remote") or []) if x not in in_person]
+        guests = [{k: v for k, v in g.items() if k in ("name", "callsign", "notes", "online") and v and isinstance(v, str | bool)}
+                  for g in d.get("guests") or [] if text(g.get("name", ""))]
+        visitors = d.get("visitors") or 0
+        if not isinstance(visitors, int):
+            raise TypeError
+        sec = d.get("sections") or {}
+        sections = {s: [Item(text(i["text"]), i.get("member") if isinstance(i.get("member"), str) and i.get("member") else None, *_span(i.get("when"), i.get("until")),
+                             i.get("cal") if i.get("cal") in ("community", "planning") else None)
+                        for i in sec.get(s) or [] if text(i.get("text", ""))]
+                    for s in m.section_order(club.sections())}  # only sections these minutes have: no others from the browser
+    except (TypeError, AttributeError, KeyError):
+        raise Unreadable from None
+    m.leader = leader or m.leader
+    m.in_person, m.remote, m.visitors = in_person, remote, max(0, visitors)
+    m.guests = [g for g in guests if not club.is_redacted(g["name"])]
+    m.sections = sections
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser
     m.save(archive.root)
     state_path(archive, slug).write_text(json.dumps(data.get("state") or {}))

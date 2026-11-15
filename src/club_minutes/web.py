@@ -3170,9 +3170,14 @@ async def console_release(request: Request, slug: str, mid: str = Depends(leader
     return {"ok": True}
 
 
+CONSOLE_SAVE_MAX = 256 * 1024  # a long meeting's minutes and console state are a few KB
+
+
 @app.put("/api/meetings/{slug}")
 async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
+    if len(await request.body()) > CONSOLE_SAVE_MAX:
+        raise HTTPException(413, "That's too much to save at once. Reload the console and try again.")
     data = await _json(request)
     if not isinstance(data, dict) or not isinstance(data.get("meeting"), dict):
         raise HTTPException(400, "That request wasn't readable.")
@@ -3185,6 +3190,8 @@ async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
         _held_by_other(slug, None, mid)  # a console from before this version (no tab): only someone else's hold stops it
     try:
         console.apply(archive, slug, data)
+    except console.Unreadable:
+        raise HTTPException(400, "That request wasn't readable.") from None
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}

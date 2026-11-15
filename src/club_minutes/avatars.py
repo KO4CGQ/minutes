@@ -45,6 +45,8 @@ def save(mid: str, data: bytes) -> None:
             raise ValueError("That picture is too big.")
         img.load()  # decode it all now: a damaged or cut-off file fails here, with a message, not later
         img = ImageOps.exif_transpose(img)
+    except Image.DecompressionBombError:  # claims billions of pixels: Pillow refuses before our cap is checked
+        raise ValueError("That picture is too big.")
     except (UnidentifiedImageError, OSError):  # not a picture, or a damaged one
         raise ValueError("That file isn't a picture we can read. Use a JPEG, PNG or WebP.")
     clear = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
