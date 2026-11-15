@@ -3,7 +3,8 @@
 Members sign in here (passkey or emailed link) and /meet/<room> hands the club's own Jitsi server a short-lived token
 (a JWT, HS256, signed with the secret it shares: CLUB_MINUTES_JITSI_SECRET) saying who they are and whether they host
 (the "meet_host" permission). The Jitsi server checks it with Prosody's token authentication (jitsi-meet-tokens);
-token_affiliation reads the host from `context.user.affiliation`. The token only opens the room: it expires in minutes.
+token_affiliation reads the host from `context.user.affiliation`; `lobby_bypass` lets every signed-in member past the
+lobby (token_lobby_bypass), hosts included, so only guests knock. The token only opens the room: it expires in minutes.
 """
 from __future__ import annotations
 
@@ -45,7 +46,8 @@ def token(club: Club, mid: str, room: str, host: bool, now: float | None = None)
     s, now = settings(club), int(now or time.time())
     payload = {"aud": "jitsi", "iss": s["app_id"], "sub": s["domain"], "room": room, "iat": now, "nbf": now - 10,
                "exp": now + MINUTES * 60, "moderator": host,
-               "context": {"user": {"id": mid, "name": club.name(mid), "affiliation": "owner" if host else "member"}}}
+               "context": {"user": {"id": mid, "name": club.name(mid), "affiliation": "owner" if host else "member",
+                                    "lobby_bypass": True}}}
     head = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     return f"{head}.{body}.{sign(f'{head}.{body}'.encode(), secret().encode())}"

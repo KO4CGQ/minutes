@@ -62,7 +62,8 @@ def test_officers_host_members_join(env):
     assert r.headers["location"].startswith("https://meet.example.org/club?jwt=")
     t = claims(r.headers["location"])
     assert (t["aud"], t["iss"], t["sub"], t["room"], t["moderator"]) == ("jitsi", "club-minutes", "meet.example.org", "club", True)
-    assert t["context"]["user"] == {"id": "pres", "name": "Jane Doe", "affiliation": "owner"} and t["exp"] - t["iat"] == 300
+    assert t["context"]["user"] == {"id": "pres", "name": "Jane Doe", "affiliation": "owner",
+                                       "lobby_bypass": True} and t["exp"] - t["iat"] == 300
     t = claims(as_("n0call").get("/meet/net-night", follow_redirects=False).headers["location"])
     assert (t["room"], t["moderator"], t["context"]["user"]["affiliation"]) == ("net-night", False, "member")
 
