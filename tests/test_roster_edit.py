@@ -130,10 +130,11 @@ def test_email_and_status_need_their_permissions_and_no_one_above_you(env, monke
     c.post("/members/n0bbbb/edit", data=form(phone="419-555-0102") | {"status": ""})  # disabled fields aren't sent: other details save
     assert club.members["n0bbbb"].phone == "419-555-0102" and club.members["n0bbbb"].status == "Active"
     club.save_roles({**club.role_table(), "roster_keeper": {**club.role_table()["roster_keeper"], "perms": ["members", "emails", "status"]}})
-    club.members["n0bbbb"].role = "Treasurer"  # Bob may now record money, which Amy (the Secretary) can't
+    t = club.role_table()
+    club.save_roles({**t, "treasurer": {**t["treasurer"], "members": ["n0bbbb"]}})  # Bob, picked: may record money; Amy can't
     r = c.post("/members/n0bbbb/edit", data=form(email="mallory@example.org"), follow_redirects=False)
     assert "Locked%3A%20Bob%20can%20record%20money%20and%20change%20the%20Treasurer%20settings%2C%20which%20you%20can%27t." in r.headers["location"] and not any(t == "mallory@example.org" for t, *_ in sent)
-    club.members["n0bbbb"].role = ""
+    club.save_roles({**club.role_table(), "treasurer": {**club.role_table()["treasurer"], "members": []}})
     club.admins = {"n0bbbb"}
     r = c.post("/members/n0bbbb/edit", data=form(status="Inactive"), follow_redirects=False)
     assert "Only%20an%20admin" in r.headers["location"] and club.members["n0bbbb"].status == "Active"
@@ -240,11 +241,32 @@ def test_an_email_change_is_checked_again_when_confirmed(env, monkeypatch, tmp_p
     club, _tmp, sent, _who, c = env
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     c.post("/members/n0bbbb/edit", data=form(email="bob@new.example.org"))
-    club.members["n0bbbb"].role = "Treasurer"  # Bob may now record money; Amy can't
+    t = club.role_table()
+    club.save_roles({**t, "treasurer": {**t["treasurer"], "members": ["n0bbbb"]}})  # Bob may now record money; Amy can't
     r = TestClient(web.app).post("/email/confirm", data={"t": _link(sent, "bob@new.example.org")})
     assert "can record money" in r.text and "Nothing was changed" in r.text and club.members["n0bbbb"].email == "bob@example.org"
-    club.members["n0bbbb"].role = ""
+    club.save_roles({**club.role_table(), "treasurer": {**club.role_table()["treasurer"], "members": []}})
     c.post("/members/n0bbbb/edit", data=form(email="taken@example.org"))
     club.members["n0aaaa"].email = "taken@example.org"
     r = TestClient(web.app).post("/email/confirm", data={"t": _link(sent, "taken@example.org")})
     assert "Another member uses that address now" in r.text and club.members["n0bbbb"].email == "bob@example.org"
+
+
+def test_office_holders_identity_is_for_admins(env, monkeypatch, tmp_path):
+    """Jim, 2026-11-15 (the middle way): a roster keeper can't change an office holder's email, status or callsign, even
+    if an admin trimmed what offices allow; their phone and titles stay everyday edits; admin mode may."""
+    from club_minutes import club as clubmod
+    club, _tmp, _sent, _who, c = env
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    club.members["n0bbbb"].role = "President"
+    t = club.role_table()
+    club.save_roles({k: {**r, "perms": [p for p in r["perms"] if k != "officer" or p == "lead"]} for k, r in t.items()}
+                    | {"keep": {"name": "Keeps the rest", "perms": [p for p in t["officer"]["perms"] if p != "lead"], "offices": [], "members": []}})
+    for what, data in (("email", form(email="mallory@example.org")), ("status", form(status="Inactive"))):
+        r = c.post("/members/n0bbbb/edit", data=data, follow_redirects=False)
+        assert "holds%20an%20office" in r.headers["location"], what
+    r = c.post("/members/n0bbbb/callsign", data={"callsign": "N0BOBB", "date": "2026-11-15"}, follow_redirects=False)
+    assert "holds%20an%20office" in r.headers["location"] and "n0bbbb" in club.members
+    assert "holds an office, so an admin changes their callsign" in c.get("/members/n0bbbb/edit?tab=callsign").text
+    c.post("/members/n0bbbb/edit", data=form(phone="419-555-0103") | {"email": "bob@example.org", "status": "Active"})
+    assert club.members["n0bbbb"].phone == "419-555-0103"

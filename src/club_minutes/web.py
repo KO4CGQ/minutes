@@ -1253,7 +1253,7 @@ def recover_page(request: Request, error: str = "", note: str = "", mid: str = D
     r = recovery.load()
     return page(request, "recover.html", r=r, st=recovery.state(club, r) if r else None, officers=recovery.officers(club),
                 is_officer=mid in recovery.officers(club), error=error, note=note, wait=recovery.WAIT_DAYS,
-                wait_objected=recovery.WAIT_DAYS_OBJECTED, ts=lambda t: dt.datetime.fromtimestamp(t).strftime("%b %-d, %Y %-I:%M %p"),
+                wait_objected=recovery.WAIT_DAYS_OBJECTED, lapse=recovery.LAPSE_DAYS, ts=lambda t: dt.datetime.fromtimestamp(t).strftime("%b %-d, %Y %-I:%M %p"),
                 members=sorted((m for m in club.members.values() if m.status.lower() == "active"), key=lambda m: (m.last, m.first)))
 
 
@@ -1781,25 +1781,31 @@ def index(request: Request, period: str = "", p: str = Query("1", alias="page"),
     return page(request, "index.html", pg=paginate(ms, p, per), years=years(), period=period, label=label)
 
 
-def _version(slug: str, v: str):
-    """The minutes, or with ?v=1 an earlier version of them (404 for any other v)."""
+def _version(request: Request, slug: str, v: str):
+    """The minutes, or with ?v=1 an earlier version of them (404 for any other v, and for one a correction ticked
+    "This removes private details" replaced, unless you may correct these minutes)."""
     m = get_meeting(slug)
     if not v:
         return m
     old = corrections.load_version(archive, slug, num(v) or 0)
-    if not old:
+    if not old or corrections.hidden_version(m, old.version) and not _may_see_hidden(request, m):
         raise HTTPException(404, "No such version of these minutes")
     return old
 
 
+def _may_see_hidden(request: Request, m) -> bool:
+    return corrections.may_correct(archive.club, m, request.state.member, admin_mode(request))
+
+
 @app.get("/meetings/{slug}", response_class=HTMLResponse)
 def view(request: Request, slug: str, v: str = ""):
-    current, m = get_meeting(slug), _version(slug, v)
+    current, m = get_meeting(slug), _version(request, slug, v)
     has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
     return page(request, "meeting.html", m=m, current=current, has_original=has_original,
                 emailed=console.email_status(archive, slug),
                 notice=console.email_status(archive, slug, f"emailed.v{current.version}.json") if current.version > 1 else None,
-                can_correct=corrections.may_correct(archive.club, current, request.state.member, admin_mode(request)))
+                can_correct=corrections.may_correct(archive.club, current, request.state.member, admin_mode(request)),
+                prev_hidden=m.version > 1 and corrections.hidden_version(current, m.version - 1) and not _may_see_hidden(request, current))
 
 
 def _corrector(request: Request, slug: str):
@@ -1825,7 +1831,7 @@ async def correct_preview(request: Request, slug: str):
     form = await request.form()
     return page(request, "correct_preview.html", m=m, words=corrections.words, rows=corrections.diff(m, corrections.from_form(archive, m, form), archive.club),
                 fields=[(k, v) for k, v in form.multi_items() if isinstance(v, str)],
-                reason=" ".join(str(form.get("reason") or "").split()), notice=bool(form.get("notice")))
+                reason=" ".join(str(form.get("reason") or "").split()), notice=bool(form.get("notice")), private=bool(form.get("private")))
 
 
 @app.post("/meetings/{slug}/correct")
@@ -1833,14 +1839,15 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
     m = _corrector(request, slug)
     form = await request.form()
     new = corrections.from_form(archive, m, form)
-    what = corrections.changes(m, new, archive.club)
+    private = bool(form.get("private"))
+    what = corrections.changes(m, new, archive.club, private)
     notice = bool(form.get("notice"))
     try:
         m = corrections.correct(archive, slug, request.state.member, str(form.get("reason") or ""),
-                                num(str(form.get("version") or "")) or 0, new, notice)
+                                num(str(form.get("version") or "")) or 0, new, notice, private)
     except ValueError as e:
         return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
-    _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice)
+    _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
     if notice:
         background.add_task(corrections.email_notice, archive, slug, what, lambda: render_pdf(archive.by_slug[slug]),
                             f"{base_url(request)}/meetings/{slug}")
@@ -1874,7 +1881,7 @@ def render_pdf(m) -> tuple[str, bytes]:
 
 @app.get("/meetings/{slug}/minutes.pdf")
 def pdf(request: Request, slug: str, v: str = ""):
-    m = _version(slug, v)
+    m = _version(request, slug, v)
     if m.status == "draft":
         raise HTTPException(409, "This meeting is still in progress; the PDF is available once the minutes are submitted.")
     fname, data = render_pdf(m)
@@ -1979,6 +1986,7 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
                 tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
                 no_email=may_change(request, who, "emails", "email"), no_status=may_change(request, who, "status", "status"),
+                no_callsign=may_change(request, who, "members", "callsign"),
                 events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=club.role_names(who))
 
 
@@ -2042,6 +2050,8 @@ def why_not_change(club, mid: str, who: str, perm: str, what: str) -> str | None
         return f"Your roles don't allow changing a member's {what}."
     if club.is_admin(who) and who != mid:
         return f"Only an admin, in admin mode, can change an admin's {what}."
+    if club.holds_office(who) and who != mid:  # even if an admin trimmed what offices allow (Jim, 2026-11-15)
+        return f"Locked: {club.members[who].first} holds an office, so an admin changes their {what}."
     if more := club.perms(who) - club.perms(mid):
         return f"Locked: {club.members[who].first} can {PERMISSIONS[min(more)].split(' (')[0]}, which you can't."
     return None
@@ -2073,10 +2083,13 @@ def member_titles(m, f) -> str:
 @app.post("/members/{who}/callsign")
 def member_callsign(request: Request, who: str, callsign: str = Form(""), date: str = Form(""),
                     mid: str = Depends(roster_keeper)):
-    """A new callsign: the roster sheet, and the member's id in every record (callsign.py). Backed up first."""
+    """A new callsign: the roster sheet, and the member's id in every record (callsign.py). Backed up first. Like email
+    and status, never for someone who holds an office or can do more than you (an admin in admin mode may)."""
     if who not in archive.club.members:
         raise HTTPException(404)
     try:
+        if err := may_change(request, who, "members", "callsign"):
+            raise ValueError(err)
         with business.locked(), events.locked(), _chow_lock:  # nothing else writes those files meanwhile
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()

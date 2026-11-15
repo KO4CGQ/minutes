@@ -44,6 +44,8 @@
   <label>Why <input name="reason" required maxlength="{{ reason_max }}" placeholder="e.g. Corrected a misspelled name">
     <span class="hint">A line: members see it with the minutes.</span></label>
   <label class="check"><input type="checkbox" name="notice" value="1" checked> Send the corrected minutes to members</label>
+  <label class="check"><input type="checkbox" name="private" value="1"> This removes private details</label>
+  <p class="hint">Tick it when you're taking out something that shouldn't have been recorded (a health matter, a phone number): the email then shows no old words at all, and the version before stays visible only to those who can correct minutes. Removed lines are never quoted in the email either way.</p>
   <p class="hint">With what changed, the same way they get the minutes (PDF or link). If you don't, the footer says "no notice sent".</p>
   <p><button class="btn">Preview the changes</button> <a class="btn ghost" href="/meetings/{{ m.slug }}">Cancel</a></p>
 </form>

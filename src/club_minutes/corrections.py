@@ -45,7 +45,8 @@ def load_version(archive: Archive, slug: str, v: int) -> Meeting | None:
     return archive._canonicalize(Meeting.load(p)) if p.exists() else None
 
 
-def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new: Meeting, notice: bool) -> Meeting:
+def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new: Meeting, notice: bool,
+            private: bool = False) -> Meeting:
     """Save `new` (attendance, guests and sections) as the next version of these minutes, keeping the current one as
     minutes.v{n}.md. version: the one the editor was opened on (if someone corrected them meanwhile, refused). Reviews
     imported minutes too: a correction is a review that fixed something."""
@@ -66,7 +67,8 @@ def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new
         m.in_person, m.remote, m.guests, m.visitors = new.in_person, new.remote, new.guests, new.visitors
         m.sections = new.sections
         m.version += 1
-        m.corrections = [*m.corrections, {"version": m.version, "at": int(time.time()), "by": by, "reason": reason, "notice": notice}]
+        m.corrections = [*m.corrections, {"version": m.version, "at": int(time.time()), "by": by, "reason": reason, "notice": notice}
+                         | ({"private": True} if private else {})]
         if m.status == "imported" and not m.reviewed:
             m.reviewed = {"by": by, "at": int(time.time())}
         try:
@@ -135,14 +137,38 @@ def words(a: str, b: str) -> tuple[Markup, Markup]:
     return Markup("").join(old), Markup("").join(new)
 
 
-def changes(old: Meeting, new: Meeting, club) -> list[str]:
-    """What a correction changed, a line each (for the notice email)."""
+def _was(a: str, b: str) -> str:
+    """The words of `a` that `b` replaced, when one short stretch changed ("Oct 20"); else "" (just "reworded")."""
+    ta, tb = re.findall(r"\w+|\s+|[^\w\s]", a), re.findall(r"\w+|\s+|[^\w\s]", b)
+    parts = [(i1, i2) for op, i1, i2, _j1, _j2 in difflib.SequenceMatcher(None, ta, tb, autojunk=False).get_opcodes() if op != "equal"]
+    gone = " ".join("".join(ta[parts[0][0]:parts[0][1]]).split()) if len(parts) == 1 else ""  # one stretch only, else "reworded"
+    return gone if len(gone) <= 40 else ""
+
+
+def changes(old: Meeting, new: Meeting, club, private: bool = False) -> list[str]:
+    """What a correction changed, a line each, for the notice email. Never the text of a removed line (a correction may
+    be made to take something out); a changed line shows its new text and the few words it replaced, or with `private`
+    only its new text. Attendance shows names."""
     out = []
     for part, rows in diff(old, new, club):
-        q = (lambda t: t) if part in (*LISTS, "Visitors") else (lambda t: f'"{_short(t)}"')  # names and numbers bare
-        out += [f"{part}: " + (f"{q(a)} → {q(b)}" if k == "changed" else f"removed {q(a)}" if k == "removed" else f"added {q(b)}")
-                for k, a, b in rows if k != "same"]
+        if part in ("In person", "Online", "Visitors"):
+            out += [f"{part}: " + (f"{a} → {b}" if k == "changed" else f"removed {a}" if k == "removed" else f"added {b}")
+                    for k, a, b in rows if k != "same"]
+            continue
+        for k, a, b in rows:
+            if k == "changed":
+                was = "" if private else _was(a, b)
+                out.append(f'{part}: "{_short(b)}"' + (f' (was "{was}")' if was else " (reworded)"))
+            elif k == "added":
+                out.append(f'{part}: added "{_short(b)}"')
+        if n := sum(k == "removed" for k, *_ in rows):
+            out.append(f"{part}: {n} line{'s' if n > 1 else ''} removed")
     return out
+
+
+def hidden_version(m: Meeting, v: int) -> bool:
+    """Version v was replaced by a correction ticked "This removes private details": only those who may correct see it."""
+    return any(c.get("private") and c.get("version") == v + 1 for c in m.corrections)
 
 
 def pdf_name(m: Meeting) -> str:

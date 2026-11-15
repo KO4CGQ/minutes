@@ -91,7 +91,7 @@ def test_a_correction_keeps_the_old_version_and_says_who_and_why(tmp_path):
     new = edit(m, in_person=["doe", "kim", "roe"], sections={**m.sections, "Old Business": [Item("John motioned, Jane seconded, to buy patches")]})
     assert corrections.changes(m, new, a.club) == [
         "In person: added Rick Roe",
-        'Old Business: "Jane motioned, John seconded, to buy patches.  Passed" → "John motioned, Jane seconded, to buy patches"']
+        'Old Business: "John motioned, Jane seconded, to buy patches" (reworded)']  # several stretches changed
     m2 = corrections.correct(a, m.slug, "roe", "  John seconded the patches motion,\n not Jane ", 1, new, notice=True)
     assert m2.version == 2 and m2.status == "published" and m2.in_person == ["doe", "kim", "roe"]
     assert m2.corrected == {"version": 2, "at": m2.corrected["at"], "by": "roe", "reason": "John seconded the patches motion, not Jane", "notice": True}
@@ -179,8 +179,7 @@ def test_correcting_on_the_web_and_reading_both_versions(tmp_path, monkeypatch):
     assert r.headers["location"] == "/meetings/2026-10-15"
     m = a.by_slug["2026-10-15"]
     assert m.version == 2 and m.remote == ["roe"] and m.items("Community Reports")[0].member == "kim"
-    assert sent == [["Online: added Rick Roe", ('Old Business: "Jane motioned, John seconded, to buy patches.  Passed" → '
-                                               '"John motioned, Jane seconded, to buy patches"')]]
+    assert sent == [["Online: added Rick Roe", 'Old Business: "John motioned, Jane seconded, to buy patches" (reworded)']]
     page = c.get("/meetings/2026-10-15").text
     assert "Version 2 · corrected" in page and "John seconded the patches motion, not Jane" in page and "See version 1" in page
     assert "no notice sent" not in page
@@ -309,3 +308,28 @@ def test_a_correction_that_fails_to_save_changes_nothing(tmp_path, monkeypatch):
     m = a.by_slug["2026-10-15"]
     m.recorder = "n0kimo"
     assert a._canonicalize(m).recorder == "kim"
+
+
+def test_removed_lines_are_never_quoted_and_private_hides_the_version_before(tmp_path, monkeypatch):
+    from club_minutes import web
+    """Security and privacy sweeps, Jim's middle way (2026-11-15): the notice never quotes a removed line, shows the few
+    words a changed line replaced, and with "This removes private details" no old words at all; the version before a
+    private correction (and its PDF) is only for those who may correct."""
+    a = archive(tmp_path)
+    m = a.by_slug["2026-10-15"]
+    new = edit(m, sections={**m.sections, "Community Reports": [],
+                            "Upcoming Events": [Item("VE testing on Nov 22", when="2026-11-21T10:00", cal="community")]})
+    m.sections["Upcoming Events"] = [Item("VE testing on Nov 21", when="2026-11-21T10:00", cal="community")]
+    assert corrections.changes(m, new, a.club) == ['Community Reports: 1 line removed', 'Upcoming Events: "Sat Nov 21, 10:00 AM: VE testing on Nov 22" (was "21")']
+    assert corrections.changes(m, new, a.club, private=True)[1] == 'Upcoming Events: "Sat Nov 21, 10:00 AM: VE testing on Nov 22" (reworded)'
+    assert not any("dipole" in x for x in corrections.changes(m, new, a.club))  # the removed report's words
+    a, member = web_as(tmp_path, monkeypatch, "n0call")
+    m = a.by_slug["2026-10-15"]
+    new = edit(m, sections={**m.sections, "Community Reports": []})
+    corrections.correct(a, "2026-10-15", "roe", "Took out a private detail", 1, new, notice=False, private=True)
+    page = member.get("/meetings/2026-10-15").text
+    assert "Version 2" in page and "See version 1" not in page
+    assert member.get("/meetings/2026-10-15?v=1").status_code == 404 and member.get("/meetings/2026-10-15/minutes.pdf?v=1").status_code == 404
+    editor = TestClient(web.app)
+    editor.cookies.set(web.COOKIE, web.authn.new_session("kim"))  # the recorder
+    assert "See version 1" in editor.get("/meetings/2026-10-15").text and editor.get("/meetings/2026-10-15?v=1").status_code == 200

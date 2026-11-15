@@ -75,8 +75,9 @@ def test_two_officers_at_least_and_calling_it_off(club):
     club.offices = ["President", {"title": "Trustee", "officer": False, "seats": 3}]  # one officer only
     recovery.start(club, "pres", "n0call", [], "", "https://x")
     recovery.accept(club, "n0call", "https://x")
-    assert recovery.state(club, recovery.load())["need"] == 2 and not recovery.tick(club, "https://x", now=9e12)
-    with pytest.raises(ValueError, match="who started it"):
+    r = recovery.load()
+    assert recovery.state(club, r)["need"] == 2 and not recovery.tick(club, "https://x", now=r["at"] + 20 * DAY)  # one officer can't
+    with pytest.raises(ValueError, match="Only an officer"):
         recovery.cancel(club, "n0call", "https://x")
     recovery.cancel(club, "pres", "https://x")
     assert recovery.load() is None and "called off" in club.sent[-1][2]
@@ -125,3 +126,18 @@ def test_a_new_callsign_keeps_a_suspension_and_an_open_recovery(club, tmp_path):
     callsign.rename_id("adm", "n0newa", tmp_path)
     callsign.rename_id("n0call", "n0newc", tmp_path)
     assert club.suspended == {"n0newa"} and recovery.load()["nominee"] == "n0newc"
+
+
+def test_it_lapses_after_30_days_and_a_majority_can_call_it_off(club):
+    """Jim, 2026-11-15: one officer, or a nominee who never accepts, can't hold it forever."""
+    r = recovery.start(club, "pres", "n0call", [], "", "https://x")
+    assert not recovery.tick(club, "https://x", now=r["at"] + 29 * DAY) and recovery.load()
+    assert not recovery.tick(club, "https://x", now=r["at"] + 30 * DAY) and recovery.load() is None
+    assert "ended without changing any admin" in club.sent[-1][2]
+    recovery.start(club, "pres", "n0call", [], "", "https://x")
+    with pytest.raises(ValueError, match="Only an officer"):
+        recovery.cancel(club, "tru", "https://x")
+    assert not recovery.cancel(club, "vp", "https://x") and recovery.load()  # 1 of the 3 needed (a majority of 4)
+    assert not recovery.cancel(club, "sec", "https://x")
+    assert recovery.cancel(club, "tre", "https://x") and recovery.load() is None
+    assert "a majority of the officers" in club.sent[-1][2]

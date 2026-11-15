@@ -471,9 +471,10 @@ class Club:
         """roles.json, read again only when it changes (every permission check asks)."""
         p = DATA / "roles.json"
         try:
-            key = (p, p.stat().st_mtime_ns)
+            st = p.stat()
         except FileNotFoundError:
             return None
+        key = (p, st.st_mtime_ns, st.st_ino, st.st_size)  # each save replaces the file (a new inode): two saves in one clock tick differ
         if getattr(self, "_rj", (None, None))[0] != key:
             self._rj = (key, json.loads(p.read_text()))
         return self._rj[1]

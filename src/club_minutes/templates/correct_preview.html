@@ -3,7 +3,7 @@
 {% if not rows %}<p class="msg warn">Nothing was changed.</p>
 {% else %}
 <p class="muted">The minutes of {{ m.date|longdate }}: only the parts that change. Why: <em>{{ reason }}</em>.
-  {{ 'Members get an email with these changes.' if notice else 'No notice is sent: the footer will say so.' }}</p>
+  {{ 'Members get an email saying what changed (removed lines aren\'t quoted).' if notice else 'No notice is sent: the footer will say so.' }}{% if private %} Private details: the version before stays visible only to those who can correct minutes.{% endif %}</p>
 <table class="diff">
   <thead><tr><th>Version {{ m.version }} (now)</th><th>Version {{ m.version + 1 }}</th></tr></thead>
   {% for part, lines in rows %}<tbody><tr><th colspan="2" class="part">{{ part }}</th></tr>

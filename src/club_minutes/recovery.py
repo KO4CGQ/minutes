@@ -21,6 +21,7 @@ from . import auth, branding
 from .club import DATA, Club, show_date
 
 WAIT_DAYS, WAIT_DAYS_OBJECTED = 7, 14
+LAPSE_DAYS = 30  # not approved and accepted by then: it ends by itself, so one officer or nominee can't hold it forever
 MOTION_MAX = 200
 
 
@@ -80,7 +81,9 @@ def state(club: Club, r: dict) -> dict:
     ready = None
     if r.get("accepted") and len(approvals) >= need:
         ready = max(r["accepted"], approvals[need - 1]) + (WAIT_DAYS_OBJECTED if objected else WAIT_DAYS) * 86400
-    return {"officers": offs, "need": need, "have": len(approvals), "objected": objected, "ready_at": ready}
+    calloffs = [m for m in r.get("calloffs", {}) if m in offs]
+    return {"officers": offs, "need": need, "have": len(approvals), "objected": objected, "ready_at": ready,
+            "lapses_at": None if ready else r["at"] + LAPSE_DAYS * 86400, "calloffs": calloffs, "calloff_need": needed(len(offs), False)}
 
 
 @_locked
@@ -151,12 +154,24 @@ def object_(club: Club, by: str, url: str) -> dict:
 
 
 @_locked
-def cancel(club: Club, by: str, url: str) -> None:
+def cancel(club: Club, by: str, url: str) -> bool:
+    """The officer who started it calls it off at once; other officers each ask, and a majority of the officers (at
+    least 2) calls it off. True if it ended."""
     r = _open(club)
-    if by != r["by"]:
-        raise ValueError("Only the officer who started it can call it off.")
-    _save(None)
-    _tell(club, "Recovering admin access: called off", f"{club.name(by)} called off the recovery.", r, url)
+    offs = officers(club)
+    if by != r["by"] and by not in offs:
+        raise ValueError("Only an officer can call it off.")
+    r.setdefault("calloffs", {})[by] = int(time.time())
+    st = state(club, r)
+    if by == r["by"] or len(st["calloffs"]) >= st["calloff_need"]:
+        _save(None)
+        who = club.name(by) if by == r["by"] else ", ".join(club.name(m) for m in st["calloffs"]) + " (a majority of the officers)"
+        _tell(club, "Recovering admin access: called off", f"{who} called off the recovery.", r, url)
+        return True
+    _save(r)
+    _tell(club, "Recovering admin access: asked to call it off", f"{club.name(by)} asked to call off the recovery "
+          f"({len(st['calloffs'])} of the {st['calloff_need']} officers needed).", r, url)
+    return False
 
 
 @_locked
@@ -165,8 +180,13 @@ def tick(club: Club, url: str, now: float | None = None) -> bool:
     r = load()
     if not r:
         return False
-    st = state(club, r)
-    if not st["ready_at"] or (now or time.time()) < st["ready_at"]:
+    st, now = state(club, r), now or time.time()
+    if st["lapses_at"] and now >= st["lapses_at"]:
+        _save(None)
+        _tell(club, "Recovering admin access: lapsed", f"It wasn't approved and accepted within {LAPSE_DAYS} days, so it "
+              "ended without changing any admin. An officer can start a new one.", r, url)
+        return False
+    if not st["ready_at"] or now < st["ready_at"]:
         return False
     n = club.members.get(r["nominee"])
     if not n or n.status.lower() != "active":  # never suspend admins without the new one: the club would be locked out
