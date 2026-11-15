@@ -59,13 +59,15 @@ PROVIDERS = {
 
 LINK_MINUTES = 15
 CHALLENGE_SECONDS = 300
-EMAILS_PER_HOUR = 5
+EMAILS_PER_HOUR = 5            # sign-in links a member gets from one address in an hour...
+LINKS_PER_HOUR_ALL = 15        # ...and from all addresses together
+REPEAT_SECONDS = 120           # the same request again this soon sends nothing and counts toward nothing
 
 SCHEMA = """
 create table if not exists sessions (token_hash text primary key, member text not null,
   created integer not null, expires integer not null, agent text);
 create table if not exists links (token_hash text primary key, member text not null,
-  expires integer not null, next text, used integer default 0, created integer not null);
+  expires integer not null, next text, used integer default 0, created integer not null, ip text);
 create table if not exists passkeys (id text primary key, member text not null, public_key blob not null,
   sign_count integer not null, transports text, label text, created integer not null, last_used integer,
   aaguid text);
@@ -124,6 +126,8 @@ class Auth:
                 self.db.execute(f"alter table sessions add column {col} text")
         if "agent" not in {r["name"] for r in self.db.execute("pragma table_info(events)")}:  # added in 1.0.0
             self.db.execute("alter table events add column agent text")
+        if "ip" not in {r["name"] for r in self.db.execute("pragma table_info(links)")}:  # added in 1.1.0
+            self.db.execute("alter table links add column ip text")
         os.chmod(path, 0o600)
 
     # ---------------- sessions ----------------
@@ -260,23 +264,27 @@ class Auth:
             self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
             return
         now = int(time.time())
-        recent = self.db.execute("select count(*) from links where member=? and created>?",
-                                 (member, now - 3600)).fetchone()[0]
-        if recent >= EMAILS_PER_HOUR:
+
+        def count(since: int, same_ip: bool) -> int:
+            return self.db.execute("select count(*) from links where member=? and created>?" + (" and ip is ?" if same_ip else ""),
+                                   (member, now - since, *((ip,) if same_ip else ()))).fetchone()[0]
+        if count(REPEAT_SECONDS, True):  # a second click while the email is on its way
+            return
+        if count(3600, True) >= EMAILS_PER_HOUR or count(3600, False) >= LINKS_PER_HOUR_ALL:
             log.warning("login link rate limit hit for %s", member)
             self.event("link_limit", ip, member, agent=agent)
             return
-        url = self.create_link(member, next_url, base_url)
+        url = self.create_link(member, next_url, base_url, ip)
         send_email(self.club.members[member].email, f"Your {branding.name(self.club)} sign-in link", only_to=self.club.email_only_to(), to_self=True,
                    body=f"Hi {self.club.members[member].first},\n\n"
                    f"Use this link to sign in to {branding.name(self.club)}. It works once, for {LINK_MINUTES} minutes:\n\n"
                    f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n73,\n{branding.name(self.club)}")
 
-    def create_link(self, member: str, next_url: str = "/", base_url: str | None = None) -> str:
+    def create_link(self, member: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None) -> str:
         now = int(time.time())
         token = secrets.token_urlsafe(32)
-        self.db.execute("insert into links values (?,?,?,?,0,?)",
-                        (_hash(token), member, now + LINK_MINUTES * 60, _safe_next(next_url), now))
+        self.db.execute("insert into links (token_hash, member, expires, next, used, created, ip) values (?,?,?,?,0,?,?)",
+                        (_hash(token), member, now + LINK_MINUTES * 60, _safe_next(next_url), now, ip))
         return f"{(base_url or self.base_url or '').rstrip('/')}/login/link?t={token}"
 
     def use_link(self, token: str) -> tuple[str, str] | None:

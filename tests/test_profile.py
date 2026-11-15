@@ -420,5 +420,5 @@ def test_email_log_and_server_log_hide_link_tokens(tmp_path, monkeypatch, caplog
         assert not re.search(r"[?&]t=[\w-]{20,}", body)
     assert "&next=%2F" in log[2]                                                               # only the token goes
     monkeypatch.delenv("CLUB_MINUTES_SMTP_PASSWORD")                                           # no SMTP: the body goes to the server log
-    a.send_link("ann@example.org", base_url="https://club.example.org")
+    a.send_link("ann@example.org", base_url="https://club.example.org", ip="192.0.2.1")      # another address: not a quick repeat
     assert "t=[hidden]" in caplog.text and not re.search(r"[?&]t=[\w-]{20,}", caplog.text)

@@ -41,10 +41,39 @@ def test_unknown_and_inactive_addresses_get_nothing(a):
     assert a.sent == []
 
 
-def test_rate_limit(a):
-    for _ in range(8):
-        a.send_link("jane@example.org")
+def test_link_limits_per_address_and_overall(a, monkeypatch):
+    clock = [1_000_000_000.0]
+    monkeypatch.setattr(auth_mod.time, "time", lambda: clock[0])
+
+    def ask(ip, n=1, gap=auth_mod.REPEAT_SECONDS + 1):
+        for _ in range(n):
+            clock[0] += gap
+            a.send_link("jane@example.org", ip=ip)
+
+    ask("9.9.9.9", 8)                                     # someone else asks again and again
     assert len(a.sent) == auth_mod.EMAILS_PER_HOUR
+    ask("8.8.8.8")                                        # the member's own request still gets through
+    assert len(a.sent) == auth_mod.EMAILS_PER_HOUR + 1
+    ask("8.8.8.8", 3, gap=5)                              # quick repeats: nothing sent, nothing counted
+    assert len(a.sent) == auth_mod.EMAILS_PER_HOUR + 1
+    assert [e["ip"] for e in a.events() if e["kind"] == "link_limit"] == ["9.9.9.9"] * 3
+    for ip in ("1.1.1.1", "1.0.0.1", "4.4.4.4", "4.2.2.2"):  # many addresses: 15 an hour in all
+        ask(ip, 5)
+    assert len(a.sent) == auth_mod.LINKS_PER_HOUR_ALL
+    clock[0] += 3600                                      # an hour later, links again
+    ask("8.8.8.8")
+    assert len(a.sent) == auth_mod.LINKS_PER_HOUR_ALL + 1
+
+
+def test_old_links_table_gets_its_ip_column(a, tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / "old.sqlite")
+    db.execute("create table links (token_hash text primary key, member text not null, expires integer not null, "
+               "next text, used integer default 0, created integer not null)")
+    db.commit()
+    db.close()
+    b = auth_mod.Auth(a.club, tmp_path / "old.sqlite")
+    assert b.use_link("x") is None and "ip" in {r["name"] for r in b.db.execute("pragma table_info(links)")}
 
 
 def test_sessions(a):

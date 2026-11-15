@@ -5,6 +5,7 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Security:** sign-in link limits count per address, so someone asking again and again for a member's link no longer uses up the member's own: 5 an hour for a member from each address, 15 an hour from all addresses together. Asking again within two minutes sends nothing more and no longer counts toward an automatic ban (a click while the email is still on its way).
 - **Security:** "Email me a link" answers before the email goes out, so a member's address and anyone else's answer in the same time (a member's took about a second longer, which showed who's a member).
 - **Security:** turning on admin mode with a passkey needs it to check your PIN, fingerprint or face; a security key that's only tapped was accepted. Signing in still takes a tap, so older keys keep working; an emailed link still turns admin mode on too.
 - **Security:** the Email log, and the server's log when no SMTP is set up, show sign-in, new-email and admin-mode links with their one-time code hidden (`t=[hidden]`), so an admin reading the log can't open a member's link and be signed in as them. The emails themselves are unchanged.
