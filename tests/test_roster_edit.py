@@ -134,3 +134,23 @@ def test_roles_are_not_set_on_the_edit_page(env):
     assert (club.members["n0aaaa"].officer, club.members["n0aaaa"].board) == (True, True)  # the Secretary stays one
     assert "roles: Officer, Board, Roster keeper." in c.get("/members/n0aaaa/edit?tab=titles").text
     assert '<span class="chip">Roster keeper</span>' in c.get("/members/n0aaaa").text  # the member's page shows them
+
+
+def test_another_members_callsign_is_never_an_other_spelling(env):
+    """Security (1.0.1): a roster keeper who typed an admin's callsign into their own Other spellings became that admin
+    (and the admin's sessions theirs). The edit page refuses it, and a roster that has one anyway ignores it, as it
+    ignores a former callsign two members both list."""
+    club, _tmp, _sent, _who, c = env
+    club.admins = {"n0bbbb"}
+    r = c.post("/members/n0aaaa/edit", data=form(first="Amy", last="Appleseed", email="amy@example.org", aliases="N0BBBB"),
+               follow_redirects=False)
+    assert "another%20member%27s%20callsign" in r.headers["location"] and club.members["n0aaaa"].aliases == []
+    assert club.all_admins == {"n0bbbb"} and not club.is_admin("n0aaaa")
+    rows = json.loads(json.dumps(PEOPLE))
+    rows[0]["aliases"] = ["N0BBBB", "N0OLDX"]  # put in the sheet by hand
+    rows[1]["aliases"] = ["Bobby", "N0OLDX"]
+    c2 = Club(FIX / "test-club.yaml", roster=rows)
+    c2.admins = {"n0bbbb", "n0oldx"}
+    assert c2.canonical("n0bbbb") == "n0bbbb" and c2.canonical("n0oldx") == "n0oldx" and not c2.is_admin("n0aaaa")
+    rows[1]["aliases"] = ["N0OLDX"]  # one member's own former callsign still works
+    assert Club(FIX / "test-club.yaml", roster=rows[1:]).canonical("n0oldx") == "n0bbbb"

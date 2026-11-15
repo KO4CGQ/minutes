@@ -390,9 +390,15 @@ class Club:
         for d in roster:
             self.members[d["id"]] = Member(**{k: v for k, v in d.items() if k in known})
         self._auto_short_names()
-        # A former callsign (e.g. before a vanity change) listed in aliases maps to the member.
-        self.former_ids = {a.lower(): m.id for m in self.members.values()
-                           for a in m.aliases if CALLSIGN.match(a)}
+        # A former callsign (e.g. before a vanity change) listed in aliases maps to the member. Never another member's
+        # current callsign, and never one two members both list: else typing an admin's callsign into your own
+        # "Other spellings" made you that admin (and their sessions yours).
+        claims: dict[str, set[str]] = {}
+        for m in self.members.values():
+            for a in m.aliases:
+                if CALLSIGN.match(a):
+                    claims.setdefault(a.lower(), set()).add(m.id)
+        self.former_ids = {a: next(iter(ids)) for a, ids in claims.items() if len(ids) == 1 and a not in self.members}
         for m in self.members.values():  # callsign aliases aren't name spellings
             m.aliases = [a for a in m.aliases if not CALLSIGN.match(a)]
         if (picked := self._picked()) is not None:  # roles.json, once there is one, over the roster's old ticks

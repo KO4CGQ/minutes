@@ -66,6 +66,7 @@ from . import callsign as callsign_mod
 from .auth import Auth, _safe_next
 from .backup import KEY_FILE
 from .club import (
+    CALLSIGN,
     DATA,
     DATES,
     PERMISSIONS,
@@ -1739,6 +1740,10 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
             raise ValueError("Pick a license class and status from the lists.")
         if email and not valid_email(email):
             raise ValueError(f"{email} doesn't look like an email address.")
+        for a in (x.strip() for x in f.get("aliases", "").split(",")):
+            other = archive.club.former_ids.get(a.lower()) if CALLSIGN.match(a) else None
+            if CALLSIGN.match(a) and (a.lower() in archive.club.members and a.lower() != who or other not in (None, who)):
+                raise ValueError(f"{a.upper()} is another member's callsign: it can't be one of {m.first}'s other spellings.")
         # An address is a way to sign in (and an admin's, to confirm admin mode): only an admin changes an admin's.
         if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
             raise ValueError("Only an admin, in admin mode, can change an admin's email.")
