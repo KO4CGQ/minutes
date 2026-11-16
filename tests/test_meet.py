@@ -83,6 +83,8 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
             "name1": "Board", "slug1": "", "leaves1": "stay", "p2p1": "direct"}
     as_("pres").post("/admin/site/video", data={"rows": "2", **room, "adhoc": "1", "guests_a": "1", "leaves_a": "guests"})
     assert [r["slug"] for r in meet.rooms(c)] == ["club", "board"]
+    tab = as_("pres").get("/admin/site/video").text  # each room's fields named by their room for a screen reader
+    assert 'aria-label="Room: Club meeting"' in tab and 'aria-label="Room: a new room"' in tab
     t = claims(as_("n0call").get("/meet/club", follow_redirects=False).headers["location"])
     assert t["context"]["room"]["club"] == {"guests": True, "guest_mic": False, "guest_camera": False, "guest_screen": False,
                                             "guest_chat": True, "last_host_leaves": "end"}

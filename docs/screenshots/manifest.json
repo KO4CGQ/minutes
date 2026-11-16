@@ -224,7 +224,7 @@
   "templates/_avatar.html": "6706c6fa69201c1a1d29914618a54e5da08322a68108e51c2e0cbb040d7e4feb",
   "templates/_business_item.html": "53ec9525fc666d247b46ec35d6f970c54dbc2aaba2e4f092dfe2595651e9acba",
   "templates/_icons.html": "d7909338dc8d708dd8f49e8a15337a8af23a6d24b45f9d0ece1212f682d25c26",
-  "templates/_minutes.html": "0a83e6875a4cc26cc1507afd8ef961e2bc2da43c710c59c11a4c81883d755e71",
+  "templates/_minutes.html": "abafff8033e4019c50ea2dee75e829edf6e6e023830c1d73a29c11bb3b4e67d9",
   "templates/_multi.html": "7ae8197e904664c3ab5539dcdaea28c8010c992083d4b037949b5f9b71bee0a9",
   "templates/admin.html": "0c1a6efb472f31ef6feecddaba69b9b4cfa742570b8692557b82f5545d00e5e1",
   "templates/base.html": "723fbe5beb0132dc31ef51464ed69ffec30aff77fb13cd5f43fe331e14226cb2",
@@ -236,7 +236,7 @@
   "templates/member_edit.html": "335a190a3b7dc8bf52986cf9eed76be79afa75ec5d1ee8a4fd7a828e0582c9c1",
   "templates/offices.html": "e840308d8f14fdac5a934de7e44aa62c40aa1f8acfb6f6d42f7b4dc8f4969e69",
   "templates/security.html": "4717d9963a73611267af37c56b994f701bd2a523800cb7ea0b6df742e518a335",
-  "templates/site.html": "f27d4873bea2edd6838289a8f4f554a50cd2c271c46c862fa7c458b384082681",
+  "templates/site.html": "e916df7d96ba9793615b9afaecef5ccedc9c4c03ada47ad0ca0b63c1843cb33f",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "3a4f7ff5a88b5176441a6c10d6157b0908809211a69a46d85f7565a6e470e25c"
  }

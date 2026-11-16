@@ -181,7 +181,7 @@ def test_correcting_on_the_web_and_reading_both_versions(tmp_path, monkeypatch):
     assert m.version == 2 and m.remote == ["roe"] and m.items("Community Reports")[0].member == "kim"
     assert sent == [["Online: added Rick Roe", 'Old Business: "John motioned, Jane seconded, to buy patches" (reworded)']]
     page = c.get("/meetings/2026-10-15").text
-    assert "Version 2 · corrected" in page and "John seconded the patches motion, not Jane" in page and "See version 1" in page
+    assert "Version 2<br>Corrected" in page and "John seconded the patches motion, not Jane" in page and "See version 1" in page
     assert "no notice sent" not in page
     v1 = c.get("/meetings/2026-10-15?v=1").text
     assert "This is version 1" in v1 and "See the current version" in v1 and "Jane motioned" in v1 and "Correct these minutes" not in v1

@@ -35,10 +35,10 @@
     <ul>{% for l in club.links if l.minutes != false %}<li>{{ l.label }}: <a href="{{ l.url|abs_url }}">{{ l.url|abs_url }}</a></li>{% endfor %}</ul>
     {% set cur = current if current is defined and current else m %}{% set c = m.corrected %}
     <p class="ver">Version {{ m.version }}
-      {%- if c %} · corrected {{ c.at|ts }} by {{ club.name(c.by) }}: <em>{{ c.reason }}</em>{% if not c.notice %} · no notice sent{% endif %}
+      {%- if c %}<br>Corrected {{ c.at|ts }} by {{ club.name(c.by) }}: <em>{{ c.reason }}</em>{% if not c.notice %} · no notice sent{% endif %}
         {%- if not pdf and not prev_hidden %} · <a href="/meetings/{{ m.slug }}?v={{ m.version - 1 }}">See version {{ m.version - 1 }}</a>{% endif %}{% endif %}
-      {%- if m.version < cur.version %}{% set nxt = cur.corrections|selectattr('version', 'equalto', m.version + 1)|first %} · replaced by version {{ m.version + 1 }}{% if nxt %} on {{ nxt.at|ts }}{% endif %}{% endif %}
-      {%- if m.status == 'imported' %} · imported from {{ m.source }}{% if cur.reviewed %}, reviewed by {{ club.name(cur.reviewed.by) }} {{ cur.reviewed.at|ts }}{% else %}, not yet reviewed{% endif %}{% endif %}
-      {%- if m.note and not pdf %} · {{ m.note }}{% endif %}</p>
+      {%- if m.version < cur.version %}{% set nxt = cur.corrections|selectattr('version', 'equalto', m.version + 1)|first %}<br>Replaced by version {{ m.version + 1 }}{% if nxt %} on {{ nxt.at|ts }}{% endif %}{% endif %}
+      {%- if m.status == 'imported' %}<br>Imported from {{ m.source }}{% if cur.reviewed %}, reviewed by {{ club.name(cur.reviewed.by) }} {{ cur.reviewed.at|ts }}{% else %}, not yet reviewed{% endif %}{% endif %}
+      {%- if m.note and not pdf %}<br>{{ m.note }}{% endif %}</p>
   </footer>
 </article>
