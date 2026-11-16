@@ -42,6 +42,10 @@ The [server admin guide](docs/server-admin.md#getting-started-a-new-club) walks 
 - [Developer guide](docs/developers.md): running it locally, previews, releases, security checks.
 - [Security](SECURITY.md): reporting a vulnerability privately, and what's checked on every change.
 
+## Support it
+
+Club Minutes is free for every club. If it helps yours, you can chip in toward its servers and new features: [GitHub Sponsors](https://github.com/sponsors/jflattery) or [Ko-fi](https://ko-fi.com/jflattery).
+
 ## License
 Copyright © 2026 James Flattery, KO4CGQ.
 
