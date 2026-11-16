@@ -35,7 +35,7 @@ In admin mode, the name menu's **Admin** lists the admin tools, each with a line
 
 ![The Admin page: Security, Backups, Updates, Site, Email log and this guide](screenshots/admin.png)
 
-- 🛡️ **Security:** failed sign-ins today, bans. Its **Members** tab lists every member's last sign-in, passkeys and signed-in devices, so you can see who hasn't signed in or still uses emailed links.
+- 🛡️ **Security:** failed sign-ins today, bans. Its **Members** tab lists every member's last sign-in, passkeys and signed-in devices, so you can see who hasn't signed in or still uses emailed links. Sign-in records, failed attempts and emailed links are kept 90 days (each member's latest sign-in stays).
 - 💾 **Backups:** the last one.
 - ⬆️ **Updates:** what's running and what's available.
 - 🎨 **Site:** the club's settings.

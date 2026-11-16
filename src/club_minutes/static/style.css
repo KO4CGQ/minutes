@@ -249,6 +249,7 @@ details.edit[open] { display: block; background: var(--surface-2); border: 1px s
 .cards { display: flex; flex-direction: column; gap: .8rem; margin: .5rem 0 1.2rem; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .95rem 1.15rem; box-shadow: var(--shadow); }
 .card.room > * { margin: .45rem 0; } .card.room > :first-child { margin-top: 0; } .card.room > :last-child { margin-bottom: 0; }  /* Video meeting's rooms: no page-sized gaps inside */
+.card.room .btn { min-height: 44px; display: inline-flex; align-items: center; }  /* an easy tap on a phone */
 .card.overdue { border-left: 4px solid var(--danger); } .card.done { background: var(--surface-2); } .card.done .card-text { color: var(--muted); }
 .card-head { display: flex; gap: .8rem; align-items: flex-start; justify-content: space-between; }
 .card-text { font-size: 1.04rem; white-space: pre-wrap; line-height: 1.45; }
@@ -627,6 +628,7 @@ details.sitesec[open] > summary::before { transform: rotate(90deg); }
 details.sitesec > summary h2 { margin: 0; } details.sitesec[open] > summary { margin-bottom: .7rem; }
 form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items: flex-start; padding: .45rem 0; margin: 0; }
 .sitesec label.check input { margin-top: .25rem; flex: none; }  /* a wrapped label mustn't squeeze the box */
+label.check > input { flex: none; }  /* anywhere: a wrapped label mustn't squeeze its box (Settings, Roles) */
 .fmtgrid { display: grid; grid-template-columns: max-content minmax(8rem, 20rem) 1fr; gap: .5rem .8rem; align-items: center; }
 @media (max-width: 560px) { .fmtgrid { grid-template-columns: 1fr; } .fmtgrid span { margin-bottom: .4rem; } }
 .agendagrid { display: grid; grid-template-columns: auto 3.5rem minmax(10rem, 16rem) 1fr; gap: .45rem .7rem; align-items: center; }

@@ -57,8 +57,8 @@ def claims(location):
 
 def test_officers_host_members_join(env):
     _c, as_ = env
-    r = as_("pres").get("/meet", follow_redirects=False)
-    assert r.headers["location"] == "/meet/club"
+    r = as_("pres").get("/meet", follow_redirects=False)  # one room: its card too, so Join always opens a new tab
+    assert r.status_code == 200 and r.text.count('aria-label="Join ') == 1
     r = as_("pres").get("/meet/club", follow_redirects=False)
     assert r.headers["location"].startswith("https://meet.example.org/club?jwt=")
     t = claims(r.headers["location"])
@@ -176,8 +176,8 @@ def test_rooms_for_some_roles(env, monkeypatch):
     c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"others": "no"}]})
     r = as_("n0call").get("/meet/board", follow_redirects=False)
     assert r.status_code == 403 and "Officer" in r.text
-    r = as_("n0call").get("/meet", follow_redirects=False)  # Board hidden: the one room left, straight in
-    assert r.headers["location"] == "/meet/club"
+    p = as_("n0call").get("/meet").text  # Board hidden: the one room left, as a card
+    assert 'aria-label="Join Club meeting' in p and "Board" not in p
     c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"others": "no"},
                                                   {"slug": "exec", "name": "Executive", "roles": ["officer"], "others": "no"}]})
     assert as_("pres").get("/meet").text.count('aria-label="Join ') == 3  # an officer: all three

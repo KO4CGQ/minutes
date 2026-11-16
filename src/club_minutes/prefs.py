@@ -79,7 +79,7 @@ def save(mid: str, choices: dict) -> dict:
 # ---------------- other settings (Your profile → Settings), in settings.json ----------------
 
 SETTINGS = {"week_start": ("First day of the week", {"sunday": "Sunday", "monday": "Monday"}, "sunday"),
-            "support_link": ("Support Club Minutes in the menu", {"show": "Show it", "hide": "Hide it"}, "show")}
+            "support_link": ("Support Club Minutes in the menu", {"show": "Show it", "hide": "Hide it: I already give toward the app's development and upkeep"}, "show")}
 
 
 def settings(mid: str | None) -> dict:

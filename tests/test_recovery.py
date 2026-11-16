@@ -156,3 +156,8 @@ def test_old_sign_in_records_are_pruned(club, tmp_path):
     a.db.execute("insert into events (at, ip, kind) values (?, ?, ?)", (int(time.time()) - 91 * DAY, "203.0.113.9", "bad_link"))
     a.db.execute("insert into events (at, ip, kind) values (?, ?, ?)", (int(time.time()), "203.0.113.9", "bad_link"))
     assert a.prune() == 1 and len(a.events()) == 1
+    now = int(time.time())
+    for at, who in ((now - 200 * DAY, "pres"), (now - 100 * DAY, "pres"), (now - 100 * DAY, "n0call"), (now, "n0call")):
+        a.db.execute("insert into signins (at, member, method, ip) values (?,?,?,?)", (at, who, "passkey", "203.0.113.9"))
+    assert a.prune() == 2  # pres keeps the latest, if old ("last signed in"); n0call's old one goes
+    assert sorted((r["member"], r["at"]) for r in a.signins()) == [("n0call", now), ("pres", now - 100 * DAY)]

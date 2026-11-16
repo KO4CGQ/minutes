@@ -22,7 +22,7 @@ Your name menu → **Your profile**:
 
 - 📇 **Contact details and birthday:** change your email (a link goes to the new address; it changes once you open it, and you're signed out everywhere, so sign in again), phone, address and birthday (a month alone is fine). Officers always see them; other members see only what you tick to share. A shared birthday, and each year you've been a member, gets a mention at the meeting that week.
 - ✉️ **Email:** turn each kind of email on or off: the minutes (with the PDF or as a link), the meeting-day reminder, reminders for business you're looking after, the chow list (with the PDF or as a link) and roster updates.
-- ⚙️ **Settings:** how the app shows things to you, like the first day of the week, and whether the menu shows **Support Club Minutes** (the Ko-fi link at its foot).
+- ⚙️ **Settings:** how the app shows things to you, like the first day of the week, and whether the menu shows **Support Club Minutes** (the Ko-fi link at its foot; hide it if you already give toward the app).
 
 ## 📝 Minutes and search
 **Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights, calendar events and these guides. A name also finds its common nicknames (Richard, Rich, Rick and Dick find each other, member or not), and a member's name its other spellings from the roster; a typo is caught when nothing else is found.
@@ -40,7 +40,7 @@ Minutes can be corrected after the meeting. A corrected meeting's footer says wh
 ![Business: the club's open items](screenshots/business.png)
 
 ## 🎥 Video meeting
-If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists the club's rooms you can join (or takes you straight in when there's only one), already signed in as you: no other password. Officers and meeting leaders host; joining sends the video server your name and callsign. Guests without an account use a room's guest address, shown on the page, and wait in the lobby until a host lets them in; a room may be for members only. Some rooms are for certain members (the board, say): the page says who; others wait in the lobby until a host lets them in, or don't see the room at all. Each room says what guests may do: if they must ask to unmute, turn their camera on or share their screen, a host allows them in the meeting as usual.
+If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists the club's rooms you can join, each with a Join button that opens the meeting in a new tab, already signed in as you: no other password. Officers and meeting leaders host; joining sends the video server your name and callsign. Guests without an account use a room's guest address, shown on the page, and wait in the lobby until a host lets them in; a room may be for members only. Some rooms are for certain members (the board, say): the page says who; others wait in the lobby until a host lets them in, or don't see the room at all. Each room says what guests may do: if they must ask to unmute, turn their camera on or share their screen, a host allows them in the meeting as usual.
 
 If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its guest address, and you host it for a day. A calendar event can link to one of the club's rooms.
 

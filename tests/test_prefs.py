@@ -136,7 +136,8 @@ def test_support_link_member_hides_it_club_turns_it_off(tmp_path, monkeypatch):
     assert link in t.get("/").text and "ko-fi.com/jflattery" in t.get("/about").text
     prefs.save_settings("n0aaaa", {"week_start": "monday"})
     t.post("/profile/settings", data={"support_link": "hide"})
-    assert link not in t.get("/").text
+    assert link not in t.get("/").text and "I already give toward the app" in (st := t.get("/profile/settings").text)
+    assert 'href="https://github.com/sponsors/jflattery"' in st and 'href="https://ko-fi.com/jflattery"' in st
     assert prefs.settings("n0aaaa") == {"week_start": "monday", "support_link": "hide"}  # a form with one setting keeps the other
     t.post("/profile/settings", data={"support_link": "<script>"})  # not a choice: nothing changes
     assert prefs.settings("n0aaaa")["support_link"] == "hide"

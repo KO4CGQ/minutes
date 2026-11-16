@@ -434,11 +434,14 @@ class Auth:
         return bool(ch and ch["member"] == member)
 
     def prune(self, days: int = 90) -> int:
-        """The daily job: sign-in links, failed attempts and stale challenges older than `days` go (they hold addresses
-        and devices). Sessions and bans expire on their own."""
+        """The daily job: sign-in links, failed attempts, stale challenges and sign-ins older than `days` go (they hold
+        addresses and devices), but each member's latest sign-in stays (Security's "last signed in"). Sessions and bans
+        expire on their own."""
         old = time.time() - days * 86400
         return sum(self.db.execute(f"delete from {t} where {c}<?", (old,)).rowcount
-                   for t, c in (("links", "created"), ("events", "at"), ("challenges", "expires")))
+                   for t, c in (("links", "created"), ("events", "at"), ("challenges", "expires"))) + self.db.execute(
+            "delete from signins where at<? and (member, at) not in (select member, max(at) from signins group by member)",
+            (old,)).rowcount
 
     def authenticate(self, cid: str | None, credential: dict, kind: str = "login", member: str | None = None) -> str:
         ch = self._take_challenge(cid, kind)
