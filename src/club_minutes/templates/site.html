@@ -92,7 +92,7 @@
   {% for o in office_rows if o.title %}<label class="check small"><input type="checkbox" name="offices.{{ k }}" value="{{ o.title }}"{{ ' checked' if o.title in r.offices }}> {{ o.title }}</label>{% endfor %}
   </fieldset>
   <p class="small"><b>And these members:</b></p>
-  <details class="multi"><summary data-none="Nobody">{% for i in r.members %}{{ club.name(i) }}{{ ', ' if not loop.last }}{% else %}Nobody{% endfor %}</summary><div class="multi-list">
+  <details class="multi"><summary data-none="Nobody">{% for i in r.members %}<span class="chip">{{ club.name(i) }}</span>{% else %}Nobody{% endfor %}</summary><div class="multi-list">
     {% if r.choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter members…" aria-label="Filter members" hidden>{% endif %}
     <div class="multi-opts">{% for i in r.choices %}<label class="check"><input type="checkbox" name="members.{{ k }}" value="{{ i }}" data-label="{{ club.name(i) }}" {{ 'checked' if i in r.members }}> {{ club.name(i) }}</label>{% endfor %}</div>
   </div></details>
@@ -192,10 +192,10 @@
 <fieldset><legend class="small"><b>Guests may, without asking a host</b></legend>
 {% for g, label in (('mic', 'Unmute'), ('camera', 'Turn their camera on'), ('screen', 'Share their screen'), ('chat', 'Chat')) %}<label class="check small"><input type="checkbox" name="{{ g }}{{ k }}" value="1"{{ ' checked' if r['guest_' ~ g] }}> {{ label }}</label>{% endfor %}
 </fieldset>
-<label class="small">Two-person calls <select name="p2p{{ k }}">
-  <option value="server"{{ ' selected' if not r.p2p }}>Go through the club's server</option>
-  <option value="direct"{{ ' selected' if r.p2p }}>Connect directly</option></select></label>
-<p class="hint">Through the server, the limits above always hold. Directly, two people's computers talk to each other: smoother and lighter on the server, but a guest alone with a host could get around the limits. Directly suits rooms with no guests, or none held back.</p>
+<label class="small">While only two are in the meeting <select name="p2p{{ k }}">
+  <option value="server"{{ ' selected' if not r.p2p }}>Still go through the club's server</option>
+  <option value="direct"{{ ' selected' if r.p2p }}>Connect the two directly</option></select></label>
+<p class="hint">With three or more, everyone always goes through the server. With just two, their computers can talk to each other directly: smoother and lighter on the server, but a guest alone with a host could then get around the limits above. Direct suits rooms with no guests, or none held back.</p>
 <label class="small">When the last host leaves <select name="leaves{{ k }}">{% for v, label in video_leaves.items() %}<option value="{{ v }}"{{ ' selected' if r.last_host_leaves == v }}>{{ label }}</option>{% endfor %}</select></label>
 {% endmacro %}
 <form method="post" action="/admin/site/video" class="profile">
@@ -207,8 +207,11 @@
   <label class="small">Name <input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="e.g. Net night"></label>
   <label class="small">Address <input name="slug{{ i }}" value="{{ r.slug }}" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" title="Letters, numbers, dashes and underscores" placeholder="made from the name"></label>
   <fieldset><legend class="small"><b>Members who come straight in</b></legend>
-  <p class="hint">None ticked: every member. Tick roles (Board, say) to let only their members straight in; they host if they have "host video meetings" too.</p>
-  {% for key, label in video_roles.items() %}<label class="check small"><input type="checkbox" name="roles{{ i }}" value="{{ key }}"{{ ' checked' if key in (r.roles or []) }}> {{ label }}</label>{% endfor %}
+  <p class="hint">Every member, or pick roles (Officer, say) to let only their members straight in; they host if they have "host video meetings" too.</p>
+  <details class="multi"><summary data-none="Every member">{% for key in r.roles or [] if key in video_roles %}<span class="chip">{{ video_roles[key] }}</span>{% else %}Every member{% endfor %}</summary><div class="multi-list">
+    {% if video_roles|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter roles…" aria-label="Filter roles" hidden>{% endif %}
+    <div class="multi-opts">{% for key, label in video_roles.items() %}<label class="check"><input type="checkbox" name="roles{{ i }}" value="{{ key }}" data-label="{{ label }}"{{ ' checked' if key in (r.roles or []) }}> {{ label }}</label>{% endfor %}</div>
+  </div></details>
   <label class="small">Other members <select name="others{{ i }}">{% for v, label in video_others.items() %}<option value="{{ v }}"{{ ' selected' if (r.others or 'knock') == v }}>{{ label }}</option>{% endfor %}</select></label>
   </fieldset>
   {{ guest_rules(i, r) }}
@@ -362,6 +365,7 @@ document.querySelectorAll("form[data-preview]").forEach((f) => {
 });
 </script>
 {% endif %}
+{% if tab == 'video' %}{% include "_multi.html" %}{% endif %}
 {% if tab in ('roles', 'video') %}<script nonce="{{ csp_nonce }}">
 // + Add an office or a room: a row from the <template>, numbered after the others, and the row count the server reads raised
 for (const b of document.querySelectorAll("[data-add]")) {
@@ -370,6 +374,7 @@ for (const b of document.querySelectorAll("[data-add]")) {
     const i = +b.dataset.next; b.dataset.next = i + 1;
     document.getElementById(b.dataset.into || "officegrid").insertAdjacentHTML("beforeend", document.getElementById(b.dataset.add).innerHTML.replaceAll("__i__", i));
     b.form.elements.rows.value = i + 1;
+    document.getElementById(b.dataset.into || "officegrid").querySelectorAll(".multi-filter").forEach((f) => { f.hidden = false; });
     b.form.elements[(b.dataset.focus || "title") + i].focus();
   });
 }

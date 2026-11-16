@@ -30,7 +30,7 @@
   <fieldset class="titles"><legend>Titles</legend>
     <p><b>Offices:</b> {% for t in held %}<span class="chip">{{ t }}</span> {% else %}<span class="muted">none</span> {% endfor %}<span class="hint">Offices change on the <a href="/offices">Offices</a> page, which keeps their history.</span></p>
     <p><b>Other titles</b> <span class="hint">(jobs in the club that aren't offices, kept here without history)</span></p>
-    <details class="multi"><summary data-none="None">{{ mine|join(', ') or 'None' }}</summary><div class="multi-list">
+    <details class="multi"><summary data-none="None">{% for t in mine %}<span class="chip">{{ t }}</span>{% else %}None{% endfor %}</summary><div class="multi-list">
       {% if choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter titles…" aria-label="Filter titles" hidden>{% endif %}
       {% if choices %}<div class="multi-opts">{% for t in choices %}<label class="check"><input type="checkbox" name="title" value="{{ t }}" {{ 'checked' if t in mine }}> {{ t }}</label>{% endfor %}</div>{% endif %}
       <label class="new">Add a title <input name="title_new" maxlength="120" placeholder="e.g. Net Manager"></label>
