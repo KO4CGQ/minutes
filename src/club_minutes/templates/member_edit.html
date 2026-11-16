@@ -2,7 +2,7 @@
 <h1>Edit {{ member.name }}{% if member.callsign %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
 <p class="muted">Saved changes go to the roster and are emailed to the Secretary and to {{ member.first }}; an officer can undo them on <a href="/roster/changes">Roster changes</a>. {{ member.first }} sets their own birthday and sharing on their profile.</p>
 {% if saved and not error %}<p class="msg ok">Saved. The roster is updated.</p>{% endif %}
-{% if email_sent and not error %}<p class="msg ok">A confirmation link went to <b>{{ email_sent }}</b>, and {{ member.first }}'s old address was told. The email changes only when the link is opened{{ '' if email_ready() else " (this server can't send email yet: the link is in its log)" }}.</p>{% endif %}
+{% if email_sent and not error %}<p class="msg ok">If <b>{{ email_sent }}</b> can receive mail, a confirmation link is on its way, and {{ member.first }}'s old address was told. The email changes only when the link is opened{{ '' if email_ready() else " (this server can't send email yet: the link is in its log)" }}.</p>{% endif %}
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 <nav class="tabs" aria-label="Edit">{% for t, label in tabs.items() %}<a href="/members/{{ member.id }}/edit?tab={{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 

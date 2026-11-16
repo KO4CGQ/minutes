@@ -12,7 +12,7 @@
   <span class="small">Running {{ VERSION }}{% if upd %} · <b>{{ upd.version }} is available</b>{% endif %}</span></a>
 <a class="card" href="/admin/site"><b>Site</b><span class="muted small">The app's name, the logo and its icons.</span>
   <span class="small">{{ app_name() }}</span></a>
-<a class="card" href="/admin/email"><b>Email log</b><span class="muted small">Every email the app sent{{ ', or held back' if PREVIEW or STAGE or club.email_only_to() is not none }}.</span>
+<a class="card" href="/admin/email"><b>Email log</b><span class="muted small">Every email the app sent in the last 90 days (at most the last 1,000){{ ', or held back' if PREVIEW or STAGE or club.email_only_to() is not none }}.</span>
   <span class="small">{% if held %}{{ held }} held back this week{% else %}Nothing held back this week{% endif %}</span></a>
 <a class="card" href="/help/server-admin"><b>Server admin guide</b><span class="muted small">Install, settings, backups, updates and security, step by step.</span>
   <span class="small">For {{ VERSION }}</span></a>

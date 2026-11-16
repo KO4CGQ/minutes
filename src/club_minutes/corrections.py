@@ -16,7 +16,7 @@ import time
 from markupsafe import Markup, escape
 
 from .club import show_date
-from .console import email_status, send_to_members
+from .console import email_status, reply_address, send_to_members
 from .meeting import Item, Meeting
 from .store import Archive
 
@@ -191,7 +191,7 @@ def email_notice(archive: Archive, slug: str, what_changed: list[str], make_pdf,
             f"{c['reason']}\n\nWhat changed:\n{changed}\n\nThe corrected minutes: {url} (the PDF is attached)\n\n"
             f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.label}")
     return send_to_members(archive, slug, f"{club.label} meeting minutes, {date} (corrected)", body, " (the PDF is attached)",
-                           make_pdf, who.email if who and who.email else None, name)
+                           make_pdf, reply_address(who), name)
 
 
 # ---------------- the editor's form ----------------

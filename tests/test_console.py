@@ -102,7 +102,7 @@ def mail_archive(tmp_path, monkeypatch, only_to):
     FakeSMTP.outbox = []
     c = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
         {"id": "doe", "first": "Jane", "last": "Doe", "email": "jane@example.org", "minutes_editor": True},
-        {"id": "kim", "first": "Sam", "last": "Kim", "email": "sam@example.org"},
+        {"id": "kim", "first": "Sam", "last": "Kim", "email": "sam@example.org", "share": ["email"]},
         {"id": "roe", "first": "Rick", "last": "Roe", "email": "rick@example.org", "status": "Silent Key"},
         {"id": "dummy", "first": "Jane", "last": "Dummy"}])
     c.email = {"only_to": only_to} if only_to is not None else {}
@@ -116,7 +116,8 @@ def test_email_minutes_test_mode_only_reaches_allowlist(tmp_path, monkeypatch):
     assert [m["To"] for m in FakeSMTP.outbox] == ["jane@example.org"]  # Sam is on the roster but withheld
     assert st["sent"] == 1 and st["roster"] == 2 and st["test_mode"]
     msg = FakeSMTP.outbox[0]
-    assert msg["Reply-To"] == "jane@example.org" and "November 12, 2026" in msg["Subject"]
+    assert msg["Reply-To"] is None and "November 12, 2026" in msg["Subject"]  # Jane doesn't share her email
+    assert "Replies go to the club." in msg.get_body(("plain",)).get_content()
     assert [p.get_filename() for p in msg.iter_attachments()] == ["m.pdf"]
     console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "u")  # only once
     assert len(FakeSMTP.outbox) == 1

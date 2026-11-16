@@ -326,9 +326,6 @@ class Auth:
         email, by = email.strip(), by or member
         if not valid_email(email):
             return "That doesn't look like an email address."
-        other = self.member_by_email(email)
-        if other and other != member:
-            return "Another member already uses that address."
         now = int(time.time())
         if self.db.execute("select count(*) from email_changes where member=? and created>?",
                            (member, now - 3600)).fetchone()[0] >= EMAILS_PER_HOUR:
@@ -337,17 +334,16 @@ class Auth:
         self.db.execute("insert into email_changes (token_hash, member, email, expires, created, by) values (?,?,?,?,?,?)",
                         (_hash(token), member, email, now + LINK_MINUTES * 60, now, by))
         base, app, m = (base_url or self.base_url or "").rstrip("/"), branding.name(self.club), self.club.members[member]
+        other = self.member_by_email(email)
+        if not (other and other != member):  # in use: everything as usual but this mail, so nobody can test an address
+            # no names: the new address may be a stranger's (a typo)
+            send_email(email, f"Confirm your new {app} email", only_to=self.club.email_only_to(), to_self=by == member,
+                       body=f"Hello,\n\nSomeone asked to use this address for a {app} account. If that's you, open this "
+                       f"link within {LINK_MINUTES} minutes:\n\n{base}/email/confirm?t={token}\n\n"
+                       f"If you don't know what this is, ignore this email and nothing changes.\n\n73,\n{app}")
         if by == member:
-            send_email(email, f"Confirm your new {app} email", only_to=self.club.email_only_to(), to_self=True,
-                       body=f"Hi {m.first},\n\nTo use this address for {app} and the club roster, open this link within "
-                       f"{LINK_MINUTES} minutes:\n\n{base}/email/confirm?t={token}\n\n"
-                       f"If you didn't ask for this, ignore this email and nothing changes.\n\n73,\n{app}")
             return None
         who = self.club.name(by)
-        send_email(email, f"Confirm your new {app} email", only_to=self.club.email_only_to(),
-                   body=f"Hi {m.first},\n\n{who} is changing your email on the club roster to this address. If it's "
-                   f"yours, open this link within {LINK_MINUTES} minutes to confirm it:\n\n{base}/email/confirm?t={token}\n\n"
-                   f"If you don't know what this is, ignore this email and nothing changes.\n\n73,\n{app}")
         if m.email:
             send_email(m.email, f"Your {app} email is being changed", only_to=self.club.email_only_to(),
                        body=f"Hi {m.first},\n\n{who} asked to change your email on the club roster from this address to "
@@ -493,12 +489,20 @@ def _preview_outbox(recipients, subject, body, attachments, only_to, reply_to) -
 
 
 EMAIL_LOG_KEEP = 1000  # entries kept in email-log.jsonl
+EMAIL_LOG_DAYS = 90  # and none older
 
 
 def hide_tokens(text: str) -> str:
     """A sign-in, email-confirm or admin-mode link with its one-time token blanked (`t=[hidden]`), for the copies an
     admin or the server's log can read: the email itself still carries the working link."""
     return re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text)
+
+
+def _logged_at(line: str) -> float:
+    try:
+        return json.loads(line).get("at", 0)
+    except (ValueError, AttributeError):
+        return 0  # a torn line: dropped at the next prune
 
 
 def _email_log(entry: dict) -> None:
@@ -511,9 +515,13 @@ def _email_log(entry: dict) -> None:
         with p.open("a") as f:
             f.write(json.dumps({"at": int(time.time()), **entry}) + "\n")
         p.chmod(0o600)
-        lines = p.read_text().splitlines()
-        if len(lines) > EMAIL_LOG_KEEP * 1.5:
-            p.write_text("\n".join(lines[-EMAIL_LOG_KEEP:]) + "\n")
+        lines, cutoff = p.read_text().splitlines(), time.time() - EMAIL_LOG_DAYS * 86400
+        if len(lines) > EMAIL_LOG_KEEP * 1.5 or _logged_at(lines[0]) < cutoff:
+            kept = [line for line in lines[-EMAIL_LOG_KEEP:] if _logged_at(line) >= cutoff]
+            tmp = p.with_name(f"email-log.{os.getpid()}.tmp")
+            tmp.write_text("".join(line + "\n" for line in kept))
+            tmp.chmod(0o600)
+            tmp.replace(p)  # shortcut: a line another process appends during the rewrite is lost; a lock if that matters
     except OSError:
         log.exception("couldn't write the email log")
 

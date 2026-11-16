@@ -424,6 +424,11 @@ def email_status(archive: Archive, slug: str, name: str = "emailed.json") -> dic
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def reply_address(m) -> str | None:
+    """A member's email for Reply-To only if they share it with members; else None (the club's address)."""
+    return m.email if m and m.email and "email" in m.share else None
+
+
 def send_to_members(archive: Archive, slug: str, subject: str, body: str, pdf_note: str, make_pdf, reply_to, name: str) -> dict:
     """Email members who want the PDF (attached, from make_pdf()) and those who want a link (body less pdf_note). Test
     mode (email.only_to) applies. The outcome, or the error, is kept in the meeting's folder as `name`."""
@@ -460,9 +465,9 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
             f"{f', led and recorded by {leader.name}' if leader and m.recorder == m.leader else f', led by {leader.name}' if leader else ''}"
             f"{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
-            f"Replies go to {writer.first if writer and writer.email else 'the club'}.\n\n"
+            f"Replies go to {writer.first if reply_address(writer) else 'the club'}.\n\n"
             f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.label}")
-    subject, reply_to = f"{club.label} meeting minutes, {date}", writer.email if writer and writer.email else None
+    subject, reply_to = f"{club.label} meeting minutes, {date}", reply_address(writer)
     return send_to_members(archive, slug, subject, body, " The PDF is attached.", make_pdf, reply_to, "emailed.json")
 
 

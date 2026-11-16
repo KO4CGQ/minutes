@@ -136,14 +136,52 @@ def test_email_change_needs_confirmation(tmp_path, monkeypatch):
         {"id": "n0cccc", "first": "Bob", "last": "Member", "email": "bob@example.org"},
         {"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
     a = auth_mod.Auth(club, tmp_path / "auth.sqlite")
-    assert a.start_email_change("n0cccc", "jane@example.org") == "Another member already uses that address."
+    assert a.start_email_change("n0cccc", "jane@example.org") is None and not sent  # the same reply; nothing sent
     assert a.start_email_change("n0cccc", "not-an-email")
     assert a.start_email_change("n0cccc", "bob@new.example", base_url="https://x") is None
     (to, body), = sent
+    assert "Bob" not in body
     token = body.split("/email/confirm?t=")[1].split()[0]  # 1.0 sent /profile/email?t=, which was the Email page
     assert to == "bob@new.example"
     assert a.confirm_email_change(token) == ("n0cccc", "bob@new.example", "n0cccc")
     assert a.confirm_email_change(token) is None  # one use
+
+
+def test_keeper_email_change_names_nobody_to_the_new_address(tmp_path, monkeypatch):
+    from club_minutes import auth as auth_mod
+    sent = []
+    monkeypatch.setattr(auth_mod, "send_email", lambda to, subject, body, **kw: sent.append((to, body)))
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "n0cccc", "first": "Bob", "last": "Member", "email": "bob@example.org"},
+        {"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
+    auth_mod.Auth(club, tmp_path / "auth.sqlite").start_email_change("n0cccc", "typo@example.com", by="n0aaaa")
+    got = dict(sent)
+    assert not any(n in got["typo@example.com"] for n in ("Bob", "Jane", "Doe"))
+    assert "Jane Doe" in got["bob@example.org"] and "typo@example.com" in got["bob@example.org"]  # the old address is told
+
+
+def test_an_address_in_use_counts_toward_the_hourly_limit_like_any_other(tmp_path, monkeypatch):
+    """Otherwise a member could tell a member's address from a stranger's by when "Too many tries" starts."""
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "send_email", lambda *a, **kw: None)
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "n0cccc", "first": "Bob", "last": "Member", "email": "bob@example.org"},
+        {"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
+    a, b = (auth_mod.Auth(club, tmp_path / f"{n}.sqlite") for n in "ab")
+    for _ in range(auth_mod.EMAILS_PER_HOUR):
+        assert a.start_email_change("n0cccc", "jane@example.org") is None and b.start_email_change("n0cccc", "x@example.com") is None
+    assert a.start_email_change("n0cccc", "jane@example.org") == b.start_email_change("n0cccc", "x@example.com") == "Too many tries; please wait an hour."
+
+
+def test_email_log_keeps_90_days(tmp_path, monkeypatch):
+    import time
+
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    old = int(time.time()) - 91 * 86400
+    (tmp_path / "email-log.jsonl").write_text(json.dumps({"at": old, "subject": "old"}) + "\n{torn\n5\nnull\n")
+    auth_mod._email_log({"subject": "new"})
+    assert [json.loads(x)["subject"] for x in (tmp_path / "email-log.jsonl").read_text().splitlines()] == ["new"]
 
 
 def test_monthday_filter():

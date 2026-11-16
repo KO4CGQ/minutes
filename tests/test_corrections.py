@@ -234,7 +234,7 @@ def test_the_notice_email(tmp_path, monkeypatch):
     assert st["sent"] == 6 and corrections.email_notice(a, m.slug, what, None, "") == st   # once per version
     msg = FakeSMTP.outbox[0]
     body = msg.get_body(("plain",)).get_content()
-    assert msg["Subject"] == "W0TEST meeting minutes, October 15, 2026 (corrected)" and msg["Reply-To"] == "rick@example.org"
+    assert msg["Subject"] == "W0TEST meeting minutes, October 15, 2026 (corrected)" and msg["Reply-To"] is None  # Rick doesn't share his email
     assert "corrected (version 2) by Rick Roe:\nJohn was there" in body and "- In person: added John Dummy" in body
     assert [p.get_filename() for p in msg.iter_attachments()] == ["15-oct-26-minutes-v2.pdf"]
 
