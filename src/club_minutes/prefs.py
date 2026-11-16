@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 from pathlib import Path
 
 from . import branding, business, calview, chow
 from .club import DATA, Club, num, show_date
+
+log = logging.getLogger(__name__)
 
 # kind: (heading, {choice: what it means}, default), in the order the Email tab shows them. "roster" is for the Secretaries.
 KINDS = {
@@ -41,7 +44,11 @@ def _path(name: str) -> Path:
 
 def _read(name: str) -> dict:
     p = _path(name)
-    return json.loads(p.read_text()) if p.exists() else {}
+    try:
+        return json.loads(p.read_text()) if p.exists() else {}
+    except ValueError:
+        log.exception("%s is damaged; using defaults", p)  # every page reads it: a torn file mustn't stop them all
+        return {}
 
 
 def _write(name: str, d: dict) -> None:
@@ -71,7 +78,8 @@ def save(mid: str, choices: dict) -> dict:
 
 # ---------------- other settings (Your profile → Settings), in settings.json ----------------
 
-SETTINGS = {"week_start": ("First day of the week", {"sunday": "Sunday", "monday": "Monday"}, "sunday")}
+SETTINGS = {"week_start": ("First day of the week", {"sunday": "Sunday", "monday": "Monday"}, "sunday"),
+            "support_link": ("Support Club Minutes in the menu", {"show": "Show it", "hide": "Hide it"}, "show")}
 
 
 def settings(mid: str | None) -> dict:
@@ -81,9 +89,9 @@ def settings(mid: str | None) -> dict:
 
 
 def save_settings(mid: str, choices: dict) -> dict:
-    """Keep only valid choices (they come from a form)."""
+    """Keep only valid choices (they come from a form); settings not in this form stay as they were."""
     alls = _read("settings.json")
-    alls[mid] = {k: v for k, v in choices.items() if k in SETTINGS and v in SETTINGS[k][1]}
+    alls[mid] = alls.get(mid, {}) | {k: v for k, v in choices.items() if k in SETTINGS and v in SETTINGS[k][1]}
     _write("settings.json", alls)
     return settings(mid)
 

@@ -22,7 +22,7 @@ Your name menu → **Your profile**:
 
 - 📇 **Contact details and birthday:** change your email (a link goes to the new address; it changes once you open it, and you're signed out everywhere, so sign in again), phone, address and birthday (a month alone is fine). Officers always see them; other members see only what you tick to share. A shared birthday, and each year you've been a member, gets a mention at the meeting that week.
 - ✉️ **Email:** turn each kind of email on or off: the minutes (with the PDF or as a link), the meeting-day reminder, reminders for business you're looking after, the chow list (with the PDF or as a link) and roster updates.
-- ⚙️ **Settings:** how the app shows things to you, like the first day of the week.
+- ⚙️ **Settings:** how the app shows things to you, like the first day of the week, and whether the menu shows **Support Club Minutes** (the Ko-fi link at its foot).
 
 ## 📝 Minutes and search
 **Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights, calendar events and these guides. A name also finds its common nicknames (Richard, Rich, Rick and Dick find each other, member or not), and a member's name its other spellings from the roster; a typo is caught when nothing else is found.

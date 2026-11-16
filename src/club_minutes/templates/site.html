@@ -124,6 +124,9 @@
 <div class="card sitesec"><h2>Chow {{ origin('modules.chow') }}</h2>
 <label class="check"><input type="checkbox" name="chow" value="1"{{ ' checked' if module('chow') }}> <span><b>A chow rotation</b><br><span class="muted small">Members take turns bringing food to meetings: the Chow page, swaps, reminders, the console's Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.</span></span></label>
 </div>
+<div class="card sitesec"><h2>Supporting Club Minutes {{ origin('club.supports_app') }}</h2>
+<label class="check"><input type="checkbox" name="supports_app" value="1"{{ ' checked' if club.info.get('supports_app') }}> <span><b>The club supports Club Minutes</b><br><span class="muted small">This club, {{ club.info.callsign or club.info.name }}, gives toward the maintenance and development of this app (<a href="https://github.com/sponsors/jflattery">GitHub Sponsors</a> or <a href="https://ko-fi.com/jflattery">Ko-fi</a>): the menu's Support Club Minutes link goes away for everyone, and the About page thanks the club instead.</span></span></label>
+</div>
 <div class="card sitesec"><h2>Video meetings {{ origin('modules.jitsi') }}</h2>
 <label class="check"><input type="checkbox" name="jitsi" value="1"{{ ' checked' if module('jitsi') }}> <span><b>The club's own Jitsi Meet server</b><br><span class="muted small">Members join it signed in from here (Video meeting in the menu); guests knock and a host lets them in. The rooms and their rules are on the <a href="/admin/site/video">Video</a> tab once it's on.</span></span></label>
 <div class="fmtgrid">
@@ -174,7 +177,7 @@
 </div>
 <p class="row"><button class="btn">Save</button></p>
 </form>
-{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'modules.jitsi', 'jitsi.domain', 'jitsi.app_id'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, video meetings, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'modules.jitsi', 'jitsi.domain', 'jitsi.app_id', 'club.supports_app'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, video meetings, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% if tab == 'features' %}<form id="jitsi-secret" method="post" action="/admin/site/jitsi-secret"></form>{% endif %}
 {% elif tab == 'bylaws' %}
 <p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>

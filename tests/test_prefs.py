@@ -101,8 +101,8 @@ def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):
 
     from club_minutes import web
     from club_minutes.auth import Auth
-    assert prefs.settings("n0aaaa") == prefs.settings(None) == {"week_start": "sunday"}
-    assert prefs.save_settings("n0aaaa", {"week_start": "friday", "evil": "x"}) == {"week_start": "sunday"}  # not a choice
+    assert prefs.settings("n0aaaa") == prefs.settings(None) == {"week_start": "sunday", "support_link": "show"}
+    assert prefs.save_settings("n0aaaa", {"week_start": "friday", "evil": "x"})["week_start"] == "sunday"  # not a choice
     c = club()
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
@@ -117,3 +117,32 @@ def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):
     page = month()
     assert "<th>Mon</th><th>Tue</th>" in page and page.index("<th>Sun</th>") > page.index("<th>Sat</th>")
     assert 'aria-label="Monday, October 26"' in page and 'aria-label="Sunday, December 6"' in page
+
+
+def test_support_link_member_hides_it_club_turns_it_off(tmp_path, monkeypatch):
+    """The menu's Support Club Minutes link (Ko-fi): on by default; a member hides it or brings it back on Your
+    profile → Settings; an admin's "the club supports Club Minutes" takes it away for everyone."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    c = club()
+    a = Auth(c, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", c)
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
+    link = 'class="kofi" href="https://ko-fi.com/jflattery"'  # at the foot of the menu, on by default
+    assert link in t.get("/").text and "ko-fi.com/jflattery" in t.get("/about").text
+    prefs.save_settings("n0aaaa", {"week_start": "monday"})
+    t.post("/profile/settings", data={"support_link": "hide"})
+    assert link not in t.get("/").text
+    assert prefs.settings("n0aaaa") == {"week_start": "monday", "support_link": "hide"}  # a form with one setting keeps the other
+    t.post("/profile/settings", data={"support_link": "<script>"})  # not a choice: nothing changes
+    assert prefs.settings("n0aaaa")["support_link"] == "hide"
+    t.post("/profile/settings", data={"support_link": "show"})
+    assert link in t.get("/").text
+    c.info["supports_app"] = True  # Site → Features (or club.yaml): the club supports the app
+    about = t.get("/about").text
+    assert link not in t.get("/").text and "Your club supports Club Minutes" in about and "ko-fi.com/jflattery" in about
+    assert "isn't shown to anyone" in t.get("/profile/settings").text  # the setting says why

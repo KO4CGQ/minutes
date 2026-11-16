@@ -413,6 +413,8 @@ def _page(request: Request, name: str, **ctx) -> HTMLResponse:
         # an open meeting from another day (say, last week's never submitted): leaders get "Continue minutes"
         "open_draft": next((m for m in archive.meetings if m.status == "draft"), None),
         "update_available": _update_badge(request),
+        # the menu's Support link: off when the club supports the app (Site → Features) or the member hid it
+        "show_support": bool(mid) and not archive.club.info.get("supports_app") and prefs.settings(mid)["support_link"] == "show",
         "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id and not has_passkey_here(request, mid)),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
 
@@ -2644,7 +2646,7 @@ PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
 FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
-                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"))
+                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
@@ -2706,7 +2708,7 @@ async def site_dates(request: Request):
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
 
 
-OFF = {("modules", "jitsi"): False, ("jitsi", "domain"): "", ("jitsi", "app_id"): "", ("modules", "chow"): False, ("club", "public_calendars"): [], ("calendar", "holidays"): "",
+OFF = {("modules", "jitsi"): False, ("jitsi", "domain"): "", ("jitsi", "app_id"): "", ("modules", "chow"): False, ("club", "public_calendars"): [], ("club", "supports_app"): False, ("calendar", "holidays"): "",
        ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
 
 
@@ -2768,7 +2770,7 @@ async def site_features(request: Request):
             if domain and not meet.DOMAIN.match(domain) or app_id and not meet.APP_ID.match(app_id):
                 raise ValueError("Video meetings: the address is the Jitsi server's name (meet.example.org), the app ID letters, numbers, dots, - and _.")
             values = _keep_changes(club, {("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
-                                          ("modules", "chow"): bool(form.get("chow")),
+                                          ("modules", "chow"): bool(form.get("chow")), ("club", "supports_app"): bool(form.get("supports_app")),
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
                                           ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})

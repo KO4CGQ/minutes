@@ -93,7 +93,7 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     assert "form-action 'self' https://meet.example.org;" in p.headers["content-security-policy"] + ";"  # "Open it" ends there
     assert "form-action 'self';" in as_("n0call").get("/calendar").headers["content-security-policy"] + ";"  # only there
     assert "Join Board" in p.text and "No guests" in p.text and "https://meet.example.org/club" in p.text
-    assert p.text.count('target="_blank" rel="noopener"') == 2  # each room opens in a new tab, this page stays
+    assert p.text.count('target="_blank" rel="noopener" aria-label="Join ') == 2  # each room opens in a new tab, this page stays
     assert meet.rooms(c)[0]["about"] == "Tuesdays at 7 <b>PM</b>" and "Tuesdays at 7 &lt;b&gt;PM&lt;/b&gt;" in p.text  # typed, never markup
     # a room of one's own: its opener hosts it, someone else opening it just joins
     r = as_("n0call").post("/meet", data={"name": "Antenna Project!"}, follow_redirects=False)
@@ -204,12 +204,14 @@ def test_turned_on_from_site_features(env, monkeypatch):
     c.save_site_settings({})
     assert not c.has("jitsi") and meet.settings(c) is None and 'href="/meet"' not in as_("n0call").get("/").text
     page = as_("pres").get("/admin/site/features").text
+    assert 'href="https://github.com/sponsors/jflattery"' in page and 'href="https://ko-fi.com/jflattery"' in page  # the support tick says where
     assert 'name="jitsi_domain"' in page and "set in this server's env file" in page
     r = as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "", "jitsi_app_id": "x"}, follow_redirects=False)
     assert "error=" in r.headers["location"] and not c.has("jitsi")  # on, but where?
     r = as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "meet.example.org/<b>", "jitsi_app_id": "x"}, follow_redirects=False)
     assert "error=" in r.headers["location"]
-    as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "https://meet.example.org/", "jitsi_app_id": "club-minutes"})
+    as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "https://meet.example.org/", "jitsi_app_id": "club-minutes", "supports_app": "1"})
+    assert c.info.get("supports_app") is True and 'class="kofi"' not in as_("n0call").get("/").text  # the club supports the app
     assert meet.settings(c) == {"domain": "meet.example.org", "app_id": "club-minutes", "room": "club"}
     assert 'href="/meet"' in as_("n0call").get("/").text and as_("pres").get("/admin/site/video").status_code == 200
     monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "")  # on, but the server's secret missing: no menu link, and the tab says so
@@ -241,3 +243,11 @@ def test_secret_made_on_site_features(env, monkeypatch):
     monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "y" * 40)
     assert meet.secret() == "y" * 40 and "Make a" not in as_("pres").get("/admin/site/features").text
     assert "error=" in as_("pres").post("/admin/site/jitsi-secret", follow_redirects=False).headers["location"]
+
+
+def test_a_damaged_settings_file_breaks_no_page(env):
+    """Every page reads the member's settings (the support link): a torn settings.json means defaults, not a 500."""
+    from club_minutes import prefs
+    _, as_ = env
+    (prefs.DATA / "settings.json").write_text('{"n0call": {"supp')
+    assert as_("n0call").get("/").status_code == 200

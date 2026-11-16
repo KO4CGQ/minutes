@@ -222,7 +222,7 @@ def office_list(raw: list) -> list[dict]:
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
-                                    "invite_after_visits", "remind_days_before", "public_calendars")} | {
+                                    "invite_after_visits", "remind_days_before", "public_calendars", "supports_app")} | {
     ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
     ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc"), ("modules", "jitsi"),
