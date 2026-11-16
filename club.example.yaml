@@ -98,7 +98,12 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 # jitsi:
 #   domain: meet.example.org   # the club's Jitsi server
 #   app_id: club-minutes       # Prosody's app_id
-#   room: club                 # the room /meet opens
+#   room: club                 # the club's one room, until rooms: (or Site → Video) lists them
+#   rooms:                     # the club's rooms; each guest_ setting: true = guests may, false = a host must allow it
+#     - {slug: club, name: Club meeting, guests: true, guest_mic: false, guest_camera: false, guest_screen: false,
+#        guest_chat: true, last_host_leaves: end, p2p: false}   # last_host_leaves: stay, guests (dropped) or end;
+#                                                  # p2p: true lets calls of two connect directly (guests' limits then don't hold)
+#   adhoc: {on: false}         # members may open rooms of their own (with the same settings as a room, for all of them)
 
 # Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer). Also on Admin → Site → Offices.
 # roster_keepers: [Secretary, Treasurer]

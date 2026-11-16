@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}Video meeting{% endblock %}{% block body %}
+<h1>Video meeting</h1>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+<p class="muted">You join signed in as you. Guests (anyone not signed in) use a room's guest address and wait in the lobby until a host lets them in.</p>
+<div class="card">{% for r in rooms %}
+<p><a class="btn" href="/meet/{{ r.slug }}">Join {{ r.name }}</a><br>
+<span class="muted small">{% if r.guests %}Guest address: <code class="wrap">https://{{ domain }}/{{ r.slug }}</code>{% else %}Members only{% endif %}</span></p>
+{% endfor %}</div>
+{% if adhoc %}
+<form method="post" action="/meet" class="card profile">
+<h2>A room of your own</h2>
+<p class="hint">Name it, then send guests its address: https://{{ domain }}/ plus the name written with dashes (Net night becomes net-night). You host it for a day.{% if not adhoc.guests %} Members only: guests can't come in.{% endif %}</p>
+<p class="row"><label>Name <input name="name" maxlength="60" required placeholder="e.g. Antenna project"></label> <button class="btn">Open it</button></p>
+</form>
+{% endif %}
+{% endblock %}

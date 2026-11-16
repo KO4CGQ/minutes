@@ -107,18 +107,6 @@
 {% for r in role_rows if r.builtin and r.edited %}<form id="roleback-{{ r.key }}" method="post" action="/admin/site/roles" data-confirm="Put {{ r.name }} back as it ships (its name, what it allows and its offices)? The members picked for it stay."><input type="hidden" name="back" value="{{ r.key }}"></form>{% endfor %}
 </div>
 {% include "_multi.html" %}
-<script nonce="{{ csp_nonce }}">
-// + Add an office: a row from the <template>, numbered after the others, and the row count the server reads raised
-for (const b of document.querySelectorAll("[data-add]")) {
-  b.hidden = false;
-  b.addEventListener("click", () => {
-    const i = +b.dataset.next; b.dataset.next = i + 1;
-    document.getElementById("officegrid").insertAdjacentHTML("beforeend", document.getElementById(b.dataset.add).innerHTML.replaceAll("__i__", i));
-    b.form.elements.rows.value = i + 1;
-    b.form.elements["title" + i].focus();
-  });
-}
-</script>
 {% elif tab == 'privacy' %}
 <p class="muted">Names that are never recorded. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/privacy" class="profile">
@@ -197,6 +185,41 @@ for (const b of document.querySelectorAll("[data-add]")) {
 <p class="row"><button class="btn">Save</button></p>
 </form>
 {% if here_keys|select('in', ['bylaws.refs', 'bylaws.arrears_note', 'treasurer.certificate'])|list %}<form method="post" action="/admin/site/bylaws" data-confirm="Go back to club.yaml's bylaws references, arrears note and certificate?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'video' %}
+<p class="muted">The club's video meeting rooms, on its own Jitsi Meet server. Members join signed in from here; guests (anyone not signed in) knock and a host lets them in. Each change is in the admin log; changes here win over club.yaml on the server. Meetings already going on keep the rules they started with.</p>
+{% macro guest_rules(k, r) %}
+<label class="check small"><input type="checkbox" name="guests{{ k }}" value="1"{{ ' checked' if r.guests }}> Let guests knock (unticked: members only)</label>
+<fieldset><legend class="small"><b>Guests may, without asking a host</b></legend>
+{% for g, label in (('mic', 'Unmute'), ('camera', 'Turn their camera on'), ('screen', 'Share their screen'), ('chat', 'Chat')) %}<label class="check small"><input type="checkbox" name="{{ g }}{{ k }}" value="1"{{ ' checked' if r['guest_' ~ g] }}> {{ label }}</label>{% endfor %}
+</fieldset>
+<label class="check small"><input type="checkbox" name="p2p{{ k }}" value="1"{{ ' checked' if r.p2p }}> Let two-person calls connect directly (peer-to-peer)</label>
+<p class="hint">Direct is lighter on the server, but in a call of just a host and a guest the guest could then get around the limits above. Untick it to keep every call on the server.</p>
+<label class="small">When the last host leaves <select name="leaves{{ k }}">{% for v, label in video_leaves.items() %}<option value="{{ v }}"{{ ' selected' if r.last_host_leaves == v }}>{{ label }}</option>{% endfor %}</select></label>
+{% endmacro %}
+<form method="post" action="/admin/site/video" class="profile">
+<input type="hidden" name="rows" value="{{ video_rooms|length }}">
+<div class="card sitesec"><h2>Rooms {{ origin('jitsi.rooms') }}</h2>
+<p class="hint">Video meeting in the menu lists these; the first is where it goes when there's only one. A host (the "host video meetings" permission on Roles) can still allow one guest to unmute, start their camera or share their screen during a meeting; chat is for the whole room. When the last host leaves, a minute's grace in case they come back.</p>
+{% macro room_row(i, r) %}
+<details class="role"{{ ' open' if not r.name }}><summary><b>{{ r.name or 'A new room' }}</b>{% if r.slug %}<br><span class="muted small">/{{ r.slug }}</span>{% endif %}</summary>
+  <label class="small">Name <input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="e.g. Net night"></label>
+  <label class="small">Address <input name="slug{{ i }}" value="{{ r.slug }}" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" title="Letters, numbers, dashes and underscores" placeholder="made from the name"></label>
+  {{ guest_rules(i, r) }}
+  {% if r.slug %}<label class="check small"><input type="checkbox" name="rm{{ i }}" value="1"> Remove {{ r.name }} when you save</label>{% else %}<p class="hint">Leave the name empty to drop this new room.</p>{% endif %}
+</details>
+{% endmacro %}
+<div class="rolelist" id="roomlist">{% for r in video_rooms %}{{ room_row(loop.index0, r) }}{% endfor %}</div>
+<template id="t-room">{{ room_row('__i__', {'name': '', 'slug': '', 'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False}) }}</template>
+<p><button type="button" class="btn small" data-add="t-room" data-into="roomlist" data-focus="name" data-next="{{ video_rooms|length }}" hidden>+ Add a room</button></p>
+</div>
+<div class="card sitesec"><h2>Members' own rooms {{ origin('jitsi.adhoc') }}</h2>
+<label class="check"><input type="checkbox" name="adhoc" value="1"{{ ' checked' if video_adhoc }}> Members may open rooms of their own</label>
+<p class="hint">Any signed-in member can open a room by giving it a name on the Video meeting page. Its opener hosts it for a day, as do the usual hosts. These rules apply to every such room:</p>
+{{ guest_rules('_a', video_adhoc or {'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False}) }}
+</div>
+<p class="row"><button class="btn">Save</button></p>
+</form>
+{% if 'jitsi.rooms' in here_keys or 'jitsi.adhoc' in here_keys %}<form method="post" action="/admin/site/video" data-confirm="Go back to club.yaml's video rooms?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
 {{ 'Set here.' if dates_here else 'From the server (club.yaml) until you save here.' }}</p>
@@ -332,4 +355,16 @@ document.querySelectorAll("form[data-preview]").forEach((f) => {
 });
 </script>
 {% endif %}
+{% if tab in ('roles', 'video') %}<script nonce="{{ csp_nonce }}">
+// + Add an office or a room: a row from the <template>, numbered after the others, and the row count the server reads raised
+for (const b of document.querySelectorAll("[data-add]")) {
+  b.hidden = false;
+  b.addEventListener("click", () => {
+    const i = +b.dataset.next; b.dataset.next = i + 1;
+    document.getElementById(b.dataset.into || "officegrid").insertAdjacentHTML("beforeend", document.getElementById(b.dataset.add).innerHTML.replaceAll("__i__", i));
+    b.form.elements.rows.value = i + 1;
+    b.form.elements[(b.dataset.focus || "title") + i].focus();
+  });
+}
+</script>{% endif %}
 {% endblock %}

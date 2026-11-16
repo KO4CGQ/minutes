@@ -33,7 +33,8 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     c = Club(FIX / "test-club.yaml", roster=ROSTER)
     c.modules["jitsi"] = True
-    c.yaml = {**c.yaml, "jitsi": {"domain": "meet.example.org", "app_id": "club-minutes", "room": "club"}}
+    c.yaml = {**c.yaml, "modules": {**(c.yaml.get("modules") or {}), "jitsi": True},
+              "jitsi": {"domain": "meet.example.org", "app_id": "club-minutes", "room": "club"}}
     monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "a-test-secret-not-a-real-one-0123456789")
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
@@ -48,7 +49,7 @@ def env(tmp_path, monkeypatch):
 
 
 def claims(location):
-    jwt = location.split("?jwt=")[1]
+    jwt = location.split("?jwt=")[1].split("#")[0]
     head, body, sig = jwt.split(".")
     assert meet.sign(f"{head}.{body}".encode(), b"a-test-secret-not-a-real-one-0123456789") == sig
     return json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
@@ -64,8 +65,66 @@ def test_officers_host_members_join(env):
     assert (t["aud"], t["iss"], t["sub"], t["room"], t["moderator"]) == ("jitsi", "club-minutes", "meet.example.org", "club", True)
     assert t["context"]["user"] == {"id": "pres", "name": "Jane Doe", "affiliation": "owner",
                                        "lobby_bypass": True} and t["exp"] - t["iat"] == 300
-    t = claims(as_("n0call").get("/meet/net-night", follow_redirects=False).headers["location"])
-    assert (t["room"], t["moderator"], t["context"]["user"]["affiliation"]) == ("net-night", False, "member")
+    t = claims(as_("n0call").get("/meet/club", follow_redirects=False).headers["location"])
+    assert (t["room"], t["moderator"], t["context"]["user"]["affiliation"]) == ("club", False, "member")
+    assert t["context"]["room"]["club"] == {"guests": True, "guest_mic": True, "guest_camera": True, "guest_screen": True,
+                                            "guest_chat": True, "last_host_leaves": "stay"}  # club.yaml's one room: no limits
+    assert r.headers["referrer-policy"] == "no-referrer"
+    assert as_("n0call").get("/meet/net-night", follow_redirects=False).status_code == 404  # not a club room, none of their own
+
+
+def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
+    """Site → Video: named rooms with their rules for guests (in every member's token), and rooms members open
+    themselves, whose opener hosts them; the calendar offers the rooms for an event's online link."""
+    c, as_ = env
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c.save_app_admins({"pres"})
+    room = {"name0": "Club meeting", "slug0": "club", "guests0": "1", "chat0": "1", "leaves0": "end",
+            "name1": "Board", "slug1": "", "leaves1": "stay", "p2p1": "1"}
+    as_("pres").post("/admin/site/video", data={"rows": "2", **room, "adhoc": "1", "guests_a": "1", "leaves_a": "guests"})
+    assert [r["slug"] for r in meet.rooms(c)] == ["club", "board"]
+    t = claims(as_("n0call").get("/meet/club", follow_redirects=False).headers["location"])
+    assert t["context"]["room"]["club"] == {"guests": True, "guest_mic": False, "guest_camera": False, "guest_screen": False,
+                                            "guest_chat": True, "last_host_leaves": "end"}
+    assert as_("n0call").get("/meet/club", follow_redirects=False).headers["location"].endswith("#config.p2p.enabled=false")  # kept on the server
+    loc = as_("n0call").get("/meet/board", follow_redirects=False).headers["location"]
+    assert claims(loc.split("#")[0])["context"]["room"]["club"]["guests"] is False and "#" not in loc  # peer-to-peer allowed
+    p = as_("n0call").get("/meet")  # two rooms: a page, not straight in
+    assert "form-action 'self' https://meet.example.org;" in p.headers["content-security-policy"] + ";"  # "Open it" ends there
+    assert "form-action 'self';" in as_("n0call").get("/calendar").headers["content-security-policy"] + ";"  # only there
+    assert "Join Board" in p.text and "Members only" in p.text and "https://meet.example.org/club" in p.text
+    # a room of one's own: its opener hosts it, someone else opening it just joins
+    r = as_("n0call").post("/meet", data={"name": "Antenna Project!"}, follow_redirects=False)
+    assert r.headers["location"] == "/meet/antenna-project"
+    t = claims(as_("n0call").get("/meet/antenna-project", follow_redirects=False).headers["location"])
+    assert t["moderator"] is True and t["context"]["room"]["club"]["last_host_leaves"] == "guests"
+    as_("pres").post("/meet", data={"name": "antenna project"})
+    assert meet.opener("antenna-project") == "n0call"
+    (clubmod.DATA / "meet-rooms.json").write_text("")  # damaged (power lost mid-save): nobody's the opener, nothing breaks
+    assert meet.opener("antenna-project") is None and as_("n0call").get("/meet/antenna-project", follow_redirects=False).status_code == 303
+    from club_minutes import callsign
+    meet.open_room("n0call", "n0call")  # a room named after its opener's callsign: a callsign change renames only the opener
+    callsign.rename_id("n0call", "w0demo", clubmod.DATA)
+    assert meet.opener("n0call") == "w0demo"
+    r = as_("n0call").get("/meet/CLUB", follow_redirects=False)  # capitals can't dodge a named room's rules
+    assert r.headers["location"].startswith("https://meet.example.org/club?jwt=") and claims(r.headers["location"])["context"]["room"]["club"]["last_host_leaves"] == "end"
+    for i in range(5):
+        as_("pres").post("/meet", data={"name": f"pres room {i}"})
+    assert "error=" in as_("pres").post("/meet", data={"name": "one too many"}, follow_redirects=False).headers["location"]
+    assert as_("pres").post("/meet", data={"name": "pres room 0"}, follow_redirects=False).headers["location"] == "/meet/pres-room-0"  # their own: fine
+    assert "error=" in as_("n0call").post("/meet", data={"name": "Board"}, follow_redirects=False).headers["location"]  # a club room's name
+    # what's refused on Site → Video
+    for bad in ({"rows": "1", "name0": "X", "slug0": "a b"}, {"rows": "2", "name0": "A", "slug0": "a", "name1": "B", "slug1": "a"},
+                {"rows": "1", "name0": "A", "rm0": "1"}):
+        assert "error=" in as_("pres").post("/admin/site/video", data=bad, follow_redirects=False).headers["location"]
+    assert 'list="video-rooms"' in as_("pres").get("/calendar/edit").text
+    # ad-hoc off again: an unlisted room is gone, and so is the form
+    as_("pres").post("/admin/site/video", data={"rows": "2", **room})
+    assert as_("n0call").get("/meet/antenna-project", follow_redirects=False).status_code == 404
+    assert as_("n0call").post("/meet", data={"name": "x"}, follow_redirects=False).status_code == 404
+    c.modules["jitsi"] = False
+    assert as_("pres").get("/admin/site/video").status_code == 404
+    assert as_("pres").post("/admin/site/video", data={"rows": "0"}).status_code == 404
 
 
 def test_signed_out_odd_rooms_and_off(env, monkeypatch):
