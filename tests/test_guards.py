@@ -28,6 +28,16 @@ def test_screenshots_are_up_to_date():
     assert listed == {p.stem for p in SHOTS.glob("*.png")}, "a picture isn't in demo/screenshots.py, or one is missing"
 
 
+def test_manifest_keeps_pictures_not_retaken(tmp_path, monkeypatch):
+    """screenshots.py retakes only what's out of date: the pictures it skips stay in the manifest, still up to date."""
+    import json
+    monkeypatch.setattr(manifest, "MANIFEST", tmp_path / "manifest.json")
+    manifest.write({"home": {"home.html"}}, {"chow": ["templates/chow.html"]})
+    m = json.loads(manifest.MANIFEST.read_text())
+    assert set(m["shots"]) == {"home", "chow"} and "templates/chow.html" in m["files"] and "templates/base.html" in m["files"]
+    assert manifest.stale() == {}
+
+
 def test_every_screenshot_is_used():
     text = "\n".join(p.read_text() for p in DOCS)
     assert not [p.name for p in SHOTS.glob("*.png") if p.name not in text], "a screenshot no guide or the README shows"
