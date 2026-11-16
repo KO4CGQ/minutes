@@ -181,3 +181,28 @@ def test_rooms_for_some_roles(env, monkeypatch):
     assert meet.rooms(c)[1]["roles"] == ["gone"]  # a save of the tab doesn't open it to everyone
     c.save_site_settings({("jitsi", "rooms"): None, ("jitsi", "adhoc"): {"on": True}})
     assert "Join Club meeting" in as_("n0call").get("/meet").text  # club.yaml's one room, with own rooms on: the page
+
+
+def test_turned_on_from_site_features(env, monkeypatch):
+    """Site → Features: Jitsi on or off, the server's address and the app ID (the secret stays in the server's env);
+    the menu shows Video meeting only once it all works."""
+    c, as_ = env
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c.save_app_admins({"pres"})
+    c.yaml = {**c.yaml, "modules": {k: v for k, v in c.yaml["modules"].items() if k != "jitsi"}}
+    c.yaml.pop("jitsi")
+    c.save_site_settings({})
+    assert not c.has("jitsi") and meet.settings(c) is None and 'href="/meet"' not in as_("n0call").get("/").text
+    page = as_("pres").get("/admin/site/features").text
+    assert 'name="jitsi_domain"' in page and "secret the app shares with the Jitsi server is set" in page
+    r = as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "", "jitsi_app_id": "x"}, follow_redirects=False)
+    assert "error=" in r.headers["location"] and not c.has("jitsi")  # on, but where?
+    r = as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "meet.example.org/<b>", "jitsi_app_id": "x"}, follow_redirects=False)
+    assert "error=" in r.headers["location"]
+    as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "https://meet.example.org/", "jitsi_app_id": "club-minutes"})
+    assert meet.settings(c) == {"domain": "meet.example.org", "app_id": "club-minutes", "room": "club"}
+    assert 'href="/meet"' in as_("n0call").get("/").text and as_("pres").get("/admin/site/video").status_code == 200
+    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "")  # on, but the server's secret missing: no menu link, and the tab says so
+    assert 'href="/meet"' not in as_("n0call").get("/").text and "Not working yet" in as_("pres").get("/admin/site/features").text
+    as_("pres").post("/admin/site/features", data={"jitsi_domain": "meet.example.org", "jitsi_app_id": "club-minutes"})
+    assert not c.has("jitsi")  # unticked: off, the address kept

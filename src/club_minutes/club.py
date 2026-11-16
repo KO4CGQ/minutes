@@ -225,7 +225,8 @@ SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_
                                     "invite_after_visits", "remind_days_before", "public_calendars")} | {
     ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
-    ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc")}  # "": a top-level club.yaml setting
+    ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc"), ("modules", "jitsi"),
+    ("jitsi", "domain"), ("jitsi", "app_id")}  # "": a top-level club.yaml setting
 
 
 # club.yaml settings renamed since 1.0.0: (section, old name) -> (section, new name). The old name keeps working

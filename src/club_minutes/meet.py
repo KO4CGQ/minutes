@@ -36,11 +36,12 @@ _opening = threading.Lock()
 
 
 def settings(club: Club) -> dict | None:
-    """{domain, app_id, room} when Jitsi is on and set up (club.yaml's jitsi: block and the secret); else None."""
-    j = club.yaml.get("jitsi") or {}
-    if not club.has("jitsi") or not j.get("domain") or not j.get("app_id") or len(secret()) < 32:  # a short secret can be guessed from one token
+    """{domain, app_id, room} when Jitsi is on and set up (Site → Features or club.yaml's jitsi: block, and the
+    secret in the server's env); else None."""
+    domain, app_id = (str(_setting(club, k) or "").strip().strip("/") for k in ("domain", "app_id"))
+    if not club.has("jitsi") or not domain or not app_id or len(secret()) < 32:  # a short secret can be guessed from one token
         return None
-    return {"domain": str(j["domain"]).strip().strip("/"), "app_id": str(j["app_id"]), "room": str(j.get("room") or "club")}
+    return {"domain": domain, "app_id": app_id, "room": str(_setting(club, "room") or "club")}
 
 
 def secret() -> str:
@@ -83,8 +84,12 @@ def rules(d: dict | None) -> dict:
     return out
 
 
+DOMAIN = re.compile(r"^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$")  # the Jitsi server: a host name, perhaps with a port
+APP_ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
 def _setting(club: Club, key: str):
-    """Site → Video's setting, else club.yaml's jitsi: one."""
+    """Site → Video's (or → Features') setting, else club.yaml's jitsi: one."""
     site = club.site_settings.get("jitsi") or {}
     return site[key] if key in site else (club.yaml.get("jitsi") or {}).get(key)
 

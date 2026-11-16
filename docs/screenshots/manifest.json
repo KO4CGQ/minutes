@@ -227,7 +227,7 @@
   "templates/_minutes.html": "0a83e6875a4cc26cc1507afd8ef961e2bc2da43c710c59c11a4c81883d755e71",
   "templates/_multi.html": "7ae8197e904664c3ab5539dcdaea28c8010c992083d4b037949b5f9b71bee0a9",
   "templates/admin.html": "202397bad56966d4e51d42d37deb591624020f343f7268e054834239b47a04e1",
-  "templates/base.html": "10b068b991975c39093cf9894c39d7e1ac9f51688de8d9f9aac31095545910a8",
+  "templates/base.html": "3763ff96d13a0987ef9a84dc104740e451509ce007d2bae06d6d7454526bea88",
   "templates/business.html": "11cd26aab2edb01bc5f9e6dcc04425810804e90e994a50e1c63348431b37e3a4",
   "templates/calendar.html": "0906fbdcf3db96ac848790f0f6ccb312a859f4160b25b06b11a006199605fde8",
   "templates/chow.html": "754a4c93e11477597e862e8995c309d96cb519ca27663a8da05f419f301cb95a",
@@ -236,7 +236,7 @@
   "templates/member_edit.html": "6985d529988640a91aac4aa2c426d961f546f508e2d9cebf8950841070891c10",
   "templates/offices.html": "e840308d8f14fdac5a934de7e44aa62c40aa1f8acfb6f6d42f7b4dc8f4969e69",
   "templates/security.html": "4717d9963a73611267af37c56b994f701bd2a523800cb7ea0b6df742e518a335",
-  "templates/site.html": "b4e691000ba7d77b6a87a07affe3ea7d70d21bc769d81bd4b013454e89f55707",
+  "templates/site.html": "c1375f7b64bcde38c4689b3877f202e903335f0e90243780336a2392b2866296",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "3a4f7ff5a88b5176441a6c10d6157b0908809211a69a46d85f7565a6e470e25c"
  }

@@ -190,6 +190,7 @@ def _assets_stamp() -> str:
 templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
+                             video_ready=lambda: bool(meet.settings(archive.club)),  # Jitsi on, set up, and its secret set
                              cite=lambda rule: archive.club.cite(rule),
                              email_ready=authmod.email_ready,  # a new server, before its SMTP settings: links go to its log
                              cert=lambda: archive.club.certificate,
@@ -2641,7 +2642,8 @@ SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles",
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
-FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"))
+FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
+                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
@@ -2661,6 +2663,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     return page(request, "site.html", tab=tab, tabs=_site_tabs(), error=error, note=note,
                 video_rooms=meet.rooms(club), video_adhoc=meet.adhoc(club), video_leaves=meet.LEAVES, video_others=meet.OTHERS,
                 video_roles={k: r["name"] for k, r in club.role_table().items()},
+                jitsi_secret=len(meet.secret()) >= 32, jitsi_domain=meet._setting(club, "domain") or "", jitsi_app_id=meet._setting(club, "app_id") or "",
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -2701,7 +2704,7 @@ async def site_dates(request: Request):
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
 
 
-OFF = {("modules", "chow"): False, ("club", "public_calendars"): [], ("calendar", "holidays"): "",
+OFF = {("modules", "jitsi"): False, ("jitsi", "domain"): "", ("jitsi", "app_id"): "", ("modules", "chow"): False, ("club", "public_calendars"): [], ("calendar", "holidays"): "",
        ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
 
 
@@ -2755,7 +2758,15 @@ async def site_features(request: Request):
             hol = next((code for code, name in regs["holidays"].items() if typed.lower() in (code, name.lower())), typed.lower())  # a name or a code
             if hol and hol not in regs["holidays"] or ele and ele not in regs["elections"]:
                 raise ValueError("Pick a region from the list.")
-            values = _keep_changes(club, {("modules", "chow"): bool(form.get("chow")),
+            domain, app_id = (" ".join((form.get(k) or "").split()).strip("/") for k in ("jitsi_domain", "jitsi_app_id"))
+            if domain.startswith(("https://", "http://")):
+                domain = domain.split("://", 1)[1].strip("/")
+            if form.get("jitsi") and not (domain and app_id):
+                raise ValueError("Video meetings: give the Jitsi server's address and the app ID, or untick it.")
+            if domain and not meet.DOMAIN.match(domain) or app_id and not meet.APP_ID.match(app_id):
+                raise ValueError("Video meetings: the address is the Jitsi server's name (meet.example.org), the app ID letters, numbers, dots, - and _.")
+            values = _keep_changes(club, {("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
+                                          ("modules", "chow"): bool(form.get("chow")),
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
                                           ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})

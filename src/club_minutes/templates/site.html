@@ -123,6 +123,14 @@
 <div class="card sitesec"><h2>Chow {{ origin('modules.chow') }}</h2>
 <label class="check"><input type="checkbox" name="chow" value="1"{{ ' checked' if module('chow') }}> <span><b>A chow rotation</b><br><span class="muted small">Members take turns bringing food to meetings: the Chow page, swaps, reminders, the console's Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.</span></span></label>
 </div>
+<div class="card sitesec"><h2>Video meetings {{ origin('modules.jitsi') }}</h2>
+<label class="check"><input type="checkbox" name="jitsi" value="1"{{ ' checked' if module('jitsi') }}> <span><b>The club's own Jitsi Meet server</b><br><span class="muted small">Members join it signed in from here (Video meeting in the menu); guests knock and a host lets them in. The rooms and their rules are on the <a href="/admin/site/video">Video</a> tab once it's on.</span></span></label>
+<div class="fmtgrid">
+<label for="f-jd">The Jitsi server</label><input id="f-jd" name="jitsi_domain" value="{{ jitsi_domain }}" maxlength="260" placeholder="meet.example.org" autocomplete="off" spellcheck="false">{{ origin('jitsi.domain') }}
+<label for="f-ja">App ID</label><input id="f-ja" name="jitsi_app_id" value="{{ jitsi_app_id }}" maxlength="64" placeholder="club-minutes" autocomplete="off" spellcheck="false">{{ origin('jitsi.app_id') }}
+</div>
+<p class="hint">{% if jitsi_secret %}The secret the app shares with the Jitsi server is set on the server.{% else %}<b>Not working yet:</b> the secret the app shares with the Jitsi server isn't set. Whoever runs the server adds it (server admin guide → Video meetings); it never goes in a web page. Until then, Video meeting stays hidden.{% endif %} The address and app ID must match the Jitsi server's own settings.</p>
+</div>
 <div class="card sitesec"><h2>Public calendars {{ origin('club.public_calendars') }}</h2>
 <p class="hint">Anyone can see these at /calendar/public (and subscribe), signed in or not. Chow and birthdays are never public.</p>
 {% set pub = club.info.get('public_calendars') or [] %}
