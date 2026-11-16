@@ -3368,7 +3368,7 @@ def _calendar_editor(request: Request) -> None:
 def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
     r = page(request, "calendar_edit.html", f=f, id=id, d=d, cals=events.CALS, error=error, repeats=repeats, scopes=events.SCOPES,
              repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()), zones=events.ZONES, club_tz=_club_tz(),
-             video_rooms=[(f"{base_url(request)}/meet/{x['slug']}", x["name"]) for x in meet.rooms(archive.club)] if meet.settings(archive.club) else [])
+             video_rooms=[(f"{base_url(request)}/meet/{x['slug']}", x["name"], x["slug"]) for x in meet.rooms(archive.club)] if meet.settings(archive.club) else [])
     r.status_code = status
     return r
 
@@ -3407,6 +3407,9 @@ def calendar_edit(request: Request, id: str = "", d: str = "", date: str = "", c
 async def calendar_save(request: Request, mid: str = Depends(me)):
     _calendar_editor(request)
     f = dict((await request.form()).items())
+    rooms = {x["slug"] for x in meet.rooms(archive.club)} if meet.settings(archive.club) else set()
+    if f.get("video_room") in rooms:  # a club video room picked: its link in the app (members signed in, guests knock)
+        f["online"] = f"{base_url(request)}/meet/{f['video_room']}"
     eid, d, cal, scope = f.get("id", ""), f.get("d", ""), f.get("cal", ""), f.get("scope") or "all"
     if cal not in events.CALS or scope not in events.SCOPES:
         raise HTTPException(404)
