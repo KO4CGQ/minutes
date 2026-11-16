@@ -117,13 +117,8 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     for bad in ({"rows": "1", "name0": "X", "slug0": "a b"}, {"rows": "2", "name0": "A", "slug0": "a", "name1": "B", "slug1": "a"},
                 {"rows": "1", "name0": "A", "rm0": "1"}):
         assert "error=" in as_("pres").post("/admin/site/video", data=bad, follow_redirects=False).headers["location"]
-    assert '<option value="board">Board</option>' in as_("pres").get("/calendar/edit").text  # a plain list: phones show it
-    as_("pres").post("/calendar/save", data={"cal": "events", "title": "Board meeting", "date": "2026-12-03", "video_room": "board",
-                                              "online": "https://example.org/old"})
-    from club_minutes import events
-    ev = next(e for e in events.load() if e["title"] == "Board meeting")
-    assert ev["online"].endswith("/meet/board")  # the room picked fills in the link (in the app, so members are signed in)
-    assert '<option value="board" selected>' in as_("pres").get(f"/calendar/edit?id={ev['id']}").text
+    form = as_("pres").get("/calendar/edit").text  # the rooms: buttons that fill in the online link, and the datalist
+    assert 'data-url="http://testserver/meet/board">Board</button>' in form and 'list="video-rooms"' in form
     # ad-hoc off again: an unlisted room is gone, and so is the form
     as_("pres").post("/admin/site/video", data={"rows": "2", **room})
     assert as_("n0call").get("/meet/antenna-project", follow_redirects=False).status_code == 404

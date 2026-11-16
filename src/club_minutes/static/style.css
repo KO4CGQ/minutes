@@ -151,6 +151,7 @@ table.list { width: 100%; border-collapse: separate; border-spacing: 0; backgrou
 .list .nw { white-space: nowrap; } .list td.wrap { overflow-wrap: anywhere; }
 code.wrap { overflow-wrap: anywhere; }
 .sitesec select { max-width: 100%; }
+button.chip { border: 0; cursor: pointer; font: inherit; font-size: .84rem; color: inherit; }
 .list .n { text-align: right; font-variant-numeric: tabular-nums; }
 .list td a { text-decoration: none; font-weight: 500; } .list td a:hover { text-decoration: underline; }
 th.asc::after { content: " ▲"; } th.desc::after { content: " ▼"; } .list thead th { cursor: pointer; user-select: none; }

@@ -24,11 +24,15 @@
   <label class="until">Until <input type="date" name="repeat_until" value="{{ f.repeat_until }}" aria-label="Repeats until (optional)"></label>
   <p class="muted small">"Until" is optional; leave it empty to keep repeating.</p></fieldset>
 <label>Where <input name="where" value="{{ f.where }}" maxlength="200"></label>
-{% if video_rooms %}<label>Video room <select name="video_room">
-  <option value="">None: use the online link below</option>
-  {% for url, name, slug in video_rooms %}<option value="{{ slug }}"{{ ' selected' if f.online == url }}>{{ name }}</option>{% endfor %}</select></label>
-<p class="muted small">One of the club's video rooms: members join it signed in, guests knock. It fills in the online link when you save.</p>{% endif %}
-<label>Online link <input type="url" name="online" value="{{ f.online }}" maxlength="500" placeholder="https://meet.example.com/abc"></label>
+<label>Online link <input type="url" name="online" id="online" value="{{ f.online }}" maxlength="500" placeholder="https://meet.example.com/abc"{% if video_rooms %} list="video-rooms"{% endif %}></label>
+{% if video_rooms %}<datalist id="video-rooms">{% for url, name, slug in video_rooms %}<option value="{{ url }}">{{ name }}</option>{% endfor %}</datalist>
+<p class="muted small" id="room-picks" hidden>Club video rooms (members join signed in, guests knock): {% for url, name, slug in video_rooms %}<button type="button" class="chip" data-url="{{ url }}">{{ name }}</button> {% endfor %}</p>
+<script nonce="{{ csp_nonce }}">
+// a club video room's button fills in the online link (any other link can still be typed); phones ignore the datalist
+const picks = document.getElementById("room-picks"), online = document.getElementById("online");
+picks.hidden = false;
+picks.addEventListener("click", (e) => { const b = e.target.closest("button[data-url]"); if (b) { online.value = b.dataset.url; online.focus(); } });
+</script>{% endif %}
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
 <label class="check"><input type="checkbox" name="quiet" value="1" {{ 'checked' if f.quiet }}> Leave out of the leader console's Upcoming Events</label>
 <p class="muted small">The console lists what's on the calendar until the next meeting, for the leader to read out. Tick this for something that needn't be announced (the weekly meeting is left out unless you untick it there).</p>
