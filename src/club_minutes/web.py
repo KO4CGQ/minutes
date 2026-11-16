@@ -1215,6 +1215,13 @@ def admin_confirm_link(request: Request, t: str = "", next: str = "/", mid: str 
 
 # ---------------- Jitsi Meet sign-in (an optional module; meet.py) ----------------
 
+def _room_roles(room: dict) -> str:
+    """The names of the roles a room lets straight in: "Board and Officer"."""
+    t = archive.club.role_table()
+    names = [t[k]["name"] for k in room.get("roles") or [] if k in t] or ["nobody"]
+    return ", ".join(names[:-1]) + (" and " if len(names) > 1 else "") + names[-1]
+
+
 @app.get("/meet", response_class=HTMLResponse)
 def meet_home(request: Request, error: str = "", mid: str = Depends(real_me)):
     """The club's video rooms (the Jitsi server's bare address comes here, so nobody starts a random room). One room
@@ -1225,6 +1232,7 @@ def meet_home(request: Request, error: str = "", mid: str = Depends(real_me)):
     rooms, adhoc = meet.rooms(archive.club), meet.adhoc(archive.club)
     if len(rooms) == 1 and not adhoc and not error:
         return RedirectResponse(f"/meet/{rooms[0]['slug']}", status_code=303)
+    rooms = [r | {"for": _room_roles(r) if r["roles"] else "", "inside": admin_mode(request) or meet.lets_in(archive.club, mid, r)} for r in rooms]
     return page(request, "meet.html", rooms=rooms, adhoc=adhoc, domain=s["domain"], error=error)
 
 
@@ -1260,8 +1268,12 @@ def meet_room(request: Request, room: str, mid: str = Depends(real_me)):
         raise HTTPException(404)
     if request.state.viewing_as:
         raise HTTPException(403, "Stop viewing the app as another member first: you'd join as them.")
-    host = archive.club.may(mid, "meet_host") or admin_mode(request) or (not named and meet.opener(room) == mid)
-    jwt = meet.token(archive.club, mid, room, host, room_rules=room_rules)
+    inside = admin_mode(request) or meet.lets_in(archive.club, mid, room_rules)
+    if not inside and room_rules.get("others") == "no":
+        raise HTTPException(403, f"{room_rules['name']} is for {_room_roles(room_rules)} only.")
+    # a host must also be let straight in: a meeting leader who isn't on the board knocks at the board's room
+    host = inside and (archive.club.may(mid, "meet_host") or admin_mode(request) or (not named and meet.opener(room) == mid))
+    jwt = meet.token(archive.club, mid, room, host, room_rules=room_rules, straight_in=inside)
     r = RedirectResponse(f"https://{s['domain']}/{room}?jwt={jwt}{meet.p2p_off(room_rules)}", status_code=303)
     r.headers["Referrer-Policy"] = "no-referrer"  # the token is in the address: don't hand it on
     return r
@@ -2647,7 +2659,8 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
     return page(request, "site.html", tab=tab, tabs=_site_tabs(), error=error, note=note,
-                video_rooms=meet.rooms(club), video_adhoc=meet.adhoc(club), video_leaves=meet.LEAVES,
+                video_rooms=meet.rooms(club), video_adhoc=meet.adhoc(club), video_leaves=meet.LEAVES, video_others=meet.OTHERS,
+                video_roles={k: r["name"] for k, r in club.role_table().items()},
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -2760,7 +2773,7 @@ def _site_tabs():
 def _video_rules(form, k: str) -> dict:
     """One room's (or the ad-hoc rooms') rules for guests, from the Video tab's ticks: k is the row's suffix."""
     return {"guests": bool(form.get(f"guests{k}"))} | {f"guest_{g}": bool(form.get(f"{g}{k}")) for g in meet.GUEST} | {
-        "last_host_leaves": form.get(f"leaves{k}") if form.get(f"leaves{k}") in meet.LEAVES else "stay", "p2p": bool(form.get(f"p2p{k}"))}
+        "last_host_leaves": form.get(f"leaves{k}") if form.get(f"leaves{k}") in meet.LEAVES else "stay", "p2p": form.get(f"p2p{k}") == "direct"}
 
 
 @app.post("/admin/site/video")
@@ -2783,14 +2796,18 @@ async def site_video(request: Request):
                     raise ValueError(f"{name}: its address is letters, numbers, - and _ only.")
                 if slug in {r["slug"] for r in rooms}:
                     raise ValueError(f"Two rooms have the address {slug}: change one.")
-                rooms.append({"slug": slug, "name": name} | _video_rules(form, i))
+                known = club.role_table()
+                # a role removed since keeps meaning "nobody" (the form can't show it): never everyone after a save
+                gone = [k for r in meet.rooms(club) if r["slug"] == slug for k in r["roles"] if k not in known]
+                rooms.append({"slug": slug, "name": name, "roles": [k for k in form.getlist(f"roles{i}") if k in known] + gone,
+                              "others": form.get(f"others{i}") if form.get(f"others{i}") in meet.OTHERS else "knock"} | _video_rules(form, i))
             if not rooms:
                 raise ValueError("Keep at least one room: it's where Video meeting in the menu goes.")
             values = {("jitsi", "rooms"): rooms, ("jitsi", "adhoc"): {"on": bool(form.get("adhoc"))} | _video_rules(form, "_a")}
         club.save_site_settings(values)
     except ValueError as e:
         return RedirectResponse("/admin/site/video?error=" + quote(str(e)), status_code=303)
-    short = lambda r: ("guests" if r["guests"] else "members only") + "".join(f" {g}" for g in meet.GUEST if r[f"guest_{g}"]) + f", last host: {r['last_host_leaves']}" + (", peer-to-peer" if r["p2p"] else "")
+    short = lambda r: (f"straight in: {', '.join(r['roles'])}, others {r['others']}; " if r.get("roles") else "") + ("guests" if r["guests"] else "members only") + "".join(f" {g}" for g in meet.GUEST if r[f"guest_{g}"]) + f", last host: {r['last_host_leaves']}" + (", peer-to-peer" if r["p2p"] else "")
     _admin_log(request, site_video="club.yaml" if form.get("back") else "; ".join(f"{r['slug']} ({short(r)})" for r in rooms)
                + (f"; own rooms ({short(values[('jitsi', 'adhoc')])})" if not form.get("back") and form.get("adhoc") else ""))
     return RedirectResponse("/admin/site/video?note=" + quote("Saved. Meetings already going on keep the rules they started with."), status_code=303)

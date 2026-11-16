@@ -3,8 +3,8 @@
 Members sign in here (passkey or emailed link) and /meet/<room> hands the club's own Jitsi server a short-lived token
 (a JWT, HS256, signed with the secret it shares: CLUB_MINUTES_JITSI_SECRET) saying who they are and whether they host
 (the "meet_host" permission). The Jitsi server checks it with Prosody's token authentication (jitsi-meet-tokens);
-token_affiliation reads the host from `context.user.affiliation`; `lobby_bypass` lets every signed-in member past the
-lobby (token_lobby_bypass), hosts included, so only guests knock. The token only opens the room: it expires in minutes.
+token_affiliation reads the host from `context.user.affiliation`; `lobby_bypass` lets a signed-in member past the
+lobby (token_lobby_bypass), hosts included, so only guests knock, and members a room doesn't name the roles of. The token only opens the room: it expires in minutes.
 
 Rooms: the named rooms (Site → Video, or club.yaml's jitsi: rooms) and, if allowed (jitsi: adhoc), rooms members open
 themselves, whose opener hosts too. Each room's rules for guests ride in every member's token as context.room.club, for
@@ -28,6 +28,7 @@ from .club import Club
 MINUTES = 5
 ROOM = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 GUEST = ("mic", "camera", "screen", "chat")  # what a guest may do, each True (freely) or False (a host must allow it)
+OTHERS = {"knock": "Knock in the lobby", "no": "Can't join"}  # members a room doesn't let straight in
 LEAVES = {"stay": "Nothing: the meeting goes on", "guests": "The guests are dropped", "end": "The meeting ends for everyone"}
 OPEN_HOURS = 24  # an ad-hoc room's opener stays its host this long
 OPEN_MAX = (5, 200)  # rooms of their own a day: per member, and in all
@@ -54,12 +55,18 @@ def sign(signing_input: bytes, key: bytes) -> str:
     return _b64(hmac.new(key, signing_input, hashlib.sha256).digest())
 
 
-def token(club: Club, mid: str, room: str, host: bool, now: float | None = None, room_rules: dict | None = None) -> str:
+def lets_in(club: Club, mid: str, room: dict) -> bool:
+    """Whether a member comes straight into this room: every member, unless it names roles."""
+    return not room.get("roles") or bool(set(room["roles"]) & set(club.roles(mid)))
+
+
+def token(club: Club, mid: str, room: str, host: bool, now: float | None = None, room_rules: dict | None = None,
+          straight_in: bool = True) -> str:
     s, now = settings(club), int(now or time.time())
     payload = {"aud": "jitsi", "iss": s["app_id"], "sub": s["domain"], "room": room, "iat": now, "nbf": now - 10,
                "exp": now + MINUTES * 60, "moderator": host,
                "context": {"user": {"id": mid, "name": club.name(mid), "affiliation": "owner" if host else "member",
-                                    "lobby_bypass": True},
+                                    "lobby_bypass": straight_in},
                            "room": {"club": rules(room_rules)}}}
     head = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
@@ -89,9 +96,12 @@ def rooms(club: Club) -> list[dict]:
         slug = str(r.get("slug") or "").lower()  # Jitsi's room names are lower case: NET is net
         if ROOM.match(slug) and slug not in seen:
             seen.add(slug)
-            out.append({"slug": slug, "name": str(r.get("name") or slug)[:60], "p2p": r.get("p2p", True) is not False} | rules(r))
+            out.append({"slug": slug, "name": str(r.get("name") or slug)[:60], "p2p": r.get("p2p", True) is not False,
+                        # roles that come straight in (none: every member); a role removed later matches nobody
+                        "roles": [str(x) for x in ([r["roles"]] if isinstance(r.get("roles"), str) else r.get("roles") or [])], "others": r.get("others") if r.get("others") in OTHERS else "knock"}
+                       | rules(r))
     if not out and (s := settings(club)):
-        out = [{"slug": s["room"], "name": "Club meeting", "p2p": True} | rules(None)]
+        out = [{"slug": s["room"], "name": "Club meeting", "p2p": True, "roles": [], "others": "knock"} | rules(None)]
     return out
 
 

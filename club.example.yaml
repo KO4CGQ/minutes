@@ -103,6 +103,8 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #     - {slug: club, name: Club meeting, guests: true, guest_mic: false, guest_camera: false, guest_screen: false,
 #        guest_chat: true, last_host_leaves: end, p2p: false}   # last_host_leaves: stay, guests (dropped) or end;
 #                                                  # p2p: true lets calls of two connect directly (guests' limits then don't hold)
+#     - {slug: board, name: Board, guests: false, roles: [board], others: knock}   # roles: who comes straight in
+#                                                  # (role keys; none: every member); others: knock or no
 #   adhoc: {on: false}         # members may open rooms of their own (with the same settings as a room, for all of them)
 
 # Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer). Also on Admin → Site → Offices.

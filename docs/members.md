@@ -40,7 +40,7 @@ Minutes can be corrected after the meeting. A corrected meeting's footer says wh
 ![Business: the club's open items](screenshots/business.png)
 
 ## 🎥 Video meeting
-If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists the club's rooms (or takes you straight into its one room), already signed in as you: no other password. Officers and meeting leaders host; joining sends the video server your name and callsign. Guests without an account use a room's guest address, shown on the page, and wait in the lobby until a host lets them in; a room may be for members only. Each room says what guests may do: if they must ask to unmute, turn their camera on or share their screen, a host allows them in the meeting as usual.
+If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists the club's rooms (or takes you straight into its one room), already signed in as you: no other password. Officers and meeting leaders host; joining sends the video server your name and callsign. Guests without an account use a room's guest address, shown on the page, and wait in the lobby until a host lets them in; a room may be for members only. Some rooms are for certain members (the board, say): the page says who; others wait in the lobby until a host lets them in, or can't join. Each room says what guests may do: if they must ask to unmute, turn their camera on or share their screen, a host allows them in the meeting as usual.
 
 If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its guest address, and you host it for a day. A calendar event can link to one of the club's rooms.
 

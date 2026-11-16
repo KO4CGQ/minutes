@@ -80,7 +80,7 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     c.save_app_admins({"pres"})
     room = {"name0": "Club meeting", "slug0": "club", "guests0": "1", "chat0": "1", "leaves0": "end",
-            "name1": "Board", "slug1": "", "leaves1": "stay", "p2p1": "1"}
+            "name1": "Board", "slug1": "", "leaves1": "stay", "p2p1": "direct"}
     as_("pres").post("/admin/site/video", data={"rows": "2", **room, "adhoc": "1", "guests_a": "1", "leaves_a": "guests"})
     assert [r["slug"] for r in meet.rooms(c)] == ["club", "board"]
     t = claims(as_("n0call").get("/meet/club", follow_redirects=False).headers["location"])
@@ -92,7 +92,7 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     p = as_("n0call").get("/meet")  # two rooms: a page, not straight in
     assert "form-action 'self' https://meet.example.org;" in p.headers["content-security-policy"] + ";"  # "Open it" ends there
     assert "form-action 'self';" in as_("n0call").get("/calendar").headers["content-security-policy"] + ";"  # only there
-    assert "Join Board" in p.text and "Members only" in p.text and "https://meet.example.org/club" in p.text
+    assert "Join Board" in p.text and "No guests" in p.text and "https://meet.example.org/club" in p.text
     # a room of one's own: its opener hosts it, someone else opening it just joins
     r = as_("n0call").post("/meet", data={"name": "Antenna Project!"}, follow_redirects=False)
     assert r.headers["location"] == "/meet/antenna-project"
@@ -155,3 +155,29 @@ def test_host_permission_only_shown_while_on_and_kept(env, monkeypatch):
         form |= {f"name.{k}": r["name"], f"perms.{k}": [p for p in r["perms"] if p != "meet_host"], f"offices.{k}": r["offices"]}
     as_("pres").post("/admin/site/roles", data=form | {"perms.officer": ["lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer"]})
     assert "meet_host" in c.role_table()["officer"]["perms"] and "meet_host" in c.role_table()["minutes_editor"]["perms"]
+
+
+def test_rooms_for_some_roles(env, monkeypatch):
+    """A room can let only some roles straight in; other members knock (or can't join), and only those let in host."""
+    c, as_ = env
+    board = {"slug": "board", "name": "Board", "roles": ["officer"], "others": "knock"}
+    c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board]})
+    assert "officer" in c.roles("pres") and not c.roles("n0call")
+    t = claims(as_("pres").get("/meet/board", follow_redirects=False).headers["location"])
+    assert t["context"]["user"]["lobby_bypass"] is True and t["moderator"] is True
+    t = claims(as_("n0call").get("/meet/board", follow_redirects=False).headers["location"])
+    assert t["context"]["user"]["lobby_bypass"] is False and t["moderator"] is False  # knocks, like a guest
+    assert "You wait in the lobby" in as_("n0call").get("/meet").text
+    c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"others": "no"}]})
+    r = as_("n0call").get("/meet/board", follow_redirects=False)
+    assert r.status_code == 403 and "Officer" in r.text
+    assert "Join Board" not in as_("n0call").get("/meet").text
+    c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"roles": ["gone"]}]})
+    assert as_("pres").get("/meet/board", follow_redirects=False).status_code == 303  # a removed role: nobody straight in,
+    assert claims(as_("pres").get("/meet/board", follow_redirects=False).headers["location"])["moderator"] is False  # not everyone
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c.save_app_admins({"pres"})
+    as_("pres").post("/admin/site/video", data={"rows": "2", "name0": "Club meeting", "slug0": "club", "name1": "Board", "slug1": "board"})
+    assert meet.rooms(c)[1]["roles"] == ["gone"]  # a save of the tab doesn't open it to everyone
+    c.save_site_settings({("jitsi", "rooms"): None, ("jitsi", "adhoc"): {"on": True}})
+    assert "Join Club meeting" in as_("n0call").get("/meet").text  # club.yaml's one room, with own rooms on: the page

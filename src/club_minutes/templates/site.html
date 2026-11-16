@@ -192,8 +192,10 @@
 <fieldset><legend class="small"><b>Guests may, without asking a host</b></legend>
 {% for g, label in (('mic', 'Unmute'), ('camera', 'Turn their camera on'), ('screen', 'Share their screen'), ('chat', 'Chat')) %}<label class="check small"><input type="checkbox" name="{{ g }}{{ k }}" value="1"{{ ' checked' if r['guest_' ~ g] }}> {{ label }}</label>{% endfor %}
 </fieldset>
-<label class="check small"><input type="checkbox" name="p2p{{ k }}" value="1"{{ ' checked' if r.p2p }}> Let two-person calls connect directly (peer-to-peer)</label>
-<p class="hint">Direct is lighter on the server, but in a call of just a host and a guest the guest could then get around the limits above. Untick it to keep every call on the server.</p>
+<label class="small">Two-person calls <select name="p2p{{ k }}">
+  <option value="server"{{ ' selected' if not r.p2p }}>Go through the club's server</option>
+  <option value="direct"{{ ' selected' if r.p2p }}>Connect directly</option></select></label>
+<p class="hint">Through the server, the limits above always hold. Directly, two people's computers talk to each other: smoother and lighter on the server, but a guest alone with a host could get around the limits. Directly suits rooms with no guests, or none held back.</p>
 <label class="small">When the last host leaves <select name="leaves{{ k }}">{% for v, label in video_leaves.items() %}<option value="{{ v }}"{{ ' selected' if r.last_host_leaves == v }}>{{ label }}</option>{% endfor %}</select></label>
 {% endmacro %}
 <form method="post" action="/admin/site/video" class="profile">
@@ -204,12 +206,17 @@
 <details class="role"{{ ' open' if not r.name }}><summary><b>{{ r.name or 'A new room' }}</b>{% if r.slug %}<br><span class="muted small">/{{ r.slug }}</span>{% endif %}</summary>
   <label class="small">Name <input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="e.g. Net night"></label>
   <label class="small">Address <input name="slug{{ i }}" value="{{ r.slug }}" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" title="Letters, numbers, dashes and underscores" placeholder="made from the name"></label>
+  <fieldset><legend class="small"><b>Members who come straight in</b></legend>
+  <p class="hint">None ticked: every member. Tick roles (Board, say) to let only their members straight in; they host if they have "host video meetings" too.</p>
+  {% for key, label in video_roles.items() %}<label class="check small"><input type="checkbox" name="roles{{ i }}" value="{{ key }}"{{ ' checked' if key in (r.roles or []) }}> {{ label }}</label>{% endfor %}
+  <label class="small">Other members <select name="others{{ i }}">{% for v, label in video_others.items() %}<option value="{{ v }}"{{ ' selected' if (r.others or 'knock') == v }}>{{ label }}</option>{% endfor %}</select></label>
+  </fieldset>
   {{ guest_rules(i, r) }}
   {% if r.slug %}<label class="check small"><input type="checkbox" name="rm{{ i }}" value="1"> Remove {{ r.name }} when you save</label>{% else %}<p class="hint">Leave the name empty to drop this new room.</p>{% endif %}
 </details>
 {% endmacro %}
 <div class="rolelist" id="roomlist">{% for r in video_rooms %}{{ room_row(loop.index0, r) }}{% endfor %}</div>
-<template id="t-room">{{ room_row('__i__', {'name': '', 'slug': '', 'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False}) }}</template>
+<template id="t-room">{{ room_row('__i__', {'name': '', 'slug': '', 'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False, 'roles': [], 'others': 'knock'}) }}</template>
 <p><button type="button" class="btn small" data-add="t-room" data-into="roomlist" data-focus="name" data-next="{{ video_rooms|length }}" hidden>+ Add a room</button></p>
 </div>
 <div class="card sitesec"><h2>Members' own rooms {{ origin('jitsi.adhoc') }}</h2>
