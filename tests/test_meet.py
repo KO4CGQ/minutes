@@ -194,7 +194,7 @@ def test_turned_on_from_site_features(env, monkeypatch):
     c.save_site_settings({})
     assert not c.has("jitsi") and meet.settings(c) is None and 'href="/meet"' not in as_("n0call").get("/").text
     page = as_("pres").get("/admin/site/features").text
-    assert 'name="jitsi_domain"' in page and "secret the app shares with the Jitsi server is set" in page
+    assert 'name="jitsi_domain"' in page and "set in this server's env file" in page
     r = as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "", "jitsi_app_id": "x"}, follow_redirects=False)
     assert "error=" in r.headers["location"] and not c.has("jitsi")  # on, but where?
     r = as_("pres").post("/admin/site/features", data={"jitsi": "1", "jitsi_domain": "meet.example.org/<b>", "jitsi_app_id": "x"}, follow_redirects=False)
@@ -206,3 +206,28 @@ def test_turned_on_from_site_features(env, monkeypatch):
     assert 'href="/meet"' not in as_("n0call").get("/").text and "Not working yet" in as_("pres").get("/admin/site/features").text
     as_("pres").post("/admin/site/features", data={"jitsi_domain": "meet.example.org", "jitsi_app_id": "club-minutes"})
     assert not c.has("jitsi")  # unticked: off, the address kept
+
+
+def test_secret_made_on_site_features(env, monkeypatch):
+    """Admins can make the secret on Site → Features: shown once, kept for the app only, never shown again; the
+    server's env, if it sets one, wins and the button isn't there."""
+    import stat
+    c, as_ = env
+    monkeypatch.delenv("CLUB_MINUTES_JITSI_SECRET")
+    assert as_("pres").post("/admin/site/jitsi-secret", follow_redirects=False).status_code == 404  # not in admin mode
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    c.save_app_admins({"pres"})
+    assert as_("n0call").post("/admin/site/jitsi-secret").status_code == 404  # not an admin
+    page = as_("pres").get("/admin/site/features").text
+    assert "Not working yet" in page and ">Make a secret<" in page and meet.settings(c) is None
+    r = as_("pres").post("/admin/site/jitsi-secret")
+    value = meet.secret()
+    assert len(value) == 64 and value in r.text and r.headers["cache-control"] == "no-store"
+    assert stat.S_IMODE((clubmod.DATA / "jitsi-secret").stat().st_mode) == 0o600
+    page = as_("pres").get("/admin/site/features").text
+    assert value not in page and "Make a new secret" in page and meet.settings(c)["domain"] == "meet.example.org"
+    as_("pres").post("/admin/site/jitsi-secret")
+    assert meet.secret() != value  # a new one replaces it
+    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "y" * 40)
+    assert meet.secret() == "y" * 40 and "Make a" not in as_("pres").get("/admin/site/features").text
+    assert "error=" in as_("pres").post("/admin/site/jitsi-secret", follow_redirects=False).headers["location"]

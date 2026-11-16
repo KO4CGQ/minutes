@@ -45,7 +45,39 @@ def settings(club: Club) -> dict | None:
 
 
 def secret() -> str:
-    return os.environ.get("CLUB_MINUTES_JITSI_SECRET", "")
+    """The secret shared with the Jitsi server: the server's env (CLUB_MINUTES_JITSI_SECRET) if set, else the one made
+    on Admin → Site → Features (the data folder, readable by the app only)."""
+    return os.environ.get("CLUB_MINUTES_JITSI_SECRET", "").strip() or _secret_file()
+
+
+def _secret_file() -> str:
+    try:
+        return (clubmod.DATA / "jitsi-secret").read_text().strip()
+    except OSError:
+        return ""
+
+
+def secret_source() -> tuple[str, float] | None:
+    """Where the secret comes from: ("env", 0), ("app", when it was made), or None (not set)."""
+    if os.environ.get("CLUB_MINUTES_JITSI_SECRET", "").strip():
+        return "env", 0
+    try:
+        return ("app", (clubmod.DATA / "jitsi-secret").stat().st_mtime) if _secret_file() else None
+    except OSError:
+        return None
+
+
+def new_secret() -> str:
+    """Make a new secret (64 hex characters), keep it for the app only, and return it to show once."""
+    import secrets
+    value, p = secrets.token_hex(32), clubmod.DATA / "jitsi-secret"
+    with _opening:  # one write at a time (they share the .tmp); two at once: the later one is the one kept
+        tmp = p.with_suffix(".tmp")
+        tmp.touch(mode=0o600)
+        tmp.chmod(0o600)
+        tmp.write_text(value + "\n")
+        tmp.replace(p)
+    return value
 
 
 def _b64(b: bytes) -> str:

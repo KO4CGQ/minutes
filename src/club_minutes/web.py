@@ -2663,7 +2663,8 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     return page(request, "site.html", tab=tab, tabs=_site_tabs(), error=error, note=note,
                 video_rooms=meet.rooms(club), video_adhoc=meet.adhoc(club), video_leaves=meet.LEAVES, video_others=meet.OTHERS,
                 video_roles={k: r["name"] for k, r in club.role_table().items()},
-                jitsi_secret=len(meet.secret()) >= 32, jitsi_domain=meet._setting(club, "domain") or "", jitsi_app_id=meet._setting(club, "app_id") or "",
+                jitsi_secret=len(meet.secret()) >= 32, jitsi_source=(src := meet.secret_source()) and src[0],
+                jitsi_made=dt.date.fromtimestamp(src[1]) if src and src[0] == "app" else None, jitsi_domain=meet._setting(club, "domain") or "", jitsi_app_id=meet._setting(club, "app_id") or "",
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -2822,6 +2823,19 @@ async def site_video(request: Request):
     _admin_log(request, site_video="club.yaml" if form.get("back") else "; ".join(f"{r['slug']} ({short(r)})" for r in rooms)
                + (f"; own rooms ({short(values[('jitsi', 'adhoc')])})" if not form.get("back") and form.get("adhoc") else ""))
     return RedirectResponse("/admin/site/video?note=" + quote("Saved. Meetings already going on keep the rules they started with."), status_code=303)
+
+
+@app.post("/admin/site/jitsi-secret", response_class=HTMLResponse)
+def site_jitsi_secret(request: Request):
+    """Make a new secret for the Jitsi server and show it once (never again: the card then only says it's set)."""
+    _site_admin(request)
+    if meet.secret_source() and meet.secret_source()[0] == "env":
+        return RedirectResponse("/admin/site/features?error=" + quote("The server's env file sets the secret: change it there."), status_code=303)
+    value = meet.new_secret()
+    _admin_log(request, jitsi_secret="made a new one")
+    r = page(request, "jitsi_secret.html", value=value, domain=meet._setting(archive.club, "domain") or "", app_id=meet._setting(archive.club, "app_id") or "club-minutes")
+    r.headers["Cache-Control"] = "no-store"  # shown once: never kept by the browser
+    return r
 
 
 @app.post("/admin/site/bylaws")

@@ -236,7 +236,7 @@
   "templates/member_edit.html": "6985d529988640a91aac4aa2c426d961f546f508e2d9cebf8950841070891c10",
   "templates/offices.html": "e840308d8f14fdac5a934de7e44aa62c40aa1f8acfb6f6d42f7b4dc8f4969e69",
   "templates/security.html": "4717d9963a73611267af37c56b994f701bd2a523800cb7ea0b6df742e518a335",
-  "templates/site.html": "c1375f7b64bcde38c4689b3877f202e903335f0e90243780336a2392b2866296",
+  "templates/site.html": "4b3552da6533f9eb79bc55913e08c28c5436a9472988bfc825b6d340194db398",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "3a4f7ff5a88b5176441a6c10d6157b0908809211a69a46d85f7565a6e470e25c"
  }

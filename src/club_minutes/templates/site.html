@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block title %}Site{% endblock %}{% block body %}
 <h1>Site</h1>
-{% macro origin(k) %}<span class="muted small">{{ 'Set here' if k in set_here or k in here_keys else 'From club.yaml' }}</span>{% endmacro %}
+{# a setting an admin changed here (it now wins over the server's club.yaml); nothing for the rest #}
+{% macro origin(k) %}{% if k in set_here or k in here_keys %}<span class="muted small">Changed here</span>{% endif %}{% endmacro %}
 <nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% if tab == 'club' %}
@@ -10,7 +11,7 @@
 <div class="fmtgrid">
 <label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ origin('name') }}
 <label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9\/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
-<label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}"><span class="muted small">{{ 'Set here' if app_name() != default_name else 'From the callsign' }}</span>
+<label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}">{% if app_name() != default_name %}<span class="muted small">Changed here</span>{% else %}<span></span>{% endif %}
 </div>
 <p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
 <div class="card sitesec"><h2>Meetings</h2>
@@ -129,7 +130,11 @@
 <label for="f-jd">The Jitsi server</label><input id="f-jd" name="jitsi_domain" value="{{ jitsi_domain }}" maxlength="260" placeholder="meet.example.org" autocomplete="off" spellcheck="false">{{ origin('jitsi.domain') }}
 <label for="f-ja">App ID</label><input id="f-ja" name="jitsi_app_id" value="{{ jitsi_app_id }}" maxlength="64" placeholder="club-minutes" autocomplete="off" spellcheck="false">{{ origin('jitsi.app_id') }}
 </div>
-<p class="hint">{% if jitsi_secret %}The secret the app shares with the Jitsi server is set on the server.{% else %}<b>Not working yet:</b> the secret the app shares with the Jitsi server isn't set. Whoever runs the server adds it (server admin guide → Video meetings); it never goes in a web page. Until then, Video meeting stays hidden.{% endif %} The address and app ID must match the Jitsi server's own settings.</p>
+<p class="hint">The address and app ID must match the Jitsi server's own settings. The app and the Jitsi server also share a <b>secret</b>: a long password only they know, which proves a member's sign-in came from this app.
+{% if jitsi_source == 'env' %}It's set in this server's env file, so it's changed there, not here.
+{% elif jitsi_source %}It was made here {{ jitsi_made|listdate }}, and isn't shown again. If the Jitsi server lost it, make a new one and give them that: the old one then stops working.
+{% else %}<b>Not working yet:</b> there's no secret. Make one, then give it to whoever runs the Jitsi server. Until both have it, Video meeting stays hidden.{% endif %}</p>
+{% if jitsi_source != 'env' %}<p><button class="btn small{{ ' ghost' if jitsi_source }}" form="jitsi-secret"{% if jitsi_source %} data-confirm="Make a new secret? Video meetings stop working until the Jitsi server has the new one."{% endif %}>{{ 'Make a new secret' if jitsi_source else 'Make a secret' }}</button></p>{% endif %}
 </div>
 <div class="card sitesec"><h2>Public calendars {{ origin('club.public_calendars') }}</h2>
 <p class="hint">Anyone can see these at /calendar/public (and subscribe), signed in or not. Chow and birthdays are never public.</p>
@@ -169,7 +174,8 @@
 </div>
 <p class="row"><button class="btn">Save</button></p>
 </form>
-{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'modules.jitsi', 'jitsi.domain', 'jitsi.app_id'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, video meetings, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if tab == 'features' %}<form id="jitsi-secret" method="post" action="/admin/site/jitsi-secret"></form>{% endif %}
 {% elif tab == 'bylaws' %}
 <p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/bylaws" class="profile sitewide">
@@ -240,7 +246,7 @@
 {% if 'jitsi.rooms' in here_keys or 'jitsi.adhoc' in here_keys %}<form method="post" action="/admin/site/video" data-confirm="Go back to club.yaml's video rooms?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
-{{ 'Set here.' if dates_here else 'From the server (club.yaml) until you save here.' }}</p>
+{{ 'Changed here.' if dates_here }}</p>
 <form method="post" action="/admin/site/dates" class="profile sitedates">
 <div class="card sitesec" role="radiogroup" aria-labelledby="dates-h"><h2 id="dates-h">Dates read like</h2>
 {% for k, (label, f) in presets.items() %}<label class="check"><input type="radio" name="preset" value="{{ k }}"{{ ' checked' if preset == k }}> <span><b>{{ label }}</b><br><span class="muted small">{{ sample.strftime(f.list) }} · {{ sample.strftime('%A, ' + f.long) }}</span></span></label>{% endfor %}

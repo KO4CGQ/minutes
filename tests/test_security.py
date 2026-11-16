@@ -301,7 +301,7 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
     same = {"name": "Test Club", "callsign": "w0test", "meeting_day": "thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
     try:
         assert member.get("/admin/site/club").status_code == 404 and member.post("/admin/site/club", data=same).status_code == 404
-        assert admin.get("/admin/site/club").text.count("From club.yaml") == 5
+        assert "Changed here" not in admin.get("/admin/site/club").text  # tagged only once changed here
         admin.post("/admin/site/club", data=same)
         assert c.site_settings == {}  # nothing differs: nothing kept
         for bad, why in (({"callsign": "W0 <b>"}, "callsign"), ({"name": "  "}, "name"), ({"timezone": "Mars/Base"}, "time zone: &#39;mars/base&#39; isn"),
@@ -335,7 +335,7 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         assert not events.dates(old, since, since + dt.timedelta(days=60)) and nxt_thu in events.dates(old, today, since) and old.get("where", "") == ""
         assert new["start"].startswith(str(since + dt.timedelta(days=(1 - since.weekday()) % 7))) and new["where"] == where and new["online"] == online
         tab = admin.get("/admin/site/club").text
-        assert tab.count("Set here") == 2 and tab.count("From club.yaml") == 3  # name and day were changed
+        assert tab.count("Changed here") == 2  # name and day were changed
         assert 'value=""' in tab.split('id="c-where"')[1][:80]  # the next meeting (still the old Thursday) has no Where yet
         cal = admin.get(f"/calendar?start={since}").text
         assert 'href="https://meet.example.com/abc?pwd=x&amp;y=1" rel="noopener">Join online' in cal and "123 Main St &lt;b&gt;" in cal
@@ -392,7 +392,7 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
 
     assert member.get("/admin/site/agenda").status_code == 404 and member.post("/admin/site/agenda", data=form()).status_code == 404
     page_ = admin.get("/admin/site/agenda").text
-    assert "Old Business" in page_ and "Winners" in page_ and page_.count("From club.yaml") == 3
+    assert "Old Business" in page_ and "Winners" in page_ and "Changed here" not in page_
     assert 'name="remind_days_before" min="0" max="60" value="3"' in page_ and 'name="invite_after_visits" min="1" max="50" value="3"' in page_
     admin.post("/admin/site/agenda", data=form())
     assert c.site_settings == {}  # nothing changed: nothing kept
@@ -438,7 +438,7 @@ def test_site_features_and_bylaws_tabs(app, tmp_path, monkeypatch):
     cert = {"cert_on": "1", "cert_name": "Bond (Certificate of Indebtedness)", "cert_short": "bond", "cert_note": "Each member buys one."}
     for tab, data in (("features", feats), ("bylaws", cert)):
         assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data=data).status_code == 404
-        assert "From club.yaml" in admin.get(f"/admin/site/{tab}").text
+        assert "Changed here" not in admin.get(f"/admin/site/{tab}").text
         admin.post(f"/admin/site/{tab}", data=data)
         assert c.site_settings == {}, tab  # unchanged: nothing kept
     admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1", "public_chow": "1"})
