@@ -1225,15 +1225,16 @@ def _room_roles(room: dict) -> str:
 
 @app.get("/meet", response_class=HTMLResponse)
 def meet_home(request: Request, error: str = "", mid: str = Depends(real_me)):
-    """The club's video rooms (the Jitsi server's bare address comes here, so nobody starts a random room). One room
-    and no rooms of their own: straight into it."""
+    """The club's video rooms this member may join (the Jitsi server's bare address comes here, so nobody starts a
+    random room). One room and no rooms of their own: straight into it."""
     s = meet.settings(archive.club)
     if not s:
         raise HTTPException(404)
-    rooms, adhoc = meet.rooms(archive.club), meet.adhoc(archive.club)
+    rooms = [r | {"for": _room_roles(r) if r["roles"] else "", "inside": admin_mode(request) or meet.lets_in(archive.club, mid, r)}
+             for r in meet.rooms(archive.club)]
+    rooms, adhoc = [r for r in rooms if r["inside"] or r["others"] == "knock"], meet.adhoc(archive.club)
     if len(rooms) == 1 and not adhoc and not error:
         return RedirectResponse(f"/meet/{rooms[0]['slug']}", status_code=303)
-    rooms = [r | {"for": _room_roles(r) if r["roles"] else "", "inside": admin_mode(request) or meet.lets_in(archive.club, mid, r)} for r in rooms]
     return page(request, "meet.html", rooms=rooms, adhoc=adhoc, domain=s["domain"], error=error)
 
 

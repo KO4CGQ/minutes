@@ -172,7 +172,14 @@ def test_rooms_for_some_roles(env, monkeypatch):
     c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"others": "no"}]})
     r = as_("n0call").get("/meet/board", follow_redirects=False)
     assert r.status_code == 403 and "Officer" in r.text
-    assert "Join Board" not in as_("n0call").get("/meet").text
+    r = as_("n0call").get("/meet", follow_redirects=False)  # Board hidden: the one room left, straight in
+    assert r.headers["location"] == "/meet/club"
+    c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"others": "no"},
+                                                  {"slug": "exec", "name": "Executive", "roles": ["officer"], "others": "no"}]})
+    assert as_("pres").get("/meet").text.count("Join ") == 3  # an officer: all three
+    c.save_site_settings({("jitsi", "rooms"): [board | {"others": "no"}, {"slug": "exec", "name": "Exec", "roles": ["officer"], "others": "no"}]})
+    p = as_("n0call").get("/meet").text  # none they can join: the page says so, no room names
+    assert "No rooms you can join" in p and "Board" not in p and "Exec" not in p
     c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"roles": ["gone"]}]})
     assert as_("pres").get("/meet/board", follow_redirects=False).status_code == 303  # a removed role: nobody straight in,
     assert claims(as_("pres").get("/meet/board", follow_redirects=False).headers["location"])["moderator"] is False  # not everyone
