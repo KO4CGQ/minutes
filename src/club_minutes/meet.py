@@ -133,12 +133,12 @@ def rooms(club: Club) -> list[dict]:
         slug = str(r.get("slug") or "").lower()  # Jitsi's room names are lower case: NET is net
         if ROOM.match(slug) and slug not in seen:
             seen.add(slug)
-            out.append({"slug": slug, "name": str(r.get("name") or slug)[:60], "p2p": r.get("p2p", True) is not False,
+            out.append({"slug": slug, "name": str(r.get("name") or slug)[:60], "about": " ".join(str(r.get("about") or "").split())[:300], "p2p": r.get("p2p", True) is not False,
                         # roles that come straight in (none: every member); a role removed later matches nobody
                         "roles": [str(x) for x in ([r["roles"]] if isinstance(r.get("roles"), str) else r.get("roles") or [])], "others": r.get("others") if r.get("others") in OTHERS else "knock"}
                        | rules(r))
     if not out and (s := settings(club)):
-        out = [{"slug": s["room"], "name": "Club meeting", "p2p": True, "roles": [], "others": "knock"} | rules(None)]
+        out = [{"slug": s["room"], "name": "Club meeting", "about": "", "p2p": True, "roles": [], "others": "knock"} | rules(None)]
     return out
 
 

@@ -100,7 +100,8 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #   app_id: club-minutes       # Prosody's app_id
 #   room: club                 # the club's one room, until rooms: (or Site → Video) lists them
 #   rooms:                     # the club's rooms; each guest_ setting: true = guests may, false = a host must allow it
-#     - {slug: club, name: Club meeting, guests: true, guest_mic: false, guest_camera: false, guest_screen: false,
+#     - {slug: club, name: Club meeting, about: "The weekly meeting, Tuesdays at 7 PM",   # about: shown under its name
+#        guests: true, guest_mic: false, guest_camera: false, guest_screen: false,
 #        guest_chat: true, last_host_leaves: end, p2p: false}   # last_host_leaves: stay, guests (dropped) or end;
 #                                                  # p2p: true lets calls of two connect directly (guests' limits then don't hold)
 #     - {slug: board, name: Board, guests: false, roles: [board], others: knock}   # roles: who comes straight in

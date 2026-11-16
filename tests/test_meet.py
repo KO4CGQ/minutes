@@ -79,7 +79,7 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     c, as_ = env
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     c.save_app_admins({"pres"})
-    room = {"name0": "Club meeting", "slug0": "club", "guests0": "1", "chat0": "1", "leaves0": "end",
+    room = {"name0": "Club meeting", "slug0": "club", "about0": "Tuesdays\n at 7 <b>PM</b>", "guests0": "1", "chat0": "1", "leaves0": "end",
             "name1": "Board", "slug1": "", "leaves1": "stay", "p2p1": "direct"}
     as_("pres").post("/admin/site/video", data={"rows": "2", **room, "adhoc": "1", "guests_a": "1", "leaves_a": "guests"})
     assert [r["slug"] for r in meet.rooms(c)] == ["club", "board"]
@@ -93,6 +93,8 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     assert "form-action 'self' https://meet.example.org;" in p.headers["content-security-policy"] + ";"  # "Open it" ends there
     assert "form-action 'self';" in as_("n0call").get("/calendar").headers["content-security-policy"] + ";"  # only there
     assert "Join Board" in p.text and "No guests" in p.text and "https://meet.example.org/club" in p.text
+    assert p.text.count('target="_blank" rel="noopener"') == 2  # each room opens in a new tab, this page stays
+    assert meet.rooms(c)[0]["about"] == "Tuesdays at 7 <b>PM</b>" and "Tuesdays at 7 &lt;b&gt;PM&lt;/b&gt;" in p.text  # typed, never markup
     # a room of one's own: its opener hosts it, someone else opening it just joins
     r = as_("n0call").post("/meet", data={"name": "Antenna Project!"}, follow_redirects=False)
     assert r.headers["location"] == "/meet/antenna-project"
@@ -176,7 +178,7 @@ def test_rooms_for_some_roles(env, monkeypatch):
     assert r.headers["location"] == "/meet/club"
     c.save_site_settings({("jitsi", "rooms"): [{"slug": "club", "name": "Club meeting"}, board | {"others": "no"},
                                                   {"slug": "exec", "name": "Executive", "roles": ["officer"], "others": "no"}]})
-    assert as_("pres").get("/meet").text.count("Join ") == 3  # an officer: all three
+    assert as_("pres").get("/meet").text.count('aria-label="Join ') == 3  # an officer: all three
     c.save_site_settings({("jitsi", "rooms"): [board | {"others": "no"}, {"slug": "exec", "name": "Exec", "roles": ["officer"], "others": "no"}]})
     p = as_("n0call").get("/meet").text  # none they can join: the page says so, no room names
     assert "No rooms you can join" in p and "Board" not in p and "Exec" not in p

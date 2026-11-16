@@ -3,7 +3,9 @@
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
 <p class="muted">You join signed in as you. Guests (anyone not signed in) use a room's guest address and wait in the lobby until a host lets them in.</p>
 <div class="cards">{% for r in rooms %}
-<div class="card"><p><a class="btn" href="/meet/{{ r.slug }}">Join {{ r.name }}</a><br>
+<div class="card room"><h2>{{ r.name }}</h2>
+{% if r.about %}<p>{{ r.about }}</p>{% endif %}
+<p><a class="btn" href="/meet/{{ r.slug }}" target="_blank" rel="noopener" aria-label="Join {{ r.name }} (opens in a new tab)">Join ↗</a><br>
 {% if r.for %}<span class="small">Straight in: {{ r.for }}.{% if not r.inside %} You wait in the lobby until a host lets you in.{% endif %}</span><br>{% endif %}
 <span class="muted small">{% if r.guests %}Guest address: <code class="wrap">https://{{ domain }}/{{ r.slug }}</code>{% else %}No guests{% endif %}</span></p></div>
 {% else %}

@@ -220,6 +220,7 @@
 <details class="role"{{ ' open' if not r.name }}><summary><b>{{ r.name or 'A new room' }}</b>{% if r.slug %}<br><span class="muted small">/{{ r.slug }}</span>{% endif %}</summary>
   <label class="small">Name <input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="e.g. Net night"></label>
   <label class="small">Address <input name="slug{{ i }}" value="{{ r.slug }}" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" title="Letters, numbers, dashes and underscores" placeholder="made from the name"></label>
+  <label class="small">About it <span class="muted">(shown under its name on Video meeting)</span> <textarea name="about{{ i }}" rows="2" maxlength="300" placeholder="e.g. The weekly club meeting, Tuesdays at 7 PM">{{ r.about or '' }}</textarea></label>
   <fieldset><legend class="small"><b>Members who come straight in</b></legend>
   <p class="hint">Every member, or pick roles (Officer, say) to let only their members straight in; they host if they have "host video meetings" too.</p>
   <details class="multi"><summary data-none="Every member">{% for key in r.roles or [] if key in video_roles %}<span class="chip">{{ video_roles[key] }}</span>{% else %}Every member{% endfor %}</summary><div class="multi-list">
@@ -233,7 +234,7 @@
 </details>
 {% endmacro %}
 <div class="rolelist" id="roomlist">{% for r in video_rooms %}{{ room_row(loop.index0, r) }}{% endfor %}</div>
-<template id="t-room">{{ room_row('__i__', {'name': '', 'slug': '', 'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False, 'roles': [], 'others': 'knock'}) }}</template>
+<template id="t-room">{{ room_row('__i__', {'name': '', 'slug': '', 'about': '', 'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False, 'roles': [], 'others': 'knock'}) }}</template>
 <p><button type="button" class="btn small" data-add="t-room" data-into="roomlist" data-focus="name" data-next="{{ video_rooms|length }}" hidden>+ Add a room</button></p>
 </div>
 <div class="card sitesec"><h2>Members' own rooms {{ origin('jitsi.adhoc') }}</h2>

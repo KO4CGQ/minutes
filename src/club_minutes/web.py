@@ -2812,7 +2812,7 @@ async def site_video(request: Request):
                 known = club.role_table()
                 # a role removed since keeps meaning "nobody" (the form can't show it): never everyone after a save
                 gone = [k for r in meet.rooms(club) if r["slug"] == slug for k in r["roles"] if k not in known]
-                rooms.append({"slug": slug, "name": name, "roles": [k for k in form.getlist(f"roles{i}") if k in known] + gone,
+                rooms.append({"slug": slug, "name": name, "about": " ".join((form.get(f"about{i}") or "").split())[:300], "roles": [k for k in form.getlist(f"roles{i}") if k in known] + gone,
                               "others": form.get(f"others{i}") if form.get(f"others{i}") in meet.OTHERS else "knock"} | _video_rules(form, i))
             if not rooms:
                 raise ValueError("Keep at least one room: it's where Video meeting in the menu goes.")
