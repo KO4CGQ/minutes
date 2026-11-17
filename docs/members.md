@@ -47,7 +47,7 @@ If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists 
 - **Guests** without an account use a room's guest address, shown on the page, and wait in the lobby until a host lets them in. Some rooms are for members only.
 - **What guests may do:** each room says. If they must ask to unmute, turn their camera on or share their screen, a host allows it in the meeting as usual.
 
-If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its guest address, and you host it for a day. A calendar event can link to one of the club's rooms.
+If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its guest address, and you host it until a day passes with no one joining it here. A calendar event can link to one of the club's rooms.
 
 ## 📅 Calendar
 **Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
@@ -76,4 +76,4 @@ With tracking on (the same switch as your dues, above), **Spending** in the menu
 - **Video meetings:** joining sends your name and callsign to the club's video server.
 - **Admin recovery:** if the officers ever have to recover admin access, every member is emailed at each step.
 - **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both.
-- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night. Made Active again, you sign in with an emailed link and add a passkey again.
+- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night, and your address leaves the Email log. Made Active again, you sign in with an emailed link and add a passkey again.

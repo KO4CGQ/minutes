@@ -15,7 +15,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Smaller changes:**
     - If the minutes email (or a correction's) doesn't go out, the minutes page offers **Send it now**, and it's tried again overnight.
     - Replies to the minutes email go to whoever took the minutes only if they share their email with members; otherwise to the club's address.
-    - The members guide says what's kept and who sees it. Old sign-in records and the Email log are deleted after 90 days, and a member's email choices, settings, passkeys and sign-in records the night after they're made Inactive or a Silent Key.
+    - The members guide says what's kept and who sees it. Old sign-in records and the Email log are deleted after 90 days, and a member's email choices, settings, passkeys, sign-in records and Email log lines the night after they're made Inactive or a Silent Key.
     - Easier on a phone and with a screen reader: bigger checkboxes and buttons, buttons named for their row, and an "Are you sure?" before more removals.
     - The Security page also lists hostile requests (scanner probes, requests from other sites, refused actions).
     - An admin with admin mode off is told to turn it on, on every admin page.
