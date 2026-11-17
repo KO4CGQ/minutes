@@ -226,6 +226,11 @@ def test_links_to_pages_of_the_app_stay_relative(tmp_path, monkeypatch):
     assert web.link_host("/bylaws") == "on this site"
     bad = {**form, "url": ["//evil.example/x", "/calendar", "https://discord.example/x"]}
     assert "error=" in TestClient(web.app).post("/links", data=bad, follow_redirects=False).headers["location"]
+    saved.clear()
+    r = TestClient(web.app).post("/links", data={}, follow_redirects=False)  # not from the page: it always sends its rows
+    assert r.status_code == 400 and "nothing was changed" in r.text and saved == []
+    blank = {"label": [""], "url": [""], "icon": [""], "show": ["both"]}  # every row blanked on the page: the links cleared
+    assert TestClient(web.app).post("/links", data=blank, follow_redirects=False).status_code == 303
 
 
 def test_link_icons():

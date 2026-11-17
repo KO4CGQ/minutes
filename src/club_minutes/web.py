@@ -3526,6 +3526,8 @@ async def links_save(request: Request, mid: str = Depends(me)):
     if not admin_mode(request):
         raise HTTPException(403, "Turn on admin mode to edit the club links.")
     form = await request.form()
+    if "label" not in form:  # the page always sends its rows (blank ones clear the links): this one wasn't from it
+        raise HTTPException(400, "No links were sent, so nothing was changed.")
     rows = zip(form.getlist("label"), form.getlist("url"), form.getlist("icon"), form.getlist("show"))
     out = []
     own = f"https://{authn.rp_id}/".lower() if authn.rp_id else None
