@@ -157,3 +157,14 @@ def test_settings_saved_at_once_all_survive():
     for t in ts:
         t.join()
     assert all(prefs.settings(f"member-{i}")["week_start"] == "monday" for i in range(20))
+
+
+def test_a_removed_members_choices_are_dropped_and_no_one_elses():
+    prefs.save("n0aaaa", {"minutes": "link"})
+    prefs.save("n0gone", {"minutes": "link"})
+    prefs.save_settings("n0gone", {"support_link": "hide"})
+    prefs.save_settings("n0cccc", {"support_link": "hide"})  # a Silent Key is still on the roster
+    assert prefs.purge_removed(Club(FIX / "test-club.yaml", roster=[])) == 0  # a roster that didn't load: nothing goes
+    assert prefs.purge_removed(club()) == 1 and prefs.purge_removed(club()) == 0
+    assert prefs.get("n0aaaa")["minutes"] == "link" and prefs.settings("n0cccc")["support_link"] == "hide"
+    assert prefs.get("n0gone")["minutes"] == "pdf" and prefs.settings("n0gone")["support_link"] == "show"

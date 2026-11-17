@@ -38,7 +38,7 @@ def test_every_data_file_with_member_ids_follows_a_callsign_change():
 LOCK = {"chow.json": "_chow_lock", "business.json": "business.locked()", "events.json": "events.locked()",
         "treasurer.json": "treasurer.locked()", "recovery.json": "recovery.locked()", "admins.json": "recovery.locked()",
         "admins-suspended.json": "recovery.locked()", "roles.json": "none: an admin's Roles save, rarely",
-        "email-prefs.json": "none: a member's own choices", "settings.json": "none: a member's own choices",
+        "email-prefs.json": "prefs.locked()", "settings.json": "prefs.locked()",
         "calendar-feeds.json": "none: a member's own feed list", "ask-about.json": "none: one meeting leader at a time",
         "meet-rooms.json": "none: written when a host opens a room"}
 
@@ -67,6 +67,7 @@ NOT_ATOMIC = {
     ("events.py", 'open(DATA / "events.lock", "w")'): "a lock",
     ("business.py", 'open(DATA / "business.lock", "w")'): "a lock",
     ("recovery.py", 'open(DATA / "recovery.lock", "w")'): "a lock",
+    ("prefs.py", 'open(DATA / "prefs.lock", "w")'): "a lock",
     ("treasurer.py", 'open(DATA / "treasurer.lock", "w")'): "a lock",
     ("upgrade.py", 'open(data / "upgrade.lock", "w")'): "a lock",
 }

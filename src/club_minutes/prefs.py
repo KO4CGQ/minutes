@@ -6,11 +6,12 @@ chow changes to your own night and security emails aren't covered: they always g
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
+import fcntl
 import json
 import logging
 import os
-import threading
 from pathlib import Path
 
 from . import branding, business, calview, chow
@@ -53,7 +54,16 @@ def _read(name: str) -> dict:
         return {}
 
 
-_lock = threading.Lock()  # read-merge-write: two saves at once mustn't lose one (the web app is one process)
+@contextlib.contextmanager
+def locked():
+    """Held around read-merge-write of email-prefs.json and settings.json, by the web app and the daily job alike."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "prefs.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def _write(name: str, d: dict) -> None:
@@ -75,7 +85,7 @@ def save(mid: str, choices: dict) -> dict:
     """Keep only valid choices (this is a trust boundary: it comes from a form)."""
     clean = {k: v for k, v in choices.items() if k in KINDS and v in KINDS[k][1]}
     clean["chow_days"] = sorted({num(d) for d in choices.get("chow_days", []) if num(d) in CHOW_DAYS}, reverse=True)
-    with _lock:
+    with locked():
         allp = _read("email-prefs.json")
         allp[mid] = clean
         _write("email-prefs.json", allp)
@@ -96,7 +106,7 @@ def settings(mid: str | None) -> dict:
 
 def save_settings(mid: str, choices: dict) -> dict:
     """Keep only valid choices (they come from a form); settings not in this form stay as they were."""
-    with _lock:
+    with locked():
         alls = _read("settings.json")
         alls[mid] = alls.get(mid, {}) | {k: v for k, v in choices.items() if k in SETTINGS and v in SETTINGS[k][1]}
         _write("settings.json", alls)
@@ -167,6 +177,20 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
         out.append((m.id, f"digest:{today}:{m.id}", f"{club.label} meeting tonight",
                     f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nTo stop this email, or choose which others you get: {url}/profile/email\n\n{_sign(club)}"))
     return out
+
+
+def purge_removed(club: Club) -> int:
+    """Drop the choices of members no longer on the roster (privacy: nothing kept about someone who's gone)."""
+    if not club.members:  # a roster that didn't load isn't everyone leaving
+        return 0
+    gone = set()
+    with locked():
+        for name in ("email-prefs.json", "settings.json"):
+            d = _read(name)
+            if drop := set(d) - set(club.members):
+                gone |= drop
+                _write(name, {k: v for k, v in d.items() if k not in drop})
+    return len(gone)
 
 
 def unsent(keys: list[str]) -> set[str]:
