@@ -57,7 +57,7 @@ What a club relies on:
 - **The data folder:** what's stored in it, which a newer version may reshape only through an upgrade step (Changes and releases, above); and the backup format, so an older backup can always be restored.
 - **The server:** the folders (`/opt/club-minutes`, `/var/lib/club-minutes`, `/etc/club-minutes`), the service and timer names, the `club-minutes` commands and their options, the `CLUB_MINUTES_*` environment settings, and `setup.sh` and `update.sh`.
 - **Addresses others keep:** members' calendar subscription links (`/calendar/feed/…`, `/calendar/public.ics`) and public calendar page, sign-in links in emails already sent, and any page address in an email or a bookmark (a moved page answers its old address with a redirect, as Backups' does).
-- **The roster API** (`/api/roster`, used by the Discord bot): its token, its fields and what they mean. Fields may be added; none removed or renamed.
+- **The roster API** (`/api/roster`, for a club's own tools, such as a chat bot): its token, its fields and what they mean. Fields may be added; none removed or renamed.
 
 The rules:
 - **A new setting has a default** that keeps things as they were, so a club.yaml from 1.0.0 still starts. A setting that must be given is a 2.0 change.
