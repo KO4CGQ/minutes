@@ -100,3 +100,71 @@ def test_every_from_leads_back(monkeypatch):
                               ("stats", "/stats", "Attendance"), ("search&q=bob%20a", "/search?q=bob%20a", "Search"), ("home", "/", "Home")):
         html = t.get(f"/members/{mid}?from={came}").text
         assert f'<nav class="crumb" aria-label="Back"><a href="{href}">‹ {label}</a>' in html, came
+
+
+TEMPLATES = ROOT / "src/club_minutes/templates"
+CSS = (ROOT / "src/club_minutes/static/style.css").read_text()
+
+
+def test_destructive_forms_ask_first():
+    """A form whose button or address says remove, delete, ban... carries data-confirm (on the form or a button)."""
+    risky = re.compile(r"\b(remov\w*|delet\w*|lift|suspend\w*|accept|object|call off|ban|unban|discard|revoke|end-all|sign ?out|withdraw|forget)\b", re.IGNORECASE)
+    allowed = {  # part of the form tag -> why it needs no question
+        'action="/logout"': "signing out loses nothing",
+        'action="/admin/view-as"': "Stop only ends a look at the app as someone else",
+        'action="/admin/mode"': "turning admin mode off loses nothing",
+        'action="/admin/updates/cancel"': "withdrawing the request can simply be made again",
+        'action="/admin/security/unban"': "Unban gives an address its access back",
+        'action="/profile/photo/remove"': "a member's own picture: uploading again undoes it",
+        'action="/chow/requests/{{ r.id }}/answer"': "cancelling a chow request can be asked again",
+        'action="/business/suggestions/{{ g.id }}/accept"': "adds a card that can be edited or deleted",
+    }
+    bad = []
+    for t in sorted(TEMPLATES.glob("*.html")):
+        for m in re.finditer(r"<form\b([^>]*)>(.*?)</form>", t.read_text(), re.DOTALL):
+            head, inner = m.groups()
+            texts = re.findall(r"<button\b[^>]*>(.*?)</button>", inner, re.DOTALL)
+            probe = " ".join([re.sub(r"<[^>]+>|\{[{%].*?[}%]\}", " ", " ".join(texts)),
+                              (re.search(r'action="([^"]*)"', head) or [0, ""])[1].replace("/", " "),
+                              " ".join(re.findall(r'name="op" value="(\w+)"', inner))])
+            if risky.search(probe) and "data-confirm" not in head + inner and not any(a in head for a in allowed):
+                bad.append(f"{t.name}: {' '.join(head.split())[:80]}")
+    assert not bad, "destructive forms without data-confirm (or an allowlist reason): " + "; ".join(bad)
+
+
+def test_changes_are_not_shown_by_colour_alone():
+    assert re.search(r"table\.diff ins\b[^{}]*\{[^}]*text-decoration:\s*underline", CSS), "ins needs an underline"
+    assert re.search(r"table\.diff del\b[^{}]*\{[^}]*text-decoration:\s*line-through", CSS), "del needs a strike-through"
+
+
+def test_new_tab_links_are_safe_and_say_so():
+    """rel=noopener, and the name says it opens in a new tab: ↗ or "new tab", or no class (style.css adds both to those)."""
+    bad = []
+    for t in sorted(TEMPLATES.glob("*.html")):
+        for m in re.finditer(r"<a\b[^>]*target=\"_blank\"[^>]*>(.*?)</a>", t.read_text(), re.DOTALL):
+            tag = m.group(0)
+            if 'rel="noopener' not in tag or (" class=" in tag and not re.search(r"↗|new tab", tag)):
+                bad.append(f"{t.name}: {tag[:90]}")
+    for line in (ROOT / "src/club_minutes/static/console.js").read_text().splitlines():
+        link = line[line.rindex('h("a"', 0, line.index('target: "_blank"')):] if 'target: "_blank"' in line else ""
+        if link and ('rel: "noopener"' not in link or ("class:" in link and not re.search(r"↗|new tab", link))):
+            bad.append(f"console.js: {link[:90]}")
+    assert not bad, "target=_blank needs rel=noopener and ↗ or 'new tab' in its name: " + "; ".join(bad)
+
+
+INTRO = re.compile(r"(?:</h1>|\{% (?:el)?if tab == [^%]*%\})(?:\s|\{[%#][^}]*[%#]\}|<[^p][^>]*>)*?<p class=\"muted\"[^>]*>(.*?)</p>", re.DOTALL)
+
+
+def intros():
+    for t in sorted(TEMPLATES.glob("*.html")):
+        for m in INTRO.finditer(t.read_text()):
+            text = re.sub(r"\{%.*?%\}|\{#.*?#\}|<[^>]+>", " ", m.group(1), flags=re.DOTALL)
+            yield t.name, len(re.sub(r"\{\{.*?\}\}", "x", text).split()), text.split()[:6]
+
+
+def test_page_intros_are_short():
+    """The grey paragraph under a page's title: 60 words at most. Longer goes in a hint beside what it explains."""
+    seen = list(intros())
+    assert len(seen) > 10, "the intro pattern matches nothing"
+    long = [f"{n} ({w} words)" for n, w, _ in seen if w > 60]
+    assert not long, "page intros over 60 words: split them or move the detail into hints: " + "; ".join(long)

@@ -37,8 +37,8 @@
 <p class="muted">An internet address with {{ ban_after }} of these in an hour is banned from signing in for {{ ban_hours }} hours. Requests sent from another site's page, actions a member isn't allowed and oversized uploads are listed here, but never count. LAN and tailnet addresses are never banned automatically.</p>
 {% if events %}{% set banned = bans|map(attribute='ip')|list %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
 {% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td><span class="ip">{{ e.ip }}</span> <span class="muted">{{ e.ip|where }}</span></td>
-<td class="evacts"><button type="button" class="btn small ghost" popovertarget="ev{{ loop.index }}">Details</button>
-{% if not e.ip or e.kind == 'cross_site' %}{% elif e.ip|ban_key in banned %}<a class="small" href="/admin/security/bans">Banned</a>{% elif e.ip == my_ip %}<span class="muted small">You</span>{% else %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}
+<td class="evacts"><button type="button" class="btn small ghost" popovertarget="ev{{ loop.index }}" aria-label="Details of {{ event_names.get(e.kind, e.kind) }}, {{ e.at|tsfull }}">Details</button>
+{% if not e.ip or e.kind == 'cross_site' %}{% elif e.ip|ban_key in banned %}<a class="small" href="/admin/security/bans">Banned</a>{% elif e.ip == my_ip %}<span class="muted small">You</span>{% else %}<form method="post" action="/admin/security/ban" data-confirm="Ban this address?"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}
 <div popover id="ev{{ loop.index }}" class="modal" aria-labelledby="ev{{ loop.index }}-t"><button type="button" class="calclose" popovertarget="ev{{ loop.index }}" popovertargetaction="hide" aria-label="Close">{{ emoji('✖️', 'x') }}</button>
 <div class="body"><h2 id="ev{{ loop.index }}-t">{{ event_names.get(e.kind, e.kind) }}</h2><dl class="evinfo">
 <dt>When</dt><dd>{{ e.at|tsfull }}</dd>
@@ -56,9 +56,9 @@
 {% for b in bans %}<tr><td><span class="ip">{{ b.ip }}</span> <span class="muted">{{ b.ip|where }}</span></td><td>{{ b.reason }} <span class="muted">({{ 'automatic' if b.by == 'automatic' else club.name(b.by) }})</span></td><td class="opt">{{ b.at|tsfull }}</td><td>{{ b.until|tsfull if b.until else 'until lifted' }}</td>
 <td><form method="post" action="/admin/security/unban"><input type="hidden" name="ip" value="{{ b.ip }}"><button class="btn small">Unban</button></form></td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">No addresses are banned.</p>{% endif %}
-<form method="post" action="/admin/security/ban" class="inline"><label>Ban an address <input name="ip" required placeholder="203.0.113.7" size="18"></label>
+<form method="post" action="/admin/security/ban" class="inline" data-confirm="Ban this address?"><label>Ban an address <input name="ip" required placeholder="203.0.113.7" size="18"></label>
 <label>for <select name="hours"><option value="24">24 hours</option><option value="168">a week</option><option value="0">until lifted</option></select></label>
-<input name="reason" placeholder="Why (optional)" size="24"> <button class="btn small">Ban</button></form>
+<input name="reason" placeholder="Why (optional)" aria-label="Why (optional)" size="24"> <button class="btn small">Ban</button></form>
 <p class="muted">SSH bans by fail2ban on the server aren't shown here; lift one on the server with <code>fail2ban-client set sshd unbanip ADDRESS</code>.</p>
 
 {% endif %}

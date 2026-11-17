@@ -94,14 +94,14 @@
     holdbar.replaceChildren(who.you ? `You're taking these minutes in another window or device (since ${clock(who.since)}).`
         : `${who.holder} is taking these minutes (since ${clock(who.since)}). This page is read-only, so nothing gets overwritten; it shows the minutes as they were when you opened it.`,
       lost ? " Changes made here after the last save weren't saved." : "", " ",
-      h("a", { href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view ↗"), " ",
+      h("a", { href: `/meetings/${M.slug}`, target: "_blank", rel: "noopener" }, "Follow the live view"), " ",
       h("button", { class: "btn small", onclick: async () => {
         if (!who.you && !confirm(`Take over from ${who.holder}? Their console becomes read-only, and you're recorded as taking the minutes from here.`)) return;
         const r = await post("hold", { take: true });
         if (r.ok) location.reload(); else checkIn(); } }, take), " ", exit());
     holdbar.hidden = false;
     if (lost) notice(`${who.holder} took over`, `${who.holder} is taking these minutes now, so this page is read-only. ` +
-      "Anything typed here in the last few seconds wasn't saved: copy it if you need it.", h("a", { class: "btn small", href: `/meetings/${M.slug}`, target: "_blank" }, "Follow the live view"));
+      "Anything typed here in the last few seconds wasn't saved: copy it if you need it.", h("a", { class: "btn small", href: `/meetings/${M.slug}`, target: "_blank", rel: "noopener" }, "Follow the live view ↗"));
   }
   function closed(how, by) {  // discarded or submitted in another console: nothing more to do here
     readOnly = true; closedHow = how;
@@ -522,7 +522,7 @@
       const items = isNew ? D.business.new : D.business.old;
       box.replaceChildren(
         ...(items.length ? items.map(row) : [h("p", { class: "muted" }, isNew ? "Nothing new yet." : "No open items.")]),
-        isNew ? add() : h("p", { class: "hint" }, "New items go in New Business. ", h("a", { href: "/business", target: "_blank" }, "All business items")));
+        isNew ? add() : h("p", { class: "hint" }, "New items go in New Business. ", h("a", { href: "/business", target: "_blank", rel: "noopener" }, "All business items")));
       setTimeout(() => box.querySelectorAll("textarea").forEach(grow), 0);
     };
     draw();
@@ -564,7 +564,7 @@
     };
     draw(); showList();
     return h("div", {}, h("h2", {}, "Chow"), box,
-      h("p", { class: "hint" }, HINTS["Upcoming Chow"], " ", h("a", { href: "/chow", target: "_blank" }, "Open the Chow page")),
+      h("p", { class: "hint" }, HINTS["Upcoming Chow"], " ", h("a", { href: "/chow", target: "_blank", rel: "noopener" }, "Open the Chow page")),
       h("h3", {}, "In the minutes (Upcoming Chow)"), list);
   }
 

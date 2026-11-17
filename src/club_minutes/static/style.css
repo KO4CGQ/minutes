@@ -76,7 +76,7 @@ select, textarea {
 input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
 fieldset { min-width: 0; }  select { max-width: 100%; }  /* long option text ("Every year on the 1st Thursday of January") mustn't widen a phone page */
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
-input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1rem; height: 1rem; }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1.5rem; height: 1.5rem; }
 textarea { resize: vertical; line-height: 1.45; }
 
 /* buttons */
@@ -718,8 +718,7 @@ table.diff td.old { border-right: 1px solid var(--border); } table.diff th.part 
 table.diff tr.same td { color: var(--muted); }
 table.diff tr.removed td.old, table.diff del { background: var(--danger-soft); color: var(--danger-text); }
 table.diff tr.added td.new, table.diff ins { background: color-mix(in srgb, #2e7d32 22%, var(--surface)); }
-table.diff del, table.diff ins { border-radius: 3px; padding: 0 .1em; } table.diff ins { text-decoration: underline; }  /* not by colour alone */
-table.att-edit input[type=radio] { width: 1.5rem; height: 1.5rem; }  /* a bigger target for older fingers */
+table.diff del, table.diff ins { border-radius: 3px; padding: 0 .1em; } table.diff ins { text-decoration: underline; } table.diff del { text-decoration: line-through; }  /* not by colour alone */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Remove: a checkbox that strikes the row out (and back) */
 form.correct .rm input { position: absolute; opacity: 0; width: 1px; height: 1px; }

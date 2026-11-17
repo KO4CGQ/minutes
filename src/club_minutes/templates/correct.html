@@ -38,7 +38,7 @@
     {% if sec in ('Old Business', 'Upcoming Chow') %}<p class="hint">The text read that night: changing it here doesn't change the {{ 'tracked business items' if sec == 'Old Business' else 'chow schedule' }}.</p>{% endif %}
     {% for it in items %}{{ item(n, loop.index0, sec, it.text, club.name(it.member) if it.member else it.shown[:it.shown|length - it.text|length - 2] if it.when else '') }}{% endfor %}
     <template id="t-s{{ n }}">{{ item(n, '__i__', sec, new=true) }}</template>
-    <button type="button" class="btn small" data-add="t-s{{ n }}" data-next="{{ items|length }}">+ Add an item</button>
+    <button type="button" class="btn small" data-add="t-s{{ n }}" data-next="{{ items|length }}" aria-label="Add an item to {{ sec }}">+ Add an item</button>
   </details>
   {% endfor %}
 

@@ -59,7 +59,7 @@
 </form>
 {% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'roles' %}
-<p class="muted">Roles say what a member may do in the app; most come from the offices a member holds. Below: the club's offices, from its bylaws, then each role, what it allows and who has it. Who holds each office is on the <a href="/offices">Offices</a> page (Roster → Offices). Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<p class="muted">Roles say what a member may do in the app; most come from the offices a member holds. Below: the club's offices, then each role, what it allows and who has it. Who holds each office is on the <a href="/offices">Offices</a> page. Each change is in the admin log and wins over club.yaml on the server.</p>
 <form method="post" action="/admin/site/offices" class="profile siteoffices">
 <input type="hidden" name="rows" value="{{ office_rows|length }}">
 <div class="card sitesec"><h2>Offices {{ origin('.offices') }}</h2>
@@ -76,7 +76,7 @@
 <template id="t-office">{{ office_row('__i__', {'title': '', 'officer': False, 'seats': 1, 'held': False}) }}</template>
 <p><button type="button" class="btn small" data-add="t-office" data-next="{{ office_rows|length }}" hidden>+ Add an office</button></p>
 <p class="hint">Clear an office's name to remove it when you save. Greyed names are held: hand them over on the Offices page before renaming them. What each office's holders may do is under Roles, below.</p>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn" aria-label="Save the offices">Save</button></p>
 </div>
 </form>
 {% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
@@ -104,7 +104,7 @@
 </details>{% endfor %}</div>
 <p class="row"><label>Add a role <input name="new" maxlength="40" placeholder="e.g. Net manager"></label></p>
 <p class="hint">Recording money always comes with looking at the Treasurer pages. A meeting's own leader and recorder may always correct its minutes. The roster emails are new members, roster changes and the chow list; a new email for someone else waits until its owner confirms it. Every permission needs at least one role: a save that would leave one with none is refused.</p>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn" aria-label="Save the roles">Save</button></p>
 </form>
 {% for r in role_rows if r.builtin and r.edited %}<form id="roleback-{{ r.key }}" method="post" action="/admin/site/roles" data-confirm="Put {{ r.name }} back as it ships (its name, what it allows and its offices)? The members picked for it stay."><input type="hidden" name="back" value="{{ r.key }}"></form>{% endfor %}
 </div>
