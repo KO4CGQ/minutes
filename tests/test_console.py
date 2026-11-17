@@ -347,3 +347,15 @@ def test_console_saves_of_the_wrong_shape_or_size_are_refused_and_attendance_is_
     m = a.by_slug[m.slug]
     assert m.in_person == ["doe", "w0demo", "roe"] and m.remote == []   # an Inactive member and an old callsign kept
     assert m.guests == [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}] and m.visitors == 2
+
+
+def test_replies_to_the_minutes_go_to_the_recorder_and_the_leader(tmp_path, monkeypatch):
+    """Each only if they share their email with members (Jim, 2026-11-16); neither: the club's address."""
+    a = mail_archive(tmp_path, monkeypatch, None)
+    Meeting(date=dt.date(2026, 11, 19), status="published", leader="kim", recorder="doe").save(tmp_path)
+    a = Archive(tmp_path, a.club)
+    console.email_minutes(a, "2026-11-19", lambda: ("m.pdf", b"%PDF"), "http://x/meetings/2026-11-19")
+    msg = FakeSMTP.outbox[0]
+    assert msg["Reply-To"] == "sam@example.org" and "Replies go to Sam." in msg.get_body(("plain",)).get_content()
+    a.club.members["doe"].share = ["email"]  # the recorder shares too: both, recorder first
+    assert console.reply_addresses(a.club.members["doe"], a.club.members["kim"], a.club.members["kim"]) == "jane@example.org, sam@example.org"

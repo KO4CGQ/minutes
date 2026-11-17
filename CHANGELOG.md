@@ -14,7 +14,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Officers guide:** Choosing an admin, with a template admin agreement.
 - **Smaller changes:**
     - If the minutes email (or a correction's) doesn't go out, leaders and editors see **Send it now** on the minutes page, and it's tried again overnight.
-    - Replies to the minutes email go to whoever took the minutes only if they share their email with members; otherwise to the club's address.
+    - Replies to the minutes email go to whoever took them and whoever led the meeting, each only if they share their email with members; otherwise to the club's address.
     - The members guide says what's kept and who sees it. Old sign-in records and the Email log are deleted after 90 days.
     - A member made Inactive or a Silent Key loses their email choices, settings, passkeys and sign-in records that night, and their address leaves the Email log. Made Active again, they sign in with an emailed link.
     - Easier on a phone and with a screen reader: bigger checkboxes and buttons, buttons named for their row, and an "Are you sure?" before more removals.

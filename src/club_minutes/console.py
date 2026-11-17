@@ -432,6 +432,15 @@ def reply_address(m) -> str | None:
     return m.email if m and m.email and "email" in m.share else None
 
 
+def reply_addresses(*members) -> str | None:
+    """Reply-To for several members (the recorder and the leader): those who share their email, else None (the club's)."""
+    out = []
+    for m in members:
+        if (a := reply_address(m)) and a.lower() not in (x.lower() for x in out):
+            out.append(a)
+    return ", ".join(out) or None
+
+
 def mark_pending(archive: Archive, slug: str, name: str, url: str, what: list[str] | None = None) -> None:
     """Note that `name`'s email is due, so a failed or lost send (an email server error, a restart mid-send) can be sent
     again: from the meeting page, or by the daily job (corrections.retry_pending). A successful send removes it."""
@@ -499,15 +508,16 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
     club = archive.club
     leader = club.members.get(m.leader or "")
     recorder = club.members.get(m.recorder or "") if m.recorder != m.leader else None
-    writer = recorder or leader  # replies (corrections) go to whoever took the minutes
+    repliers = [x for x in (recorder or leader, leader) if reply_address(x)]  # the recorder and the leader (Jim, 2026-11-16)
+    repliers = list({x.id: x for x in repliers}.values())
     date = show_date(m.date, "document")
     body = (f"Here are the minutes of the {club.label} meeting of {date}"
             f"{f', led and recorded by {leader.name}' if leader and m.recorder == m.leader else f', led by {leader.name}' if leader else ''}"
             f"{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
-            f"Replies go to {writer.first if reply_address(writer) else 'the club'}.\n\n"
+            f"Replies go to {' and '.join(x.first for x in repliers) or 'the club'}.\n\n"
             f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.label}")
-    subject, reply_to = f"{club.label} meeting minutes, {date}", reply_address(writer)
+    subject, reply_to = f"{club.label} meeting minutes, {date}", reply_addresses(*repliers)
     return send_to_members(archive, slug, subject, body, " The PDF is attached.", make_pdf, reply_to, "emailed.json")
 
 

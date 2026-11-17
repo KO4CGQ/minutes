@@ -597,8 +597,8 @@ def forget_email_log(addresses: set[str]) -> None:
             rest = {k: [a for a in e.get(k) or [] if a.strip().lower() not in addresses] for k in ("to", "withheld")}
             if (e.get("to") or e.get("withheld")) and not (rest["to"] or rest["withheld"]):
                 continue
-            if (e.get("reply_to") or "").strip().lower() in addresses:
-                e["reply_to"] = None
+            if e.get("reply_to"):  # one address, or a list (the minutes: recorder and leader)
+                e["reply_to"] = ", ".join(x.strip() for x in e["reply_to"].split(",") if x.strip().lower() not in addresses) or None
             out.append(json.dumps({**e, **rest}))
         _rewrite_email_log(p, out)
 
