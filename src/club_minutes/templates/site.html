@@ -204,29 +204,28 @@
 </form>
 {% if here_keys|select('in', ['bylaws.refs', 'bylaws.arrears_note', 'treasurer.certificate'])|list %}<form method="post" action="/admin/site/bylaws" data-confirm="Go back to club.yaml's bylaws references, arrears note and certificate?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'video' %}
-<p class="muted">The club's video meeting rooms, on its own Jitsi Meet server. Members join signed in from here; guests (anyone not signed in) knock and a host lets them in. Each change is in the admin log; changes here win over club.yaml on the server. Meetings already going on keep the rules they started with.</p>
+<p class="muted">The rooms on the club's Jitsi Meet server. Changes go in the admin log, win over club.yaml, and apply from each room's next meeting.</p>
 {% macro guest_rules(k, r) %}
 <label class="check small"><input type="checkbox" name="guests{{ k }}" value="1"{{ ' checked' if r.guests }}> Let guests knock (unticked: members only)</label>
-<fieldset><legend class="small"><b>Guests may, without asking a host</b></legend>
+<fieldset><legend class="small"><b>Guests may, without asking a host</b></legend><div class="guestgrid">
 {% for g, label in (('mic', 'Unmute'), ('camera', 'Turn their camera on'), ('screen', 'Share their screen'), ('chat', 'Chat')) %}<label class="check small"><input type="checkbox" name="{{ g }}{{ k }}" value="1"{{ ' checked' if r['guest_' ~ g] }}> {{ label }}</label>{% endfor %}
-</fieldset>
+</div></fieldset>
 <label class="small">While only two are in the meeting <select name="p2p{{ k }}">
   <option value="server"{{ ' selected' if not r.p2p }}>Still go through the club's server</option>
   <option value="direct"{{ ' selected' if r.p2p }}>Connect the two directly</option></select></label>
-<p class="hint">With three or more, everyone always goes through the server. With just two, their computers can talk to each other directly: smoother and lighter on the server, but a guest alone with a host could then get around the limits above. Direct suits rooms with no guests, or none held back.</p>
 <label class="small">When the last host leaves <select name="leaves{{ k }}">{% for v, label in video_leaves.items() %}<option value="{{ v }}"{{ ' selected' if r.last_host_leaves == v }}>{{ label }}</option>{% endfor %}</select></label>
 {% endmacro %}
-<form method="post" action="/admin/site/video" class="profile">
+<form method="post" action="/admin/site/video" class="profile sitevideo">
 <input type="hidden" name="rows" value="{{ video_rooms|length }}">
 <div class="card sitesec"><h2>Rooms {{ origin('jitsi.rooms') }}</h2>
-<p class="hint">Video meeting in the menu lists these. A host (the "host video meetings" permission on Roles) can still allow one guest to unmute, start their camera or share their screen during a meeting; chat is for the whole room. When the last host leaves, a minute's grace in case they come back.</p>
+<p class="hint">Listed on Video meeting. In a meeting, a host can still let one guest unmute, use their camera or share their screen (chat is for the whole room). The last host leaving counts after a minute, in case they come back. <b>Two in a meeting:</b> connecting them directly is lighter on the server, but a guest alone with a host could then get around the guest limits.</p>
 {% macro room_row(i, r) %}
 <details class="role"{{ ' open' if not r.name }}><summary><span class="sr">Room: </span><b>{{ r.name or 'A new room' }}</b>{% if r.slug %}<br><span class="muted small">/{{ r.slug }}</span>{% endif %}</summary>
-  <label class="small">Name <input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="e.g. Net night"></label>
-  <label class="small">Address <input name="slug{{ i }}" value="{{ r.slug }}" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" title="Letters, numbers, dashes and underscores" placeholder="made from the name"></label>
+  <div class="pair"><label class="small">Name <input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="e.g. Net night"></label>
+  <label class="small">Address <input name="slug{{ i }}" value="{{ r.slug }}" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" title="Letters, numbers, dashes and underscores" placeholder="made from the name"></label></div>
   <label class="small">About it <span class="muted">(shown under its name on Video meeting)</span> <textarea name="about{{ i }}" rows="2" maxlength="300" placeholder="e.g. The weekly club meeting, Tuesdays at 7 PM">{{ r.about or '' }}</textarea></label>
   <fieldset><legend class="small"><b>Members who come straight in</b></legend>
-  <p class="hint">Every member, or pick roles (Officer, say) to let only their members straight in; they host if they have "host video meetings" too.</p>
+  <p class="hint">Every member, or only the roles picked. They host if they also have "host video meetings" (Roles).</p>
   <details class="multi"><summary data-none="Every member">{% for key in r.roles or [] if key in video_roles %}<span class="chip">{{ video_roles[key] }}</span>{% else %}Every member{% endfor %}</summary><div class="multi-list">
     {% if video_roles|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter roles…" aria-label="Filter roles" hidden>{% endif %}
     <div class="multi-opts">{% for key, label in video_roles.items() %}<label class="check"><input type="checkbox" name="roles{{ i }}" value="{{ key }}" data-label="{{ label }}"{{ ' checked' if key in (r.roles or []) }}> {{ label }}</label>{% endfor %}</div>
@@ -243,12 +242,12 @@
 </div>
 <div class="card sitesec" role="group" aria-label="Members' own rooms"><h2>Members' own rooms {{ origin('jitsi.adhoc') }}</h2>
 <label class="check"><input type="checkbox" name="adhoc" value="1"{{ ' checked' if video_adhoc }}> Members may open rooms of their own</label>
-<p class="hint">Any signed-in member can open a room by giving it a name on the Video meeting page. Its opener hosts it for a day, as do the usual hosts. These rules apply to every such room:</p>
+<p class="hint">A member names one on Video meeting and hosts it, with the usual hosts, until a day passes with no one joining. These rules cover them all:</p>
 {{ guest_rules('_a', video_adhoc or {'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False}) }}
 </div>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn">Save</button>{% if 'jitsi.rooms' in here_keys or 'jitsi.adhoc' in here_keys %} <button class="btn small ghost" form="video-back">Back to club.yaml</button>{% endif %}</p>
 </form>
-{% if 'jitsi.rooms' in here_keys or 'jitsi.adhoc' in here_keys %}<form method="post" action="/admin/site/video" data-confirm="Go back to club.yaml's video rooms?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+<form method="post" action="/admin/site/video" id="video-back" data-confirm="Go back to club.yaml's video rooms?"><input type="hidden" name="back" value="1"></form>
 {% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
 {{ 'Changed here.' if dates_here }}</p>
