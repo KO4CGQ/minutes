@@ -1283,6 +1283,10 @@ def meet_room(request: Request, room: str, mid: str = Depends(real_me)):
 
 # ---------------- recover admin access (officers; recovery.py) ----------------
 
+class Shown(str):
+    """A message the app made, as opposed to ?error= text from a link."""
+
+
 _recover_ok: dict[str, float] = {}  # session token hash -> until: confirmed it's them (as for admin mode), for 5 minutes
 
 
@@ -1298,14 +1302,15 @@ def _recover_mark(request: Request) -> None:
 
 
 @app.get("/recover", response_class=HTMLResponse)
-def recover_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):
+def recover_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):  # error: only from recover_action
     """Where a recovery stands, for every member (they're all told); officers start or approve it, the nominee accepts,
     admins (in admin mode) object."""
     club = archive.club
     recovery.tick(club, base_url(request))
     r = recovery.load()
     return page(request, "recover.html", r=r, st=recovery.state(club, r) if r else None, officers=recovery.officers(club),
-                is_officer=mid in recovery.officers(club), error=error, note=note, wait=recovery.WAIT_DAYS,
+                is_officer=mid in recovery.officers(club), error=error if isinstance(error, Shown) else "",
+                note="Done. Every member has been told." if note == "done" else "", wait=recovery.WAIT_DAYS,
                 wait_objected=recovery.WAIT_DAYS_OBJECTED, lapse=recovery.LAPSE_DAYS, ts=lambda t: dt.datetime.fromtimestamp(t).strftime("%b %-d, %Y %-I:%M %p"),
                 members=sorted((m for m in club.members.values() if m.status.lower() == "active"), key=lambda m: (m.last, m.first)))
 
@@ -1329,10 +1334,10 @@ async def recover_act(request: Request, mid: str = Depends(real_me)):
             recovery.object_(club, mid, url)
         else:
             {"approve": recovery.approve, "accept": recovery.accept, "cancel": recovery.cancel}[do](club, mid, url)
-    except ValueError as e:
-        return RedirectResponse("/recover?error=" + quote(str(e)), status_code=303)
+    except ValueError as e:  # shown here, never carried in a link (someone could send a link with words of their own)
+        return recover_page(request, error=Shown(e), mid=mid)
     _admin_log(request, recovery=do)
-    return RedirectResponse("/recover?note=" + quote("Done. Every member has been told."), status_code=303)
+    return RedirectResponse("/recover?note=done", status_code=303)
 
 
 @app.get("/recover/confirm", response_class=HTMLResponse)
