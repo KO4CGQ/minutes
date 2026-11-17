@@ -450,6 +450,17 @@ class Auth:
             "delete from signins where at<? and (member, at) not in (select member, max(at) from signins group by member)",
             (old,)).rowcount
 
+    def forget_removed(self, keep: set[str]) -> set[str]:
+        """A member not in `keep` (Inactive, a Silent Key, or off the roster): their passkeys, sessions, sign-in links, address changes and sign-in records go
+        (the daily job, inside prefs.locked() so a callsign change isn't taken for leaving). Security events stay their 90 days."""
+        gone: set[str] = set()
+        for t in ("passkeys", "sessions", "links", "challenges", "email_changes", "signins"):
+            ids = {r[0] for r in self.db.execute(f"select distinct member from {t} where member is not null")} - keep
+            for mid in ids:
+                self.db.execute(f"delete from {t} where member=?", (mid,))
+            gone |= ids
+        return gone
+
     def authenticate(self, cid: str | None, credential: dict, kind: str = "login", member: str | None = None) -> str:
         ch = self._take_challenge(cid, kind)
         if not ch or (member and ch["member"] != member):

@@ -71,4 +71,4 @@ With tracking on (the same switch as your dues, above), **Spending** in the menu
 - **Video meetings:** joining sends your name and callsign to the club's video server.
 - **Admin recovery:** if the officers ever have to recover admin access, every member is emailed at each step.
 - **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both.
-- **If you leave the roster:** your email choices and settings are deleted the next night.
+- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night. Made Active again, you sign in with an emailed link and add a passkey again.

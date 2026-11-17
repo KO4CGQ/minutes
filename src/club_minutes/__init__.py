@@ -174,7 +174,7 @@ def main() -> None:
                 print(f"couldn't prune the Email log: {e}")
             try:
                 if n := prefs.purge_removed():
-                    print(f"dropped the settings of {n} member(s) no longer on the roster")
+                    print(f"dropped the settings and sign-ins of {n} member(s) now Inactive, a Silent Key or off the roster")
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't drop the settings of members who left: {e}")
             try:  # minutes and corrected-minutes emails that failed or never went (a restart mid-send)

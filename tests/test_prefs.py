@@ -159,12 +159,20 @@ def test_settings_saved_at_once_all_survive():
     assert all(prefs.settings(f"member-{i}")["week_start"] == "monday" for i in range(20))
 
 
-def test_a_removed_members_choices_are_dropped_and_no_one_elses():
+def test_a_removed_members_choices_are_dropped_and_no_one_elses(tmp_path, monkeypatch):
     prefs.save("n0aaaa", {"minutes": "link"})
     prefs.save("n0gone", {"minutes": "link"})
     prefs.save_settings("n0gone", {"support_link": "hide"})
-    prefs.save_settings("n0cccc", {"support_link": "hide"})  # a Silent Key is still on the roster
+    prefs.save_settings("n0cccc", {"support_link": "hide"})  # a Silent Key: theirs go too (Jim, 2026-11-16)
+    from club_minutes import auth
+    monkeypatch.setattr(auth, "DATA", tmp_path)  # its own sign-in database, not the session's shared one
+    a = auth.Auth(club())
+    a.new_session("n0gone", "Mozilla/5.0", "192.0.2.1", "passkey")
+    a.new_session("n0aaaa", "Mozilla/5.0", "192.0.2.2", "passkey")
+    a.new_session("n0cccc", "Mozilla/5.0", "192.0.2.3", "passkey")
     assert prefs.purge_removed(lambda: Club(FIX / "test-club.yaml", roster=[])) == 0  # a roster that didn't load: nothing goes
-    assert prefs.purge_removed(club) == 1 and prefs.purge_removed(club) == 0
-    assert prefs.get("n0aaaa")["minutes"] == "link" and prefs.settings("n0cccc")["support_link"] == "hide"
+    assert prefs.purge_removed(club) == 2 and prefs.purge_removed(club) == 0
+    assert prefs.get("n0aaaa")["minutes"] == "link" and prefs.settings("n0cccc")["support_link"] == "show"
     assert prefs.get("n0gone")["minutes"] == "pdf" and prefs.settings("n0gone")["support_link"] == "show"
+    members = {r[0] for t in ("sessions", "signins") for r in a.db.execute(f"select member from {t}")}
+    assert members == {"n0aaaa"}                                                   # their sign-ins went too, no one else's
