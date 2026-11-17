@@ -100,3 +100,10 @@ def test_every_from_leads_back(monkeypatch):
                               ("stats", "/stats", "Attendance"), ("search&q=bob%20a", "/search?q=bob%20a", "Search"), ("home", "/", "Home")):
         html = t.get(f"/members/{mid}?from={came}").text
         assert f'<nav class="crumb" aria-label="Back"><a href="{href}">‹ {label}</a>' in html, came
+
+
+def test_changelog_sub_bullets_indent_by_four():
+    """The About page's Markdown (Python-Markdown) shows a 2-space sub-bullet as a flat line; GitHub nests either."""
+    bad = [line for line in (ROOT / "CHANGELOG.md").read_text().splitlines()
+           if re.match(r" +[-*] ", line) and (len(line) - len(line.lstrip())) % 4]
+    assert not bad, f"indent sub-bullets by 4 spaces: {bad[:3]}"
