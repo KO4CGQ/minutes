@@ -270,6 +270,10 @@ def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkey
     admin, member = app("n0offc"), app("n0bbbb")
     try:
         assert member.get("/admin/site/dates").status_code == 404 and member.post("/admin/site/dates", data={"preset": "dayfirst"}).status_code == 404
+        with monkeypatch.context() as m:  # an admin with admin mode off is told to turn it on, as on the other admin pages
+            m.setattr(web, "admin_mode", lambda request: False)
+            r = admin.post("/admin/site/dates", data={"preset": "dayfirst"})
+            assert r.status_code == 403 and "Turn on admin mode first" in r.text and c.site_settings == {}
         assert "US: month first" in admin.get("/admin/site/dates").text and admin.get("/admin/site/nope").status_code == 404
         assert "Saved" in admin.post("/admin/site/dates", data={"preset": "dayfirst"}).text and show_date(d) == "5 Nov 2026"
         assert c.site_settings == {"club": {"date_formats": web.DATE_PRESETS["dayfirst"][1]}}

@@ -18,6 +18,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
     - The members guide says what's kept and who sees it. Old sign-in records and the Email log are deleted after 90 days.
     - Easier on a phone and with a screen reader: bigger checkboxes and buttons, buttons named for their row, and an "Are you sure?" before more removals.
     - The Security page also lists hostile requests (scanner probes, requests from other sites, refused actions).
+    - An admin with admin mode off is asked to turn it on, on every admin page (Site's and the staging server's actions answered "Not found").
 - **Fixed:** a member changing their own email never got the new one; a picture in Help opened full size sits in the middle of the screen, with its ✕ at its corner.
 - **Security:** fixes from a security review, including ways a member could see or change more than their role allows. Update soon.
 - **Removed:** restoring backups made before 1.0.0 (a 0.x install restores them).

@@ -2713,9 +2713,9 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
 
 
 def _site_admin(request: Request) -> str:
-    mid = getattr(request.state, "real_member", None)
-    if not (archive.club.is_admin(mid) and admin_mode(request)):
-        raise HTTPException(404)
+    mid = _admin(getattr(request.state, "real_member", None))
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")  # as the other admin actions answer
     return mid
 
 
@@ -3223,8 +3223,11 @@ def stage_page(request: Request, mid: str = Depends(real_me)):
 
 @app.post("/admin/stage")
 def stage_action(request: Request, action: str = Form(""), mid: str = Depends(real_me)):
-    if not (STAGE and archive.club.is_admin(mid) and admin_mode(request)):
+    if not STAGE:
         raise HTTPException(404)
+    _admin(mid)
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")
     if action == "sync":
         (DATA / "stage-sync-request").write_text(mid)  # club-stage-sync.path starts the sync
     elif action in ("pause", "resume"):
