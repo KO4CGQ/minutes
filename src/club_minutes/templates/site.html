@@ -28,7 +28,7 @@
 <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
 <p class="hint">Every week on this day, as the weekly meeting on the Club events calendar. A new day, time, Where or online link changes the meeting there from the Starting date on; earlier dates stay as they were. Where and the online link show the next meeting's; only what you change here is applied, so a different place already planned for a later date stays. Where is the place; the online link (Zoom, Meet, Teams…) shows as a Join online button on the calendar and goes to phones' calendars too. One date (a holiday, a new place for a night) is changed on the calendar itself. Chow nights come from the chow schedule on the Chow page: the app says if any are on the old day.</p>
 </div>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'agenda' %}
@@ -55,7 +55,7 @@
 </div>
 <p class="hint">The leader console reminds the leader when a guest reaches that many visits; item owners get an email that many days before the due date (and once if it's overdue).</p>
 </div>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'roles' %}
@@ -76,7 +76,7 @@
 <template id="t-office">{{ office_row('__i__', {'title': '', 'officer': False, 'seats': 1, 'held': False}) }}</template>
 <p><button type="button" class="btn small" data-add="t-office" data-next="{{ office_rows|length }}" hidden>+ Add an office</button></p>
 <p class="hint">Clear an office's name to remove it when you save. Greyed names are held: hand them over on the Offices page before renaming them. What each office's holders may do is under Roles, below.</p>
-<p class="row"><button class="btn" aria-label="Save the offices">Save</button></p>
+<p class="row"><button class="btn" aria-label="Save the offices">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </div>
 </form>
 {% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
@@ -104,7 +104,7 @@
 </details>{% endfor %}</div>
 <p class="row"><label>Add a role <input name="new" maxlength="40" placeholder="e.g. Net manager"></label></p>
 <p class="hint">Recording money always comes with looking at the Treasurer pages. A meeting's own leader and recorder may always correct its minutes. The roster emails are new members, roster changes and the chow list; a new email for someone else waits until its owner confirms it. Every permission needs at least one role: a save that would leave one with none is refused.</p>
-<p class="row"><button class="btn" aria-label="Save the roles">Save</button></p>
+<p class="row"><button class="btn" aria-label="Save the roles">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% for r in role_rows if r.builtin and r.edited %}<form id="roleback-{{ r.key }}" method="post" action="/admin/site/roles" data-confirm="Put {{ r.name }} back as it ships (its name, what it allows and its offices)? The members picked for it stay."><input type="hidden" name="back" value="{{ r.key }}"></form>{% endfor %}
 </div>
@@ -116,7 +116,7 @@
 <p class="hint">One name a line: someone who asked not to be in the minutes (a guest, say). A guest with one of these names is left out each time the console saves, a line with one is left out of imported minutes, and the AI never sees one. Minutes already saved keep what they have: edit those by hand.</p>
 <textarea name="names" rows="6" maxlength="10000" aria-label="Names never recorded, one a line">{{ club.never_record|join('\n') }}</textarea>
 </div>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if 'privacy.never_record' in here_keys %}<form method="post" action="/admin/site/privacy" data-confirm="Go back to club.yaml's list of names never recorded?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'features' %}
@@ -176,7 +176,7 @@
 </div>
 <p class="hint">On the Community calendar: the US general election (even years), or a state's own (primaries too). For a state that isn't listed, add its primaries as Community events.</p>
 </div>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'modules.jitsi', 'jitsi.domain', 'jitsi.app_id', 'club.supports_app'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, video meetings, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% if tab == 'features' %}<form id="jitsi-secret" method="post" action="/admin/site/jitsi-secret"></form>{% endif %}
@@ -200,13 +200,13 @@
 <label for="b-note">A note for the Treasurer pages</label><textarea id="b-note" name="cert_note" rows="4" maxlength="500">{{ cert.note if cert else '' }}</textarea><span></span>
 </div>
 </div>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if here_keys|select('in', ['bylaws.refs', 'bylaws.arrears_note', 'treasurer.certificate'])|list %}<form method="post" action="/admin/site/bylaws" data-confirm="Go back to club.yaml's bylaws references, arrears note and certificate?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'video' %}
 <p class="muted">The rooms on the club's Jitsi Meet server. Changes go in the admin log, win over club.yaml, and apply from each room's next meeting.</p>
 {% macro guest_rules(k, r) %}
-<label class="check small"><input type="checkbox" name="guests{{ k }}" value="1"{{ ' checked' if r.guests }}> Let guests knock (unticked: members only)</label>
+<label class="check small"><input type="checkbox" name="guests{{ k }}" value="1"{{ ' checked' if r.guests }}> Guests may join: they knock, and a host lets them in</label>
 <fieldset><legend class="small"><b>Guests may, without asking a host</b></legend><div class="guestgrid">
 {% for g, label in (('mic', 'Unmute'), ('camera', 'Turn their camera on'), ('screen', 'Share their screen'), ('chat', 'Chat')) %}<label class="check small"><input type="checkbox" name="{{ g }}{{ k }}" value="1"{{ ' checked' if r['guest_' ~ g] }}> {{ label }}</label>{% endfor %}
 </div></fieldset>
@@ -233,7 +233,7 @@
   <label class="small">Other members <select name="others{{ i }}">{% for v, label in video_others.items() %}<option value="{{ v }}"{{ ' selected' if (r.others or 'knock') == v }}>{{ label }}</option>{% endfor %}</select></label>
   </fieldset>
   {{ guest_rules(i, r) }}
-  {% if r.slug %}<label class="check small"><input type="checkbox" name="rm{{ i }}" value="1"> Remove {{ r.name }} when you save</label>{% else %}<p class="hint">Leave the name empty to drop this new room.</p>{% endif %}
+  <p>{% if r.slug %}<button class="btn small ghost" form="video-delete" name="delete" value="{{ r.slug }}" data-confirm="Delete {{ r.name }}? Changes on this page you haven't saved are discarded.">Delete {{ r.name }}</button>{% else %}<button type="button" class="btn small ghost" data-drop>Delete this new room</button>{% endif %}</p>
 </details>
 {% endmacro %}
 <div class="rolelist" id="roomlist">{% for r in video_rooms %}{{ room_row(loop.index0, r) }}{% endfor %}</div>
@@ -245,8 +245,9 @@
 <p class="hint">A member names one on Video meeting and hosts it, with the usual hosts, until a day passes with no one joining. These rules cover them all:</p>
 {{ guest_rules('_a', video_adhoc or {'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False}) }}
 </div>
-<p class="row"><button class="btn">Save</button>{% if 'jitsi.rooms' in here_keys or 'jitsi.adhoc' in here_keys %} <button class="btn small ghost" form="video-back">Back to club.yaml</button>{% endif %}</p>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button>{% if 'jitsi.rooms' in here_keys or 'jitsi.adhoc' in here_keys %} <button class="btn small ghost" form="video-back">Back to club.yaml</button>{% endif %}</p>
 </form>
+<form method="post" action="/admin/site/video" id="video-delete"></form>{# a room's Delete: that room alone, nothing else on the page #}
 <form method="post" action="/admin/site/video" id="video-back" data-confirm="Go back to club.yaml's video rooms?"><input type="hidden" name="back" value="1"></form>
 {% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
@@ -270,7 +271,7 @@
   });
 })();
 </script>
-<p class="row"><button class="btn">Save</button></p>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if dates_here %}<form method="post" action="/admin/site/dates" data-confirm="Go back to how club.yaml on the server writes dates?"><input type="hidden" name="preset" value="yaml"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% else %}
@@ -384,6 +385,35 @@ document.querySelectorAll("form[data-preview]").forEach((f) => {
 </script>
 {% endif %}
 {% if tab == 'video' %}{% include "_multi.html" %}{% endif %}
+<script nonce="{{ csp_nonce }}">
+// Changed fields are marked; while a form has changes its Discard shows, and leaving the tab asks first (the browser's
+// own "Leave site?"). A save, Discard, or Cancel on Look clears it.
+const unsaved = new Set();
+const differs = (el) => el.type === "checkbox" || el.type === "radio" ? el.checked !== el.defaultChecked
+  : el.tagName === "SELECT" ? [...el.options].some((o) => o.selected !== o.defaultSelected)
+  : el.type === "file" ? el.files.length > 0 : el.type !== "hidden" && el.value !== el.defaultValue;
+function check(f) {
+  let any = f.dataset.added === "1";  // a row added with + Add
+  for (const el of f.elements) {
+    if (!el.name || el.tagName === "BUTTON") continue;
+    const d = differs(el);
+    any ||= d;
+    (el.type === "checkbox" || el.type === "radio" ? el.closest("label") || el : el).classList.toggle("changed", d);
+  }
+  if (any) unsaved.add(f); else unsaved.delete(f);
+  f.querySelectorAll("[data-discard]").forEach((b) => { b.hidden = !any; });
+}
+for (const f of document.querySelectorAll("main form[method=post]")) {
+  f.addEventListener("input", () => check(f)); f.addEventListener("change", () => check(f));
+  f.addEventListener("reset", () => setTimeout(() => check(f)));
+}
+addEventListener("submit", (e) => { if (!e.defaultPrevented) unsaved.clear(); });  // on window: after any "Are you sure?" said no
+addEventListener("beforeunload", (e) => { if (unsaved.size) e.preventDefault(); });
+document.addEventListener("click", (e) => {
+  if (e.target.matches("[data-discard]")) { unsaved.clear(); location.replace(location.pathname); }  // not reload: Firefox would keep the typing
+});
+document.addEventListener("click", (e) => { if (e.target.matches("[data-drop]")) { const f = e.target.form; e.target.closest("details").remove(); check(f); } });
+</script>
 {% if tab in ('roles', 'video') %}<script nonce="{{ csp_nonce }}">
 // + Add an office or a room: a row from the <template>, numbered after the others, and the row count the server reads raised
 for (const b of document.querySelectorAll("[data-add]")) {
@@ -392,6 +422,7 @@ for (const b of document.querySelectorAll("[data-add]")) {
     const i = +b.dataset.next; b.dataset.next = i + 1;
     document.getElementById(b.dataset.into || "officegrid").insertAdjacentHTML("beforeend", document.getElementById(b.dataset.add).innerHTML.replaceAll("__i__", i));
     b.form.elements.rows.value = i + 1;
+    b.form.dataset.added = "1"; check(b.form);
     document.getElementById(b.dataset.into || "officegrid").querySelectorAll(".multi-filter").forEach((f) => { f.hidden = false; });
     b.form.elements[(b.dataset.focus || "title") + i].focus();
   });

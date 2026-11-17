@@ -124,8 +124,15 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     assert "error=" in as_("n0call").post("/meet", data={"name": "Board"}, follow_redirects=False).headers["location"]  # a club room's name
     # what's refused on Site → Video
     for bad in ({"rows": "1", "name0": "X", "slug0": "a b"}, {"rows": "2", "name0": "A", "slug0": "a", "name1": "B", "slug1": "a"},
-                {"rows": "1", "name0": "A", "rm0": "1"}):
+                {"rows": "1", "name0": ""}):
         assert "error=" in as_("pres").post("/admin/site/video", data=bad, follow_redirects=False).headers["location"]
+    # a room's Delete: that room alone; nothing else on the page is saved with it
+    before = meet.rooms(c)
+    as_("pres").post("/admin/site/video", data={"delete": "board", "rows": "2", "name0": "Not saved", "slug0": "club"})
+    assert meet.rooms(c) == [r for r in before if r["slug"] != "board"] and meet.adhoc(c) is not None
+    for gone in ("board", "club"):  # already gone; the last room
+        assert "error=" in as_("pres").post("/admin/site/video", data={"delete": gone}, follow_redirects=False).headers["location"]
+    as_("pres").post("/admin/site/video", data={"rows": "2", **room, "adhoc": "1", "guests_a": "1", "leaves_a": "guests"})  # both back
     form = as_("pres").get("/calendar/edit").text  # the rooms: buttons that fill in the online link, and the datalist
     assert 'data-url="http://testserver/meet/board">Board</button>' in form and 'list="video-rooms"' in form
     # ad-hoc off again: an unlisted room is gone, and so is the form

@@ -434,3 +434,76 @@ def test_a_tap_on_a_home_items_box_opens_the_item(engine):
         hit = page.evaluate(f"document.elementFromPoint({box[0]}, {box[1]}).closest('a')?.id")
         browser.close()
     assert hit == "it"
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_site_video_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, engine):
+    """Site → Video: Enter in a room's name saves (never presses a room's Delete); a change is marked and brings up
+    Discard; a room's Delete deletes it alone; leaving a Site tab with unsaved changes asks first."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from club_minutes import club as clubmod
+    from club_minutes import meet, web
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True}])
+    club.modules["jitsi"] = True
+    club.yaml = {**club.yaml, "modules": {**(club.yaml.get("modules") or {}), "jitsi": True}, "jitsi": {"domain": "meet.example.org", "app_id": "club-minutes"}}
+    club.save_app_admins({"n0admn"})
+    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "x" * 40)
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tok = a.new_session("n0admn")
+    a.set_admin(tok, 60)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, tok)
+    c.post("/admin/site/video", data={"rows": "2", "name0": "Club meeting", "slug0": "club", "name1": "Board", "slug1": "board"})
+    assert [r["slug"] for r in meet.rooms(club)] == ["club", "board"]
+
+    def serve(route):
+        q = route.request
+        r = c.request(q.method, q.url.replace("http://testserver", ""), content=q.post_data_buffer,
+                      headers={"content-type": q.headers.get("content-type", "")}, follow_redirects=q.method == "POST")
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        page.route("http://testserver/**", serve)
+        asked = []
+        page.on("dialog", lambda d: (asked.append(d.type), d.accept() if d.type == "confirm" else d.dismiss()))
+        page.goto("http://testserver/admin/site/video")
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        page.fill("input[name=name0]", "Club night")
+        with page.expect_navigation():
+            page.press("input[name=name0]", "Enter")
+        assert [r["name"] for r in meet.rooms(club)] == ["Club night", "Board"] and not asked
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        assert page.is_hidden("[data-discard]")
+        page.fill("input[name=name0]", "Not saved")
+        assert "changed" in page.get_attribute("input[name=name0]", "class") and page.is_visible("[data-discard]")
+        page.fill("input[name=name0]", "Club night")  # back as it was: nothing to save
+        assert "changed" not in page.get_attribute("input[name=name0]", "class") and page.is_hidden("[data-discard]")
+        page.fill("input[name=name0]", "Not saved")
+        page.locator("details.role").nth(1).evaluate("e => e.open = true")
+        with page.expect_navigation():
+            page.click("text=Delete Board")
+        assert [r["name"] for r in meet.rooms(club)] == ["Club night"] and asked == ["confirm"]  # Board alone; the typing discarded
+        asked.clear()
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        page.fill("input[name=name0]", "Thrown away")
+        with page.expect_navigation():
+            page.click("text=Discard changes")
+        assert page.input_value("input[name=name0]") == "Club night" and not asked
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        page.fill("input[name=name0]", "Unsaved")
+        try:
+            page.goto("http://testserver/", timeout=3000)
+        except Exception:  # noqa: BLE001, S110  # the dismissed "Leave site?" stops the navigation
+            pass
+        assert asked == ["beforeunload"]
+        browser.close()

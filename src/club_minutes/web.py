@@ -2845,11 +2845,18 @@ async def site_video(request: Request):
     try:
         if form.get("back"):
             values = {("jitsi", "rooms"): None, ("jitsi", "adhoc"): None}
+        elif gone := form.get("delete"):  # one room's Delete: that room alone, the rest as saved
+            rooms = [r for r in meet.rooms(club) if r["slug"] != gone]
+            if len(rooms) == len(meet.rooms(club)):
+                raise ValueError("That room was already gone.")
+            if not rooms:
+                raise ValueError("Keep at least one room: it's where Video meeting in the menu goes.")
+            values = {("jitsi", "rooms"): rooms}
         else:
             rooms = []
             for i in range(min(num(form.get("rows")) or 0, 30)):
                 name = " ".join((form.get(f"name{i}") or "").split())[:60]
-                if form.get(f"rm{i}") or not name:
+                if not name:  # a new row left empty
                     continue
                 slug = (form.get(f"slug{i}") or "").strip().lower() or meet.slug(name)
                 if not meet.ROOM.match(slug):
@@ -2868,6 +2875,9 @@ async def site_video(request: Request):
     except ValueError as e:
         return RedirectResponse("/admin/site/video?error=" + quote(str(e)), status_code=303)
     short = lambda r: (f"straight in: {', '.join(r['roles'])}, others {r['others']}; " if r.get("roles") else "") + ("guests" if r["guests"] else "members only") + "".join(f" {g}" for g in meet.GUEST if r[f"guest_{g}"]) + f", last host: {r['last_host_leaves']}" + (", peer-to-peer" if r["p2p"] else "")
+    if form.get("delete"):
+        _admin_log(request, site_video=f"deleted {form.get('delete')}")
+        return RedirectResponse("/admin/site/video?note=" + quote("Room deleted."), status_code=303)
     _admin_log(request, site_video="club.yaml" if form.get("back") else "; ".join(f"{r['slug']} ({short(r)})" for r in rooms)
                + (f"; own rooms ({short(values[('jitsi', 'adhoc')])})" if not form.get("back") and form.get("adhoc") else ""))
     return RedirectResponse("/admin/site/video?note=" + quote("Saved. Meetings already going on keep the rules they started with."), status_code=303)

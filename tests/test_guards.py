@@ -123,7 +123,7 @@ def test_destructive_forms_ask_first():
     for t in sorted(TEMPLATES.glob("*.html")):
         for m in re.finditer(r"<form\b([^>]*)>(.*?)</form>", t.read_text(), re.DOTALL):
             head, inner = m.groups()
-            texts = re.findall(r"<button\b[^>]*>(.*?)</button>", inner, re.DOTALL)
+            texts = re.findall(r"<button\b(?![^>]*type=\"button\")[^>]*>(.*?)</button>", inner, re.DOTALL)  # type="button" sends nothing
             probe = " ".join([re.sub(r"<[^>]+>|\{[{%].*?[}%]\}", " ", " ".join(texts)),
                               (re.search(r'action="([^"]*)"', head) or [0, ""])[1].replace("/", " "),
                               " ".join(re.findall(r'name="op" value="(\w+)"', inner))])
