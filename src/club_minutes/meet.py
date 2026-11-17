@@ -93,6 +93,12 @@ def lets_in(club: Club, mid: str, room: dict) -> bool:
     return not room.get("roles") or bool(set(room["roles"]) & set(club.roles(mid)))
 
 
+def _token_rules(r: dict) -> dict:
+    """Members only: no guest limits, or the server would hold back members' mics and cameras for no one (the ticks
+    stay stored, for when guests are let in again)."""
+    return r if r["guests"] else r | {f"guest_{k}": True for k in GUEST}
+
+
 def token(club: Club, mid: str, room: str, host: bool, now: float | None = None, room_rules: dict | None = None,
           straight_in: bool = True) -> str:
     s, now = settings(club), int(now or time.time())
@@ -100,7 +106,7 @@ def token(club: Club, mid: str, room: str, host: bool, now: float | None = None,
                "exp": now + MINUTES * 60, "moderator": host,
                "context": {"user": {"id": mid, "name": club.name(mid), "affiliation": "owner" if host else "member",
                                     "lobby_bypass": straight_in},
-                           "room": {"club": rules(room_rules)}}}
+                           "room": {"club": _token_rules(rules(room_rules))}}}
     head = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     return f"{head}.{body}.{sign(f'{head}.{body}'.encode(), secret().encode())}"

@@ -91,6 +91,8 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     assert as_("n0call").get("/meet/club", follow_redirects=False).headers["location"].endswith("#config.p2p.enabled=false")  # kept on the server
     loc = as_("n0call").get("/meet/board", follow_redirects=False).headers["location"]
     assert claims(loc.split("#")[0])["context"]["room"]["club"]["guests"] is False and "#" not in loc  # peer-to-peer allowed
+    assert claims(loc.split("#")[0])["context"]["room"]["club"]["guest_mic"] is True  # members only: nobody's mic held back
+    assert meet.rooms(c)[1]["guest_mic"] is False  # the tick itself is kept
     p = as_("n0call").get("/meet")  # two rooms: a page, not straight in
     assert "form-action 'self' https://meet.example.org;" in p.headers["content-security-policy"] + ";"  # "Open it" ends there
     assert "form-action 'self';" in as_("n0call").get("/calendar").headers["content-security-policy"] + ";"  # only there
