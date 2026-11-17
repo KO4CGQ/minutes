@@ -255,6 +255,11 @@ def test_rows_added_and_removed_in_the_browser_and_the_preview(tmp_path, monkeyp
     assert "<del>" not in p and 'class="removed"' in p and "Sam built a dipole" in p and 'class="added"' in p and "John Doe N0CALL" in p
     assert 'value="Fixed the reports"' in p and "Save version 2" in p                         # carried on to Save
     assert a.by_slug["2026-10-15"].version == 1                                                # nothing saved yet
+    assert 'formaction="/meetings/2026-10-15/correct/edit"' in p and "history.back" not in p
+    e = c.post("/meetings/2026-10-15/correct/edit", data=f).text                              # Back to editing: as typed
+    assert 'value="John Doe"' in e and 'value="n0call"' in e and '>Rick Roe tuned up the repeater</textarea>' in e
+    assert 'name="g0-rm" value="1" checked' in e and f'name="{n}-0-rm" value="1" checked' in e and 'value="Fixed the reports"' in e
+    assert 'data-add="t-guest" data-next="8"' in e and 'name="notice" value="1" checked' in e and 'name="private" value="1" >' in e
     c.post("/meetings/2026-10-15/correct", data=f)
     m = a.by_slug["2026-10-15"]
     assert [(i.text, i.member) for i in m.items("Community Reports")] == [

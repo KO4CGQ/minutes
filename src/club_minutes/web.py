@@ -1875,10 +1875,24 @@ def _corrector(request: Request, slug: str):
 
 
 @app.get("/meetings/{slug}/correct", response_class=HTMLResponse)
-def correct_page(request: Request, slug: str, error: str = ""):
+def correct_page(request: Request, slug: str, error: str = "", posted: dict | None = None):
     m = _corrector(request, slug)
+    sections = m.section_order(archive.club.sections())
+    extra = {}  # rows added in the browser before a preview: shown again on Back to editing
+    if posted:
+        extra = {"g": [i for i in corrections._posted(posted, r"g(\d+)-name") if i >= len(m.guests)]}
+        extra |= {f"s{n}": [j for j in corrections._posted(posted, rf"s{n}-(\d+)") if j >= len(m.items(sec))]
+                  for n, sec in enumerate(sections)}
     return page(request, "correct.html", m=m, error=error, attendance=corrections.attendance_rows(archive, m),
-                sections=m.section_order(archive.club.sections()), reason_max=corrections.REASON_MAX)
+                sections=sections, reason_max=corrections.REASON_MAX, posted=posted, extra=extra)
+
+
+@app.post("/meetings/{slug}/correct/edit", response_class=HTMLResponse)
+async def correct_back(request: Request, slug: str):
+    """Back to editing from the preview: the edit page again, filled in from what was sent (no history.back(), which
+    some browsers answer by asking to resend the form or by dropping the rows added)."""
+    form = await request.form()
+    return correct_page(request, slug, posted={k: v for k, v in form.multi_items() if isinstance(v, str)})
 
 
 @app.post("/meetings/{slug}/correct/preview", response_class=HTMLResponse)

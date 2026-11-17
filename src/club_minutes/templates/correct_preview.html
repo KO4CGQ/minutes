@@ -15,7 +15,6 @@
 {% endif %}
 <form method="post" action="/meetings/{{ m.slug }}/correct">
   {% for k, v in fields %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-  <p>{% if rows %}<button class="btn">Save version {{ m.version + 1 }}</button> {% endif %}<button type="button" class="btn ghost" id="back">Back to editing</button></p>
+  <p>{% if rows %}<button class="btn">Save version {{ m.version + 1 }}</button> {% endif %}<button class="btn ghost" formaction="/meetings/{{ m.slug }}/correct/edit">Back to editing</button></p>
 </form>
-<script nonce="{{ csp_nonce }}">document.getElementById("back").addEventListener("click", () => history.back());  // the browser keeps what was typed</script>
 {% endblock %}
