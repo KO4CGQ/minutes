@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import fcntl
 import json
+import logging
 import os
 import re
 import threading
@@ -20,6 +21,8 @@ import yaml
 
 from . import regions
 from .meeting import SECTIONS
+
+log = logging.getLogger(__name__)
 
 ROOT = Path(os.environ.get("CLUB_MINUTES_ROOT", Path(__file__).resolve().parents[2]))
 DATA = Path(os.environ.get("CLUB_MINUTES_DATA", ROOT / "data"))
@@ -276,7 +279,11 @@ class Club:
     def site_settings(self) -> dict:
         """What admins saved on Admin → Site: {section: {key: value}}, over club.yaml's."""
         p = DATA / "site-settings.json"
-        return json.loads(p.read_text()) if p.exists() else {}
+        try:
+            return json.loads(p.read_text()) if p.exists() else {}
+        except ValueError:
+            log.exception("%s is damaged; using club.yaml's settings", p)  # every page reads it: a torn file mustn't stop them all
+            return {}
 
     def save_site_settings(self, values: dict) -> None:
         """Set Site page settings together ({(section, key): value}; None: back to club.yaml's). Checked as the app
@@ -398,7 +405,11 @@ class Club:
     def links(self) -> list[dict]:
         """Club links: label, url, optional icon, and where they show (page / minutes, both by default)."""
         p = DATA / "links.json"
-        return json.loads(p.read_text()) if p.exists() else self._yaml_links
+        try:
+            return json.loads(p.read_text()) if p.exists() else self._yaml_links
+        except ValueError:
+            log.exception("%s is damaged; using club.yaml's links", p)
+            return self._yaml_links
 
     def save_links(self, links: list[dict]) -> None:
         p = DATA / "links.json"

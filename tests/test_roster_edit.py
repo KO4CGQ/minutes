@@ -297,3 +297,45 @@ def test_the_confirm_page_shows_the_address_and_a_failed_check_keeps_the_link(en
     club.members["n0aaaa"].email = "amy@example.org"
     r = anon.post("/email/confirm", data={"t": tok}, follow_redirects=False)  # the same link, now it works
     assert r.headers["location"] == "/login?note=email" and club.members["n0bbbb"].email == "bob@new.example.org"
+
+
+ROLE_CALLS = {"officer": "N0OFFC", "board": "N0BORD", "treasurer": "N0TRSR", "roster_keeper": "N0KEEP", "secretary": "N0SECR",
+              "minutes_editor": "N0LEAD", "calendar_editor": "N0CALE", "plain": "N0PLAN"}  # "plain": no role at all
+
+
+@pytest.fixture
+def one_of_each(monkeypatch):
+    """The roster gets one member per built-in role, and one with none (list it before env)."""
+    import sys
+    extra = [{"id": c.lower(), "first": "Jane", "last": k.title(), "callsign": c, "email": f"{c.lower()}@example.org"}
+             for k, c in ROLE_CALLS.items()]
+    monkeypatch.setattr(sys.modules[__name__], "PEOPLE", [p for p in PEOPLE if p["id"] != "n0aaaa"] + extra)
+
+
+def test_no_role_can_change_a_higher_roles_email_status_callsign_or_titles(one_of_each, env, monkeypatch, tmp_path):
+    """Every built-in role acting on every other: only a Roster keeper gets in at all, and only to change someone who
+    can do no more than they can (another keeper, or no one): never a Secretary, Treasurer, officer or leader."""
+    from club_minutes import club as clubmod
+    club, _tmp, sent, who, c = env
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    club.save_roles({k: {**r, "members": [ROLE_CALLS[k].lower()] if k in ROLE_CALLS else r["members"]} for k, r in club.role_table().items()})
+    for actor, actor_call in ROLE_CALLS.items():
+        who["id"] = actor_call.lower()
+        for target, call in ROLE_CALLS.items():
+            tid, m = call.lower(), club.members[call.lower()]
+            if target == actor:
+                continue
+            allowed = actor == "roster_keeper" and target in ("roster_keeper", "plain")
+            base = form(first="Jane", last=target.title(), email=m.email, aliases="")
+            c.post(f"/members/{tid}/edit", data={**base, "email": "mallory@example.org"}, follow_redirects=False)
+            assert any(to == "mallory@example.org" for to, *_ in sent) == allowed, (actor, target, "email")  # a link to confirm it
+            sent.clear()
+            c.post(f"/members/{tid}/edit", data={**base, "status": "Inactive"}, follow_redirects=False)
+            assert (m.status != "Active") == allowed, (actor, target, "status")
+            m.status = "Active"
+            c.post(f"/members/{tid}/callsign", data={"callsign": "N0NEWC", "date": "2026-11-15"}, follow_redirects=False)
+            assert m.callsign == call and tid in club.members and "n0newc" not in club.members, (actor, target, "callsign")
+            if actor != "roster_keeper":  # the edit page is closed to them altogether: titles and other spellings too
+                c.post(f"/members/{tid}/edit", data={"tab": "titles", "title_new": "Chief"}, follow_redirects=False)
+                c.post(f"/members/{tid}/edit", data={**base, "aliases": "Zed"}, follow_redirects=False)
+                assert (m.role, m.aliases) == (None, []), (actor, target, "titles")

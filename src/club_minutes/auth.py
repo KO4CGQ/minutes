@@ -435,11 +435,15 @@ class Auth:
 
     def prune(self, days: int = 90) -> int:
         """The daily job: sign-in links, failed attempts, stale challenges and sign-ins older than `days` go (they hold
-        addresses and devices), but each member's latest sign-in stays (Security's "last signed in"). Sessions and bans
-        expire on their own."""
-        old = time.time() - days * 86400
-        return sum(self.db.execute(f"delete from {t} where {c}<?", (old,)).rowcount
-                   for t, c in (("links", "created"), ("events", "at"), ("challenges", "expires"))) + self.db.execute(
+        addresses and devices), but each member's latest sign-in stays (Security's "last signed in"). Expired sessions,
+        address changes and bans go too (they were already refused)."""
+        now = time.time()
+        old = now - days * 86400
+        gone = sum(self.db.execute(f"delete from {t} where {c}<?", (now,)).rowcount
+                   for t, c in (("sessions", "expires"), ("email_changes", "expires"), ("bans", "until")))  # a ban with no end stays
+        gone += sum(self.db.execute(f"delete from {t} where {c}<?", (old,)).rowcount
+                    for t, c in (("links", "created"), ("events", "at"), ("challenges", "expires")))
+        return gone + self.db.execute(
             "delete from signins where at<? and (member, at) not in (select member, max(at) from signins group by member)",
             (old,)).rowcount
 
@@ -525,7 +529,7 @@ def _email_log(entry: dict) -> None:
             tmp.write_text("".join(line + "\n" for line in kept))
             tmp.chmod(0o600)
             tmp.replace(p)  # shortcut: a line another process appends during the rewrite is lost; a lock if that matters
-    except OSError:
+    except (OSError, ValueError):  # ValueError: a damaged log (not text); an email must still go
         log.exception("couldn't write the email log")
 
 

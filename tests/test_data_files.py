@@ -13,6 +13,7 @@ NO_MEMBER_IDS = {
     "branding.json": "the club's look",
     "limits.json": "the upload limit",
     "links.json": "the club's links",
+    "reminders-sent.json": "keys of reminders already sent (an id inside only stops a repeat; dropped after 60 days)",
     "roster.json": "the roster cache: rebuilt from the sheet, which the rename rewrites",
     "roster-sheet.json": "the sheet itself: the rename rewrites it row by row",
     "preview-sheet.json": "the preview's sheet, as roster-sheet.json",
@@ -26,9 +27,26 @@ NO_MEMBER_IDS = {
 
 def test_every_data_file_with_member_ids_follows_a_callsign_change():
     """A file of member ids left out of callsign.STATE_FILES keeps the old callsign (a suspension lifted by a rename)."""
-    found = {m for p in SRC for m in re.findall(r'\b[Dd][Aa][Tt][Aa] / "([\w.-]+\.json)"', p.read_text())}
+    pattern = r'\b[Dd][Aa][Tt][Aa] / "([\w.-]+\.json)"|\b_(?:read|write|path)\("([\w.-]+\.json)"'  # prefs.py: _path("...")
+    found = {m for p in SRC for g in re.findall(pattern, p.read_text()) for m in g if m}
     assert found - set(callsign.STATE_FILES) - set(NO_MEMBER_IDS) == set(), "add to callsign.STATE_FILES, or to NO_MEMBER_IDS with a reason"
     assert not set(callsign.STATE_FILES) & set(NO_MEMBER_IDS)
+
+
+# Each renamed file and what keeps a callsign change from racing a save of it: the lock the change takes (web.py's
+# member_callsign holds them all), or "none" and why. One owner per file: a save elsewhere takes the same lock.
+LOCK = {"chow.json": "_chow_lock", "business.json": "business.locked()", "events.json": "events.locked()",
+        "treasurer.json": "treasurer.locked()", "recovery.json": "recovery.locked()", "admins.json": "recovery.locked()",
+        "admins-suspended.json": "recovery.locked()", "roles.json": "none: an admin's Roles save, rarely",
+        "email-prefs.json": "none: a member's own choices", "settings.json": "none: a member's own choices",
+        "calendar-feeds.json": "none: a member's own feed list", "ask-about.json": "none: one meeting leader at a time",
+        "meet-rooms.json": "none: written when a host opens a room"}
+
+
+def test_every_renamed_file_has_one_lock_owner_a_callsign_change_takes():
+    assert set(LOCK) == set(callsign.STATE_FILES), 'a file added to STATE_FILES needs its lock named here, or "none: why"'
+    route = (SRC[0].parent / "web.py").read_text().split("def member_callsign", 1)[1].split("\n@app", 1)[0]
+    assert all(h in route for h in {v for v in LOCK.values() if not v.startswith("none")}), "member_callsign must hold each"
 
 
 # Writes that aren't a temporary file then .replace(): "not atomic yet", except the locks and markers (nothing to tear).

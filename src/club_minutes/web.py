@@ -2147,7 +2147,7 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
     try:
         if err := may_change(request, who, "members", "callsign"):
             raise ValueError(err)
-        with business.locked(), events.locked(), _chow_lock, recovery.locked():  # nothing else writes those files meanwhile
+        with business.locked(), events.locked(), treasurer.locked(), _chow_lock, recovery.locked():  # nothing else writes those files meanwhile
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
     except (ValueError, SheetError, backup.BackupError) as e:
