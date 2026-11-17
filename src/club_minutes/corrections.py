@@ -8,6 +8,7 @@ the tracked business items or the chow schedule. Search and member histories rea
 from __future__ import annotations
 
 import difflib
+import json
 import re
 import shutil
 import threading
@@ -174,6 +175,27 @@ def hidden_version(m: Meeting, v: int) -> bool:
 def pdf_name(m: Meeting) -> str:
     """15-oct-26-minutes.pdf for version 1, then 15-oct-26-minutes-v2.pdf and so on."""
     return f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes{f'-v{m.version}' if m.version > 1 else ''}.pdf".lower()
+
+
+def retry_pending(archive: Archive, make_pdf, slug: str | None = None, after: int = 600) -> int:
+    """Send again what console.unsent lists (every meeting, or one): the minutes email, or the current version's
+    corrected-minutes email; a notice for a version since replaced is dropped. make_pdf(meeting) → (name, bytes).
+    Each still goes once (emailed*.json). Returns how many were tried."""
+    from .console import email_minutes, unsent
+    n = 0
+    for s in [slug] if slug else [p.name for p in archive.root.iterdir() if p.is_dir()]:
+        m = archive.by_slug.get(s)
+        for name in unsent(archive, s, after) if m else []:
+            info = json.loads((archive.root / s / f"{name}.pending").read_text())
+            if name == "emailed.json":
+                email_minutes(archive, s, lambda m=m: make_pdf(m), info["url"])
+            elif name == f"emailed.v{m.version}.json":
+                email_notice(archive, s, info["what"], lambda m=m: make_pdf(m), info["url"])
+            else:  # replaced by a later correction, which has its own email
+                (archive.root / s / f"{name}.pending").unlink(missing_ok=True)
+                continue
+            n += 1
+    return n
 
 
 def email_notice(archive: Archive, slug: str, what_changed: list[str], make_pdf, url: str) -> dict:

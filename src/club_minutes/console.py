@@ -429,6 +429,25 @@ def reply_address(m) -> str | None:
     return m.email if m and m.email and "email" in m.share else None
 
 
+def mark_pending(archive: Archive, slug: str, name: str, url: str, what: list[str] | None = None) -> None:
+    """Note that `name`'s email is due, so a failed or lost send (an email server error, a restart mid-send) can be sent
+    again: from the meeting page, or by the daily job (corrections.retry_pending). A successful send removes it."""
+    p = archive.root / slug / f"{name}.pending"
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps({"at": int(time.time()), "url": url, "what": what or []}))
+    tmp.replace(p)
+
+
+def unsent(archive: Archive, slug: str, after: int = 600) -> list[str]:
+    """The emails of this meeting still due `after` seconds on (status names, e.g. emailed.json): not sent, or failed."""
+    out = []
+    for p in sorted((archive.root / slug).glob("*.json.pending")):
+        name, st = p.name.removesuffix(".pending"), email_status(archive, slug, p.name.removesuffix(".pending"))
+        if st and st.get("error") or not st and time.time() - p.stat().st_mtime > after:
+            out.append(name)
+    return out
+
+
 def send_to_members(archive: Archive, slug: str, subject: str, body: str, pdf_note: str, make_pdf, reply_to, name: str) -> dict:
     """Email members who want the PDF (attached, from make_pdf()) and those who want a link (body less pdf_note). Test
     mode (email.only_to) applies. The outcome, or the error, is kept in the meeting's folder as `name`."""
@@ -445,6 +464,8 @@ def send_to_members(archive: Archive, slug: str, subject: str, body: str, pdf_no
         log.exception("emailing %s failed", subject)
         status = {"at": int(time.time()), "error": str(e)}
     (archive.root / slug / name).write_text(json.dumps(status))
+    if "error" not in status:
+        (archive.root / slug / f"{name}.pending").unlink(missing_ok=True)
     return status
 
 

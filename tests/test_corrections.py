@@ -416,3 +416,49 @@ def test_unshared_details_never_appear_in_an_email_to_others(tmp_path, monkeypat
         assert reply_to != jane.email
         if to != [jane.email]:  # her own copies may say her own address
             assert not [w for w in ("555-0123", "123 Main St", jane.email) if w in body + subject], subject
+
+
+def test_an_email_that_failed_or_never_went_is_sent_again_once(tmp_path, monkeypatch):
+    """A pending note per email (console.mark_pending): a send that fails, or one a restart lost, shows "Send it now"
+    to whoever may correct; the button and the daily job send it, still once; a notice for a replaced version is dropped."""
+    import os
+    import time
+
+    from test_console import FakeSMTP
+
+    from club_minutes import auth, console, web
+    monkeypatch.setattr(auth.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "club@example.org")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "abcd efgh")
+    FakeSMTP.outbox = []
+    a, c = web_as(tmp_path, monkeypatch, "roe")
+    a.club.email = {}
+    monkeypatch.setattr(web, "render_pdf", lambda m: ("m.pdf", b"%PDF"))
+    slug, url = "2026-10-15", "https://x.example.org/meetings/2026-10-15"
+    console.mark_pending(a, slug, "emailed.json", url)
+    def broken(): raise OSError("mail server down")
+    console.email_minutes(a, slug, broken, url)
+    assert console.unsent(a, slug) == ["emailed.json"] and not FakeSMTP.outbox             # failed: listed at once
+    assert "Send it now" in c.get(f"/meetings/{slug}").text
+    c.post(f"/meetings/{slug}/send-now")
+    n = len(FakeSMTP.outbox)
+    assert n and console.unsent(a, slug) == [] and not (tmp_path / slug / "emailed.json.pending").exists()
+    assert "Send it now" not in c.get(f"/meetings/{slug}").text
+    c.post(f"/meetings/{slug}/send-now")
+    assert len(FakeSMTP.outbox) == n                                                         # once
+    # a correction's notice lost to a restart (pending, no status), then another correction replaces it
+    console.mark_pending(a, slug, "emailed.v2.json", url, ["- In person: added John Doe"])
+    p = tmp_path / slug / "emailed.v2.json.pending"
+    assert console.unsent(a, slug) == []                                                     # not yet: it may still be sending
+    os.utime(p, (time.time() - 700, time.time() - 700))
+    assert console.unsent(a, slug) == ["emailed.v2.json"]
+    assert corrections.retry_pending(a, web.render_pdf) == 0 and not p.exists()              # v1 is current: v2's dropped
+    m = a.by_slug[slug]                                                                      # now a real v2 whose notice was lost
+    new = edit(m, in_person=["doe", "kim", "dummy"])
+    what = corrections.changes(m, new, a.club)
+    corrections.correct(a, slug, "roe", "John was there", 1, new, notice=True)
+    console.mark_pending(a, slug, "emailed.v2.json", url, what)
+    os.utime(p, (time.time() - 700, time.time() - 700))
+    before = len(FakeSMTP.outbox)
+    assert corrections.retry_pending(a, web.render_pdf) == 1 and len(FakeSMTP.outbox) > before and not p.exists()
+    assert "(corrected)" in FakeSMTP.outbox[-1]["Subject"] and corrections.retry_pending(a, web.render_pdf) == 0

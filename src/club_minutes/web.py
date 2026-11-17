@@ -1850,6 +1850,16 @@ def _version(request: Request, slug: str, v: str):
     return old
 
 
+@app.post("/meetings/{slug}/send-now")
+async def send_now(request: Request, slug: str):
+    """Send it now: a minutes or corrected-minutes email that failed or never went (still once each)."""
+    m, mid = get_meeting(slug), request.state.member
+    if not (mid and archive.club.may(mid, "lead") or corrections.may_correct(archive.club, m, mid, admin_mode(request))):
+        raise HTTPException(403, "Only a meeting leader, a Minutes editor or an admin can send the minutes.")
+    await run_in_threadpool(corrections.retry_pending, archive, render_pdf, slug, 0)
+    return RedirectResponse(f"/meetings/{slug}", status_code=303)
+
+
 def _may_see_hidden(request: Request, m) -> bool:
     return corrections.may_correct(archive.club, m, request.state.member, admin_mode(request))
 
@@ -1859,7 +1869,7 @@ def view(request: Request, slug: str, v: str = ""):
     current, m = get_meeting(slug), _version(request, slug, v)
     has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
     return page(request, "meeting.html", m=m, current=current, has_original=has_original,
-                emailed=console.email_status(archive, slug),
+                emailed=console.email_status(archive, slug), unsent=console.unsent(archive, slug),
                 notice=console.email_status(archive, slug, f"emailed.v{current.version}.json") if current.version > 1 else None,
                 can_correct=corrections.may_correct(archive.club, current, request.state.member, admin_mode(request)),
                 prev_hidden=m.version > 1 and corrections.hidden_version(current, m.version - 1) and not _may_see_hidden(request, current))
@@ -1920,6 +1930,7 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
         return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
     _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
     if notice:
+        console.mark_pending(archive, slug, f"emailed.v{m.version}.json", f"{base_url(request)}/meetings/{slug}", what)
         background.add_task(corrections.email_notice, archive, slug, what, lambda: render_pdf(archive.by_slug[slug]),
                             f"{base_url(request)}/meetings/{slug}")
     return RedirectResponse(f"/meetings/{m.slug}", status_code=303)
@@ -3685,6 +3696,7 @@ def console_submit(request: Request, background: BackgroundTasks, slug: str, mid
         console.submit(archive, slug, by=mid)
     except ValueError as e:  # already in the archive: never rebuilt or emailed again
         raise HTTPException(409, str(e))
+    console.mark_pending(archive, slug, "emailed.json", f"{base_url(request)}/meetings/{slug}")
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)
