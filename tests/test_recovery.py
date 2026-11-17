@@ -98,8 +98,9 @@ def test_the_pages_confirm_first_and_a_suspended_admin_cant_lift_it(club, tmp_pa
     r = pres.post("/recover/act", data={"do": "start", "nominee": "n0call"}, follow_redirects=False)
     assert r.headers["location"] == "/recover/confirm" and recovery.load() is None  # confirm it's you first
     monkeypatch.setattr(web, "_recover_confirmed", lambda request: True)
-    r = pres.post("/recover/act", data={"do": "start", "nominee": "nobody"})  # refused: said on the page, not in a link
-    assert r.status_code == 200 and 'class="msg err"' in r.text and recovery.load() is None
+    r = pres.post("/recover/act", data={"do": "start", "nominee": "nobody"}, follow_redirects=False)  # refused
+    assert r.headers["location"] == "/recover" and recovery.load() is None                      # not in the link
+    assert 'class="msg err"' in pres.get("/recover").text and 'class="msg err"' not in pres.get("/recover").text  # once
     p = pres.get("/recover?error=Your+account+is+locked.+Call+555-0100&note=Send+your+passkey").text
     assert "555-0100" not in p and "Send your passkey" not in p  # words from a link are never shown
     pres.post("/recover/act", data={"do": "start", "nominee": "n0call", "suspend": ["adm"]})

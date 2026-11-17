@@ -123,7 +123,7 @@
   <p class="hint">The club's amounts{{ cite('dues') }}. When they change, add the new amount with the date it takes effect: earlier weeks keep the old one{% if cert() %}, and the {{ cert().short }}'s price is the one in effect when a member joined{% endif %}.</p>
   <table class="list"><thead><tr><th>What</th><th>From</th><th class="n">Amount</th>{% if edit %}<th></th>{% endif %}</tr></thead><tbody>
   {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ money(x.cents) }}</td>
-    {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline" data-confirm="Remove this rate?"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn" aria-label="Remove the {{ label|lower }} amount from {{ fmt(x['from']) }}">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}
+    {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline" data-confirm="Remove the {{ label|lower }} amount of {{ money(x.cents) }} from {{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}?"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn" aria-label="Remove the {{ label|lower }} amount from {{ fmt(x['from']) }}">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}
   </tbody></table>
   {% if edit %}<form method="post" action="/treasurer/settings/rate" class="modern"><div class="formrow">
     <label>What<select name="kind">{% for k, label in rates.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
@@ -135,9 +135,9 @@
 <div class="card"><h2>Accounts</h2>
   <p>{{ cfg.accounts|join(' · ') }}</p>
   {% if edit %}<form method="post" action="/treasurer/settings/account" class="modern"><div class="formrow">
-    <label>New account<input name="name" required maxlength="60" placeholder="e.g. Emergency Fund"></label><button class="btn small" aria-label="Add the account">Add</button></div></form>
+    <label>New account<input name="name" required maxlength="60" placeholder="e.g. Emergency Fund"></label><button class="btn small">Add account</button></div></form>
   <form method="post" action="/treasurer/settings/account" class="modern"><input type="hidden" name="remove" value="1"><div class="formrow">
-    <label>Remove an unused account<select name="name">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label><button class="btn small ghost" data-confirm="Remove this account?" aria-label="Remove the account chosen">Remove</button></div></form>{% endif %}
+    <label>Remove an unused account<select name="name">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label><button class="btn small ghost" data-confirm="Remove the account chosen in the list?">Remove account</button></div></form>{% endif %}
 </div>
 
 <div class="card"><h2>Spending categories</h2>

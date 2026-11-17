@@ -472,17 +472,19 @@ def test_send_it_now_never_sends_twice_at_once(tmp_path, monkeypatch):
     from club_minutes import console, web
     a, c = web_as(tmp_path, monkeypatch, "roe")
     sent = []
-    monkeypatch.setattr(console, "email_minutes", lambda *x: sent.append(x))
     slug, url = "2026-10-15", "https://x.example.org/meetings/2026-10-15"
+    def fake_send(*x):  # a good send: its status, and the note gone
+        sent.append(x)
+        (tmp_path / slug / "emailed.json").write_text('{"sent": 1}')
+        (tmp_path / slug / "emailed.json.pending").unlink(missing_ok=True)
+    monkeypatch.setattr(console, "email_minutes", fake_send)
     console.mark_pending(a, slug, "emailed.json", url)
-    c.post(f"/meetings/{slug}/send-now")
-    assert sent == []                                                                        # the first send may still be going
+    assert "Nothing was sent" in c.post(f"/meetings/{slug}/send-now").text and sent == []  # the first send may still be going
     (tmp_path / slug / "emailed.json").write_text('{"sent": 3, "err')                         # torn by a crash
     assert console.unsent(a, slug) == ["emailed.json"] and c.get(f"/meetings/{slug}").status_code == 200
     with open(tmp_path / slug / ".send.lock", "w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         assert corrections.retry_pending(a, web.render_pdf, slug) == 0 and sent == []        # another retry has it
-    assert corrections.retry_pending(a, web.render_pdf, slug) == 1 and len(sent) == 1
-    (tmp_path / slug / "emailed.json.pending").unlink()                                    # failed before 1.1: no note to retry
-    (tmp_path / slug / "emailed.json").write_text('{"error": "mail server down"}')
+    assert "Sent to members" in c.post(f"/meetings/{slug}/send-now").text and len(sent) == 1
+    (tmp_path / slug / "emailed.json").write_text('{"error": "mail server down"}')       # failed before 1.1: no note to retry
     assert "Emailing these minutes failed" in c.get(f"/meetings/{slug}").text

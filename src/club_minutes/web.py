@@ -1283,10 +1283,7 @@ def meet_room(request: Request, room: str, mid: str = Depends(real_me)):
 
 # ---------------- recover admin access (officers; recovery.py) ----------------
 
-class Shown(str):
-    """A message the app made, as opposed to ?error= text from a link."""
-
-
+_recover_errors: dict[str, str] = {}  # session token hash -> the app's refusal, shown once after the redirect
 _recover_ok: dict[str, float] = {}  # session token hash -> until: confirmed it's them (as for admin mode), for 5 minutes
 
 
@@ -1302,14 +1299,14 @@ def _recover_mark(request: Request) -> None:
 
 
 @app.get("/recover", response_class=HTMLResponse)
-def recover_page(request: Request, error: str = "", note: str = "", mid: str = Depends(real_me)):  # error: only from recover_action
+def recover_page(request: Request, note: str = "", mid: str = Depends(real_me)):
     """Where a recovery stands, for every member (they're all told); officers start or approve it, the nominee accepts,
     admins (in admin mode) object."""
     club = archive.club
     recovery.tick(club, base_url(request))
     r = recovery.load()
     return page(request, "recover.html", r=r, st=recovery.state(club, r) if r else None, officers=recovery.officers(club),
-                is_officer=mid in recovery.officers(club), error=error if isinstance(error, Shown) else "",
+                is_officer=mid in recovery.officers(club), error=_recover_errors.pop(authmod._hash(_session_token(request) or ""), ""),
                 note="Done. Every member has been told." if note == "done" else "", wait=recovery.WAIT_DAYS,
                 wait_objected=recovery.WAIT_DAYS_OBJECTED, lapse=recovery.LAPSE_DAYS, ts=lambda t: dt.datetime.fromtimestamp(t).strftime("%b %-d, %Y %-I:%M %p"),
                 members=sorted((m for m in club.members.values() if m.status.lower() == "active"), key=lambda m: (m.last, m.first)))
@@ -1334,8 +1331,9 @@ async def recover_act(request: Request, mid: str = Depends(real_me)):
             recovery.object_(club, mid, url)
         else:
             {"approve": recovery.approve, "accept": recovery.accept, "cancel": recovery.cancel}[do](club, mid, url)
-    except ValueError as e:  # shown here, never carried in a link (someone could send a link with words of their own)
-        return recover_page(request, error=Shown(e), mid=mid)
+    except ValueError as e:  # kept here for this session, never carried in a link (someone could send words of their own)
+        _recover_errors[authmod._hash(_session_token(request) or "")] = str(e)
+        return RedirectResponse("/recover", status_code=303)  # a reload never sends the form again
     _admin_log(request, recovery=do)
     return RedirectResponse("/recover?note=done", status_code=303)
 
@@ -1861,8 +1859,14 @@ async def send_now(request: Request, slug: str):
     m, mid = get_meeting(slug), request.state.member
     if not (mid and archive.club.may(mid, "lead") or corrections.may_correct(archive.club, m, mid, admin_mode(request))):
         raise HTTPException(403, "Only a meeting leader, a Minutes editor or an admin can send the minutes.")
-    await run_in_threadpool(corrections.retry_pending, archive, render_pdf, slug)  # the button's own rule: failed, or 10 minutes gone
-    return RedirectResponse(f"/meetings/{slug}", status_code=303)
+    n = await run_in_threadpool(corrections.retry_pending, archive, render_pdf, slug)  # the button's own rule: failed, or 10 minutes gone
+    result = "failed" if console.unsent(archive, slug) else "sent" if n else "waiting"
+    return RedirectResponse(f"/meetings/{m.slug}?sent={result}", status_code=303)  # m.slug: the archive's
+
+
+SENT_NOTES = {"sent": ("ok", "Sent to members."),  # codes, never text from the link
+              "failed": ("warn", "Tried again just now, and it didn't go out. An admin can see why on the Email log."),
+              "waiting": ("warn", "Nothing was sent: it may still be going out. Try again in a few minutes.")}
 
 
 def _may_see_hidden(request: Request, m) -> bool:
@@ -1870,11 +1874,11 @@ def _may_see_hidden(request: Request, m) -> bool:
 
 
 @app.get("/meetings/{slug}", response_class=HTMLResponse)
-def view(request: Request, slug: str, v: str = ""):
+def view(request: Request, slug: str, v: str = "", sent: str = ""):
     current, m = get_meeting(slug), _version(request, slug, v)
     has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
     return page(request, "meeting.html", m=m, current=current, has_original=has_original,
-                emailed=console.email_status(archive, slug), unsent=console.unsent(archive, slug),
+                emailed=console.email_status(archive, slug), unsent=console.unsent(archive, slug), sent_note=SENT_NOTES.get(sent),
                 notice=console.email_status(archive, slug, f"emailed.v{current.version}.json") if current.version > 1 else None,
                 can_correct=corrections.may_correct(archive.club, current, request.state.member, admin_mode(request)),
                 prev_hidden=m.version > 1 and corrections.hidden_version(current, m.version - 1) and not _may_see_hidden(request, current))
@@ -1890,7 +1894,11 @@ def _corrector(request: Request, slug: str):
 
 
 @app.get("/meetings/{slug}/correct", response_class=HTMLResponse)
-def correct_page(request: Request, slug: str, error: str = "", posted: dict | None = None):
+def correct_page(request: Request, slug: str, error: str = ""):
+    return _correct_page(request, slug, error)
+
+
+def _correct_page(request: Request, slug: str, error: str = "", posted: dict | None = None):
     m = _corrector(request, slug)
     sections = m.section_order(archive.club.sections())
     extra = {}  # rows added in the browser before a preview: shown again on Back to editing
@@ -1907,7 +1915,7 @@ async def correct_back(request: Request, slug: str):
     """Back to editing from the preview: the edit page again, filled in from what was sent (no history.back(), which
     some browsers answer by asking to resend the form or by dropping the rows added)."""
     form = await request.form()
-    return correct_page(request, slug, posted={k: v for k, v in form.multi_items() if isinstance(v, str)})
+    return _correct_page(request, slug, posted={k: v for k, v in form.multi_items() if isinstance(v, str)})
 
 
 @app.post("/meetings/{slug}/correct/preview", response_class=HTMLResponse)
