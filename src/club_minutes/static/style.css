@@ -211,8 +211,9 @@ a[target="_blank"]:not([class])::after { content: "\00a0↗"; content: "\00a0↗
 .guide img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: block; }
 .guide .shot { border: 0; padding: 0; background: none; cursor: zoom-in; width: min(100%, 24rem); margin: .4rem 0; }  /* a thumbnail; tap for full size */
 .guide .shot:hover img, .guide .shot:focus-visible img { outline: 2px solid var(--accent); outline-offset: 2px; }
-.modal.shotbig[popover] { width: auto; max-width: calc(100vw - 2rem); padding: 0; background: none; box-shadow: none; overflow: visible; }
-.shotbig img { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); border: 0; }
+.modal.shotbig[popover] { width: fit-content; height: fit-content;  /* the picture's size, so the popover centres it and its ✕ */
+   max-width: calc(100vw - 2rem); padding: 0; background: none; box-shadow: none; overflow: visible; }
+.shotbig img { display: block; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); border: 0; }
 .modal.shotbig > .calclose { background: var(--surface); border-radius: 50%; width: 2rem; height: 2rem; }
 .guide table { display: block; overflow-x: auto; border-collapse: collapse; } .guide th, .guide td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; vertical-align: top; }
 :target, .guide h2 { scroll-margin-top: 4rem; }  /* a link to #something lands below the sticky top bar */ .guide h2 + p, .guide h2 + ul { margin-top: .4rem; }
