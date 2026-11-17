@@ -130,7 +130,12 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
     sheet.add_row({"callsign": new_call, "full_name": m.name, "date": date, "event": "Callsign Change",
                    "note": f"{old_call or '(none)'} to {new_call}"}, tab=LOG_TAB, optional=("note",))
 
-    done = rename_id(mid, new)
+    try:
+        done = rename_id(mid, new)
+    except Exception:  # the sheet already has the new callsign: say how to finish (rename_id can run again safely)
+        log.exception("callsign change %s -> %s stopped partway; with the service stopped, finish it with "
+                      "`club-minutes rename-id %s %s`, then start the service", one_line(mid), one_line(new), one_line(mid), one_line(new))
+        raise
     event = {"date": date, "event": "Callsign Change", "note": f"{old_call or '(none)'} to {new_call}"}
     row.update(id=new, callsign=new_call, aliases=aliases, events=list(row.get("events") or []) + [event])
     if ROSTER_CACHE.exists():

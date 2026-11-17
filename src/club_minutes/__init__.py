@@ -31,6 +31,9 @@ def main() -> None:
     fm.add_argument("--email", required=True, help="their sign-in links go here")
     fm.add_argument("--class", dest="license_class", required=True, help="license class: Technician, General or \"Amateur Extra\"")
     fm.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
+    rn = sub.add_parser("rename-id", help="finish a callsign change that stopped partway (the log says so): with the service stopped")
+    rn.add_argument("old", help="the old id: the old callsign in lowercase")
+    rn.add_argument("new", help="the new id")
     rm = sub.add_parser("delete-meeting", help="delete one meeting's minutes, e.g. after a test (restart the service afterwards)")
     rm.add_argument("date", help="YYYY-MM-DD")
     ci = sub.add_parser("chow-import", help="one-time import of the Secretary's chow .xlsx (prints it; --write saves)")
@@ -129,6 +132,9 @@ def main() -> None:
                   "Add it there, then restart the app.")
         print("Their sign-in link (one use, 15 minutes), then add a passkey and the other members in the app:")
         print(Auth(club).create_link(mid, base_url=a.base_url))
+    elif a.cmd == "rename-id":
+        from .callsign import rename_id
+        print(f"Renamed {a.old} to {a.new}: {rename_id(a.old.lower(), a.new.lower())}. Start the service again.")
     elif a.cmd == "delete-meeting":
         import datetime as dt
         import shutil

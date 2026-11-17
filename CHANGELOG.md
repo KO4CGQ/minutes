@@ -16,7 +16,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Fixed:** a member changing their own email never got the new one; Site → Roles' checkboxes were squeezed on a phone.
 - **Security:** fixes from a security review, including ways a member could see or change more than their role allows. Update soon.
 - **Removed:** restoring backups made before 1.0.0 (a 0.x install restores them).
-- **For server admins:** 1.1.0's data is data version 3. Going back to 1.0.x after updating means restoring the copy the update keeps (a failed update does this by itself).
+- **For server admins:** 1.1.0's data is data version 3. Going back to 1.0.x after updating means restoring the copy the update keeps (a failed update does this by itself). `club-minutes rename-id` finishes a callsign change that stopped partway (server admin guide).
 
 ## 1.0.1 (2026-11-15)
 - **Security:** fixes a way a roster keeper could gain another member's access, an admin's included. Update soon.
