@@ -470,3 +470,13 @@ def test_a_quiet_site_prunes_the_email_log_daily(tmp_path, monkeypatch):
     (tmp_path / "email-log.jsonl").write_text(json.dumps({"at": int(time.time()) - 91 * 86400, "subject": "old"}) + "\n")
     auth_mod.prune_email_log()  # what the daily job runs: no email needed
     assert (tmp_path / "email-log.jsonl").read_text() == ""
+
+
+def test_forget_email_log_removes_a_leaver_alone_or_from_a_list(tmp_path, monkeypatch):
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    auth_mod._email_log({"to": ["jane@example.org"], "subject": "alone"})
+    auth_mod._email_log({"to": ["Jane@example.org", "john@example.org"], "withheld": [], "subject": "minutes"})
+    auth_mod.forget_email_log({"jane@example.org"})
+    log = [json.loads(x) for x in (tmp_path / "email-log.jsonl").read_text().splitlines()]
+    assert [(e["subject"], e["to"]) for e in log] == [("minutes", ["john@example.org"])]

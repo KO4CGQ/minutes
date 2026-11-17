@@ -462,6 +462,18 @@ def test_an_email_that_failed_or_never_went_is_sent_again_once(tmp_path, monkeyp
     before = len(FakeSMTP.outbox)
     assert corrections.retry_pending(a, web.render_pdf) == 1 and len(FakeSMTP.outbox) > before and not p.exists()
     assert "(corrected)" in FakeSMTP.outbox[-1]["Subject"] and corrections.retry_pending(a, web.render_pdf) == 0
+    # a note for minutes never submitted sends nothing; one 90 days old is dropped
+    d = a.by_slug[slug]
+    d.status = "draft"
+    (tmp_path / slug / "emailed.json").unlink()
+    console.mark_pending(a, slug, "emailed.json", url)
+    q = tmp_path / slug / "emailed.json.pending"
+    os.utime(q, (time.time() - 700, time.time() - 700))
+    n = len(FakeSMTP.outbox)
+    assert corrections.retry_pending(a, web.render_pdf) == 0 and not q.exists() and len(FakeSMTP.outbox) == n
+    console.mark_pending(a, slug, "emailed.json", url)
+    os.utime(q, (time.time() - 91 * 86400,) * 2)
+    assert console.drop_old_pending(a) == [f"{slug}/emailed.json.pending"] and not q.exists()
 
 
 def test_send_it_now_never_sends_twice_at_once(tmp_path, monkeypatch):
@@ -488,3 +500,11 @@ def test_send_it_now_never_sends_twice_at_once(tmp_path, monkeypatch):
     assert "Sent to members" in c.post(f"/meetings/{slug}/send-now").text and len(sent) == 1
     (tmp_path / slug / "emailed.json").write_text('{"error": "mail server down"}')       # failed before 1.1: no note to retry
     assert "Emailing these minutes failed" in c.get(f"/meetings/{slug}").text
+
+
+def test_the_pdf_renders_without_the_web_app(tmp_path, monkeypatch):
+    """The daily job's retry makes the minutes PDF through pdf.py, not web (importing web starts the app)."""
+    from club_minutes import pdf
+    a = archive(tmp_path)
+    name, data = pdf.render_pdf(a, a.by_slug["2026-10-15"], "club.example.org")
+    assert name == "15-oct-26-minutes.pdf" and data.startswith(b"%PDF")

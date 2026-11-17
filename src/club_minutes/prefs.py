@@ -182,7 +182,7 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
 def purge_removed(load_club=Club) -> int:
     """Drop what's kept about members who are Inactive or a Silent Key, or no longer on the roster (privacy): their
     email choices and settings, and their passkeys, sessions and sign-in records. Returns how many members."""
-    from .auth import Auth
+    from .auth import Auth, forget_email_log
     gone = set()
     with locked():  # the roster read inside the lock: a callsign change in between would look like a member leaving
         club = load_club()
@@ -195,6 +195,8 @@ def purge_removed(load_club=Club) -> int:
             if drop := set(d) - keep:
                 gone |= drop
                 _write(name, {k: v for k, v in d.items() if k not in drop})
+        # their Email log lines too (an address is known only while they're on the roster)
+        forget_email_log({m.email.strip().lower() for mid in gone if (m := club.members.get(mid)) and m.email})
     return len(gone)
 
 

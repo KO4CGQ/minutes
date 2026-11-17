@@ -36,7 +36,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from markupsafe import Markup, escape
+from markupsafe import Markup
 from starlette.concurrency import (
     run_in_threadpool,  # async routes hand slow work (the roster sheet, email, S3) to a thread
 )
@@ -68,6 +68,7 @@ from . import (
 )
 from . import auth as authmod
 from . import callsign as callsign_mod
+from . import pdf as pdfmod
 from .auth import Auth, _safe_next
 from .backup import KEY_FILE
 from .club import (
@@ -92,6 +93,7 @@ from .roster import COLUMNS, SHAREABLE, SheetError
 # Not birthday and share (the member's own choice), nor the role ticks (Admin → Site → Roles, roles.json)
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share", "minutes_editor", "calendar_editor"))
 from .meeting import SECTIONS
+from .pdf import linkify
 from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
@@ -118,12 +120,6 @@ CHALLENGE_COOKIE = "club_minutes_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico", "/email/confirm",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
                 "/api/roster")  # its own token, and only from the server itself
-URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
-
-
-def linkify(text: str) -> Markup:
-    return Markup(URL_RE.sub(r'<a href="\1">\1</a>', str(escape(text))))
-
 
 def by_last_name(ids):
     c = archive.club
@@ -1575,7 +1571,7 @@ def avatar_file(name: str, mid: str = Depends(me)):
 
 
 @app.post("/profile")
-async def profile_save(request: Request, mid: str = Depends(me)):
+async def profile_save(request: Request, background: BackgroundTasks, mid: str = Depends(me)):
     form = await request.form()
     m = archive.club.members[mid]
     address = clean_address(form.get("address", ""))
@@ -1596,7 +1592,7 @@ async def profile_save(request: Request, mid: str = Depends(me)):
         return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
     email = form.get("email", "").strip()
     if email and email.lower() != (m.email or "").lower():
-        err = await run_in_threadpool(authn.start_email_change, mid, email, base_url(request))
+        err = await run_in_threadpool(authn.start_email_change, mid, email, base_url(request), later=background.add_task)
         if err:
             return RedirectResponse("/profile?saved=1&error=" + quote(err), status_code=303)
         return RedirectResponse("/profile?saved=1&email_sent=" + quote(email), status_code=303)
@@ -1942,14 +1938,17 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
     private = bool(form.get("private"))
     what = corrections.changes(m, new, archive.club, private)
     notice = bool(form.get("notice"))
+    if notice:  # first: a crash after the save leaves a note, so the daily job sends the notice
+        console.mark_pending(archive, slug, f"emailed.v{m.version + 1}.json", f"{base_url(request)}/meetings/{slug}", what)
     try:
         m = await run_in_threadpool(corrections.correct, archive, slug, request.state.member, str(form.get("reason") or ""),
                                     num(str(form.get("version") or "")) or 0, new, notice, private)  # file writes and a reload: off the event loop
     except ValueError as e:
+        if notice and archive.by_slug[slug].version == m.version:  # nothing saved: no notice to send
+            (archive.root / slug / f"emailed.v{m.version + 1}.json.pending").unlink(missing_ok=True)
         return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
     _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
     if notice:
-        console.mark_pending(archive, slug, f"emailed.v{m.version}.json", f"{base_url(request)}/meetings/{slug}", what)
         background.add_task(corrections.email_notice, archive, slug, what, lambda: render_pdf(archive.by_slug[slug]),
                             f"{base_url(request)}/meetings/{slug}")
     return RedirectResponse(f"/meetings/{m.slug}", status_code=303)
@@ -1977,7 +1976,10 @@ def html_to_pdf(template: str, **ctx) -> bytes:
 
 def render_pdf(m) -> tuple[str, bytes]:
     """(file name, PDF bytes) for submitted minutes: 15-oct-26-minutes.pdf, or -v2.pdf for a corrected version."""
-    return corrections.pdf_name(m), html_to_pdf("minutes_doc.html", m=m, current=archive.by_slug.get(m.slug, m))
+    try:
+        return pdfmod.render_pdf(archive, m, authn.rp_id)
+    except OSError as e:  # missing system libraries (pango)
+        raise HTTPException(503, f"PDF rendering unavailable on this server: {e}")
 
 
 @app.get("/meetings/{slug}/minutes.pdf")
@@ -2092,7 +2094,7 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
 
 
 @app.post("/members/{who}/edit")
-async def member_edit(request: Request, who: str, mid: str = Depends(roster_keeper)):
+async def member_edit(request: Request, background: BackgroundTasks, who: str, mid: str = Depends(roster_keeper)):
     if who not in archive.club.members:
         raise HTTPException(404)
     m, f = archive.club.members[who], await request.form()
@@ -2131,7 +2133,7 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
             new["address"] = m.address or ""
         await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
         if new_email:  # waits for the new address to confirm it; the old one is told now
-            if err := await run_in_threadpool(authn.start_email_change, who, email, base_url(request), mid):
+            if err := await run_in_threadpool(authn.start_email_change, who, email, base_url(request), mid, later=background.add_task):
                 raise ValueError(err)
             return RedirectResponse(_safe_next(back + "saved=1&email_sent=" + quote(email)), status_code=303)
     except (ValueError, SheetError) as e:
@@ -3716,11 +3718,17 @@ def email_minutes(slug: str, url: str) -> None:
 def console_submit(request: Request, background: BackgroundTasks, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     _held_by_other(slug, None, mid)
+    fresh = archive.by_slug[slug].status == "draft"  # a note for minutes already in the archive is a real one: leave it
+    if fresh:  # first: a crash after the submit leaves a note, so the daily job sends the email
+        console.mark_pending(archive, slug, "emailed.json", f"{base_url(request)}/meetings/{slug}")
     try:
         console.submit(archive, slug, by=mid)
-    except ValueError as e:  # already in the archive: never rebuilt or emailed again
-        raise HTTPException(409, str(e))
-    console.mark_pending(archive, slug, "emailed.json", f"{base_url(request)}/meetings/{slug}")
+    except BaseException as e:  # not submitted: no note to email unsubmitted minutes
+        if fresh:
+            (archive.root / slug / "emailed.json.pending").unlink(missing_ok=True)
+        if isinstance(e, ValueError):  # already in the archive: never rebuilt or emailed again
+            raise HTTPException(409, str(e))
+        raise
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)

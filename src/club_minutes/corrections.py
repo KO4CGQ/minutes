@@ -195,6 +195,9 @@ def retry_pending(archive: Archive, make_pdf, slug: str | None = None, after: in
                 continue
             for name in unsent(archive, s, after):
                 info = json.loads((archive.root / s / f"{name}.pending").read_text())
+                if name == "emailed.json" and m.status == "draft":  # never submitted: nothing to email
+                    (archive.root / s / f"{name}.pending").unlink(missing_ok=True)
+                    continue
                 if name == "emailed.json":
                     email_minutes(archive, s, lambda m=m: make_pdf(m), info["url"])
                 elif name == f"emailed.v{m.version}.json":

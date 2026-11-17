@@ -441,6 +441,20 @@ def mark_pending(archive: Archive, slug: str, name: str, url: str, what: list[st
     tmp.replace(p)
 
 
+PENDING_DAYS = 90  # as the Email log keeps its entries
+
+
+def drop_old_pending(archive: Archive) -> list[str]:
+    """Delete notes of emails still unsent after PENDING_DAYS (a send that keeps failing): they hold the "what changed"
+    lines. Returns what was dropped, as meeting/note."""
+    gone = []
+    for p in archive.root.glob("*/*.pending"):
+        if time.time() - p.stat().st_mtime > PENDING_DAYS * 86400:
+            p.unlink(missing_ok=True)
+            gone.append(f"{p.parent.name}/{p.name}")
+    return gone
+
+
 def unsent(archive: Archive, slug: str, after: int = 600) -> list[str]:
     """The emails of this meeting still due `after` seconds on (status names, e.g. emailed.json): not sent, or failed."""
     out = []

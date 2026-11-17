@@ -5,7 +5,9 @@ session and link tokens are stored, so a copy of the database can't be used to l
 """
 from __future__ import annotations
 
+import contextlib
 import contextvars
+import fcntl
 import hashlib
 import json
 import logging
@@ -323,9 +325,12 @@ class Auth:
         return bool(self.db.execute("select 1 from links where token_hash=?", (_hash(token),)).fetchone())
 
     # ---------------- email changes ----------------
-    def start_email_change(self, member: str, email: str, base_url: str | None = None, by: str | None = None) -> str | None:
+    def start_email_change(self, member: str, email: str, base_url: str | None = None, by: str | None = None,
+                           later=None) -> str | None:
         """Email a confirmation link to the new address; nothing changes until it's opened. `by`: a roster keeper
-        changing someone else's, whose old address is told at once. Returns an error message, or None if sent."""
+        changing someone else's, whose old address is told at once. Returns an error message, or None if sent.
+        `later` (BackgroundTasks.add_task): the emails go after the reply, so an address in use (no email) and a new one
+        take the same time."""
         email, by = email.strip(), by or member
         if not valid_email(email):
             return "That doesn't look like an email address."
@@ -338,9 +343,10 @@ class Auth:
                         (_hash(token), member, email, now + LINK_MINUTES * 60, now, by))
         base, app, m = (base_url or self.base_url or "").rstrip("/"), branding.name(self.club), self.club.members[member]
         other = self.member_by_email(email)
+        later = later or (lambda f, *a, **k: f(*a, **k))
         if not (other and other != member):  # in use: everything as usual but this mail, so nobody can test an address
             # no names: the new address may be a stranger's (a typo)
-            send_email(email, f"Confirm your new {app} email", only_to=self.club.email_only_to(), to_self=by == member,
+            later(send_email, email, f"Confirm your new {app} email", only_to=self.club.email_only_to(), to_self=by == member,
                        body=f"Hello,\n\nSomeone asked to use this address for a {app} account. If that's you, open this "
                        f"link within {LINK_MINUTES} minutes:\n\n{base}/email/confirm?t={token}\n\n"
                        f"If you don't know what this is, ignore this email and nothing changes.\n\n73,\n{app}")
@@ -348,7 +354,7 @@ class Auth:
             return None
         who = self.club.name(by)
         if m.email:
-            send_email(m.email, f"Your {app} email is being changed", only_to=self.club.email_only_to(),
+            later(send_email, m.email, f"Your {app} email is being changed", only_to=self.club.email_only_to(),
                        body=f"Hi {m.first},\n\n{who} asked to change your email on the club roster from this address to "
                        f"{email}. It changes only when that address confirms it, and then you're signed out everywhere.\n\n"
                        f"If that's wrong, tell an officer or reply to this email.\n\n73,\n{app}")
@@ -526,34 +532,75 @@ def _logged_at(line: str) -> float:
         return 0  # a torn line: dropped at the next prune
 
 
+@contextlib.contextmanager
+def _log_locked():
+    """Held around every change to email-log.jsonl (an append, a prune, a member's lines removed), by the web app and
+    the daily job alike: they're separate processes, and a line appended during a rewrite would be lost."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "email-log.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def _email_log(entry: dict) -> None:
     """Live site: every email the app sends or holds back (test mode), for admins' Email log page. Links' tokens are
     hidden: an admin opening the log within 15 minutes could otherwise sign in as the member."""
     p = DATA / "email-log.jsonl"
     entry = {**entry, "body": hide_tokens(entry.get("body") or "")}
     try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a") as f:
-            f.write(json.dumps({"at": int(time.time()), **entry}) + "\n")
-        p.chmod(0o600)
+        with _log_locked():
+            with p.open("a") as f:
+                f.write(json.dumps({"at": int(time.time()), **entry}) + "\n")
+            p.chmod(0o600)
         prune_email_log()
     except (OSError, ValueError):  # ValueError: a damaged log (not text); an email must still go
         log.exception("couldn't write the email log")
+
+
+def _rewrite_email_log(p: Path, lines: list[str]) -> None:
+    tmp = p.with_name(f"email-log.{os.getpid()}.tmp")
+    tmp.write_text("".join(line + "\n" for line in lines))
+    tmp.chmod(0o600)
+    tmp.replace(p)
 
 
 def prune_email_log() -> None:
     """The Email log's last EMAIL_LOG_KEEP entries, none older than EMAIL_LOG_DAYS: after each email, and daily (a quiet
     site sends none)."""
     p = DATA / "email-log.jsonl"
-    if not p.exists():
-        return
-    lines, cutoff = p.read_text().splitlines(), time.time() - EMAIL_LOG_DAYS * 86400
-    if lines and (len(lines) > EMAIL_LOG_KEEP * 1.5 or _logged_at(lines[0]) < cutoff):
-        kept = [line for line in lines[-EMAIL_LOG_KEEP:] if _logged_at(line) >= cutoff]
-        tmp = p.with_name(f"email-log.{os.getpid()}.tmp")
-        tmp.write_text("".join(line + "\n" for line in kept))
-        tmp.chmod(0o600)
-        tmp.replace(p)  # shortcut: a line another process appends during the rewrite is lost; a lock if that matters
+    with _log_locked():
+        if not p.exists():
+            return
+        lines, cutoff = p.read_text().splitlines(), time.time() - EMAIL_LOG_DAYS * 86400
+        if lines and (len(lines) > EMAIL_LOG_KEEP * 1.5 or _logged_at(lines[0]) < cutoff):
+            _rewrite_email_log(p, [line for line in lines[-EMAIL_LOG_KEEP:] if _logged_at(line) >= cutoff])
+
+
+def forget_email_log(addresses: set[str]) -> None:
+    """A member who left: their address out of the Email log. An email to them alone goes whole; one to many (the
+    minutes) stays, less their address."""
+    p = DATA / "email-log.jsonl"
+    with _log_locked():
+        if not addresses or not p.exists():
+            return
+        out = []
+        for line in p.read_text().splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue  # torn: dropped, as the prune does
+            if not isinstance(e, dict):
+                continue
+            rest = {k: [a for a in e.get(k) or [] if a.strip().lower() not in addresses] for k in ("to", "withheld")}
+            if (e.get("to") or e.get("withheld")) and not (rest["to"] or rest["withheld"]):
+                continue
+            if (e.get("reply_to") or "").strip().lower() in addresses:
+                e["reply_to"] = None
+            out.append(json.dumps({**e, **rest}))
+        _rewrite_email_log(p, out)
 
 
 def email_ready() -> bool:

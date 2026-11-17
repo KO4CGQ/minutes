@@ -159,9 +159,12 @@ def main() -> None:
         url = f"https://{club.auth.get('rp_id')}"
         today = dt.date.today()
         if not a.dry_run:
-            from . import recovery
-            if recovery.tick(club, url):
-                print("recovered admin access (recovery.py)")
+            try:
+                from . import recovery
+                if recovery.tick(club, url):
+                    print("recovered admin access (recovery.py)")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't check the admin recovery: {e}")
             from .auth import Auth
             try:  # each housekeeping step on its own: one failing never stops the reminders below
                 if n := Auth(club).prune():
@@ -178,8 +181,12 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't drop the settings of members who left: {e}")
             try:  # minutes and corrected-minutes emails that failed or never went (a restart mid-send)
-                from . import corrections, web
-                if n := corrections.retry_pending(web.archive, web.render_pdf):
+                from . import console, corrections, pdf
+                from .store import Archive
+                archive = Archive(club=club)
+                for note in console.drop_old_pending(archive):
+                    print(f"dropped the unsent-email note {note} (over {console.PENDING_DAYS} days old)")
+                if n := corrections.retry_pending(archive, lambda m: pdf.render_pdf(archive, m, club.auth.get("rp_id"))):
                     print(f"sent {n} minutes email(s) again")
             except Exception as e:  # the reminders below still go  # noqa: BLE001
                 print(f"couldn't retry the minutes emails: {e}")
