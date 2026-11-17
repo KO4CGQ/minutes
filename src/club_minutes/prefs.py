@@ -179,12 +179,13 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
     return out
 
 
-def purge_removed(club: Club) -> int:
+def purge_removed(load_club=Club) -> int:
     """Drop the choices of members no longer on the roster (privacy: nothing kept about someone who's gone)."""
-    if not club.members:  # a roster that didn't load isn't everyone leaving
-        return 0
     gone = set()
-    with locked():
+    with locked():  # the roster read inside the lock: a callsign change in between would look like a member leaving
+        club = load_club()
+        if not club.members:  # a roster that didn't load isn't everyone leaving
+            return 0
         for name in ("email-prefs.json", "settings.json"):
             d = _read(name)
             if drop := set(d) - set(club.members):

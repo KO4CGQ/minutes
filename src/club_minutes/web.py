@@ -1861,7 +1861,7 @@ async def send_now(request: Request, slug: str):
     m, mid = get_meeting(slug), request.state.member
     if not (mid and archive.club.may(mid, "lead") or corrections.may_correct(archive.club, m, mid, admin_mode(request))):
         raise HTTPException(403, "Only a meeting leader, a Minutes editor or an admin can send the minutes.")
-    await run_in_threadpool(corrections.retry_pending, archive, render_pdf, slug, 0)
+    await run_in_threadpool(corrections.retry_pending, archive, render_pdf, slug)  # the button's own rule: failed, or 10 minutes gone
     return RedirectResponse(f"/meetings/{slug}", status_code=303)
 
 

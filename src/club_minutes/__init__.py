@@ -163,11 +163,20 @@ def main() -> None:
             if recovery.tick(club, url):
                 print("recovered admin access (recovery.py)")
             from .auth import Auth
-            if n := Auth(club).prune():
-                print(f"pruned {n} old sign-in records")
-            auth.prune_email_log()  # a quiet site sends no email to trigger it
-            if n := prefs.purge_removed(club):
-                print(f"dropped the settings of {n} member(s) no longer on the roster")
+            try:  # each housekeeping step on its own: one failing never stops the reminders below
+                if n := Auth(club).prune():
+                    print(f"pruned {n} old sign-in records")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't prune the sign-in records: {e}")
+            try:
+                auth.prune_email_log()  # a quiet site sends no email to trigger it
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't prune the Email log: {e}")
+            try:
+                if n := prefs.purge_removed():
+                    print(f"dropped the settings of {n} member(s) no longer on the roster")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't drop the settings of members who left: {e}")
             try:  # minutes and corrected-minutes emails that failed or never went (a restart mid-send)
                 from . import corrections, web
                 if n := corrections.retry_pending(web.archive, web.render_pdf):

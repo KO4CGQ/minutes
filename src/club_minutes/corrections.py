@@ -8,6 +8,7 @@ the tracked business items or the chow schedule. Search and member histories rea
 from __future__ import annotations
 
 import difflib
+import fcntl
 import json
 import re
 import shutil
@@ -185,16 +186,23 @@ def retry_pending(archive: Archive, make_pdf, slug: str | None = None, after: in
     n = 0
     for s in [slug] if slug else [p.name for p in archive.root.iterdir() if p.is_dir()]:
         m = archive.by_slug.get(s)
-        for name in unsent(archive, s, after) if m else []:
-            info = json.loads((archive.root / s / f"{name}.pending").read_text())
-            if name == "emailed.json":
-                email_minutes(archive, s, lambda m=m: make_pdf(m), info["url"])
-            elif name == f"emailed.v{m.version}.json":
-                email_notice(archive, s, info["what"], lambda m=m: make_pdf(m), info["url"])
-            else:  # replaced by a later correction, which has its own email
-                (archive.root / s / f"{name}.pending").unlink(missing_ok=True)
+        if not m:
+            continue
+        with open(archive.root / s / ".send.lock", "w") as lock:
+            try:  # one retry of a meeting at a time (two clicks, or a click and the daily job): the other skips it
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
                 continue
-            n += 1
+            for name in unsent(archive, s, after):
+                info = json.loads((archive.root / s / f"{name}.pending").read_text())
+                if name == "emailed.json":
+                    email_minutes(archive, s, lambda m=m: make_pdf(m), info["url"])
+                elif name == f"emailed.v{m.version}.json":
+                    email_notice(archive, s, info["what"], lambda m=m: make_pdf(m), info["url"])
+                else:  # replaced by a later correction, which has its own email
+                    (archive.root / s / f"{name}.pending").unlink(missing_ok=True)
+                    continue
+                n += 1
     return n
 
 

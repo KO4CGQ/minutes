@@ -171,6 +171,10 @@ def test_failed_attempts_ban_internet_addresses_only(a):
     for _ in range(auth_mod.BAN_AFTER * 2):  # links asked for unknown addresses: logged, never counted (a member's
         a.send_link("stranger@example.org", ip="9.9.9.9")  # address isn't, so a ban would tell them apart)
     assert not a.banned("9.9.9.9")
+    for _ in range(auth_mod.UNKNOWN_LOGGED):
+        a.send_link("stranger@example.org", ip="9.9.9.9")
+    count = "select count(*) from events where kind='unknown_email' and ip=?"
+    assert a.db.execute(count, ("9.9.9.9",)).fetchone()[0] == auth_mod.UNKNOWN_LOGGED  # a script can't fill the table
     for _ in range(auth_mod.BAN_AFTER - 1):
         a.event("bad_link", "9.9.9.9")
         a.event("bad_link", "192.168.1.50")

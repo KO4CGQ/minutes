@@ -421,7 +421,10 @@ def recipients(archive: Archive, how: str | None = None) -> list[str]:
 
 def email_status(archive: Archive, slug: str, name: str = "emailed.json") -> dict | None:
     p = archive.root / slug / name
-    return json.loads(p.read_text()) if p.exists() else None
+    try:
+        return json.loads(p.read_text()) if p.exists() else None
+    except ValueError:  # torn by a crash mid-write: as failed, so Send it now offers it again
+        return {"error": "the email's record is damaged"}
 
 
 def reply_address(m) -> str | None:
@@ -463,7 +466,9 @@ def send_to_members(archive: Archive, slug: str, subject: str, body: str, pdf_no
     except Exception as e:
         log.exception("emailing %s failed", subject)
         status = {"at": int(time.time()), "error": str(e)}
-    (archive.root / slug / name).write_text(json.dumps(status))
+    tmp = archive.root / slug / f"{name}.tmp"
+    tmp.write_text(json.dumps(status))
+    tmp.replace(archive.root / slug / name)
     if "error" not in status:
         (archive.root / slug / f"{name}.pending").unlink(missing_ok=True)
     return status

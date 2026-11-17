@@ -462,3 +462,27 @@ def test_an_email_that_failed_or_never_went_is_sent_again_once(tmp_path, monkeyp
     before = len(FakeSMTP.outbox)
     assert corrections.retry_pending(a, web.render_pdf) == 1 and len(FakeSMTP.outbox) > before and not p.exists()
     assert "(corrected)" in FakeSMTP.outbox[-1]["Subject"] and corrections.retry_pending(a, web.render_pdf) == 0
+
+
+def test_send_it_now_never_sends_twice_at_once(tmp_path, monkeypatch):
+    """A click while the first send is still going (pending, no status, under 10 minutes) sends nothing, and while
+    another retry of the meeting holds its lock, a second one skips it; a torn status counts as failed, not a 500."""
+    import fcntl
+
+    from club_minutes import console, web
+    a, c = web_as(tmp_path, monkeypatch, "roe")
+    sent = []
+    monkeypatch.setattr(console, "email_minutes", lambda *x: sent.append(x))
+    slug, url = "2026-10-15", "https://x.example.org/meetings/2026-10-15"
+    console.mark_pending(a, slug, "emailed.json", url)
+    c.post(f"/meetings/{slug}/send-now")
+    assert sent == []                                                                        # the first send may still be going
+    (tmp_path / slug / "emailed.json").write_text('{"sent": 3, "err')                         # torn by a crash
+    assert console.unsent(a, slug) == ["emailed.json"] and c.get(f"/meetings/{slug}").status_code == 200
+    with open(tmp_path / slug / ".send.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        assert corrections.retry_pending(a, web.render_pdf, slug) == 0 and sent == []        # another retry has it
+    assert corrections.retry_pending(a, web.render_pdf, slug) == 1 and len(sent) == 1
+    (tmp_path / slug / "emailed.json.pending").unlink()                                    # failed before 1.1: no note to retry
+    (tmp_path / slug / "emailed.json").write_text('{"error": "mail server down"}')
+    assert "Emailing these minutes failed" in c.get(f"/meetings/{slug}").text

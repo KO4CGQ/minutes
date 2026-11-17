@@ -86,6 +86,7 @@ EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the ro
                "passkey_failed": "Passkey sign-in failed", "probe": "Scanner probe (an address only attack tools ask for)",
                "cross_site": "Refused: sent from another site's page", "refused": "Refused: not allowed for this member",
                "too_big": "Refused: upload over the size limit"}
+UNKNOWN_LOGGED = 20  # unknown-address requests recorded per address an hour (the reply is the same either way)
 NOT_COUNTED = ("cross_site", "refused", "too_big", "unknown_email")  # logged, never toward a ban: a cross-site request carries the victim's address; an unknown address must count like a member's (nothing), or a ban tells them apart
 
 
@@ -279,7 +280,9 @@ class Auth:
         member = self.member_by_email(email)
         if not member:
             log.info("login link requested for an address not on the roster")
-            self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
+            if self.db.execute("select count(*) from events where kind='unknown_email' and ip is ? and at>?",
+                               (ip, int(time.time()) - 3600)).fetchone()[0] < UNKNOWN_LOGGED:  # a script mustn't fill the table
+                self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
             return
         now = int(time.time())
 
