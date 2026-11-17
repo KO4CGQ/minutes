@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from club_minutes import business, chow, web
-from club_minutes.auth import Auth, _safe_next
+from club_minutes.auth import BAN_AFTER, Auth, _safe_next
 from club_minutes.club import Club
 
 FIX = Path(__file__).parent / "fixtures"
@@ -744,3 +744,75 @@ def test_the_public_routes_are_a_fixed_list(app):
             reached.add((m, path))
     assert {p for m, p in reached if m == "GET"} <= PUBLIC_GET, sorted(reached)
     assert {p for m, p in reached if m == "POST"} <= PUBLIC_POST, sorted(reached)
+
+
+def test_a_sign_in_link_request_answers_and_counts_the_same_for_a_stranger_and_a_member(app, tmp_path):
+    """Same redirect, and the same effect on bans, so neither the reply nor getting banned tells whether an address is on the roster."""
+    seen = set()
+    for address, ip in (("amy@example.org", "8.8.8.8"), ("stranger@example.org", "1.1.1.1")):
+        c = TestClient(web.app, client=(ip, 5000))
+        replies = {(r.status_code, r.headers["location"], r.text) for r in
+                   (c.post("/login/email", data={"email": address}, follow_redirects=False) for _ in range(BAN_AFTER + 3))}
+        assert not web.authn.banned(ip), address
+        seen |= replies
+    assert len(seen) == 1
+
+
+def _log_calls():
+    import ast
+    for p in Path(web.__file__).parent.glob("*.py"):
+        for node in ast.walk(ast.parse(p.read_text())):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) \
+                    and node.func.value.id in ("log", "_log", "logging", "logger") and node.func.attr in ("debug", "info", "warning", "error", "exception", "critical"):
+                yield p, node
+
+
+def test_the_log_never_gets_an_email_body():
+    import ast
+    calls = list(_log_calls())
+    assert len(calls) > 20  # the scan finds the app's log calls
+    for p, node in calls:
+        names = {n.id for a in (*node.args, *(k.value for k in node.keywords)) for n in ast.walk(a) if isinstance(n, ast.Name)}
+        assert not any("body" in n.lower() for n in names), f"{p.name}:{node.lineno} logs an email body"
+
+
+def test_reply_to_only_comes_from_reply_address():
+    """Outside auth.py, an email's Reply-To is console.reply_address(...) (the author's own email only if they share it)."""
+    import ast
+    src = Path(web.__file__).parent
+    asked = 0
+    for p in src.glob("*.py"):
+        if p.name == "auth.py":
+            continue
+        tree = ast.parse(p.read_text())
+        for fn in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)):
+            for call in (n for n in ast.walk(fn) if isinstance(n, ast.Call)):
+                name = getattr(call.func, "id", getattr(call.func, "attr", ""))
+                if name == "send_to_members":  # its reply_to argument comes from reply_address in the same function
+                    asked += 1
+                    assert "reply_address(" in ast.get_source_segment(p.read_text(), fn), f"{p.name}:{call.lineno}"
+                if name != "send_to_members" and any(k.arg == "reply_to" for k in call.keywords):
+                    assert fn.name == "send_to_members" and all(isinstance(k.value, ast.Name) for k in call.keywords if k.arg == "reply_to"), f"{p.name}:{call.lineno}"
+    assert asked >= 2  # minutes and corrected minutes
+
+
+URL_SECRET = re.compile(r"[?&;](jwt|t|token|key|secret|email\w*|addr\w*)=")
+# where the app builds a URL with a token or an address in it, and why that's safe
+URL_SECRETS_OK = {
+    ("auth.py", "?t="): "one-time sign-in and email-confirm links, emailed (and hidden in logs by hide_tokens)",
+    ("web.py", "?t="): "one-time admin-mode and recovery links, emailed",
+    ("web.py", "?jwt="): "the video redirect, sent with Referrer-Policy: no-referrer",
+    ("web.py", "&email_sent="): "the profile page's note: an address in our own page's URL; the default Referrer-Policy is same-origin",
+}
+
+
+def test_no_token_or_address_in_a_url_without_a_reason():
+    found = {}
+    for p in Path(web.__file__).parent.rglob("*"):
+        if p.suffix in (".py", ".html", ".js") and "static" not in p.parts:
+            for i, line in enumerate(p.read_text().splitlines(), 1):
+                for m in URL_SECRET.finditer(line):
+                    found.setdefault((p.name, m.group(0)), []).append(i)
+    unknown = {k: v for k, v in found.items() if k not in URL_SECRETS_OK}
+    assert not unknown, f"a token or address in a URL: add a reason to URL_SECRETS_OK, or hide it: {unknown}"
+    assert web.app.router and 'Referrer-Policy"] = "no-referrer"' in Path(web.__file__).read_text()  # the jwt redirect's reason holds

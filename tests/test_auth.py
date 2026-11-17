@@ -168,11 +168,14 @@ def test_email_links_ignore_forged_host(monkeypatch):
 
 
 def test_failed_attempts_ban_internet_addresses_only(a):
+    for _ in range(auth_mod.BAN_AFTER * 2):  # links asked for unknown addresses: logged, never counted (a member's
+        a.send_link("stranger@example.org", ip="9.9.9.9")  # address isn't, so a ban would tell them apart)
+    assert not a.banned("9.9.9.9")
     for _ in range(auth_mod.BAN_AFTER - 1):
-        a.send_link("stranger@example.org", ip="9.9.9.9")
+        a.event("bad_link", "9.9.9.9")
         a.event("bad_link", "192.168.1.50")
     assert not a.banned("9.9.9.9")
-    a.send_link("nobody@example.org", ip="9.9.9.9")                  # the tenth in an hour
+    a.event("bad_link", "9.9.9.9")                                      # the tenth in an hour
     assert a.banned("9.9.9.9") and a.bans()[0]["by"] == "automatic"
     a.event("bad_link", "192.168.1.50")                                 # LAN: logged, never auto-banned
     assert not a.banned("192.168.1.50") and not a.banned(None)

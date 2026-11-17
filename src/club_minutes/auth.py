@@ -86,7 +86,7 @@ EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the ro
                "passkey_failed": "Passkey sign-in failed", "probe": "Scanner probe (an address only attack tools ask for)",
                "cross_site": "Refused: sent from another site's page", "refused": "Refused: not allowed for this member",
                "too_big": "Refused: upload over the size limit"}
-NOT_COUNTED = ("cross_site", "refused", "too_big")  # logged, never toward a ban: a cross-site request carries the victim's address
+NOT_COUNTED = ("cross_site", "refused", "too_big", "unknown_email")  # logged, never toward a ban: a cross-site request carries the victim's address; an unknown address must count like a member's (nothing), or a ban tells them apart
 
 
 def _public(ip: str) -> bool:
@@ -569,8 +569,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
     user = os.environ.get("CLUB_MINUTES_SMTP_USER")
     password = (os.environ.get("CLUB_MINUTES_SMTP_PASSWORD") or "").replace(" ", "")  # Google shows app passwords in groups
     if not (user and password):
-        log.warning("SMTP not configured; email to %s not sent: %s | %s", one_line(", ".join(recipients)), one_line(subject),
-                    one_line(hide_tokens(body))[:2000])
+        log.warning("SMTP not configured; email to %s not sent: %s", one_line(", ".join(recipients)), one_line(subject))
         _email_log({**entry, "status": "not sent (no SMTP settings)"})
         return 0
     try:

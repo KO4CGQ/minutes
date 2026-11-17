@@ -333,3 +333,81 @@ def test_removed_lines_are_never_quoted_and_private_hides_the_version_before(tmp
     editor = TestClient(web.app)
     editor.cookies.set(web.COOKIE, web.authn.new_session("kim"))  # the recorder
     assert "See version 1" in editor.get("/meetings/2026-10-15").text and editor.get("/meetings/2026-10-15?v=1").status_code == 200
+
+
+
+# ---------------- what goes out by email ----------------
+
+def _mail(monkeypatch, tmp_path):
+    """The real send_email, up to the SMTP step: what would be sent is recorded, and the Email log is written."""
+    from club_minutes import auth
+    sent = []
+    monkeypatch.setattr(auth, "DATA", tmp_path)
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "club@example.org")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "abcd efgh")
+    monkeypatch.setattr(auth, "_smtp_send", lambda to, subject, body, att, reply_to, *_: sent.append((list(to), subject, body, reply_to)) or len(to))
+    return sent
+
+
+def test_a_removed_line_never_goes_out_in_the_notice_or_the_email_log(tmp_path, monkeypatch):
+    sent = _mail(monkeypatch, tmp_path)
+    a = archive(tmp_path)
+    a.club.email = {}
+    m = a.by_slug["2026-10-15"]
+    secret = "ZZMARKER"
+    m = corrections.correct(a, m.slug, "roe", "add", 1, edit(m, sections={**m.sections, "New Business": [Item(f"Call {secret} about the key")]}), notice=False)
+    what = corrections.changes(m, edit(m, sections={**m.sections, "New Business": []}), a.club)  # the line removed...
+    what += corrections.changes(m, edit(m, sections={**m.sections, "New Business": [Item("Call someone about the key")]}), a.club, private=True)  # ...and reworded, private
+    m = corrections.correct(a, m.slug, "roe", "private details", 2, edit(m, sections={**m.sections, "New Business": []}), notice=True, private=True)
+    corrections.email_notice(a, m.slug, what, lambda: ("m.pdf", b"%PDF"), "https://x.example.org/meetings/2026-10-15")
+    assert sent and secret not in str(sent) and secret not in (tmp_path / "email-log.jsonl").read_text()
+
+
+def test_inactive_and_silent_key_members_get_no_minutes_or_corrections(tmp_path, monkeypatch):
+    sent = _mail(monkeypatch, tmp_path)
+    a = archive(tmp_path)
+    a.club.email = {}
+    a.club.members["kim"].status, a.club.members["roe"].status = "Inactive", "Silent Key"
+    m = a.by_slug["2026-10-15"]
+    console.email_minutes(a, m.slug, lambda: ("m.pdf", b"%PDF"), "https://x.example.org/meetings/2026-10-15")
+    new = edit(m, visitors=3)
+    corrections.correct(a, m.slug, "doe", "visitors", 1, new, notice=True)
+    corrections.email_notice(a, m.slug, corrections.changes(m, new, a.club), lambda: ("m.pdf", b"%PDF"), "https://x.example.org/meetings/2026-10-15")
+    got = {x for to, *_ in sent for x in to}
+    assert got and not got & {"sam@example.org", "rick@example.org"}
+
+
+def test_unshared_details_never_appear_in_an_email_to_others(tmp_path, monkeypatch):
+    """Minutes, corrections, recovery, an email change, reminders: a member who shares nothing has no phone, address or
+    email in any body, and no Reply-To of theirs."""
+    import datetime as dt
+
+    from club_minutes import auth, business, prefs, recovery
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(recovery, "DATA", tmp_path)
+    sent = _mail(monkeypatch, tmp_path)
+    a = archive(tmp_path)
+    club = a.club
+    club.email = {}
+    jane = club.members["doe"]
+    jane.phone, jane.address, jane.share = "555-0123", "123 Main St, Anytown", []
+    m = a.by_slug["2026-10-15"]
+    console.email_minutes(a, m.slug, lambda: ("m.pdf", b"%PDF"), "https://x.example.org/meetings/2026-10-15")
+    new = edit(m, in_person=["kim", "roe"])  # Jane's attendance removed
+    corrections.correct(a, m.slug, "roe", "Jane wasn't there", 1, new, notice=True)
+    corrections.email_notice(a, m.slug, corrections.changes(m, new, club), lambda: ("m.pdf", b"%PDF"), "https://x.example.org/meetings/2026-10-15")
+    recovery.start(club, "roe", "doe", ["n0admn"], "", "https://x.example.org")
+    auth.Auth(club, tmp_path / "auth.sqlite").start_email_change("doe", "jane.new@example.org", "https://x.example.org", by="roe")
+    due = [({"text": "Order patches", "due": "2026-10-20"}, "soon")]
+    subject, body = business.reminder_email(club, "doe", due, dt.date(2026, 10, 19), "https://x.example.org")
+    auth.send_email("anyone@example.org", subject, body)
+    monday = dt.date(2026, 10, 12)
+    day = monday + dt.timedelta(days=(club.meeting_weekday - monday.weekday()) % 7)
+    for _mid, _key, subject, body in prefs.digest(club, a, day, "https://x.example.org") + prefs.chow_reminders(club, day, "https://x.example.org"):
+        auth.send_email("anyone@example.org", subject, body)
+    assert len(sent) >= 6
+    for to, subject, body, reply_to in sent:
+        assert reply_to != jane.email
+        if to != [jane.email]:  # her own copies may say her own address
+            assert not [w for w in ("555-0123", "123 Main St", jane.email) if w in body + subject], subject

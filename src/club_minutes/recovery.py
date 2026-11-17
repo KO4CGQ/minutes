@@ -221,6 +221,7 @@ def _tell(club: Club, subject: str, what: str, r: dict, url: str) -> None:
               if st["ready_at"] else "") + ("" if r.get("accepted") else f"; waiting for {club.name(r['nominee'])} to accept") + "."
            if st else "")
     motion = f"\n\nThe board's motion: {r['motion']}" if r.get("motion") else ""
-    to = sorted({m.email for m in club.members.values() if m.email and (m.status.lower() == "active" or m.id in r["suspend"])})
+    to = sorted({m.email for m in club.members.values() if m.email and m.status.lower() not in ("inactive", "silent key")
+                 and (m.status.lower() == "active" or m.id in r["suspend"])})
     auth.send_email(to, f"{club.label}: {subject}", f"{what}{how}{motion}\n\nWhere it stands, and who has approved: "
                     f"{url}/recover\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())

@@ -179,9 +179,9 @@ def test_email_log_keeps_90_days(tmp_path, monkeypatch):
     from club_minutes import auth as auth_mod
     monkeypatch.setattr(auth_mod, "DATA", tmp_path)
     old = int(time.time()) - 91 * 86400
-    (tmp_path / "email-log.jsonl").write_text(json.dumps({"at": old, "subject": "old"}) + "\n{torn\n5\nnull\n")
+    (tmp_path / "email-log.jsonl").write_text(json.dumps({"at": old, "subject": "old"}) + "\n" + json.dumps({"at": old + 2 * 86400, "subject": "89 days"}) + "\n{torn\n5\nnull\n")
     auth_mod._email_log({"subject": "new"})
-    assert [json.loads(x)["subject"] for x in (tmp_path / "email-log.jsonl").read_text().splitlines()] == ["new"]
+    assert [json.loads(x)["subject"] for x in (tmp_path / "email-log.jsonl").read_text().splitlines()] == ["89 days", "new"]
 
 
 def test_monthday_filter():
@@ -459,4 +459,4 @@ def test_email_log_and_server_log_hide_link_tokens(tmp_path, monkeypatch, caplog
     assert "&next=%2F" in log[2]                                                               # only the token goes
     monkeypatch.delenv("CLUB_MINUTES_SMTP_PASSWORD")                                           # no SMTP: the body goes to the server log
     a.send_link("ann@example.org", base_url="https://club.example.org", ip="192.0.2.1")      # another address: not a quick repeat
-    assert "t=[hidden]" in caplog.text and not re.search(r"[?&]t=[\w-]{20,}", caplog.text)
+    assert "ann@example.org not sent" in caplog.text and "t=" not in caplog.text  # recipients and subject only, never the body

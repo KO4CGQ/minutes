@@ -161,3 +161,35 @@ def test_old_sign_in_records_are_pruned(club, tmp_path):
         a.db.execute("insert into signins (at, member, method, ip) values (?,?,?,?)", (at, who, "passkey", "203.0.113.9"))
     assert a.prune() == 2  # pres keeps the latest, if old ("last signed in"); n0call's old one goes
     assert sorted((r["member"], r["at"]) for r in a.signins()) == [("n0call", now), ("pres", now - 100 * DAY)]
+
+
+def test_old_links_challenges_and_events_go_after_90_days_but_89_stay(club, tmp_path):
+    import time
+    a = Auth(club, tmp_path / "auth.sqlite")
+    now = int(time.time())
+    for days, tag in ((91, "old"), (89, "new")):
+        at = now - days * DAY
+        a.db.execute("insert into links (token_hash, member, expires, next, used, created, ip) values (?,?,?,?,?,?,?)", (tag, "pres", at, "/", 1, at, "203.0.113.9"))
+        a.db.execute("insert into challenges (id, challenge, member, kind, expires) values (?,?,?,?,?)", (tag, b"x", "pres", "login", at))
+        a.db.execute("insert into events (at, ip, kind) values (?,?,?)", (at, "203.0.113.9", "bad_link"))
+        a.db.execute("insert into signins (at, member, method, ip) values (?,?,?,?)", (at, "pres", "email link", "203.0.113.9"))
+    a.db.execute("insert into signins (at, member, method, ip) values (?,?,?,?)", (now - 300 * DAY, "adm", "email link", "203.0.113.9"))
+    assert a.prune() == 4  # one old link, challenge, event and sign-in
+    assert [r[0] for r in a.db.execute("select token_hash from links")] == ["new"]
+    assert [r[0] for r in a.db.execute("select id from challenges")] == ["new"]
+    assert len(a.events()) == 1 and sorted(r["member"] for r in a.signins()) == ["adm", "pres"]  # adm's only one is its latest
+
+
+def test_inactive_and_silent_key_members_get_no_recovery_email_and_no_sign_in(club, tmp_path):
+    club.members["n0call"].status = "Inactive"
+    club.members["adm"].status = "Silent Key"  # an admin, suspended below: still no email
+    club.members["tru"].status = "Inactive"
+    recovery.start(club, "pres", "tre", ["adm"], "", "https://x")
+    (to, *_), = club.sent
+    assert not {"n0call@example.org", "adm@example.org", "tru@example.org"} & set(to) and "pres@example.org" in to
+    a = Auth(club, tmp_path / "auth.sqlite")
+    tokens = [a.new_session(m) for m in ("n0call", "adm", "pres")]
+    assert [a.member_for(t) for t in tokens] == [None, None, "pres"]  # a live session of theirs gets nothing
+    assert a.member_by_email("n0call@example.org") is None  # and no sign-in link is made for them
+    a.send_link("n0call@example.org", ip="203.0.113.9")
+    assert not a.db.execute("select 1 from links").fetchone()
