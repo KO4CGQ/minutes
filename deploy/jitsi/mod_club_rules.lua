@@ -4,7 +4,8 @@
 --   last_host_leaves: "end" (end the meeting), "guests" (drop the guests) or "stay"
 -- A guest is anyone without a token. Mic, camera and screen use Jitsi's own AV moderation (enforced by Jicofo);
 -- members (token holders) are put on its allow list as they join, so only guests have to ask.
--- Guests are refused (fail closed) where their rules can't be applied: no member in the room yet to set them, or
+-- Guests are refused (fail closed) where their rules can't be applied: no member in the room yet to set them (a guest
+-- who comes first knocks in the room's lobby, opened here, and waits for a host; refused if the lobby can't open), or
 -- Jitsi's AV moderation component missing.
 -- Load on the main MUC component, with av_moderation_component set up as usual.
 local util = module:require 'util';
@@ -69,7 +70,13 @@ module:hook('muc-occupant-pre-join', function (event)
         return;
     end
     local r, why = rules(room), nil;
-    if not r then
+    if not r and not room:get_members_only() then
+        -- not started: open the lobby (persistent_lobby), so they knock and wait for a host instead of an error
+        prosody.events.fire_event('create-persistent-lobby-room', { room = room; reason = 'waiting-for-host'; skip_display_name_check = true; });
+    end
+    if not r and room:get_members_only() then
+        return; -- the lobby holds them; a host lets them in once a member has set the rules (and this runs again)
+    elseif not r then
         why = 'This meeting has not started: a member must join first.';
     elseif r.guests == false then
         why = 'This meeting is for members only.';

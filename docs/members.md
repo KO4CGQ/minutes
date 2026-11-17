@@ -44,7 +44,7 @@ If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists 
 
 - **Who hosts:** officers and meeting leaders.
 - **Rooms for certain members** (the board, say): the page says who. Other members wait in the lobby until a host lets them in, or don't see the room at all.
-- **Guests** without an account use a room's guest address, shown on the page, and wait in the lobby until a host lets them in. Some rooms are for members only.
+- **Guests** without an account use a room's guest address, shown on the page, and wait in the lobby until a host lets them in, even if they come before anyone else. Some rooms are for members only.
 - **What guests may do:** each room says. If they must ask to unmute, turn their camera on or share their screen, a host allows it in the meeting as usual.
 
 If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its guest address, and you host it until a day passes with no one joining it here. Its card stays on the Video meeting page for you until then. A calendar event can link to one of the club's rooms.
