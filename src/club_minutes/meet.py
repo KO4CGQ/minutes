@@ -182,15 +182,20 @@ def opener(room: str) -> str | None:
     return (_openers().get(f"room:{room}") or {}).get("by")
 
 
-def open_room(room: str, mid: str) -> None:
-    """Note a member opening an ad-hoc room, unless someone else did in the last day (then they just join it).
-    ValueError past OPEN_MAX."""
+def mine(mid: str) -> list[dict]:
+    """The ad-hoc rooms this member opened that are still current: [{slug, name}], for their cards on /meet."""
+    return [{"slug": k[5:], "name": v.get("name") or k[5:]} for k, v in _openers().items() if v.get("by") == mid]
+
+
+def open_room(room: str, mid: str, name: str = "") -> None:
+    """Note a member opening an ad-hoc room (and the name they typed, for its card), unless someone else did in the
+    last day (then they just join it). ValueError past OPEN_MAX."""
     with _opening:
         d = _openers()
         if f"room:{room}" not in d and (sum(v.get("by") == mid for v in d.values()) >= OPEN_MAX[0] or len(d) >= OPEN_MAX[1]):
             raise ValueError("That's as many rooms of your own as one day allows: use one you opened.")
         if d.get(f"room:{room}", {}).get("by") in (None, mid):
-            d[f"room:{room}"] = {"by": mid, "at": time.time()}
+            d[f"room:{room}"] = {"by": mid, "at": time.time(), "name": name[:60] or d.get(f"room:{room}", {}).get("name", "")}
             _save(d)
 
 

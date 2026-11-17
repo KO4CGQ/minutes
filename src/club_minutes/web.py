@@ -1235,21 +1235,22 @@ def meet_home(request: Request, error: str = "", mid: str = Depends(real_me)):
     rooms = [r | {"for": _room_roles(r) if r["roles"] else "", "inside": admin_mode(request) or meet.lets_in(archive.club, mid, r)}
              for r in meet.rooms(archive.club)]
     rooms, adhoc = [r for r in rooms if r["inside"] or r["others"] == "knock"], meet.adhoc(archive.club)
-    return page(request, "meet.html", rooms=rooms, adhoc=adhoc, domain=s["domain"], error=error)
+    return page(request, "meet.html", rooms=rooms, adhoc=adhoc, mine=meet.mine(mid) if adhoc else [], domain=s["domain"], error=error)
 
 
 @app.post("/meet")
 async def meet_open(request: Request, mid: str = Depends(real_me)):
     """Open a room of one's own (while the admin allows them): its opener hosts it for a day."""
     form = await request.form()
-    room = meet.slug(" ".join((form.get("name") or "").split()))
+    name = " ".join((form.get("name") or "").split())
+    room = meet.slug(name)
     if not meet.settings(archive.club) or not meet.adhoc(archive.club):
         raise HTTPException(404)
     if not meet.ROOM.match(room) or room in {r["slug"] for r in meet.rooms(archive.club)}:
         return RedirectResponse("/meet?error=" + quote("Give the room a name of letters and numbers, not one of the club's rooms."), status_code=303)
     if not request.state.viewing_as:
         try:
-            meet.open_room(room, mid)
+            meet.open_room(room, mid, name)
         except ValueError as e:
             return RedirectResponse("/meet?error=" + quote(str(e)), status_code=303)
     return RedirectResponse(f"/meet/{room}", status_code=303)

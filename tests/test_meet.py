@@ -104,6 +104,9 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     assert t["moderator"] is True and t["context"]["room"]["club"]["last_host_leaves"] == "guests"
     as_("pres").post("/meet", data={"name": "antenna project"})
     assert meet.opener("antenna-project") == "n0call"
+    assert "<h2>Antenna Project!</h2>" in as_("n0call").get("/meet").text  # its card stays on the opener's page, by the name typed
+    assert "antenna-project" not in as_("pres").get("/meet").text  # and no one else's
+    assert 'action="/meet" target="_blank"' in as_("n0call").get("/meet").text  # Open it: a new tab, like Join
     (clubmod.DATA / "meet-rooms.json").write_text("")  # damaged (power lost mid-save): nobody's the opener, nothing breaks
     assert meet.opener("antenna-project") is None and as_("n0call").get("/meet/antenna-project", follow_redirects=False).status_code == 303
     from club_minutes import callsign
