@@ -64,3 +64,10 @@ Once tracking is on, Home shows what you owe (or that you're paid up, and throug
 With tracking on (the same switch as your dues, above), **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in.
 
 ![Where the club's money goes: a year of spending by category](screenshots/spending.png)
+
+## 🔒 What's kept, and who sees it
+- **Your details:** officers and admins see your email, phone, address and birthday (a club can let other roles see them too); other members see only what you tick under **Share with all members** on your profile. Replies to the minutes email go to whoever took them only if they share their email.
+- **Corrected minutes:** earlier versions are kept, and members can open them from the minutes page. A correction that removes private details (a health matter, a phone number) keeps the version before for those who can correct minutes only. Members are usually emailed what changed, but removed lines are never quoted.
+- **Video meetings:** joining sends your name and callsign to the club's video server.
+- **Admin recovery:** if the officers ever have to recover admin access, every member is emailed at each step.
+- **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both.
