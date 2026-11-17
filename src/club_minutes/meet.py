@@ -30,7 +30,7 @@ ROOM = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 GUEST = ("mic", "camera", "screen", "chat")  # what a guest may do, each True (freely) or False (a host must allow it)
 OTHERS = {"knock": "Knock in the lobby", "no": "Can't join"}  # members a room doesn't let straight in
 LEAVES = {"stay": "Nothing: the meeting goes on", "guests": "The guests are dropped", "end": "The meeting ends for everyone"}
-OPEN_HOURS = 24  # an ad-hoc room's opener stays its host this long
+OPEN_HOURS = 24  # an ad-hoc room's opener stays its host until this long passes with no one joining it here
 OPEN_MAX = (5, 200)  # rooms of their own a day: per member, and in all
 _opening = threading.Lock()
 
@@ -148,6 +148,14 @@ def adhoc(club: Club) -> dict | None:
     return rules(a) | {"p2p": a.get("p2p", True) is not False} if a.get("on") else None
 
 
+def members_only(club: Club, room: str) -> bool:
+    """Whether this room lets no guests in (a guest reaching /meet/<room> is told so instead of sent on to Jitsi)."""
+    if not settings(club) or not ROOM.match(room):
+        return False
+    r = next((r for r in rooms(club) if r["slug"] == room), None) or adhoc(club)
+    return bool(r) and not r["guests"]
+
+
 def p2p_off(room: dict) -> str:
     """What the address to Jitsi ends with when a room keeps two-person calls on the server: members' browsers then
     refuse peer-to-peer, so a call with a guest goes through the server, where the rules for guests hold."""
@@ -160,7 +168,7 @@ def slug(name: str) -> str:
 
 
 def _openers() -> dict:
-    """{"room:<slug>": {by, at}} for the last day. Keys never equal a member id, so a callsign change (callsign.py)
+    """{"room:<slug>": {by, at}}: at is the last join through the app; older than a day is gone. Keys never equal a member id, so a callsign change (callsign.py)
     renames only the openers. A damaged file reads as empty: it only says who hosts for a day."""
     try:
         d = json.loads((clubmod.DATA / "meet-rooms.json").read_text())
@@ -170,7 +178,7 @@ def _openers() -> dict:
 
 
 def opener(room: str) -> str | None:
-    """Who opened this ad-hoc room, in the last day."""
+    """Who opened this ad-hoc room, while it's current."""
     return (_openers().get(f"room:{room}") or {}).get("by")
 
 
@@ -183,7 +191,20 @@ def open_room(room: str, mid: str) -> None:
             raise ValueError("That's as many rooms of your own as one day allows: use one you opened.")
         if d.get(f"room:{room}", {}).get("by") in (None, mid):
             d[f"room:{room}"] = {"by": mid, "at": time.time()}
-            p = clubmod.DATA / "meet-rooms.json"
-            tmp = p.with_suffix(".tmp")
-            tmp.write_text(json.dumps(d, indent=1))
-            tmp.replace(p)
+            _save(d)
+
+
+def touch(room: str) -> None:
+    """A join through the app keeps an ad-hoc room's name and its opener current for another day."""
+    with _opening:
+        d = _openers()
+        if f"room:{room}" in d:
+            d[f"room:{room}"]["at"] = time.time()
+            _save(d)
+
+
+def _save(d: dict) -> None:
+    p = clubmod.DATA / "meet-rooms.json"
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, indent=1))
+    tmp.replace(p)

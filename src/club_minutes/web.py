@@ -260,6 +260,10 @@ async def require_login(request: Request, call_next):
                                 "Stop viewing as them (banner at the top) to make changes.", status_code=403)
     if request.state.member or path.startswith(PUBLIC_PATHS):
         return await call_next(request)
+    if request.method == "GET" and path.startswith("/meet/") and meet.members_only(archive.club, path[6:].lower()):
+        refused = page(request, "meet.html", members_only=True, room=path[6:].lower())
+        refused.status_code = 403
+        return refused
     if request.method == "GET" and not path.startswith("/api/"):
         target = path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
@@ -1276,6 +1280,8 @@ def meet_room(request: Request, room: str, mid: str = Depends(real_me)):
     # a host must also be let straight in: a meeting leader who isn't on the board knocks at the board's room
     host = inside and (archive.club.may(mid, "meet_host") or admin_mode(request) or (not named and meet.opener(room) == mid))
     jwt = meet.token(archive.club, mid, room, host, room_rules=room_rules, straight_in=inside)
+    if not named:
+        meet.touch(room)
     r = RedirectResponse(f"https://{s['domain']}/{room}?jwt={jwt}{meet.p2p_off(room_rules)}", status_code=303)
     r.headers["Referrer-Policy"] = "no-referrer"  # the token is in the address: don't hand it on
     return r

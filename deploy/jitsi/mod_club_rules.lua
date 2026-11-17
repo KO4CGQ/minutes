@@ -4,6 +4,8 @@
 --   last_host_leaves: "end" (end the meeting), "guests" (drop the guests) or "stay"
 -- A guest is anyone without a token. Mic, camera and screen use Jitsi's own AV moderation (enforced by Jicofo);
 -- members (token holders) are put on its allow list as they join, so only guests have to ask.
+-- Guests are refused (fail closed) where their rules can't be applied: no member in the room yet to set them, or
+-- Jitsi's AV moderation component missing.
 -- Load on the main MUC component, with av_moderation_component set up as usual.
 local util = module:require 'util';
 local is_healthcheck_room, is_admin, is_focus = util.is_healthcheck_room, util.is_admin, util.is_focus;
@@ -38,7 +40,7 @@ module:hook('muc-occupant-joined', function (event)
     if not r then return; end
     local mod = av();
     if not mod then
-        module:log('error', 'no %s: guests are not held back', av_host);
+        module:log('error', 'no %s: guests are refused where they would not be held back', av_host);
         return;
     end
     local me = internal_room_jid_match_rewrite(occupant.nick);
@@ -56,12 +58,27 @@ module:hook('muc-occupant-joined', function (event)
     end
 end, -3); -- after av_moderation's own join handling (-2)
 
+local function needs_av(r)
+    return r.guest_mic == false or r.guest_camera == false or r.guest_screen == false;
+end
+
+-- Fails closed: a guest is refused unless the room's rules are known (a member came first) and can be applied.
 module:hook('muc-occupant-pre-join', function (event)
     local room, session = event.room, event.origin;
-    local r = rules(room);
-    if r and r.guests == false and session and not session.auth_token and not is_admin(event.occupant.bare_jid)
-            and not is_healthcheck_room(room.jid) then
-        session.send(st.error_reply(event.stanza, 'cancel', 'not-allowed', 'This meeting is for members only.'));
+    if not session or session.auth_token or is_admin(event.occupant.bare_jid) or is_healthcheck_room(room.jid) then
+        return;
+    end
+    local r, why = rules(room), nil;
+    if not r then
+        why = 'This meeting has not started: a member must join first.';
+    elseif r.guests == false then
+        why = 'This meeting is for members only.';
+    elseif needs_av(r) and not av() then
+        module:log('error', 'no %s: refusing a guest in %s', av_host, room.jid);
+        why = 'This meeting cannot admit guests right now.';
+    end
+    if why then
+        session.send(st.error_reply(event.stanza, 'cancel', 'not-allowed', why));
         return true;
     end
 end, -3.9); -- before the lobby (-4) sends them to knock

@@ -84,7 +84,7 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     as_("pres").post("/admin/site/video", data={"rows": "2", **room, "adhoc": "1", "guests_a": "1", "leaves_a": "guests"})
     assert [r["slug"] for r in meet.rooms(c)] == ["club", "board"]
     tab = as_("pres").get("/admin/site/video").text  # each room's fields named by their room for a screen reader
-    assert 'aria-label="Room: Club meeting"' in tab and 'aria-label="Room: a new room"' in tab
+    assert '<span class="sr">Room: </span><b>Club meeting</b>' in tab and 'aria-label="Room:' not in tab
     t = claims(as_("n0call").get("/meet/club", follow_redirects=False).headers["location"])
     assert t["context"]["room"]["club"] == {"guests": True, "guest_mic": False, "guest_camera": False, "guest_screen": False,
                                             "guest_chat": True, "last_host_leaves": "end"}
@@ -253,3 +253,20 @@ def test_a_damaged_settings_file_breaks_no_page(env):
     _, as_ = env
     (prefs.DATA / "settings.json").write_text('{"n0call": {"supp')
     assert as_("n0call").get("/").status_code == 200
+
+
+def test_guests_told_members_only_and_own_rooms_expire_when_unused(env):
+    c, as_ = env
+    c.yaml["jitsi"]["adhoc"] = {"on": True, "guests": False}
+    r = as_(None).get("/meet/net-night", follow_redirects=False)  # a guest, in a room that lets none in: a page, not Jitsi
+    assert r.status_code == 403 and "members only" in r.text and "/login?next=/meet/net-night" in r.text
+    assert as_(None).get("/meet/club", follow_redirects=False).headers["location"] == "/login?next=/meet/club"
+    as_("n0call").post("/meet", data={"name": "Net night"})
+    d = json.loads((clubmod.DATA / "meet-rooms.json").read_text())
+    d["room:net-night"]["at"] -= 23 * 3600  # almost lapsed: a join keeps it
+    (clubmod.DATA / "meet-rooms.json").write_text(json.dumps(d))
+    as_("pres").get("/meet/net-night", follow_redirects=False)
+    assert meet.opener("net-night") == "n0call"
+    d["room:net-night"]["at"] -= 25 * 3600  # a day with no join: free to take
+    (clubmod.DATA / "meet-rooms.json").write_text(json.dumps(d))
+    assert meet.opener("net-night") is None
