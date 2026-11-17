@@ -207,6 +207,13 @@ RELEASED_FILES = {"admin-log.jsonl", "admins.json", "ai-log.jsonl", "api-log.jso
                   "site-settings.json", "stage-sync-status.json", "treasurer.json", "treasurer.lock", "treasurer-log.jsonl",
                   "update-check.json", "update-request.json", "update-running.json", "update-settings.json",
                   "update-status.json", "upgrade.lock"}
+# 1.0.1's Admin → Site settings (club.SITE_KEYS), all in site-settings.json: a key added since (Site → Video's, say)
+# is in a file 1.0.1 reads, so it too needs the data-version step that makes 1.0.1 refuse the data.
+RELEASED_SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
+                                             "invite_after_visits", "remind_days_before", "public_calendars")} | {
+    ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
+    ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
+    ("", "offices"), ("", "roster_keepers")}
 RELEASED_COLUMNS = {
     "sessions": {"token_hash", "member", "created", "expires", "agent", "admin_until", "view_as", "ip", "method"},
     "links": {"token_hash", "member", "expires", "next", "used", "created"},
@@ -225,6 +232,9 @@ def test_new_data_files_and_columns_come_with_a_data_version_step(tmp_path):
     a = Auth(Club(FIX / "test-club.yaml", roster=PEOPLE), tmp_path / "auth.sqlite")
     columns = {t: {r["name"] for r in a.db.execute(f"pragma table_info({t})")} for t in RELEASED_COLUMNS}
     new = {t: sorted(c - RELEASED_COLUMNS[t]) for t, c in columns.items() if c - RELEASED_COLUMNS[t]}
+    from club_minutes.club import SITE_KEYS
+    if SITE_KEYS - RELEASED_SITE_KEYS:
+        assert upgrade.CURRENT > RELEASED_VERSION, f"new Site settings {sorted(SITE_KEYS - RELEASED_SITE_KEYS)}: add a step to upgrade.STEPS"
     if files - RELEASED_FILES or new:
         assert upgrade.CURRENT > RELEASED_VERSION, (
             f"new since the last release: files {sorted(files - RELEASED_FILES)}, columns {new}: add a step to "
