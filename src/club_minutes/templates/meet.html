@@ -14,7 +14,7 @@
 <p class="muted">No rooms you can join.</p>
 {% endfor %}</div>
 {% if adhoc %}
-<form method="post" action="/meet" class="card profile">
+<form method="post" action="/meet" class="card profile room">
 <h2>A room of your own</h2>
 <p class="hint">Name it, then send guests its address: https://{{ domain }}/ plus the name written with dashes (Net night becomes net-night). You host it until a day passes with no one joining it here.{% if not adhoc.guests %} Members only: guests can't come in.{% endif %}</p>
 <p class="row"><label>Name <input name="name" maxlength="60" required placeholder="e.g. Antenna project"></label> <button class="btn">Open it</button></p>
