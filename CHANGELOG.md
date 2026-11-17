@@ -7,22 +7,23 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 ## Unreleased
 - **Custom roles:** on Admin → Site → Roles, admins decide what each role may do and who has it (by office, or picked by hand), and can add the club's own roles. Leading meetings (**Meeting leader**) and fixing published minutes (**Minutes editor**) are now separate roles, and a **Secretary** role gets the roster emails.
 - **Correct these minutes:** the meeting's leader or recorder, a Minutes editor or an admin can correct minutes in the archive, with a reason and a side-by-side preview. Earlier versions are kept, and members can be emailed what changed; if **This removes private details** is ticked, only editors see the version before. Imported minutes get **Mark as reviewed**.
-- **Video meetings (optional):** members join the club's own Jitsi Meet server already signed in. Officers and meeting leaders host; guests wait in the lobby. Each room says which members come straight in, what guests may do (unmute, camera, screen sharing, chat) and what happens when the last host leaves. Members can open rooms of their own, and a calendar event can name a room. An admin turns it on under Admin → Site → Features (server admin guide → Video meetings).
+- **Video meetings (optional):** members join the club's own Jitsi Meet server already signed in. Officers and meeting leaders host; guests wait in the lobby. Each room says which members come straight in, what guests may do (unmute, camera, screen sharing, chat) and what happens when the last host leaves. Members can open rooms of their own (theirs until a day passes with no one joining), and a calendar event can name a room. An admin turns it on under Admin → Site → Features (server admin guide → Video meetings).
 - **Recover admin access:** if the club can't reach its admins, the officers can make a member an admin and suspend the others, with approvals, a waiting period, and every member told at each step (officers guide). The last active admin can't be removed, and the Admin page warns while there's only one.
 - **Email changes:** a new address takes effect once its owner confirms it, and the change signs them out everywhere. Changing another member's email or status is a permission of its own, and only an admin changes an officer's or admin's email, status or callsign.
 - **Support the app:** a **Support Club Minutes** link (Ko-fi) at the foot of the menu, and GitHub Sponsors or Ko-fi on the About page. Members can hide the link under Your profile → Settings; an admin can hide it for everyone on Admin → Site → Features.
 - **Officers guide:** Choosing an admin, with a template admin agreement.
 - **Smaller changes:**
-    - If the minutes email (or a correction's) doesn't go out, the minutes page offers **Send it now**, and it's tried again overnight.
+    - If the minutes email (or a correction's) doesn't go out, leaders and editors see **Send it now** on the minutes page, and it's tried again overnight.
     - Replies to the minutes email go to whoever took the minutes only if they share their email with members; otherwise to the club's address.
-    - The members guide says what's kept and who sees it. Old sign-in records and the Email log are deleted after 90 days, and a member's email choices, settings, passkeys, sign-in records and Email log lines the night after they're made Inactive or a Silent Key.
+    - The members guide says what's kept and who sees it. Old sign-in records and the Email log are deleted after 90 days.
+    - A member made Inactive or a Silent Key loses their email choices, settings, passkeys and sign-in records that night, and their address leaves the Email log. Made Active again, they sign in with an emailed link.
     - Easier on a phone and with a screen reader: bigger checkboxes and buttons, buttons named for their row, and an "Are you sure?" before more removals.
     - The Security page also lists hostile requests (scanner probes, requests from other sites, refused actions).
     - An admin with admin mode off is told to turn it on, on every admin page.
 - **Fixed:** a member changing their own email never got the new one; a picture in Help opened full size sits in the middle of the screen, with its ✕ at its corner.
 - **Security:** fixes from a security review, including ways a member could see or change more than their role allows. Update soon.
 - **Removed:** restoring backups made before 1.0.0 (a 0.x install restores them).
-- **For server admins:** 1.1.0 upgrades the data, so going back to 1.0.x means restoring the copy the update keeps (a failed update does this by itself). `club-minutes rename-id` finishes a callsign change that stopped partway (server admin guide).
+- **For server admins:** 1.1.0 upgrades the data, so going back to 1.0.x means restoring the copy the update keeps (a failed update does this by itself). `club-minutes rename-id` finishes a callsign change that stopped partway (server admin guide). The first night after updating, members already Inactive or a Silent Key lose their passkeys and sign-ins.
 
 ## 1.0.1 (2026-11-15)
 - **Security:** fixes a way a roster keeper could gain another member's access, an admin's included. Update soon.
