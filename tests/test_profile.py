@@ -460,3 +460,13 @@ def test_email_log_and_server_log_hide_link_tokens(tmp_path, monkeypatch, caplog
     monkeypatch.delenv("CLUB_MINUTES_SMTP_PASSWORD")                                           # no SMTP: the body goes to the server log
     a.send_link("ann@example.org", base_url="https://club.example.org", ip="192.0.2.1")      # another address: not a quick repeat
     assert "ann@example.org not sent" in caplog.text and "t=" not in caplog.text  # recipients and subject only, never the body
+
+
+def test_a_quiet_site_prunes_the_email_log_daily(tmp_path, monkeypatch):
+    import time
+
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    (tmp_path / "email-log.jsonl").write_text(json.dumps({"at": int(time.time()) - 91 * 86400, "subject": "old"}) + "\n")
+    auth_mod.prune_email_log()  # what the daily job runs: no email needed
+    assert (tmp_path / "email-log.jsonl").read_text() == ""

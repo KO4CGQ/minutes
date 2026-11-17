@@ -25,6 +25,7 @@ from .meeting import SECTIONS
 log = logging.getLogger(__name__)
 
 ROOT = Path(os.environ.get("CLUB_MINUTES_ROOT", Path(__file__).resolve().parents[2]))
+_site_lock = threading.Lock()
 DATA = Path(os.environ.get("CLUB_MINUTES_DATA", ROOT / "data"))
 MEETINGS = DATA / "meetings"
 ROSTER_CACHE = DATA / "roster.json"
@@ -288,28 +289,29 @@ class Club:
     def save_site_settings(self, values: dict) -> None:
         """Set Site page settings together ({(section, key): value}; None: back to club.yaml's). Checked as the app
         checks club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
-        if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS]:
-            raise ValueError(f"{', '.join(bad)} can't be changed here.")
-        site = self.site_settings
-        for (section, key), value in values.items():
-            if value is None:
-                site.get(section, {}).pop(key, None)
-            else:
-                site.setdefault(section, {})[key] = value
-        site = {k: v for k, v in site.items() if v}
-        cfg = _overlay(self.yaml, site)
-        probe = Club.__new__(Club)
-        try:
-            probe._configure(cfg)
-            _ = (probe.meeting_weekday, probe.meeting_time, probe.timezone)
-        except Exception:
-            set_dates(self.info.get("date_formats"))  # the probe may have set the shared formats already
-            raise
-        p = DATA / "site-settings.json"
-        tmp = p.with_suffix(".tmp")
-        tmp.write_text(json.dumps(site, indent=1))
-        tmp.replace(p)
-        self._configure(cfg)
+        with _site_lock:  # two admins saving at once: one after the other, neither lost
+            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS]:
+                raise ValueError(f"{', '.join(bad)} can't be changed here.")
+            site = self.site_settings
+            for (section, key), value in values.items():
+                if value is None:
+                    site.get(section, {}).pop(key, None)
+                else:
+                    site.setdefault(section, {})[key] = value
+            site = {k: v for k, v in site.items() if v}
+            cfg = _overlay(self.yaml, site)
+            probe = Club.__new__(Club)
+            try:
+                probe._configure(cfg)
+                _ = (probe.meeting_weekday, probe.meeting_time, probe.timezone)
+            except Exception:
+                set_dates(self.info.get("date_formats"))  # the probe may have set the shared formats already
+                raise
+            p = DATA / "site-settings.json"
+            tmp = p.with_suffix(".tmp")
+            tmp.write_text(json.dumps(site, indent=1))
+            tmp.replace(p)
+            self._configure(cfg)
 
     def _configure(self, cfg: dict) -> None:
         """The settings, from club.yaml with the Site page's on top. Raises ValueError for a wrong one."""

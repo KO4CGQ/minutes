@@ -165,6 +165,7 @@ def main() -> None:
             from .auth import Auth
             if n := Auth(club).prune():
                 print(f"pruned {n} old sign-in records")
+            auth.prune_email_log()  # a quiet site sends no email to trigger it
             try:  # minutes and corrected-minutes emails that failed or never went (a restart mid-send)
                 from . import corrections, web
                 if n := corrections.retry_pending(web.archive, web.render_pdf):

@@ -147,3 +147,13 @@ def test_support_link_member_hides_it_club_turns_it_off(tmp_path, monkeypatch):
     about = t.get("/about").text
     assert link not in t.get("/").text and "Your club supports Club Minutes" in about and "ko-fi.com/jflattery" in about
     assert "isn't shown to anyone" in t.get("/profile/settings").text  # the setting says why
+
+
+def test_settings_saved_at_once_all_survive():
+    import threading
+    ts = [threading.Thread(target=prefs.save_settings, args=(f"member-{i}", {"week_start": "monday"})) for i in range(20)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert all(prefs.settings(f"member-{i}")["week_start"] == "monday" for i in range(20))

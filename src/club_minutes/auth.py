@@ -522,15 +522,24 @@ def _email_log(entry: dict) -> None:
         with p.open("a") as f:
             f.write(json.dumps({"at": int(time.time()), **entry}) + "\n")
         p.chmod(0o600)
-        lines, cutoff = p.read_text().splitlines(), time.time() - EMAIL_LOG_DAYS * 86400
-        if len(lines) > EMAIL_LOG_KEEP * 1.5 or _logged_at(lines[0]) < cutoff:
-            kept = [line for line in lines[-EMAIL_LOG_KEEP:] if _logged_at(line) >= cutoff]
-            tmp = p.with_name(f"email-log.{os.getpid()}.tmp")
-            tmp.write_text("".join(line + "\n" for line in kept))
-            tmp.chmod(0o600)
-            tmp.replace(p)  # shortcut: a line another process appends during the rewrite is lost; a lock if that matters
+        prune_email_log()
     except (OSError, ValueError):  # ValueError: a damaged log (not text); an email must still go
         log.exception("couldn't write the email log")
+
+
+def prune_email_log() -> None:
+    """The Email log's last EMAIL_LOG_KEEP entries, none older than EMAIL_LOG_DAYS: after each email, and daily (a quiet
+    site sends none)."""
+    p = DATA / "email-log.jsonl"
+    if not p.exists():
+        return
+    lines, cutoff = p.read_text().splitlines(), time.time() - EMAIL_LOG_DAYS * 86400
+    if lines and (len(lines) > EMAIL_LOG_KEEP * 1.5 or _logged_at(lines[0]) < cutoff):
+        kept = [line for line in lines[-EMAIL_LOG_KEEP:] if _logged_at(line) >= cutoff]
+        tmp = p.with_name(f"email-log.{os.getpid()}.tmp")
+        tmp.write_text("".join(line + "\n" for line in kept))
+        tmp.chmod(0o600)
+        tmp.replace(p)  # shortcut: a line another process appends during the rewrite is lost; a lock if that matters
 
 
 def email_ready() -> bool:
