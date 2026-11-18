@@ -5,6 +5,7 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- Development only: Dependabot waits 7 days after a release for ordinary updates; its safe pull requests (only `uv.lock` or pinned Actions from trusted publishers, patch or minor, development tools only) merge themselves once the required checks pass, and a high or critical security fix in an app package becomes a patch release in the same pull request once the fixed version has been out 48 hours (a poisoned "fix" is usually pulled by then; meanwhile the maintainer is told, and a `release-now` label releases it at once) (`dev/dependabot.py`, `.github/workflows/dependabot.yml`). Other updates wait for review; ordinary app-package updates go with the next release.
 
 ## 1.0.1 (2026-11-15)
 - **Security:** a roster keeper could type an admin's callsign into their own "Other spellings" and become that admin (the admin losing admin rights, and their sign-ins becoming the keeper's); the same worked for any member's roles and items. Another member's callsign is now refused there, and a roster that has one anyway (or a former callsign two members both list) ignores it.
