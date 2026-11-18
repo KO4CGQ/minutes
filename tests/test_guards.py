@@ -168,3 +168,12 @@ def test_page_intros_are_short():
     assert len(seen) > 10, "the intro pattern matches nothing"
     long = [f"{n} ({w} words)" for n, w, _ in seen if w > 60]
     assert not long, "page intros over 60 words: split them or move the detail into hints: " + "; ".join(long)
+
+
+def test_new_tab_links_have_one_arrow():
+    """style.css adds "↗" (and "opens in a new tab" for screen readers) to a plain link with target="_blank"; one typed
+    into such a link as well shows twice. Only links with a class (buttons) carry their own."""
+    twice = [f"{t.name}: {m.group(0)[:80]}" for t in sorted(TEMPLATES.glob("*.html"))
+             for m in re.finditer(r"<a\b([^>]*)>(.*?)</a>", t.read_text(), re.DOTALL)
+             if 'target="_blank"' in m.group(1) and "class=" not in m.group(1) and "↗" in m.group(2)]
+    assert not twice, twice

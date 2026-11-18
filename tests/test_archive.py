@@ -376,7 +376,7 @@ def test_join_online_is_the_first_video_link(client, monkeypatch):
     c = web.archive.club
     monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"},
                                            {"label": "Weekly meeting", "url": "https://us02web.zoom.us/j/123"}])
-    assert 'href="https://us02web.zoom.us/j/123">Join online (Weekly meeting)' in client.get("/").text
+    assert 'href="https://us02web.zoom.us/j/123" target="_blank" rel="noopener">Join online (Weekly meeting)</a>' in client.get("/").text
     monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"}])
     assert "Join online" not in client.get("/").text
 

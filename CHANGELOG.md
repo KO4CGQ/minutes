@@ -16,6 +16,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
     - Replies to the minutes email go to whoever took them and whoever led the meeting, each only if they share their email with members; otherwise to the club's address.
     - If the minutes email (or a correction's) doesn't go out, leaders and editors can send it again from the minutes page, and it's tried again overnight.
     - A member made Inactive or a Silent Key loses their saved choices, passkeys and sign-in records that night; everyone's old sign-in records and the Email log go after 90 days. The members guide says what's kept and who sees it.
+    - Join online, on the calendar and Home, opens the meeting in a new tab.
     - Admin → Site marks the fields you change, has Discard changes beside Save, and asks before you leave a tab with changes not yet saved.
 - **Fixed:** a member changing their own email never got the new one; a license class the roster spells its own way ("Extra") showed as none when editing that member, and saving their details cleared it; a picture in Help opened full size sits in the middle of the screen, with its ✕ at its corner.
 - **Security:** fixes from a security review, including ways a member could see or change more than their role allows. Update soon.

@@ -342,7 +342,7 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         assert tab.count("Changed here") == 2  # name and day were changed
         assert 'value=""' in tab.split('id="c-where"')[1][:80]  # the next meeting (still the old Thursday) has no Where yet
         cal = admin.get(f"/calendar?start={since}").text
-        assert 'href="https://meet.example.com/abc?pwd=x&amp;y=1" rel="noopener">Join online' in cal and "123 Main St &lt;b&gt;" in cal
+        assert 'href="https://meet.example.com/abc?pwd=x&amp;y=1" target="_blank" rel="noopener"' in cal and "123 Main St &lt;b&gt;" in cal
         n = len(events.load())
         admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": "", "online": "",
                                              "shown_where": "", "shown_online": ""})  # as the page sends it, untouched
