@@ -96,7 +96,7 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
     p = as_("n0call").get("/meet")  # two rooms: a page, not straight in
     assert "form-action 'self' https://meet.example.org;" in p.headers["content-security-policy"] + ";"  # "Open it" ends there
     assert "form-action 'self';" in as_("n0call").get("/calendar").headers["content-security-policy"] + ";"  # only there
-    assert "Join Board" in p.text and "No guests" in p.text and "https://meet.example.org/club" in p.text
+    assert "Join Board" in p.text and "(members only)" in p.text and "http://testserver/meet/club" in p.text  # one address to share
     assert p.text.count('target="_blank" rel="noopener" aria-label="Join ') == 2  # each room opens in a new tab, this page stays
     assert meet.rooms(c)[0]["about"] == "Tuesdays at 7 <b>PM</b>" and "Tuesdays at 7 &lt;b&gt;PM&lt;/b&gt;" in p.text  # typed, never markup
     # a room of one's own: its opener hosts it, someone else opening it just joins
@@ -146,8 +146,11 @@ def test_rooms_rules_and_rooms_of_their_own(env, monkeypatch):
 
 def test_signed_out_odd_rooms_and_off(env, monkeypatch):
     c, as_ = env
-    r = as_(None).get("/meet/club", follow_redirects=False)
-    assert r.headers["location"] == "/login?next=/meet/club"  # sign in, then back
+    r = as_(None).get("/meet/club", follow_redirects=False)  # a room guests may join: sign in (then back), or join as a guest
+    assert r.status_code == 200 and "/login?next=/meet/club" in r.text and 'href="https://meet.example.org/club"' in r.text
+    c.yaml["jitsi"]["rooms"] = [{"slug": "club", "name": "Club meeting", "about": "Board business first"}]
+    assert "Board business first" not in as_(None).get("/meet/club").text  # the description is for members
+    assert as_(None).get("/meet/nobodys-room", follow_redirects=False).headers["location"] == "/login?next=/meet/nobodys-room"
     assert as_("n0call").get("/meet/..%2Fadmin", follow_redirects=False).status_code == 404
     assert as_("n0call").get("/meet/" + "x" * 65, follow_redirects=False).status_code == 404
     monkeypatch.delenv("CLUB_MINUTES_JITSI_SECRET")
@@ -272,7 +275,6 @@ def test_guests_told_members_only_and_own_rooms_expire_when_unused(env):
     c.yaml["jitsi"]["adhoc"] = {"on": True, "guests": False}
     r = as_(None).get("/meet/net-night", follow_redirects=False)  # a guest, in a room that lets none in: a page, not Jitsi
     assert r.status_code == 403 and "members only" in r.text and "/login?next=/meet/net-night" in r.text
-    assert as_(None).get("/meet/club", follow_redirects=False).headers["location"] == "/login?next=/meet/club"
     as_("n0call").post("/meet", data={"name": "Net night"})
     d = json.loads((clubmod.DATA / "meet-rooms.json").read_text())
     d["room:net-night"]["at"] -= 23 * 3600  # almost lapsed: a join keeps it
@@ -282,3 +284,6 @@ def test_guests_told_members_only_and_own_rooms_expire_when_unused(env):
     d["room:net-night"]["at"] -= 25 * 3600  # a day with no join: free to take
     (clubmod.DATA / "meet-rooms.json").write_text(json.dumps(d))
     assert meet.opener("net-night") is None
+    c.yaml["jitsi"]["adhoc"] = {"on": True, "guests": True}  # an own room that lets guests in: the guest page while it lasts
+    as_("n0call").post("/meet", data={"name": "Net night"})
+    assert 'href="https://meet.example.org/net-night"' in as_(None).get("/meet/net-night").text

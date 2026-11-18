@@ -162,6 +162,18 @@ def members_only(club: Club, room: str) -> bool:
     return bool(r) and not r["guests"]
 
 
+def guest_room(club: Club, room: str) -> dict | None:
+    """The room a signed-out visitor may join as a guest, for /meet/<room>'s "Sign in or join as a guest" page: one of
+    the club's rooms that lets guests in, or a member's own room while it's current (and own rooms let guests in)."""
+    if not settings(club) or not ROOM.match(room):
+        return None
+    named = next((r for r in rooms(club) if r["slug"] == room), None)
+    if named:
+        return named if named["guests"] else None
+    own, a = _openers().get(f"room:{room}"), adhoc(club)
+    return {"slug": room, "name": own.get("name") or room, "about": ""} if own and a and a["guests"] else None
+
+
 def p2p_off(room: dict) -> str:
     """What the address to Jitsi ends with when a room keeps two-person calls on the server: members' browsers then
     refuse peer-to-peer, so a call with a guest goes through the server, where the rules for guests hold."""

@@ -251,6 +251,7 @@ details.edit[open] { display: block; background: var(--surface-2); border: 1px s
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .95rem 1.15rem; box-shadow: var(--shadow); }
 .cards.rooms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 21rem)); justify-content: center; }  /* Video meeting: one size (at most 21rem, so a narrow screen never widens them), 1 to 3 across, centred */
 form.card.room { max-width: none; }
+.cards.choice .card { display: flex; flex-direction: column; } .cards.choice .card > :last-child { margin-top: auto; }  /* signed out at a room: Sign in and Join as a guest level */
 .card.room > * { margin: .45rem 0; } .card.room > :first-child { margin-top: 0; } .card.room > :last-child { margin-bottom: 0; }  /* Video meeting's rooms: no page-sized gaps inside */
 .card.room .btn { min-height: 44px; display: inline-flex; align-items: center; }  /* an easy tap on a phone */
 .card.overdue { border-left: 4px solid var(--danger); } .card.done { background: var(--surface-2); } .card.done .card-text { color: var(--muted); }

@@ -260,6 +260,8 @@ async def require_login(request: Request, call_next):
         refused = page(request, "meet.html", members_only=True, room=path[6:].lower())
         refused.status_code = 403
         return refused
+    if request.method == "GET" and path.startswith("/meet/") and (g := meet.guest_room(archive.club, path[6:].lower())):
+        return page(request, "meet.html", guest=g, domain=meet.settings(archive.club)["domain"])  # sign in, or join as a guest
     if request.method == "GET" and not path.startswith("/api/"):
         target = path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
@@ -1235,7 +1237,7 @@ def meet_home(request: Request, error: str = "", mid: str = Depends(real_me)):
     rooms = [r | {"for": _room_roles(r) if r["roles"] else "", "inside": admin_mode(request) or meet.lets_in(archive.club, mid, r)}
              for r in meet.rooms(archive.club)]
     rooms, adhoc = [r for r in rooms if r["inside"] or r["others"] == "knock"], meet.adhoc(archive.club)
-    return page(request, "meet.html", rooms=rooms, adhoc=adhoc, mine=meet.mine(mid) if adhoc else [], domain=s["domain"], error=error)
+    return page(request, "meet.html", rooms=rooms, adhoc=adhoc, mine=meet.mine(mid) if adhoc else [], base=base_url(request), error=error)
 
 
 @app.post("/meet")
