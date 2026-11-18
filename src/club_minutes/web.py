@@ -2332,7 +2332,7 @@ def dependencies() -> list[dict]:
     return sorted(out, key=lambda d: d["name"].lower())
 
 
-GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin"}  # docs/<name>.md; not developers.md
+GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin", "jitsi": "Video meetings"}  # docs/<name>.md; not developers.md
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 # GitHub's alert syntax ("> [!TIP]" on a blockquote's first line), so a box looks the same here and on GitHub
 CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Important", "WARNING": "⚠️ Warning", "CAUTION": "🛑 Caution"}
@@ -2340,9 +2340,9 @@ CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Importan
 
 def guides_for(request: Request) -> dict:
     """The guides offered to this member: everyone gets the members guide, leaders, officers and admins the
-    officers guide (it has admins' setup steps too), admins the server admin guide."""
+    officers guide (it has admins' setup steps too), admins the server admin and video meetings guides."""
     mid, admin = request.state.member, archive.club.is_admin(real_me(request))
-    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or moderates(request), "server-admin": admin}
+    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or moderates(request), "server-admin": admin, "jitsi": admin}
     return {g: t for g, t in GUIDES.items() if show[g]}
 
 
