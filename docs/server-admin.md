@@ -26,7 +26,7 @@ To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwi
 5. **Backups** (Admin → Backups), before anything is entered for real.
 
 > [!TIP]
-> To update by hand: `/opt/club-minutes/deploy/update.sh` installs the latest main (`TAG=v1.0.0` before it for a release). Admin → **Updates** installs new releases from the app, or nightly.
+> To update by hand: `/opt/club-minutes/deploy/update.sh` installs the latest main (`TAG=v1.0.0` before it for a release). Admin → **Updates** installs new releases from the app, or nightly. A high or critical security fix in one of the app's packages comes out as a patch release by itself, two days after the fix is published, so with automatic updates on a server gets it that night.
 
 Good to know: the app runs as the `minutes` user on port 8000, with its settings in `/etc/club-minutes/` and its data in `/var/lib/club-minutes/`. `google-service-account.json` goes in `/etc/club-minutes/` too, only for backups to Google Drive.
 
