@@ -443,8 +443,8 @@ def _money_nav(request: Request, mid: str | None) -> dict:
 
 def _update_badge(request: Request) -> str | None:
     """For admins (in admin mode or not): the newer version, if there is one (cached check, see updates.py)."""
-    if STAGE or not archive.club.is_admin(getattr(request.state, "real_member", None)):
-        return None  # stage is updated by hand (deploy/stage-push.sh)
+    if PREVIEW or not archive.club.is_admin(getattr(request.state, "real_member", None)):
+        return None  # previews have no updater
     try:
         rel = updates.available()
     except Exception:  # noqa: BLE001
@@ -1430,7 +1430,7 @@ def admin_updates(request: Request, error: str = "", note: str = "", mid: str = 
     if not admin_mode(request):
         return RedirectResponse("/admin/confirm?next=/admin/updates", status_code=303)
     return page(request, "updates.html", running=updates.running(), rel=updates.latest(), st=updates.status(),
-                newer=updates.available(), error=error, note=note, auto=updates.auto_settings(),
+                newer=updates.available(), error=error, note=note, auto=updates.auto_settings(), source=updates.source(), stage=updates.STAGE,
                 backup_ready=len(os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE", "")) >= 12)
 
 
@@ -1439,7 +1439,8 @@ def admin_updates_check(request: Request, mid: str = Depends(real_me)):
     _admin(mid)
     rel = updates.latest(force=True)
     msg = "Couldn't reach GitHub." if rel is None else (
-        f"Version {rel['version']} is available." if updates.newer(rel["version"], updates.running()) else "You're up to date.")
+        ("A newer commit on the next branch is available." if rel["version"] == "next" else f"Version {rel['version']} is available.")
+        if updates.available() else "You're up to date.")
     return RedirectResponse("/admin/updates?note=" + quote(msg), status_code=303)
 
 
@@ -1478,6 +1479,20 @@ def admin_updates_auto(request: Request, on: int = Form(0), hour: str = Form("")
     st = updates.auto_settings()
     return RedirectResponse("/admin/updates?note=" + quote(f"Automatic updates are on, nightly at {st['hour']}:30." if on
                                                            else "Automatic updates are off."), status_code=303)
+
+
+@app.post("/admin/updates/from")
+def admin_updates_from(request: Request, source: str = Form(""), mid: str = Depends(real_me)):
+    _admin(mid)
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")
+    try:
+        updates.set_source(source)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    updates.latest(force=True)
+    _admin_log(request, update_from=source)
+    return RedirectResponse("/admin/updates?note=" + quote("Saved."), status_code=303)
 
 
 @app.post("/admin/updates/cancel")
@@ -2521,7 +2536,7 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
     held = sum(1 for m in mail if m.get("at", 0) >= week and m.get("withheld"))  # someone it wasn't sent to
     sp = DATA / "stage-sync-status.json"
     try:
-        upd = None if STAGE else updates.available()
+        upd = None if PREVIEW else updates.available()
     except Exception:  # GitHub not reachable: just don't say  # noqa: BLE001
         upd = None
     return page(request, "admin.html", only_admin=len(archive.club.active_admins) == 1, failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),

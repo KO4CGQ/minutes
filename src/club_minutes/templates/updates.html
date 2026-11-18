@@ -5,7 +5,7 @@
 
 <div class="cards">
 <article class="card">
-  <div class="card-head"><div class="card-text">Running <b>{{ running }}</b>{% if rel %} · latest release <b>{{ rel.version }}</b>{% endif %}</div>
+  <div class="card-head"><div class="card-text">Running <b>{{ running }}</b>{% if rel and rel.version == "next" %} · latest on next <b>{{ rel.commit }}</b>{% elif rel %} · latest release <b>{{ rel.version }}</b>{% endif %}</div>
     <div class="topacts"><form method="post" action="/admin/updates/check" class="inline"><button class="act">{{ emoji('🔄', 'refresh') }} Check now</button></form></div></div>
   {% if not rel %}<p class="muted">Couldn't reach GitHub to check for releases.</p>
   {% elif not newer %}<p class="muted">You're up to date.</p>{% endif %}
@@ -28,7 +28,7 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
 </script>
 
 {% elif newer %}<article class="card">
-  <div class="card-text"><b>Version {{ newer.version }}</b> is available. <a href="{{ newer.url }}">Release on GitHub</a></div>
+  <div class="card-text">{% if newer.version == 'next' %}<b>A newer commit on the next branch</b> ({{ newer.commit }}: {{ newer.notes }}).{% else %}<b>Version {{ newer.version }}</b> is available.{% endif %} <a href="{{ newer.url }}">{{ "Commit" if newer.version == "next" else "Release" }} on GitHub</a></div>
   <form method="post" action="/admin/updates/run" class="modern"><input type="hidden" name="target" value="{{ newer.version }}">
     {% if newer.deploy_notes %}<div class="msg err"><b>This release needs steps by hand.</b> Do these on the server first:
       <div class="deploynotes">{{ newer.deploy_notes|md }}</div>
@@ -38,6 +38,16 @@ setInterval(() => fetch(location.pathname, {cache: "no-store"})
     {% else %}<p class="hint">Backups aren't set up (no passphrase), so there's no backup before the update. Admin mode → Admin → Backups.</p>{% endif %}
     <div class="formrow"><button class="btn" data-confirm="Update the app to {{ newer.version }} now? It restarts, so anyone using it is interrupted for a moment.">Update now</button></div>
     <p class="hint">Installs exactly this release (its tag on GitHub), then restarts; if the app doesn't come back up, it goes back to the version it had. Avoid doing it during a meeting.</p>
+  </form>
+</article>{% endif %}
+
+{% if stage %}<article class="card">
+  <div class="card-text"><b>Update from</b> (staging server only)</div>
+  <form method="post" action="/admin/updates/from" class="modern">
+    <label class="check"><input type="radio" name="source" value="releases" {{ 'checked' if source == 'releases' }}> Releases</label>
+    <label class="check"><input type="radio" name="source" value="rc" {{ 'checked' if source == 'rc' }}> Release candidates (vX.Y.Z-rc.N) and releases</label>
+    <label class="check"><input type="radio" name="source" value="next" {{ 'checked' if source == 'next' }}> The <code>next</code> branch (its latest commit)</label>
+    <div class="formrow"><button class="btn small">Save</button></div>
   </form>
 </article>{% endif %}
 

@@ -192,7 +192,7 @@ install -m 644 /opt/club-minutes/deploy/club-stage-sync.* /etc/systemd/system/ &
 systemctl enable --now club-stage-sync.timer club-stage-sync.path && systemctl start club-stage-sync && systemctl restart club-minutes
 ```
 
-Admin → **Stage sync** shows the last sync, **Sync now**, and **Pause nightly sync** (to keep test changes overnight). A sync replaces everything except stage's own sign-ins and passkeys, email log, backups and update settings. Stage doesn't update itself; a developer installs a branch on it (developer guide).
+Admin → **Stage sync** shows the last sync, **Sync now**, and **Pause nightly sync** (to keep test changes overnight). A sync replaces everything except stage's own sign-ins and passkeys, email log, backups and update settings. Stage updates like any server, from what its Updates page's Update from says (releases, release candidates or the `next` branch); a developer can also install a branch on it (developer guide).
 
 > [!TIP]
 > **Another time for the nightly sync?** `systemctl edit club-stage-sync.timer`, and put in:

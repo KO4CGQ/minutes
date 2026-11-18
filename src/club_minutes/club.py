@@ -84,7 +84,7 @@ def roster_locked(fn):
 # SMTP, and roster edits go to a local copy of the sheet, never the real one.
 PREVIEW = os.environ.get("CLUB_MINUTES_PREVIEW") or None
 # Stage mode (a staging server: docs/server-admin.md → Staging server): prod's data, pulled one way each night. Email
-# goes only to the person clicking (auth.send_email); the app doesn't update itself.
+# goes only to the person clicking (auth.send_email); it updates from what Admin → Updates → Update from says (updates.source()).
 STAGE = bool(os.environ.get("CLUB_MINUTES_STAGE"))
 
 

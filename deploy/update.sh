@@ -36,7 +36,7 @@ main() {
   # makes every fetch fail ("would clobber existing tag"), as it did for 0.17.0
   sudo -u minutes git fetch -q --tags --force origin
   if [ -n "$TAG" ]; then
-    [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a release tag: $TAG" >&2; exit 2; }
+    [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "Not a release tag: $TAG" >&2; exit 2; }
     sudo -u minutes git reset -q --hard "refs/tags/$TAG"
   else
     sudo -u minutes git reset -q --hard "origin/$BRANCH"

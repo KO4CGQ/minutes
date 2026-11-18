@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run as root by club-minutes-update.service when the app's admin page asks for an update
-# (it writes update-request.json in the data folder). Runs update.sh for the release asked for (vX.Y.Z),
+# (it writes update-request.json in the data folder). Runs update.sh for the release asked for (vX.Y.Z; on a staging server also vX.Y.Z-rc.N or the next branch),
 # and leaves the outcome in update-status.json for the app to show. update.sh replaces this file while
 # it runs, so everything is inside main(), which bash reads in full before starting.
 main() {
@@ -15,8 +15,16 @@ main() {
   # The release asked for, if it's a plain X.Y.Z (the app writes this file: nothing else gets through to git)
   local TO; TO=$("$APP/.venv/bin/python" -c 'import json, re, sys
 t = str(json.load(open(sys.argv[1])).get("to", ""))
-print(t if re.fullmatch(r"[0-9]+[.][0-9]+[.][0-9]+", t) else "")' "$RUN" 2>/dev/null || true)
+print(t if re.fullmatch(r"[0-9]+[.][0-9]+[.][0-9]+(-rc[.][0-9]+)?|next", t) else "")' "$RUN" 2>/dev/null || true)
+  # A release candidate or the next branch only if root's own env file says this is a staging server
+  # (neither the app's data folder nor the request is trusted for that)
+  local stage=false
+  grep -qE '^CLUB_MINUTES_STAGE=[[:alnum:]]' /etc/club-minutes/env 2>/dev/null && stage=true
   if [ -z "$TO" ]; then echo "The request didn't name a release (X.Y.Z), so nothing was installed." >"$LOG"
+  elif ! [[ "$TO" =~ ^[0-9.]+$ ]] && [ "$stage" != true ]; then
+    echo "Release candidates and the next branch install only on a staging server." >"$LOG"
+  elif [ "$TO" = next ]; then
+    if BRANCH=next "$APP/deploy/update.sh" >"$LOG" 2>&1; then ok=true; fi
   elif TAG="v$TO" "$APP/deploy/update.sh" >"$LOG" 2>&1; then ok=true; fi
   "$APP/.venv/bin/python" - "$RUN" "$LOG" "$OUT" "$ok" "$start" <<'PY'
 import json, sys, time
