@@ -226,6 +226,11 @@ def test_links_to_pages_of_the_app_stay_relative(tmp_path, monkeypatch):
     assert web.link_host("/bylaws") == "on this site"
     bad = {**form, "url": ["//evil.example/x", "/calendar", "https://discord.example/x"]}
     assert "error=" in TestClient(web.app).post("/links", data=bad, follow_redirects=False).headers["location"]
+    saved.clear()
+    r = TestClient(web.app).post("/links", data={}, follow_redirects=False)  # not from the page: it always sends its rows
+    assert r.status_code == 400 and "nothing was changed" in r.text and saved == []
+    blank = {"label": [""], "url": [""], "icon": [""], "show": ["both"]}  # every row blanked on the page: the links cleared
+    assert TestClient(web.app).post("/links", data=blank, follow_redirects=False).status_code == 303
 
 
 def test_link_icons():
@@ -371,7 +376,7 @@ def test_join_online_is_the_first_video_link(client, monkeypatch):
     c = web.archive.club
     monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"},
                                            {"label": "Weekly meeting", "url": "https://us02web.zoom.us/j/123"}])
-    assert 'href="https://us02web.zoom.us/j/123">Join online (Weekly meeting)' in client.get("/").text
+    assert 'href="https://us02web.zoom.us/j/123" target="_blank" rel="noopener">Join online (Weekly meeting)</a>' in client.get("/").text
     monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"}])
     assert "Join online" not in client.get("/").text
 
@@ -426,3 +431,12 @@ def test_anydate_formats_dates_and_leaves_typed_text():
     assert anydate("2025-07-25") != "2025-07-25"
     assert anydate("2026-11-05T19:30") == anydate("2026-11-05")
     assert anydate("spring 2019") == "spring 2019" and anydate("2025-13-45") == "2025-13-45" and anydate(None) == ""
+
+
+def test_one_unreadable_minutes_file_doesnt_stop_the_archive(tmp_path, m):
+    """Data sweep: Archive.reload parsed every file unguarded, so one bad file stopped the app."""
+    from club_minutes.store import Archive
+    m.save(tmp_path)
+    (tmp_path / "2026-01-01").mkdir()
+    (tmp_path / "2026-01-01" / "minutes.md").write_bytes(b"---\n: [unclosed\n---\n\xff")
+    assert [x.slug for x in Archive(tmp_path, club).meetings] == [m.slug]

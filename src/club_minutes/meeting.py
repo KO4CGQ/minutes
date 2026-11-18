@@ -86,10 +86,19 @@ class Meeting:
     guests: list[dict] = field(default_factory=list)  # {name, callsign}
     visitors: int = 0  # guests counted but not named (e.g. family, minors)
     sections: dict[str, list[Item]] = field(default_factory=dict)
+    # Each correction, oldest first: {version (the one it made), at (unix time), by (roster id), reason, notice (bool)}.
+    # The versions before it are kept beside minutes.md as minutes.v1.md, minutes.v2.md… (corrections.py).
+    corrections: list[dict] = field(default_factory=list)
+    reviewed: dict | None = None  # imported minutes someone looked over: {by, at}
 
     @property
     def slug(self) -> str:
         return self.date.isoformat()
+
+    @property
+    def corrected(self) -> dict | None:
+        """The latest correction, if any."""
+        return self.corrections[-1] if self.corrections else None
 
     @property
     def attendance(self) -> int:
@@ -115,6 +124,8 @@ class Meeting:
             "attendance": {"in_person": self.in_person, "remote": self.remote},
             "guests": self.guests,
             "visitors": self.visitors,
+            "corrections": self.corrections,
+            "reviewed": self.reviewed,
         }
         fm = {k: v for k, v in fm.items() if v not in (None, [], {}, 0)}
         out = ["---", yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip(), "---", ""]
@@ -143,6 +154,8 @@ class Meeting:
             remote=att.get("remote") or [],
             guests=fm.get("guests") or [],
             visitors=fm.get("visitors", 0),
+            corrections=fm.get("corrections") or [],
+            reviewed=fm.get("reviewed"),
         )
         current = None
         for line in body.splitlines():
@@ -166,7 +179,9 @@ class Meeting:
         d = root / self.slug
         d.mkdir(parents=True, exist_ok=True)
         p = d / "minutes.md"
-        p.write_text(self.to_markdown())
+        tmp = d / "minutes.md.tmp"
+        tmp.write_text(self.to_markdown())
+        tmp.replace(p)  # a crash mid-write leaves the old minutes, never half of them
         return p
 
     @classmethod

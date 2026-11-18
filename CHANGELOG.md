@@ -1,17 +1,31 @@
 # Changelog
 
-What changed in each version of Club Minutes. Ideas and requests: the repository's [Issues](https://github.com/KO4CGQ/minutes/issues).
+What changed in each version of Club Minutes. Ideas and requests: the repository's [Issues](https://github.com/KO4CGQ/minutes/issues). Security fixes are summed up here; their details are in the repository's [security advisories](https://github.com/KO4CGQ/minutes/security/advisories), once the fix is out.
 
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Custom roles:** a club decides what each role may do and who has it (by office, or member by member), and can add roles of its own. Leading meetings (Meeting leader) and fixing published minutes (Minutes editor) are now separate roles, and a Secretary role gets the roster emails.
+- **Correct these minutes:** the meeting's leader or recorder, a Minutes editor or an admin can correct minutes in the archive, with a reason and a side-by-side preview. Earlier versions are kept, and members can be emailed what changed; a correction that takes out private details keeps the version before for editors only. Imported minutes can be marked as reviewed.
+- **Video meetings (optional):** members join the club's own Jitsi Meet server already signed in. Officers and meeting leaders host; guests wait in the lobby. Each room says which members come straight in, what guests may do (unmute, camera, screen sharing, chat) and what happens when the last host leaves. Members can open rooms of their own (theirs until a day passes with no one joining), and a calendar event can name a room.
+- **Recover admin access:** if the club can't reach its admins, the officers can make a member an admin and suspend the others, with approvals, a waiting period, and every member told at each step (officers guide). The last active admin can't be removed, and the Admin page warns while there's only one.
+- **Email changes:** a new address takes effect once its owner confirms it, and the change signs them out everywhere. Only an admin can change another office holder's or an admin's email, status or callsign.
+- **Support the app:** a Support Club Minutes link (Ko-fi) at the foot of the menu, and both ways to give (GitHub Sponsors or Ko-fi) on the About page.
+- **Officers guide:** Choosing an admin, with a template admin agreement.
+- **Smaller changes:**
+    - Replies to the minutes email go to whoever took them and whoever led the meeting, each only if they share their email with members; otherwise to the club's address.
+    - If the minutes email (or a correction's) doesn't go out, leaders and editors can send it again from the minutes page, and it's tried again overnight.
+    - A member made Inactive or a Silent Key loses their saved choices, passkeys and sign-in records that night; everyone's old sign-in records and the Email log go after 90 days. The members guide says what's kept and who sees it.
+    - Join online, on the calendar and Home, opens the meeting in a new tab.
+    - The chow schedule shows every upcoming night, 16 to a page, so the night Ask to swap offers is always on it.
+    - Admin → Site marks the fields you change, has Discard changes beside Save, and asks before you leave a tab with changes not yet saved.
+- **Fixed:** a member changing their own email never got the new one; a license class the roster spells its own way ("Extra") showed as none when editing that member, and saving their details cleared it; a picture in Help opened full size sits in the middle of the screen, with its ✕ at its corner.
+- **Security:** fixes from a security review, including ways a member could see or change more than their role allows. Update soon.
+- **Removed:** restoring backups made before 1.0.0 (a 0.x install restores them).
+- **For server admins:** 1.1.0 upgrades the data, so going back to 1.0.x means restoring the copy the update keeps (a failed update does this by itself). `club-minutes rename-id` finishes a callsign change that stopped partway (server admin guide). The first night after updating, members already Inactive or a Silent Key lose their passkeys and sign-ins.
 
 ## 1.0.1 (2026-11-15)
-- **Security:** a roster keeper could type an admin's callsign into their own "Other spellings" and become that admin (the admin losing admin rights, and their sign-ins becoming the keeper's); the same worked for any member's roles and items. Another member's callsign is now refused there, and a roster that has one anyway (or a former callsign two members both list) ignores it.
-- Development only: smarter checks. A docs-only change (Markdown and `docs/`, `dev/changes.sh`) runs just the quick checks (pip-audit, gitleaks, the changelog, `pytest -m docs`), locally and on pull requests; the slow ones (every test, the upgrade check, CodeQL) run for anything else, on every push to main and every Monday, and locally whenever they last passed over a week ago (`dev/checks.sh --full` runs everything).
-- Development only: a pull request that changes the app (`src/`, `deploy/`) needs a CHANGELOG line, or the `no-changelog` label (`dev/changelog-check.sh`, also in `dev/checks.sh`); shellcheck covers `dev/*.sh`.
-- Development only: an upgrade check on every pull request (`dev/upgrade-check.sh`, also in `dev/checks.sh`): the last 1.x release builds the demo club's data, then the new code opens it and checks that every member and every meeting's minutes are still there, as an admin and as a member.
-- Development only: the secret scan no longer allows the icons file's pre-1.0 path (the 0.x tags it lived in are deleted), and `dev/checks.sh` scans branches and tags only, as GitHub does (not local worktrees).
+- **Security:** fixes a way a roster keeper could gain another member's access, an admin's included. Update soon.
 
 ## 1.0.0 (2026-11-13)
 **Initial release.** Club Minutes has been redesigned so any amateur radio club can set it up and shape it to its own needs (its agenda, offices, dues, calendars and look) from the app. Earlier test versions (0.x) aren't listed here. From 1.0.0 on, settings, folders, services and command names stay the same from one version to the next; a change a club would have to act on waits for 2.0 (the developer guide's Compatibility section lists what that covers).

@@ -53,3 +53,12 @@ def test_without_email_settings_a_page_never_claims_it_emailed(monkeypatch):
     monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "x")
     monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "y")
     assert "on its way" in TestClient(web.app).get("/login?sent=1").text
+
+
+def test_rename_id_finishes_a_callsign_change(tmp_path):
+    (tmp_path / "club.yaml").write_text(CONFIG)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "email-prefs.json").write_text('{"n0aaaa": {"digest": "off"}}')
+    r = run(tmp_path, "rename-id", "N0AAAA", "W0AMYA")
+    assert r.returncode == 0 and "Start the service again" in r.stdout, r.stderr
+    assert (tmp_path / "data" / "email-prefs.json").read_text().count("w0amya") == 1

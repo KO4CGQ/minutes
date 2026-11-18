@@ -150,3 +150,23 @@ def test_damaged_pictures_are_refused_and_a_damaged_logo_on_disk_never_stops_a_p
     c = Club(FIX / "test-club.yaml", roster=[])
     c.info["app_name"] = "Two\r\nLines"
     assert branding.name(c) == "Two Lines"                              # never a line break in a subject
+
+
+def bomb() -> bytes:
+    """A small PNG whose header claims 40,000 x 40,000 pixels (a decompression bomb)."""
+    import struct
+    import zlib
+    raw = bytearray(png((1, 1)))
+    ihdr = struct.pack(">II", 40_000, 40_000) + bytes(raw[24:29])
+    raw[16:29] = ihdr
+    raw[29:33] = struct.pack(">I", zlib.crc32(b"IHDR" + ihdr))
+    return bytes(raw)
+
+
+def test_a_picture_claiming_billions_of_pixels_is_too_big(data, monkeypatch):
+    from club_minutes import avatars
+    monkeypatch.setattr(avatars, "DATA", data)
+    with pytest.raises(ValueError, match="too big"):
+        branding.save("logo", bomb())
+    with pytest.raises(ValueError, match="too big"):
+        avatars.save("n0aaaa", bomb())

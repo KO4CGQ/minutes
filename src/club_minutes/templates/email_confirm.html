@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Confirm your email{% endblock %}{% block body %}
+<h1>Confirm your new email</h1>
+{% if error %}<p class="msg err">{{ error }}</p>
+<p>Ask for a new link: change your email again on your profile, or ask the officer who changed it.</p>
+<p><a class="btn" href="/">Home</a></p>
+{% else %}<p>Use <b>{{ email }}</b> for the club from now on? Then you're signed out everywhere: sign in again with your passkey, or a link sent to this address.</p>
+<form method="post" action="/email/confirm"><input type="hidden" name="t" value="{{ t }}"><button class="btn">Yes, use this address</button></form>
+<p class="muted small">If you didn't expect this, close this page and nothing changes.</p>{% endif %}
+{% endblock %}

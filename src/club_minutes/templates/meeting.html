@@ -1,9 +1,18 @@
-{% extends "base.html" %}{% block title %}Minutes, {{ m.date|listdate }}{% endblock %}{% block crumb %}{{ back('/minutes', 'Minutes') }}{% endblock %}{% block body %}
+{% extends "base.html" %}{% block title %}Minutes, {{ m.date|listdate }}{% if m.version < current.version %} (version {{ m.version }}){% endif %}{% endblock %}{% block crumb %}{{ back('/minutes', 'Minutes') }}{% endblock %}{% block body %}
+{% set old = m.version < current.version %}
+{% if old %}<p class="msg warn">This is version {{ m.version }}{% set nxt = current.corrections|selectattr('version', 'equalto', m.version + 1)|first %}{% if nxt %}, replaced on {{ nxt.at|ts }}{% endif %}. <a href="/meetings/{{ m.slug }}">See the current version ›</a></p>{% endif %}
 {% if has_original or m.status != 'draft' %}<div class="actions">
-  {% if has_original %}<a class="btn ghost" href="/meetings/{{ m.slug }}/original.pdf">View original</a>
-  {% elif m.status != 'draft' %}<a class="btn" href="/meetings/{{ m.slug }}/minutes.pdf">Download PDF</a>{% endif %}
+  {% if has_original %}<a class="btn ghost" href="/meetings/{{ m.slug }}/original.pdf">View original</a>{% endif %}
+  {% if m.status != 'draft' and (not has_original or m.version > 1) %}<a class="btn" href="/meetings/{{ m.slug }}/minutes.pdf{% if old %}?v={{ m.version }}{% endif %}">Download PDF</a>{% endif %}
+  {% if can_correct and not old %}<a class="btn ghost" href="/meetings/{{ m.slug }}/correct">Correct these minutes</a>
+  {% if m.status == 'imported' and not m.reviewed %}<form method="post" action="/meetings/{{ m.slug }}/reviewed" class="inline" data-confirm="Mark these imported minutes as reviewed? Do this when you've read them against the original and nothing needs fixing.">
+    <button class="btn ghost">Mark as reviewed</button></form>{% endif %}{% endif %}
 </div>{% endif %}
-{% if can_lead and emailed %}<p class="muted">{% if emailed.error %}Emailing these minutes failed; see the server log.{% else %}Emailed {{ emailed.at|ts }} to {{ emailed.sent }} of {{ emailed.roster }} roster addresses{% if emailed.test_mode %} (test mode: email.only_to){% endif %}.{% endif %}</p>{% endif %}
+{% if sent_note and (can_lead or can_correct) %}<p class="msg {{ sent_note[0] }}" role="status">{{ sent_note[1] }}</p>{% endif %}
+{% if (can_lead or can_correct) and unsent and not old %}<form method="post" action="/meetings/{{ m.slug }}/send-now" class="msg warn">{{ 'These minutes' if 'emailed.json' in unsent else 'The corrected minutes' }} weren't emailed to members (an email problem, or the server restarted while sending). They'll be tried again overnight. <button class="btn small">Send it now</button></form>{% endif %}
+{% if can_lead and emailed and emailed.error and 'emailed.json' not in unsent and not old %}<p class="msg warn">Emailing these minutes failed; see the server log.</p>{% endif %}
+{% if can_lead and emailed and not old and not emailed.error %}<p class="muted">Emailed {{ emailed.at|ts }} to {{ emailed.sent }} of {{ emailed.roster }} roster addresses{% if emailed.test_mode %} (test mode: email.only_to){% endif %}.</p>{% endif %}
+{% if can_lead and notice and not old and not notice.error %}<p class="muted">Corrected minutes (version {{ current.version }}) emailed {{ notice.at|ts }} to {{ notice.sent }} of {{ notice.roster }} roster addresses{% if notice.test_mode %} (test mode: email.only_to){% endif %}.</p>{% endif %}
 {% if m.status == 'draft' %}<p class="badge warn" style="display:inline-block">Meeting in progress: this page updates live{% if can_lead %} · <a href="/console/{{ m.slug }}">Open in the leader console ›</a>{% endif %}</p>{% endif %}
 <div id="doc">{% include "_minutes.html" %}</div>
 {% if m.status == 'draft' %}<script nonce="{{ csp_nonce }}">

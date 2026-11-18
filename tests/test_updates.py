@@ -103,7 +103,7 @@ def test_admin_page(env, tmp_path, monkeypatch):
     c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1})
     c.cookies.set(web.COOKIE, a.new_session("bob"))
     assert "of the app is available" not in c.get("/links").text                 # not for members
-    assert c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1}).status_code == 403
+    assert c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1}).status_code == 404
 
 
 def test_backup_before_update(env, tmp_path, monkeypatch):
@@ -233,7 +233,7 @@ def test_auto_update_switch(env, tmp_path, monkeypatch):
     c.post("/admin/updates/auto", data={"on": 0})
     assert not updates.auto_settings()["on"]
     c.cookies.set(web.COOKIE, a.new_session("bob"))
-    assert c.post("/admin/updates/auto", data={"on": 1}).status_code == 403  # not for members
+    assert c.post("/admin/updates/auto", data={"on": 1}).status_code == 404  # not for members
 
 
 def test_several_releases_waiting(env):

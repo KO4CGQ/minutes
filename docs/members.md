@@ -20,22 +20,34 @@ What's next for you: the next meeting (and, on meeting night, a link to follow t
 ## 👤 Your profile, emails and settings
 Your name menu → **Your profile**:
 
-- 📇 **Contact details and birthday:** change your email, phone, address and birthday (a month alone is fine). Officers always see them; other members see only what you tick to share. A shared birthday, and each year you've been a member, gets a mention at the meeting that week.
+- 📇 **Contact details and birthday:** change your email (a link goes to the new address; it changes once you open it, and you're signed out everywhere, so sign in again), phone, address and birthday (a month alone is fine). Officers always see them; other members see only what you tick to share. A shared birthday, and each year you've been a member, gets a mention at the meeting that week.
 - ✉️ **Email:** turn each kind of email on or off: the minutes (with the PDF or as a link), the meeting-day reminder, reminders for business you're looking after, the chow list (with the PDF or as a link) and roster updates.
-- ⚙️ **Settings:** how the app shows things to you, like the first day of the week.
+- ⚙️ **Settings:** how the app shows things to you, like the first day of the week, and whether the menu shows **Support Club Minutes** (the Ko-fi link at its foot; hide it if you already give toward the app).
 
 ## 📝 Minutes and search
 **Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights, calendar events and these guides. A name also finds its common nicknames (Richard, Rich, Rick and Dick find each other, member or not), and a member's name its other spellings from the roster; a typo is caught when nothing else is found.
 
+Minutes can be corrected after the meeting. A corrected meeting's footer says which version it is, who corrected it, when and why, with a link to the version before; you get an email listing what changed, the same way you get the minutes. Imported minutes (from before the app) say whether someone has reviewed them.
+
 ![A meeting's minutes](screenshots/minutes.png)
 
 ## 🍲 Chow
-**Chow** shows the schedule and your nights. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
+**Chow** shows the schedule and your nights, 16 to a page. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
 
 ## 📌 Business
 **Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting) and the leader reads it out.
 
 ![Business: the club's open items](screenshots/business.png)
+
+## 🎥 Video meeting
+If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists the club's rooms you can join. Each has a **Join** button that opens the meeting in a new tab, already signed in as you: no other password. Joining sends the video server your name and callsign.
+
+- **Who hosts:** officers and meeting leaders.
+- **Rooms for certain members** (the board, say): the page says who. Other members wait in the lobby until a host lets them in, or don't see the room at all.
+- **Guests:** send them a room's address, shown on its card (the club calendar links to it too). Anyone not signed in can sign in there or join as a guest; guests wait in the lobby until a host lets them in, even if they come before anyone else. Some rooms are for members only.
+- **What guests may do:** each room says. If they must ask to unmute, turn their camera on or share their screen, a host allows it in the meeting as usual.
+
+If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its address, and you host it until a day passes with no one joining it here. Its card stays on the Video meeting page for you until then. A calendar event can link to one of the club's rooms.
 
 ## 📅 Calendar
 **Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
@@ -57,3 +69,11 @@ Once tracking is on, Home shows what you owe (or that you're paid up, and throug
 With tracking on (the same switch as your dues, above), **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in.
 
 ![Where the club's money goes: a year of spending by category](screenshots/spending.png)
+
+## 🔒 What's kept, and who sees it
+- **Your details:** officers and admins see your email, phone, address and birthday (a club can let other roles see them too); other members see only what you tick under **Share with all members** on your profile. Replies to the minutes email go to whoever took them and whoever led the meeting, and replies to a correction's email to whoever made it, each only if they share their email.
+- **Corrected minutes:** earlier versions are kept, and members can open them from the minutes page. A correction that removes private details (a health matter, a phone number) keeps the version before for those who can correct minutes only. Members are usually emailed what changed. Lines taken out are never quoted; a reworded line's old words are, unless **This removes private details** is ticked.
+- **Video meetings:** joining sends your name and callsign to the club's video server.
+- **Admin recovery:** if the officers ever have to recover admin access, every member is emailed at each step.
+- **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both.
+- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night, and your address leaves the Email log. Made Active again, you sign in with an emailed link and add a passkey again.

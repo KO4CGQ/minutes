@@ -28,7 +28,7 @@
 </tbody></table>
 <p class="muted small">Tap an event for details, or a day to see it in the agenda.</p>
 {% endif %}
-{% if is_officer %}<p class="muted small"><a href="/calendar/changes">Who changed what on the calendars</a></p>{% endif %}
+{% if can_moderate %}<p class="muted small"><a href="/calendar/changes">Who changed what on the calendars</a></p>{% endif %}
 {% if public %}<p class="muted small">Subscribe in your calendar app: <code>{{ request.base_url }}calendar/public.ics</code></p>
 {% else %}<p><a href="/calendar/subscribe">Subscribe in your calendar app (phone, Outlook, Apple or Google Calendar)</a></p>{% endif %}
 
@@ -43,7 +43,7 @@
 {% else %}{{ e.start|date('weekday') }}, all day{% endif %}</p>
 {% if e.repeats and repeats.get(e.id) %}<p class="muted">{{ emoji('🔁', 'repeat') }} {{ repeats[e.id] }}</p>{% endif %}
 {% if e.where %}<p><b>Where</b><br>{{ e.where|linkify }}</p>{% endif %}
-{% if e.online %}<p><a class="btn small" href="{{ e.online }}" rel="noopener">Join online</a></p>{% endif %}
+{% if e.online %}<p><a class="btn small" href="{{ e.online }}" target="_blank" rel="noopener" aria-label="Join online (opens in a new tab)">Join online ↗</a></p>{% endif %}
 {% if e.notes %}<p class="calnotes">{{ e.notes|linkify }}</p>{% endif %}
 {% if e.from_minutes %}<p class="muted small">From the last meeting's Upcoming Events{% if can_edit %}; change it in the leader console{% endif %}.</p>{% endif %}
 {% if can_edit and e.id %}<p class="row"><a class="btn small" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}">{{ emoji('✏️', 'pencil') }} Edit</a></p>{% endif %}

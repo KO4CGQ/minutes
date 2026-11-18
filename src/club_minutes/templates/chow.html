@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% block title %}Chow{% endblock %}{% block body %}
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% import "_pager.html" as pager %}{% block title %}Chow{% endblock %}{% block body %}
 <h1>Chow schedule</h1>
 {% if leader %}<nav class="tabs">{% for t, label in (('schedule', 'Schedule'), ('rotation', 'Rotation'), ('history', 'Past nights & changes')) %}<a href="/chow{{ '' if t == 'schedule' else '/' + t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>{% endif %}
 <p class="muted">Who brings chow (the meal) each meeting night. Can't make your night? Ask another member to swap below; they approve or decline here, and you both get an email.
@@ -22,7 +22,7 @@
 <div class="formrow"><a class="btn small ghost" href="/chow/list.pdf">Printable list (PDF)</a>
 {% if leader %}<form method="post" action="/chow/email" class="inline" data-confirm="Email the chow list to every member who gets it?"><button class="btn small{{ ' ghost' if not list_changed }}">Email the list to members</button></form>
 <span class="hint">{% if emailed %}Last emailed {{ emailed.at|ts }}{% if list_changed %}; the schedule has changed since{% else %}; no changes since{% endif %}.{% else %}Not emailed yet.{% endif %}</span>{% endif %}</div>
-<ol class="rotlist nights">{% for d, x in upcoming %}{% set dd = d|isodate %}<li class="{{ 'mine' if x.member == me.id }}{{ ' none' if x.status == 'none' }}{{ ' tonight' if d == today }}">
+<ol class="rotlist nights">{% for d, x in pg.rows %}{% set dd = d|isodate %}<li class="{{ 'mine' if x.member == me.id }}{{ ' none' if x.status == 'none' }}{{ ' tonight' if d == today }}">
   <span class="dateblk"><b>{{ dd.day }}</b><small>{{ dd.strftime('%b') }}</small></span>
   <div class="rot-main">
     {% if x.status == 'none' %}<div class="rot-name muted">No chow</div>{% if x.note %}<div class="rot-note">{{ x.note }}</div>{% endif %}
@@ -47,6 +47,7 @@
       <button class="btn small ghost">No chow this night</button></div></form>
   </div>{% endif %}
 </li>{% else %}<li><span></span><div class="rot-main muted">Nothing scheduled yet.</div></li>{% endfor %}</ol>
+{{ pager.links(pg, request) }}
 
 {% if leader %}<h2>Swap two nights</h2>
 <form method="post" action="/chow/swap" class="modern card swapcard">

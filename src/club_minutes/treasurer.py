@@ -566,7 +566,7 @@ def arrears_alert(club: Club, s: dict, today: dt.date) -> tuple[list[str], str, 
     for x in new:
         alerted[x["member"]] = today.isoformat()
     to = sorted({m.email for m in club.members.values() if m.email and m.status.lower() == "active"
-                 and (m.board or "treasurer" in (m.role or "").lower())})
+                 and (club.holds_office(m.id) or club.may(m.id, "money"))})
     lines = "\n".join(f"- {club.name(x['member'])}: {money(x['owed'])}, about {x['weeks_behind']} weeks" for x in new)
     note = " ".join(str(club.bylaws.get("arrears_note") or "").split())  # the club's own rules on what happens next
     body = (f"These members are now {c['arrears_weeks']} or more weeks behind on dues{club.cite('arrears')}:\n\n{lines}\n\n"

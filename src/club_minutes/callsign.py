@@ -31,9 +31,9 @@ from .roster import Sheet
 log = logging.getLogger("club_minutes.callsign")
 # Current-state files that hold member ids (as values, or as keys): renamed. *.jsonl logs are history: left alone.
 STATE_FILES = ("chow.json", "business.json", "events.json", "calendar-feeds.json", "ask-about.json", "email-prefs.json",
-               "settings.json", "treasurer.json", "admins.json", "roles.json")
+               "settings.json", "treasurer.json", "admins.json", "roles.json", "admins-suspended.json", "recovery.json", "meet-rooms.json")
 AUTH_COLUMNS = {"sessions": ("member", "view_as"), "links": ("member",), "passkeys": ("member",), "challenges": ("member",),
-                "email_changes": ("member",), "signins": ("member",), "events": ("member",)}
+                "email_changes": ("member", "by"), "signins": ("member",), "events": ("member",)}
 
 
 def _swap(x, old: str, new: str):
@@ -130,7 +130,12 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
     sheet.add_row({"callsign": new_call, "full_name": m.name, "date": date, "event": "Callsign Change",
                    "note": f"{old_call or '(none)'} to {new_call}"}, tab=LOG_TAB, optional=("note",))
 
-    done = rename_id(mid, new)
+    try:
+        done = rename_id(mid, new)
+    except Exception:  # the sheet already has the new callsign: say how to finish (rename_id can run again safely)
+        log.exception("callsign change %s -> %s stopped partway; with the service stopped, finish it with "
+                      "`club-minutes rename-id %s %s`, then start the service", one_line(mid), one_line(new), one_line(mid), one_line(new))
+        raise
     event = {"date": date, "event": "Callsign Change", "note": f"{old_call or '(none)'} to {new_call}"}
     row.update(id=new, callsign=new_call, aliases=aliases, events=list(row.get("events") or []) + [event])
     if ROSTER_CACHE.exists():

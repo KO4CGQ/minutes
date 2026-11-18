@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% block title %}Video meeting{% endblock %}{% block body %}
+{% if members_only %}<h1>Members only</h1>
+<p>This room is for members only. <a href="/login?next=/meet/{{ room|urlencode }}">Sign in to join.</a></p>
+{% elif guest %}<h1>{{ guest.name }}</h1>
+<div class="cards rooms choice"><div class="card room"><h2>Members</h2><p>Sign in, and you join as you.</p>
+<p><a class="btn" href="/login?next=/meet/{{ guest.slug|urlencode }}">Sign in</a></p></div>
+<div class="card room"><h2>Guests</h2><p>Join with just your name, then wait in the lobby until a host lets you in.</p>
+<p><a class="btn" href="https://{{ domain }}/{{ guest.slug }}">Join as a guest</a></p></div></div>
+{% else %}<h1>Video meeting</h1>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+<p class="muted">You join signed in as you. To invite someone, send them a room's address: anyone not signed in can sign in or join as a guest, and guests wait in the lobby until a host lets them in.</p>
+<div class="cards rooms">{% for r in rooms %}
+<div class="card room"><h2>{{ r.name }}</h2>
+{% if r.about %}<p>{{ r.about }}</p>{% endif %}
+<p><a class="btn" href="/meet/{{ r.slug }}" target="_blank" rel="noopener" aria-label="Join {{ r.name }} (opens in a new tab)">Join ↗</a><br>
+{% if r.for %}<span class="small">Straight in: {{ r.for }}.{% if not r.inside %} You wait in the lobby until a host lets you in.{% endif %}</span><br>{% endif %}
+<span class="muted small">Address: <code class="wrap">{{ base }}/meet/{{ r.slug }}</code>{% if not r.guests %} (members only){% endif %}</span></p></div>
+{% endfor %}
+{% for r in mine %}
+<div class="card room"><h2>{{ r.name }}</h2>
+<p>An unlisted room you opened, and you host. It goes away after a day with no one joining it.</p>
+<p><a class="btn" href="/meet/{{ r.slug }}" target="_blank" rel="noopener" aria-label="Join {{ r.name }} (opens in a new tab)">Join ↗</a><br>
+<span class="muted small">Address: <code class="wrap">{{ base }}/meet/{{ r.slug }}</code>{% if not adhoc.guests %} (members only){% endif %}</span></p></div>
+{% endfor %}
+{% if adhoc %}
+<form method="post" action="/meet" target="_blank" class="card profile room">
+<h2>A room of your own</h2>
+<p class="hint">Open an unlisted room that you host.{% if adhoc.guests %} Its card here then shows the address to send.{% else %} Members only: guests can't come in.{% endif %}</p>
+<p class="row"><label>Name <input name="name" maxlength="60" required placeholder="e.g. Antenna project"></label> <button class="btn" aria-label="Open it (opens in a new tab)">Open it ↗</button></p>
+</form>
+{% endif %}</div>
+{% if not rooms and not mine and not adhoc %}<p class="muted">No rooms you can join.</p>{% endif %}
+{% endif %}{% endblock %}

@@ -26,7 +26,7 @@ To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwi
 5. **Backups** (Admin → Backups), before anything is entered for real.
 
 > [!TIP]
-> To update by hand: `/opt/club-minutes/deploy/update.sh` installs the latest main (`TAG=v1.0.0` before it for a release). Admin → **Updates** installs new releases from the app, or nightly.
+> To update by hand: `/opt/club-minutes/deploy/update.sh` installs the latest main (`TAG=v1.0.0` before it for a release). Admin → **Updates** installs new releases from the app, or nightly. A high or critical security fix in one of the app's packages comes out as a patch release by itself, two days after the fix is published, so with automatic updates on a server gets it that night.
 
 Good to know: the app runs as the `minutes` user on port 8000, with its settings in `/etc/club-minutes/` and its data in `/var/lib/club-minutes/`. `google-service-account.json` goes in `/etc/club-minutes/` too, only for backups to Google Drive.
 
@@ -35,11 +35,11 @@ In admin mode, the name menu's **Admin** lists the admin tools, each with a line
 
 ![The Admin page: Security, Backups, Updates, Site, Email log and this guide](screenshots/admin.png)
 
-- 🛡️ **Security:** failed sign-ins today, bans. Its **Members** tab lists every member's last sign-in, passkeys and signed-in devices, so you can see who hasn't signed in or still uses emailed links.
+- 🛡️ **Security:** failed sign-ins today, bans. Its **Members** tab lists every member's last sign-in, passkeys and signed-in devices, so you can see who hasn't signed in or still uses emailed links. Sign-in records, failed attempts and emailed links are kept 90 days (each member's latest sign-in stays).
 - 💾 **Backups:** the last one.
 - ⬆️ **Updates:** what's running and what's available.
 - 🎨 **Site:** the club's settings.
-- ✉️ **Email log:** anything held back this week.
+- ✉️ **Email log:** anything held back this week; every email is kept 90 days (at most the last 1,000). When a member becomes Inactive or a Silent Key, or leaves the roster, the daily job also takes their address out of it.
 - 🧪 **Stage sync**, on a staging server only.
 
 ## 🎨 Site settings
@@ -52,8 +52,8 @@ Admin → **Site** changes most of the club's settings in the app, checked as yo
 | **Look** | The logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon, each with **Upload…** and **Reset** (the icons are made from the logo until one has its own). **Behind it**, so a dark logo on a see-through background still shows in dark mode. **Colours:** one main colour sets buttons, links, the top bar and the minutes' headings; the app makes light and dark palettes from it, checks every text colour is readable, and previews both before Save. |
 | **Club** | The app's name, the club's name and callsign, meeting day and time, time zone, and the weekly meeting's place and online link. A new day, time, place or link changes the calendar's meeting from the **Starting date** you pick. |
 | **Agenda** | The meeting's sections in order (built-in and the club's own), when a guest is invited to join, how many days before a reminder goes out. |
-| **Roles** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats; and whose holders add members to the roster (usually the Secretary and the Treasurer). Who holds each office is on Roster → Offices. Then the roles: what each allows, who has it, and who is a **Minutes editor** or **Calendar editor** (the two roles given by hand, not by an office). |
-| **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own) and election days. |
+| **Roles** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats. Who holds each office is on Roster → Offices. Then the roles, one card each: what it allows, the offices that give it (whole titles only), the members picked for it, and who has it now. Rename any role, add the club's own (**Add a role**), remove one of the club's own, or put a built-in **Back to the built-in**. A save that would leave a permission with no role is refused; recording money always comes with the Treasurer pages. Admin isn't a role and no role edit can give it. |
+| **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own), election days, video meetings, and **The club supports Club Minutes** (it takes the menu's Support link away for everyone and the About page thanks the club). |
 | **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
 | **Dates** | How dates are written (US order unless changed). |
 | **Privacy** | Names never recorded: a guest with one is left out of the minutes, a line with one out of imported minutes, and the AI never sees one. |
@@ -71,17 +71,19 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 - **Locked out?** On the server: `club-minutes login-link N0CALL` prints a one-time link for any member.
 - **AI** (optional): `CLUB_MINUTES_OPENROUTER_KEY` in the env file and `ai: {model: ...}` in club.yaml. Each call is logged (time, model, size, cost; never the text).
 
-**Emailing the minutes:** when a leader submits them, every member with an email address (except Inactive and Silent Key) gets their own copy: the PDF, or a link, as each chose on their profile (or nothing, if they turned it off). Replies go to the meeting's leader. Each meeting is emailed once, and leaders see the outcome on the minutes page.
+**Emailing the minutes:** when a leader submits them, every member with an email address (except Inactive and Silent Key) gets their own copy: the PDF, or a link, as each chose on their profile (or nothing, if they turned it off). Replies go to whoever took the minutes and whoever led the meeting, each only if they share their email with members, otherwise to the club's address. Each meeting is emailed once, and leaders see the outcome on the minutes page. If it doesn't go out (an email server problem, or a restart while sending), the minutes page shows **Send it now**, and the daily job tries again overnight (and drops the note of an email still unsent after 90 days); corrected minutes work the same way.
 
 > [!TIP]
 > **Testing email?** While club.yaml has `email.only_to`, only those callsigns or addresses get mail; everyone else's is held and logged. The submit dialog says which mode is on.
 
 **Removing a test meeting:** `club-minutes delete-meeting 2026-12-31`, then `systemctl restart club-minutes`.
 
-## 🛡️ Admin mode
-Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged.
+**A callsign change that stopped partway** (the app's log says so, for example a full disk): the roster already has the new callsign. Stop the service, run `club-minutes rename-id OLD NEW` (the ids the log names; safe to run again), then start it.
 
-- **Who's an admin:** callsigns under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins, and the last admin can't be removed.
+## 🛡️ Admin mode
+Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged. Turning it on asks you to confirm it's you: with a passkey that checks your PIN, fingerprint or face (a security key that only takes a tap isn't enough here, though it still signs you in), or with a link emailed to you.
+
+- **Who's an admin:** callsigns under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins. There's always an active admin: the last one can't be removed, or set Inactive or Silent Key (an Inactive admin can't sign in, so doesn't count), and the Admin page warns while there's only one. To step down, add a successor first. Only an admin in admin mode changes an admin's email or status. If the admins can't be reached, the officers can make a new one, and suspend admins, on **Recover admin access** (officers guide); suspensions are kept in `admins-suspended.json` and lifted on the Admins tab.
 - Admins in club.yaml can only be removed there, so whoever has the server can always get back in.
 - **View the app as …** (on a member's page): the app as that member sees it, read-only, until **Stop** or admin mode ends. Also logged.
 
@@ -115,7 +117,7 @@ systemctl start club-minutes
 `restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same.
 
 ## 🔒 Security
-The app blocks web visitors itself after repeated failed sign-ins (Admin → Security). On **Failed attempts**, **Details** shows each attempt's device and browser, and a banned address links to its ban.
+The app blocks web visitors itself after repeated failed sign-ins (Admin → Security): 10 in an hour from one internet address bans it from signing in for 24 hours (LAN and tailnet addresses never are). Members already signed in from it keep working, and the public calendar stays open, since a clubhouse or a phone carrier puts many people behind one address. An old or used sign-in link doesn't count, only one the app never sent. An IPv6 ban covers the address's whole /64 block (shown as, say, `2001:db8:1:2::/64`), since a home gets billions of addresses. The same tab lists other hostile requests: **scanner probes** (addresses only attack tools ask for, like `.env` or `wp-login.php` files), which count toward a ban; and, listed but never counted, requests sent from another site's page (the address is the victim's, so they have no Ban button), actions a member's role doesn't allow, and uploads over the size limit. On **Failed attempts**, **Details** shows each attempt's device and browser, and a banned address links to its ban.
 
 **Upload limit:** Security → **Server** → **Largest upload** (1–100 MB, 10 by default), for profile pictures and calendar imports. A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
 
@@ -135,7 +137,7 @@ Then `systemctl restart fail2ban` and check it with `fail2ban-client status sshd
 3. **Close the app's port to everyone but the server** (below).
 4. A firewall that otherwise allows only SSH (and, without Tailscale, the proxy's 80 and 443).
 
-**Closing the app's port.** The app listens on port 8000 on every network, in plain HTTP: anyone on your LAN could use it there, around the HTTPS proxy, and a stolen sign-in would work over it. Only the proxy on the same server (Tailscale serve, Caddy…) and the roster API's callers (a Discord bot's container) need it. With nftables (`apt install nftables`), save this as `/etc/club-minutes-firewall.nft` (one `accept` line per caller, or none):
+**Closing the app's port.** The app listens on port 8000 on every network, in plain HTTP: anyone on your LAN could use it there, around the HTTPS proxy, and a stolen sign-in would work over it. Only the proxy on the same server (Tailscale serve, Caddy…) and the roster API's callers (a tool's container, such as a chat bot's) need it. With nftables (`apt install nftables`), save this as `/etc/club-minutes-firewall.nft` (one `accept` line per caller, or none):
 
 ```
 table inet club_minutes
@@ -201,12 +203,26 @@ Admin → **Stage sync** shows the last sync, **Sync now**, and **Pause nightly 
 >
 > (the bare `OnCalendar=` clears the 03:00), then `systemctl daemon-reload && systemctl restart club-stage-sync.timer`. Updates keep it.
 
+## 🎥 Video meetings (Jitsi, optional)
+Members can join the club's own [Jitsi Meet](https://jitsi.org/jitsi-meet/) server signed in from here: the app hands Jitsi a token saying who they are and whether they host, so Jitsi needs no passwords of its own, and passkeys reach it. Off unless club.yaml turns it on; nothing about it shows otherwise.
+
+- **Turning it on:** Admin → Site → Features (admins, in admin mode): the tick, the Jitsi server's address and the app ID; or in club.yaml, `modules: {jitsi: true}` and a `jitsi:` block with `domain` (the Jitsi server), `app_id`, and `room` (the club's one room until an admin lists rooms on Site → Video; default `club`). **The shared secret** (it proves a sign-in came from this app; the Jitsi server's Prosody has the same one): an admin makes one with **Make a secret** on Site → Features, shown once to set in the Jitsi server's configuration, then kept in the data folder (`jitsi-secret`, the app's only; in the encrypted backups) and never shown again; a new one replaces it. Or set `CLUB_MINUTES_JITSI_SECRET` in `/etc/club-minutes/env` (at least 32 random characters, e.g. `openssl rand -hex 32`; never in club.yaml), which then wins and the button goes away. Anyone with the secret can make a sign-in for any member: copy it straight into the Jitsi server's configuration, never by email or chat.
+- **The Jitsi server's own start page:** send its bare address (`/`) to this app's `/meet` in its nginx site (`location = / { return 302 https://<this app>/meet; }`): turning off Jitsi's welcome page alone drops a visitor into a random room. Room addresses are untouched.
+- **After hanging up:** set `config.enableClosePage = true;` in the Jitsi server's `config.js`. With the welcome page off and no close page, the page stays on the ended meeting, so it looks still running; with it, people see Jitsi's thank-you page.
+- **No meeting passwords:** set `config.securityUi = { disableLobbyPassword: true };` in `config.js`. Jitsi's lobby can't tell whether a meeting has a password, so it offers every guest an "Enter meeting password" box; with this, guests always knock and a host lets them in (hosts can't set a password either).
+- **The Jitsi server:** Prosody's token authentication (`jitsi-meet-tokens`) with the same app ID and secret, `allow_empty_token = false` on the main domain and the anonymous guest domain kept; on the main MUC, Jitsi's own `token_affiliation` (the host comes from the token) and the jitsi-contrib `token_lobby_autostart` (the lobby on by default) and `token_lobby_bypass` (signed-in members, hosts included, skip it; without it the hosts knock too, with nobody to let them in); `persistent_lobby` on the main domain (it makes the lobby `token_lobby_autostart` asks for). In Jicofo, `enable-auto-owner = false` and its own `authentication` off: with it on, Jicofo makes every signed-in member a host.
+- **Who hosts:** the "host video meetings" permission on Site → Roles (shown while Jitsi is on; Officer and Meeting leader have it as they ship), and admins in admin mode. Other signed-in members join without the lobby; anyone not signed in is a guest who waits for a host.
+- **`/meet/<room>`:** signed-in members only (others sign in, then come back); the token works for that room only and expires in 5 minutes (it only has to open the room).
+- **Rooms (Site → Video, admins in admin mode; or `rooms:` and `adhoc:` in the `jitsi:` block):** the club's named rooms, each with its address, a short description (shown under its name on the Video meeting page), **which members come straight in** (every member, or the members of the roles ticked, like Board; other members either knock in the lobby like a guest, and once let in are members like any other, or can't join, and don't see it on the Video meeting page; a host must be one of those let straight in, so a meeting leader who isn't on the board knocks at the board's room; admins in admin mode always come in), and its rules for guests: may they knock at all (or members only), may they unmute, turn their camera on and share their screen without a host allowing it, may they chat, and what happens when the last host leaves (nothing, the guests are dropped, or the meeting ends, after a minute's grace). **Members' own rooms**, if allowed: any member opens one by name on the **Video meeting** page and hosts it until a day passes with no one joining it through the app; one set of rules covers them all. Any other room address is refused. On a calendar event, the rooms show as buttons under its online link: a tap fills in the room's link (any other link can still be typed).
+- **The rules on the Jitsi server:** they ride in every member's token (`context.room.club`); `deploy/jitsi/mod_club_rules.lua` (this repo) applies them. Put it in Prosody's plugins folder and add `club_rules` to the main MUC's modules, with AV moderation set up as usual. It uses Jitsi's own AV moderation, so mic, camera and screen are held back by the server, not only the page. **Two-person calls, per room** (go through the club's server, or connect directly): in a call of two, browsers normally talk directly, and then a guest alone with a host can get around the mic, camera and screen rules. A room (or members' own rooms) with peer-to-peer unticked has the app switch it off in members' browsers as they join, and a call then stays on the server even if a guest's browser asks for it; ticked, calls of two connect directly (lighter on the server). Turning it off in the Jitsi server's config.js (`p2p: { enabled: false }`) keeps every room on the server whatever is ticked. Two guests left alone ("nothing" when the last host leaves) can still connect directly. The first member into a meeting sets its rules for that meeting; a change here applies to the next one.
+- **What the Jitsi server sees:** each member's name and callsign, in the token, which is in the address the browser opens (so in the Jitsi server's web logs and the member's browser history; the app's redirect sends no referrer). Room names, members' own included, can show in Prosody's log. Keep the server the club's own, and its logs as short as the club wants.
+
 ## 🔌 Roster API
-For the club's other tools on the same server (the Discord bot): `GET /api/roster` returns active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so the bot can follow a callsign change), as JSON.
+For the club's other tools on the same server, for example a chat bot (Discord, Slack, Matrix) that gives members their roles, a mailing list kept in step with the roster, or a net logger that knows members' callsigns: `GET /api/roster` returns active members' `callsign`, `name`, `email`, `officer` and `former` (earlier callsigns, so a tool can follow a callsign change), as JSON.
 
 - Off until `CLUB_MINUTES_ROSTER_API_TOKEN=...` (a long random string) is in `/etc/club-minutes/env`.
-- Then it answers only `Authorization: Bearer <token>` requests from the server itself or an address in `CLUB_MINUTES_ROSTER_API_ALLOW` (comma-separated; the bot's container), never through the web proxy. E.g. from the bot's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`.
-- Give the bot's container a fixed IP, and close port 8000 to everyone else (Security → Closing the app's port). Every call, allowed or not, is logged.
+- Then it answers only `Authorization: Bearer <token>` requests from the server itself or an address in `CLUB_MINUTES_ROSTER_API_ALLOW` (comma-separated; the tool's container), never through the web proxy. E.g. from the tool's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`.
+- Give the tool's container a fixed IP, and close port 8000 to everyone else (Security → Closing the app's port). Every call, allowed or not, is logged.
 
 ## 📜 Bylaws
 The Bylaws page shows the club's constitution and bylaws from `bylaws.md` in the data folder (`/var/lib/club-minutes/bylaws.md`). It's kept out of the public repo.
@@ -222,7 +238,7 @@ Once, for a club moving its chow list into the app: `club-minutes chow-import FI
 - **Email test mode:** `email: only_to:`.
 - **AI:** `ai: {model: ...}`, and the private never-record list.
 - **Offices:** `offices:`, the club's offices (a title with one seat, or `{title: Trustee, officer: false, seats: 3}` for a board seat).
-- **Roster keepers:** `roster_keepers:`, the titles that may edit the roster (`[Secretary, Treasurer]` by default; admins in admin mode always can).
+- **Roster keepers:** `roster_keepers:`, the offices the Roster keeper role starts with (`[Secretary, Treasurer]` by default; admins in admin mode always can). Once an admin changes that role on Site → Roles, the page wins.
 - **Starting links** for the Links page.
 
 People, their titles and who may lead come from the roster the app keeps, edited on the Roster pages.

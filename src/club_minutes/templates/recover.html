@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% block title %}Recover admin access{% endblock %}{% block body %}
+<h1>Recover admin access</h1>
+<p class="muted">For when the club can't reach its admins, or an admin is working against the club. The officers can make a member an admin, and can suspend admins:</p>
+<ol class="muted">
+  <li>An officer starts it. More than half of the officers (at least 2) approve.</li>
+  <li>The member named accepts.</li>
+  <li>After {{ wait }} days it's done. If an admin objects: two-thirds of the officers, and {{ wait_objected }} days.</li>
+</ol>
+<p class="muted">Every member is emailed at each step. If it isn't approved and accepted within {{ lapse }} days, it ends by itself.</p>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+{% if r %}
+<div class="card">
+  <p><b>{{ club.name(r.nominee) }}</b> to become an admin{% if r.suspend %}; suspended as admin: <b>{% for a in r.suspend %}{{ club.name(a) }}{{ ', ' if not loop.last }}{% endfor %}</b>{% endif %}.</p>
+  <p class="small muted">Started by {{ club.name(r.by) }}, {{ ts(r.at) }}.{% if r.motion %} The board's motion: {{ r.motion }}{% endif %}</p>
+  <p><b>Approvals:</b> {{ st.have }} of the {{ st.need }} needed{% if st.objected %} (two-thirds: an admin objected){% endif %}.</p>
+  <ul class="small">{% for o in st.officers %}<li>{{ club.name(o) }}: {% if o in r.approvals %}approved {{ ts(r.approvals[o]) }}{% else %}<span class="muted">not yet</span>{% endif %}</li>{% endfor %}</ul>
+  <p class="small"><b>{{ club.name(r.nominee) }}:</b> {% if r.accepted %}accepted {{ ts(r.accepted) }}{% else %}<span class="muted">hasn't accepted yet</span>{% endif %}</p>
+  {% for a, t in r.objections.items() %}<p class="small"><b>Objection:</b> {{ club.name(a) }}, {{ ts(t) }}</p>{% endfor %}
+  <p>{% if st.ready_at %}It completes on <b>{{ ts(st.ready_at) }}</b> unless an admin objects (that makes it {{ wait_objected }} days).{% else %}It needs more approvals{{ '' if r.accepted else ' and the acceptance' }} before the wait begins. If that hasn't happened by <b>{{ ts(st.lapses_at) }}</b>, it ends by itself.{% endif %}</p>
+  {% if st.calloffs %}<p class="small"><b>Asked to call it off:</b> {% for o in st.calloffs %}{{ club.name(o) }}{{ ', ' if not loop.last }}{% endfor %} ({{ st.calloffs|length }} of the {{ st.calloff_need }} officers needed).</p>{% endif %}
+  <form method="post" action="/recover/act" class="row">
+    {% if is_officer and me.id not in r.approvals %}<button class="btn" name="do" value="approve" data-confirm="Approve making {{ club.name(r.nominee) }} an admin? Every member is told.">Approve</button>{% endif %}
+    {% if me.id == r.nominee and not r.accepted %}<button class="btn" name="do" value="accept" data-confirm="Accept becoming an admin? You'll be one when the wait is over.">Accept becoming an admin</button>{% endif %}
+    {% if is_admin and me.id not in r.objections %}<button class="btn ghost" name="do" value="object" data-confirm="Object? It can still go ahead, but needs two-thirds of the officers and {{ wait_objected }} days. Every member is told.">Object (admin)</button>{% endif %}
+    {% if (me.id == r.by or is_officer) and me.id not in r.get('calloffs', {}) %}<button class="btn ghost small" name="do" value="cancel" data-confirm="{{ 'Call off the recovery? Every member is told.' if me.id == r.by else 'Ask to call it off? It ends when more than half of the officers ask. Every member is told.' }}">{{ 'Call it off' if me.id == r.by else 'Ask to call it off' }}</button>{% endif %}
+  </form>
+  <p class="hint">Approving, accepting and calling it off ask you to confirm it's you first (a passkey, or a link emailed to you).</p>
+</div>
+{% elif is_officer %}
+<form method="post" action="/recover/act" class="profile card">
+  <input type="hidden" name="do" value="start">
+  <label>Make this member an admin <select name="nominee" required><option value="">Pick a member</option>
+    {% for m in members if m.id not in club.all_admins %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}</select>
+    <span class="hint">Any active member; they accept it themselves.</span></label>
+  {% if club.all_admins %}<fieldset><legend>Suspend these admins (optional)</legend>
+    {% for a in club.all_admins|by_last_name %}<label class="check"><input type="checkbox" name="suspend" value="{{ a }}"> {{ club.name(a) }}</label>{% endfor %}
+    <p class="hint">Their admin rights stop counting once it completes; only another admin can lift that.</p></fieldset>{% endif %}
+  <label>The board's motion (optional) <input name="motion" maxlength="200" placeholder="Approved at the board meeting of …"><span class="hint">Every member reads this: no personal details.</span></label>
+  <p><button class="btn" data-confirm="Start a recovery of admin access? Every member is emailed now and at each step.">Start and approve</button></p>
+  <p class="hint">Every member is emailed now and at each step. Confirm it's you first (a passkey, or a link emailed to you).</p>
+</form>
+{% else %}
+<p>Nothing under way. The officers ({% for o in officers %}{{ club.name(o) }}{{ ', ' if not loop.last }}{% else %}none at the moment{% endfor %}) can start one here.</p>
+{% endif %}
+<p class="muted small">This guards against an admin who only has the app. Whoever runs the server can change its files: that's for the club's own rules (who holds the server and its passwords).</p>
+{% endblock %}

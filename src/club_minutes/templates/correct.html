@@ -1,0 +1,67 @@
+{% extends "base.html" %}{% block title %}Correct the minutes, {{ m.date|listdate }}{% endblock %}{% block crumb %}{{ back('/meetings/' ~ m.slug, m.date|listdate) }}{% endblock %}{% block body %}
+<h1>Correct the minutes of {{ m.date|longdate }}</h1>
+<p class="muted">Open a part, change it, then preview. Saving makes version {{ m.version + 1 }}; version {{ m.version }} is kept.</p>
+{% if error %}<p class="msg err">{{ error }}</p>{% endif %}
+{# Remove is a checkbox that strikes a row out (style.css, :has), so it can be undone; + Add copies the list's <template> #}
+{% macro v(name, saved) %}{{ posted[name] if posted is not none and name in posted else saved }}{% endmacro %}
+{% macro on(name, saved) %}{{ 'checked' if (name in posted if posted is not none else saved) }}{% endmacro %}
+{% macro remove(name, what) %}<label class="btn small ghost rm"><input type="checkbox" name="{{ name }}-rm" value="1" {{ on(name ~ '-rm', false) }}><span class="off">Remove</span><span class="on">Keep it</span><span class="sr"> {{ what }}</span></label>{% endmacro %}
+{% macro guest(i, g, label) %}<fieldset class="guest"><legend>{{ label }}</legend>
+  <div class="formrow">
+    <label>Name <input name="g{{ i }}-name" value="{{ v('g' ~ i ~ '-name', g.name or '') }}" maxlength="120"></label>
+    <label>Callsign <input name="g{{ i }}-callsign" value="{{ v('g' ~ i ~ '-callsign', g.callsign or '') }}" class="cs" size="8" maxlength="12"></label>
+    <label class="check"><input type="checkbox" name="g{{ i }}-online" value="1" {{ on('g' ~ i ~ '-online', g.online) }}> Online</label>
+  </div>
+  <label>Notes <input name="g{{ i }}-notes" value="{{ v('g' ~ i ~ '-notes', g.notes or '') }}" maxlength="200"></label>
+  {{ remove('g' ~ i, label) }}
+</fieldset>{% endmacro %}
+{% macro item(n, j, sec, text='', hint='', new=false) %}<div class="item">{% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+  <textarea name="s{{ n }}-{{ j }}" rows="1" aria-label="{{ sec }}, {{ 'a new item' if new else 'item ' ~ (j + 1) }}"{% if new %} placeholder="The item left out"{% endif %}>{{ v('s' ~ n ~ '-' ~ j, text) }}</textarea>
+  {{ remove('s' ~ n ~ '-' ~ j, sec ~ ', ' ~ ('the new item' if new else 'item ' ~ (j + 1))) }}</div>{% endmacro %}
+<form method="post" action="/meetings/{{ m.slug }}/correct/preview" class="modern correct">
+  <input type="hidden" name="version" value="{{ m.version }}">
+
+  <details class="card sec"><summary>Attendance <span class="muted">{{ m.in_person|length }} in person, {{ m.remote|length }} online</span></summary>
+    <table class="list att-edit"><thead><tr><th>Member</th><th>Absent</th><th>In person</th><th>Online</th></tr></thead><tbody>
+    {% for mid, name, where in attendance %}<tr><td>{{ name }}</td>
+      {% for val, label in (('', 'Absent'), ('in_person', 'In person'), ('remote', 'Online')) %}<td><input type="radio" name="att-{{ mid }}" value="{{ val }}" aria-label="{{ name }}: {{ label }}" {{ 'checked' if (posted.get('att-' ~ mid, '') if posted is not none else where) == val }}></td>{% endfor %}</tr>
+    {% endfor %}</tbody></table>
+  </details>
+
+  <details class="card sec"><summary>Guests <span class="muted">{{ m.guests|length + m.visitors }}</span></summary>
+    {% for g in m.guests %}{{ guest(loop.index0, g, 'Guest ' ~ loop.index) }}{% endfor %}
+    {% for i in extra.g or [] %}{{ guest(i, {}, 'A guest left out') }}{% endfor %}
+    <template id="t-guest">{{ guest('__i__', {}, 'A guest left out') }}</template>
+    <button type="button" class="btn small" data-add="t-guest" data-next="{{ ((extra.g or [])|max + 1) if extra.g else m.guests|length }}">+ Add a guest</button>
+    <label>Visitors not named <input type="number" name="visitors" value="{{ v('visitors', m.visitors) }}" min="0" max="999" style="width:6rem"></label>
+  </details>
+
+  {% for sec in sections %}{% set n = loop.index0 %}{% set items = m.items(sec) %}
+  <details class="card sec"><summary>{{ sec }} <span class="muted">{{ items|length }}</span></summary>
+    {% if sec in ('Old Business', 'Upcoming Chow') %}<p class="hint">The text read that night: changing it here doesn't change the {{ 'tracked business items' if sec == 'Old Business' else 'chow schedule' }}.</p>{% endif %}
+    {% for it in items %}{{ item(n, loop.index0, sec, it.text, club.name(it.member) if it.member else it.shown[:it.shown|length - it.text|length - 2] if it.when else '') }}{% endfor %}
+    {% set more = extra['s' ~ n] or [] %}{% for j in more %}{{ item(n, j, sec, new=true) }}{% endfor %}
+    <template id="t-s{{ n }}">{{ item(n, '__i__', sec, new=true) }}</template>
+    <button type="button" class="btn small" data-add="t-s{{ n }}" data-next="{{ (more|max + 1) if more else items|length }}" aria-label="Add an item to {{ sec }}">+ Add an item</button>
+  </details>
+  {% endfor %}
+
+  <label>Why <input name="reason" value="{{ v('reason', '') }}" required maxlength="{{ reason_max }}" placeholder="e.g. Corrected a misspelled name">
+    <span class="hint">A line: members see it with the minutes.</span></label>
+  <label class="check"><input type="checkbox" name="notice" value="1" {{ on('notice', true) }}> Send the corrected minutes to members</label>
+  <label class="check"><input type="checkbox" name="private" value="1" {{ on('private', false) }}> This removes private details</label>
+  <p class="hint">Tick it when you're taking out something that shouldn't have been recorded (a health matter, a phone number): the email then shows no old words at all, and the version before stays visible only to those who can correct minutes. Removed lines are never quoted in the email either way.</p>
+  <p class="hint">With what changed, the same way they get the minutes (PDF or link). If you don't, the footer says "no notice sent".</p>
+  <p><button class="btn">Preview the changes</button> <a class="btn ghost" href="/meetings/{{ m.slug }}">Cancel</a></p>
+</form>
+<script nonce="{{ csp_nonce }}">
+// + Add: a new row from the list's <template>, numbered after the others (the server reads whichever rows are sent)
+document.querySelector("form.correct").addEventListener("click", e => {
+  const add = e.target.closest("[data-add]");
+  if (!add) return;
+  const i = +add.dataset.next; add.dataset.next = i + 1;
+  add.insertAdjacentHTML("beforebegin", document.getElementById(add.dataset.add).innerHTML.replaceAll("__i__", i));
+  add.previousElementSibling.querySelector("input, textarea").focus();
+});
+</script>
+{% endblock %}

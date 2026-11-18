@@ -158,3 +158,33 @@ def import_archive(src: Path, club: Club | None = None, dest: Path = MEETINGS) -
         m.note = "Corrected version (from the Corrected minutes email); images not included."
         m.save(dest)
     return done
+
+
+def import_correction(archive, day: dt.date, pdf: Path, by: str, reason: str, on: dt.date | None = None) -> Meeting:
+    """Imported minutes whose corrected text came later (a "Corrected minutes" email): version 1 becomes the original
+    PDF's text again, and the corrected PDF becomes version 2, with its reason. No notice: it's history. on: the day
+    they were really corrected (the footer's date), if not today."""
+    from .corrections import correct, pdf_name
+    by = archive.club.canonical(by.lower())
+    m = archive.by_slug.get(day.isoformat())
+    if not m or m.status != "imported" or m.version != 1:
+        raise ValueError(f"{day} isn't imported minutes still at version 1")
+    if by not in archive.club.members:
+        raise ValueError(f"{by!r} isn't on the roster")
+    original = archive.root / m.slug / "original.pdf"
+    if not original.exists():
+        raise ValueError(f"{day} has no original.pdf to take version 1 from")
+    v1, v2 = parse(pdf_text(original), archive.club), parse(pdf_text(pdf), archive.club)
+    if v2.date != day:
+        raise ValueError(f"{pdf.name}'s Date line says {v2.date}, not {day}")
+    m.in_person, m.remote, m.guests, m.visitors, m.sections = v1.in_person, v1.remote, v1.guests, v1.visitors, v1.sections
+    m.note = None  # it said "Corrected version…", which version 1 no longer is
+    m.source = pdf_name(m)  # was the corrected .txt; version 1 is the original PDF again
+    m.save(archive.root)
+    archive.reload()
+    m = correct(archive, m.slug, by, reason, 1, v2, notice=False)
+    if on:
+        m.corrections[-1]["at"] = m.reviewed["at"] = int(dt.datetime.combine(on, dt.time(12)).timestamp())
+        m.save(archive.root)
+        archive.reload()
+    return archive.by_slug[m.slug]

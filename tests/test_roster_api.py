@@ -8,7 +8,7 @@ from club_minutes.club import Club
 from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
-PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "callsign": "N0AAAA", "email": "amy@example.org", "officer": True,
+PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "callsign": "N0AAAA", "email": "amy@example.org", "role": "President", "officer": True,
            "phone": "419-555-0101", "aliases": ["Amelia", "N0OLDC"]},
           {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "callsign": "N0BBBB", "status": "Inactive"}]
 

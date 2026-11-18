@@ -1,5 +1,6 @@
 """Profile edits: values-only writes to the roster sheet, change log, undo, Secretary notice, sharing."""
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -119,7 +120,7 @@ def test_helpers():
 
 def test_can_see():
     club = Club(FIX / "test-club.yaml", roster=[
-        {"id": "o", "first": "O", "last": "Officer", "officer": True},
+        {"id": "o", "first": "O", "last": "Officer", "role": "President", "officer": True},
         {"id": "a", "first": "A", "last": "Member", "share": ["phone"]},
         {"id": "b", "first": "B", "last": "Member"}])
     assert club.can_see("b", "a", "phone") and not club.can_see("b", "a", "address")
@@ -135,14 +136,52 @@ def test_email_change_needs_confirmation(tmp_path, monkeypatch):
         {"id": "n0cccc", "first": "Bob", "last": "Member", "email": "bob@example.org"},
         {"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
     a = auth_mod.Auth(club, tmp_path / "auth.sqlite")
-    assert a.start_email_change("n0cccc", "jane@example.org") == "Another member already uses that address."
+    assert a.start_email_change("n0cccc", "jane@example.org") is None and not sent  # the same reply; nothing sent
     assert a.start_email_change("n0cccc", "not-an-email")
     assert a.start_email_change("n0cccc", "bob@new.example", base_url="https://x") is None
     (to, body), = sent
-    token = body.split("/profile/email?t=")[1].split()[0]
+    assert "Bob" not in body
+    token = body.split("/email/confirm?t=")[1].split()[0]  # 1.0 sent /profile/email?t=, which was the Email page
     assert to == "bob@new.example"
-    assert a.confirm_email_change(token) == ("n0cccc", "bob@new.example")
+    assert a.confirm_email_change(token) == ("n0cccc", "bob@new.example", "n0cccc")
     assert a.confirm_email_change(token) is None  # one use
+
+
+def test_keeper_email_change_names_nobody_to_the_new_address(tmp_path, monkeypatch):
+    from club_minutes import auth as auth_mod
+    sent = []
+    monkeypatch.setattr(auth_mod, "send_email", lambda to, subject, body, **kw: sent.append((to, body)))
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "n0cccc", "first": "Bob", "last": "Member", "email": "bob@example.org"},
+        {"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
+    auth_mod.Auth(club, tmp_path / "auth.sqlite").start_email_change("n0cccc", "typo@example.com", by="n0aaaa")
+    got = dict(sent)
+    assert not any(n in got["typo@example.com"] for n in ("Bob", "Jane", "Doe"))
+    assert "Jane Doe" in got["bob@example.org"] and "typo@example.com" in got["bob@example.org"]  # the old address is told
+
+
+def test_an_address_in_use_counts_toward_the_hourly_limit_like_any_other(tmp_path, monkeypatch):
+    """Otherwise a member could tell a member's address from a stranger's by when "Too many tries" starts."""
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "send_email", lambda *a, **kw: None)
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "n0cccc", "first": "Bob", "last": "Member", "email": "bob@example.org"},
+        {"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
+    a, b = (auth_mod.Auth(club, tmp_path / f"{n}.sqlite") for n in "ab")
+    for _ in range(auth_mod.EMAILS_PER_HOUR):
+        assert a.start_email_change("n0cccc", "jane@example.org") is None and b.start_email_change("n0cccc", "x@example.com") is None
+    assert a.start_email_change("n0cccc", "jane@example.org") == b.start_email_change("n0cccc", "x@example.com") == "Too many tries; please wait an hour."
+
+
+def test_email_log_keeps_90_days(tmp_path, monkeypatch):
+    import time
+
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    old = int(time.time()) - 91 * 86400
+    (tmp_path / "email-log.jsonl").write_text(json.dumps({"at": old, "subject": "old"}) + "\n" + json.dumps({"at": old + 2 * 86400, "subject": "89 days"}) + "\n{torn\n5\nnull\n")
+    auth_mod._email_log({"subject": "new"})
+    assert [json.loads(x)["subject"] for x in (tmp_path / "email-log.jsonl").read_text().splitlines()] == ["89 days", "new"]
 
 
 def test_monthday_filter():
@@ -257,8 +296,8 @@ def test_admin_mode(tmp_path, monkeypatch):
     assert "Email log" not in c.get("/links").text and "Email outbox" not in c.get("/links").text
 
     c.cookies.set(web.COOKIE, a.new_session("n0cccc"))                    # not an admin: can't turn it on
-    assert c.post("/admin/mode", data={"on": 1}).status_code == 403
-    assert c.get("/admin/confirm").status_code == 403 and c.post("/admin/confirm/email").status_code == 403
+    assert c.post("/admin/mode", data={"on": 1}).status_code == 404                # as if it didn't exist
+    assert c.get("/admin/confirm").status_code == 404 and c.post("/admin/confirm/email").status_code == 404
     assert "Turn on admin mode" not in c.get("/links").text
     assert c.get("/admin/email").status_code == 404
     assert "Sign-in &amp; passkeys" not in c.get("/links").text           # it's a tab of Your profile now
@@ -292,7 +331,7 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     from club_minutes.store import Archive
     club = Club(FIX / "test-club.yaml", roster=[
         {"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN", "email": "ann@example.org"},
-        {"id": "tess", "first": "Tess", "last": "Treasurer", "officer": True, "phone": "419-555-0142"},
+        {"id": "tess", "first": "Tess", "last": "Treasurer", "role": "Treasurer", "officer": True, "phone": "419-555-0142"},
         {"id": "bob", "first": "Bob", "last": "Member", "phone": "419-555-0199"}])
     club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -320,6 +359,59 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     assert "Viewing the app as" not in c.get("/links").text
     log = [json.loads(x) for x in (tmp_path / "admin-log.jsonl").read_text().splitlines()]
     assert [e.get("view_as") for e in log if "view_as" in e] == ["bob", None, "tess"]
+
+
+def test_act_as_makes_changes_as_the_member_on_a_test_server_only(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import prefs, web
+    from club_minutes.auth import Auth
+    from club_minutes.store import Archive
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN", "email": "ann@example.org"},
+        {"id": "bob", "first": "Bob", "last": "Member"}])
+    club.admins = {"n0admn"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(prefs, "DATA", tmp_path)
+    monkeypatch.setattr(web, "STAGE", False)
+    monkeypatch.setattr(web, "PREVIEW", None)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("n0admn"))
+    send_email = web.authmod.send_email                # the real one (admin mode's sign-in replaces it)
+    turn_on_admin_mode(c, monkeypatch)
+    assert "Act as Bob" not in c.get("/members/bob").text                       # the live app: view only
+    assert c.post("/admin/view-as", data={"member": "bob", "act": "1"}).status_code == 403
+    monkeypatch.setattr(web, "STAGE", True)
+    assert "Act as Bob" in c.get("/members/bob").text
+    c.post("/admin/view-as", data={"member": "bob", "act": "1"})
+    assert "Acting as <b>Bob Member</b>" in c.get("/links").text
+    assert c.post("/profile/settings", data={"week_start": "monday"}, follow_redirects=False).status_code == 303
+    assert prefs.settings("bob")["week_start"] == "monday" and prefs.settings("n0admn")["week_start"] == "sunday"
+    assert c.get("/account").status_code == 403 and c.post("/logout").status_code == 403   # their sign-ins stay theirs
+    assert c.get("/calendar/subscribe").status_code == 403                      # nor their private feed address
+    logged = []                                     # acting on stage: even a sign-in link reaches only the admin
+    monkeypatch.setattr(web.authmod, "PREVIEW", None)
+    monkeypatch.setattr(web.authmod, "STAGE", True)
+    monkeypatch.setattr(web.authmod, "_email_log", logged.append)
+    monkeypatch.delenv("CLUB_MINUTES_SMTP_USER", raising=False)
+    actor, acting = web.authmod.ACTOR.set("ann@example.org"), web.authmod.ACTING.set(True)
+    try:
+        send_email("bob@example.org", "Your sign-in link", "…", to_self=True)
+    finally:
+        web.authmod.ACTOR.reset(actor)
+        web.authmod.ACTING.reset(acting)
+    assert logged[0]["to"] == ["ann@example.org"] and logged[0]["withheld"] == ["bob@example.org"]
+    monkeypatch.setattr(web, "STAGE", False)                                     # no longer a test server: read-only
+    assert c.post("/profile/settings", data={"week_start": "sunday"}).status_code == 403
+    monkeypatch.setattr(web, "STAGE", True)
+    c.post("/admin/view-as", data={"member": "bob"})                             # plain View as stays read-only on stage
+    assert c.post("/profile/settings", data={"week_start": "sunday"}).status_code == 403
+    log = [json.loads(x) for x in (tmp_path / "admin-log.jsonl").read_text().splitlines()]
+    assert [(e["acted_as"], e["did"]) for e in log if "acted_as" in e] == [("bob", "POST /profile/settings")]
+    assert web.admin_action(next(e for e in log if e.get("acts"))) == "Acted as Bob Member"
 
 
 def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
@@ -385,3 +477,60 @@ def test_admins_edit_club_links(tmp_path, monkeypatch):
     assert [x.get("icon") for x in club.links] == ["si:homeassistant", None]
     assert web.brand_path("si:homeassistant") in c.get("/links").text
     assert ">Home Assistant</small>" in c.get("/links?edit=1").text  # the picker shows the logo's name
+
+
+def test_email_log_and_server_log_hide_link_tokens(tmp_path, monkeypatch, caplog):
+    """FIXES → problem 3: the Email log (and the server's log, without SMTP) shows sign-in, email-confirm and admin-mode
+    links as `t=[hidden]`, so an admin can't open one and be signed in as the member; the email itself keeps the link."""
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "PREVIEW", None)
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def starttls(self): pass
+        def login(self, u, p): pass
+        def send_message(self, m): sent.append(m.get_content())
+    monkeypatch.setattr(auth_mod.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_USER", "club@example.org")
+    monkeypatch.setenv("CLUB_MINUTES_SMTP_PASSWORD", "pw")
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN",
+                                                  "email": "ann@example.org"}])
+    a = auth_mod.Auth(club, tmp_path / "auth.sqlite")
+    a.send_link("ann@example.org", base_url="https://club.example.org")                       # sign-in link
+    assert a.start_email_change("n0admn", "ann2@example.org", base_url="https://club.example.org") is None  # new email
+    step = a.step_up_link("n0admn")                                                            # admin mode (web.py's email)
+    auth_mod.send_email("ann@example.org", "Turn on admin mode", f"https://club.example.org/admin/confirm/link?t={step}&next=%2F")
+    log = [json.loads(x)["body"] for x in (tmp_path / "email-log.jsonl").read_text().splitlines()]
+    assert len(sent) == len(log) == 3
+    for body, mail in zip(log, sent, strict=True):
+        assert "t=[hidden]" in body and "t=[hidden]" not in mail and re.search(r"[?&]t=[\w-]{20,}", mail)
+        assert not re.search(r"[?&]t=[\w-]{20,}", body)
+    assert "&next=%2F" in log[2]                                                               # only the token goes
+    monkeypatch.delenv("CLUB_MINUTES_SMTP_PASSWORD")                                           # no SMTP: the body goes to the server log
+    a.send_link("ann@example.org", base_url="https://club.example.org", ip="192.0.2.1")      # another address: not a quick repeat
+    assert "ann@example.org not sent" in caplog.text and "t=" not in caplog.text  # recipients and subject only, never the body
+
+
+def test_a_quiet_site_prunes_the_email_log_daily(tmp_path, monkeypatch):
+    import time
+
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    (tmp_path / "email-log.jsonl").write_text(json.dumps({"at": int(time.time()) - 91 * 86400, "subject": "old"}) + "\n")
+    auth_mod.prune_email_log()  # what the daily job runs: no email needed
+    assert (tmp_path / "email-log.jsonl").read_text() == ""
+
+
+def test_forget_email_log_removes_a_leaver_alone_or_from_a_list(tmp_path, monkeypatch):
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    auth_mod._email_log({"to": ["jane@example.org"], "subject": "alone"})
+    auth_mod._email_log({"to": ["Jane@example.org", "john@example.org"], "withheld": [], "subject": "minutes",
+                         "reply_to": "jane@example.org, john@example.org"})
+    auth_mod.forget_email_log({"jane@example.org"})
+    log = [json.loads(x) for x in (tmp_path / "email-log.jsonl").read_text().splitlines()]
+    assert [(e["subject"], e["to"], e["reply_to"]) for e in log] == [("minutes", ["john@example.org"], "john@example.org")]

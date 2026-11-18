@@ -34,11 +34,11 @@
 
 {% endif %}
 {% if tab == 'failed' %}
-<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned for {{ ban_hours }} hours. LAN and tailnet addresses are never banned automatically.</p>
+<p class="muted">An internet address with {{ ban_after }} of these in an hour is banned from signing in for {{ ban_hours }} hours. Requests sent from another site's page, actions a member isn't allowed and oversized uploads are listed here, but never count. LAN and tailnet addresses are never banned automatically.</p>
 {% if events %}{% set banned = bans|map(attribute='ip')|list %}<table class="list"><thead><tr><th>When</th><th>What</th><th>From</th><th></th></tr></thead><tbody>
 {% for e in events %}<tr><td>{{ e.at|tsfull }}</td><td>{{ event_names.get(e.kind, e.kind) }}{% if e.member %} ({{ club.name(e.member) }}){% endif %}</td><td><span class="ip">{{ e.ip }}</span> <span class="muted">{{ e.ip|where }}</span></td>
-<td class="evacts"><button type="button" class="btn small ghost" popovertarget="ev{{ loop.index }}">Details</button>
-{% if not e.ip %}{% elif e.ip in banned %}<a class="small" href="/admin/security/bans">Banned</a>{% elif e.ip == my_ip %}<span class="muted small">You</span>{% else %}<form method="post" action="/admin/security/ban"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}
+<td class="evacts"><button type="button" class="btn small ghost" popovertarget="ev{{ loop.index }}" aria-label="Details of {{ event_names.get(e.kind, e.kind) }}, {{ e.at|tsfull }}">Details</button>
+{% if not e.ip or e.kind == 'cross_site' %}{% elif e.ip|ban_key in banned %}<a class="small" href="/admin/security/bans">Banned</a>{% elif e.ip == my_ip %}<span class="muted small">You</span>{% else %}<form method="post" action="/admin/security/ban" data-confirm="Ban {{ e.ip }}?"><input type="hidden" name="ip" value="{{ e.ip }}"><input type="hidden" name="hours" value="0"><input type="hidden" name="reason" value="{{ event_names.get(e.kind, e.kind) }}"><button class="btn small ghost">Ban</button></form>{% endif %}
 <div popover id="ev{{ loop.index }}" class="modal" aria-labelledby="ev{{ loop.index }}-t"><button type="button" class="calclose" popovertarget="ev{{ loop.index }}" popovertargetaction="hide" aria-label="Close">{{ emoji('✖️', 'x') }}</button>
 <div class="body"><h2 id="ev{{ loop.index }}-t">{{ event_names.get(e.kind, e.kind) }}</h2><dl class="evinfo">
 <dt>When</dt><dd>{{ e.at|tsfull }}</dd>
@@ -46,7 +46,7 @@
 <dt>From</dt><dd><span class="ip">{{ e.ip or 'unknown' }}</span> <span class="muted">{{ e.ip|where }}{% if e.ip == my_ip %}, you{% endif %}</span></dd>
 <dt>Device</dt><dd>{% if e.agent %}{{ e.agent|device }}<br><span class="muted small agent">{{ e.agent }}</span>{% else %}<span class="muted">not recorded (before 1.0.0)</span>{% endif %}</dd>
 {% if e.detail %}<dt>Detail</dt><dd>{{ e.detail }}</dd>{% endif %}
-{% if e.ip in banned %}{% set b = bans|selectattr('ip', 'equalto', e.ip)|first %}<dt>Banned</dt><dd>{{ 'until lifted' if not b.until else 'until ' ~ (b.until|tsfull) }}: {{ b.reason }}. <a href="/admin/security/bans">Banned addresses</a></dd>{% endif %}
+{% if e.ip and e.ip|ban_key in banned %}{% set b = bans|selectattr('ip', 'equalto', e.ip|ban_key)|first %}<dt>Banned</dt><dd>{{ 'until lifted' if not b.until else 'until ' ~ (b.until|tsfull) }}: {{ b.reason }}. <a href="/admin/security/bans">Banned addresses</a></dd>{% endif %}
 </dl></div></div></td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">None.</p>{% endif %}
 
@@ -56,9 +56,9 @@
 {% for b in bans %}<tr><td><span class="ip">{{ b.ip }}</span> <span class="muted">{{ b.ip|where }}</span></td><td>{{ b.reason }} <span class="muted">({{ 'automatic' if b.by == 'automatic' else club.name(b.by) }})</span></td><td class="opt">{{ b.at|tsfull }}</td><td>{{ b.until|tsfull if b.until else 'until lifted' }}</td>
 <td><form method="post" action="/admin/security/unban"><input type="hidden" name="ip" value="{{ b.ip }}"><button class="btn small">Unban</button></form></td></tr>{% endfor %}
 </tbody></table>{% else %}<p class="muted">No addresses are banned.</p>{% endif %}
-<form method="post" action="/admin/security/ban" class="inline"><label>Ban an address <input name="ip" required placeholder="203.0.113.7" size="18"></label>
+<form method="post" action="/admin/security/ban" class="inline" data-confirm="Ban the address you typed?"><label>Ban an address <input name="ip" required placeholder="203.0.113.7" size="18"></label>
 <label>for <select name="hours"><option value="24">24 hours</option><option value="168">a week</option><option value="0">until lifted</option></select></label>
-<input name="reason" placeholder="Why (optional)" size="24"> <button class="btn small">Ban</button></form>
+<input name="reason" placeholder="Why (optional)" aria-label="Why (optional)" size="24"> <button class="btn small">Ban</button></form>
 <p class="muted">SSH bans by fail2ban on the server aren't shown here; lift one on the server with <code>fail2ban-client set sshd unbanip ADDRESS</code>.</p>
 
 {% endif %}
@@ -70,8 +70,10 @@
 <td>{{ 'in the app' if a in club.app_admins else 'on the server (club.yaml)' }}</td>
 <td>{% if a in club.app_admins and all|length > 1 %}<form method="post" action="/admin/security/admins/remove" class="inline" data-confirm="Remove {{ club.name(a) }} as an admin? The other admins get an email."><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Remove</button></form>{% endif %}</td></tr>{% endfor %}
 </tbody></table>
+{% if club.suspended %}<p><b>Suspended</b> by the officers (<a href="/recover">Recover admin access</a>):</p>
+<ul>{% for a in club.suspended|by_last_name %}<li>{{ club.name(a) }} <form method="post" action="/admin/security/admins/lift" class="inline" data-confirm="Lift {{ club.name(a) }}'s suspension, so they're an admin again?"><input type="hidden" name="member" value="{{ a }}"><button class="btn small ghost">Lift <span class="sr">{{ club.name(a) }}'s suspension</span></button></form></li>{% endfor %}</ul>{% endif %}
 <form method="post" action="/admin/security/admins/add" class="inline"><label>Make an admin <select name="member" required><option value="">Pick a member</option>
-{% for m in club.members|by_last_name if m not in all %}<option value="{{ m }}"{{ ' selected' if m == add }}>{{ club.name(m) }}</option>{% endfor %}</select></label>
+{% for m in club.members|by_last_name if m not in all and m not in club.suspended %}<option value="{{ m }}"{{ ' selected' if m == add }}>{{ club.name(m) }}</option>{% endfor %}</select></label>
 <button class="btn small">Make admin</button></form>
 <p class="hint">Admins can turn on admin mode: all contact details, offices, updates, backups and this page. Making someone an admin asks you to confirm it's you (passkey or emailed link) unless you just did; each change is in Admin actions and emailed to the other admins. Admins set on the server stay until they're taken out of club.yaml there.</p>
 

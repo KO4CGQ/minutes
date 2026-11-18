@@ -5,11 +5,14 @@ session and link tokens are stored, so a copy of the database can't be used to l
 """
 from __future__ import annotations
 
+import contextlib
 import contextvars
+import fcntl
 import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import smtplib
 import sqlite3
@@ -36,6 +39,7 @@ from . import branding
 from .club import DATA, PREVIEW, STAGE, Club, one_line, valid_email
 
 ACTOR = contextvars.ContextVar("actor", default=None)  # the signed-in person's email, for stage mode (set per request)
+ACTING = contextvars.ContextVar("acting", default=False)  # an admin acting as a member: no email to anyone else
 
 log = logging.getLogger("club_minutes.auth")
 
@@ -58,13 +62,15 @@ PROVIDERS = {
 
 LINK_MINUTES = 15
 CHALLENGE_SECONDS = 300
-EMAILS_PER_HOUR = 5
+EMAILS_PER_HOUR = 5            # sign-in links a member gets from one address in an hour...
+LINKS_PER_HOUR_ALL = 15        # ...and from all addresses together
+REPEAT_SECONDS = 120           # the same request again this soon sends nothing and counts toward nothing
 
 SCHEMA = """
 create table if not exists sessions (token_hash text primary key, member text not null,
   created integer not null, expires integer not null, agent text);
 create table if not exists links (token_hash text primary key, member text not null,
-  expires integer not null, next text, used integer default 0, created integer not null);
+  expires integer not null, next text, used integer default 0, created integer not null, ip text);
 create table if not exists passkeys (id text primary key, member text not null, public_key blob not null,
   sign_count integer not null, transports text, label text, created integer not null, last_used integer,
   aaguid text);
@@ -79,8 +85,12 @@ create table if not exists bans (ip text primary key, at integer not null, until
 BAN_AFTER = 10          # failed sign-in attempts from one internet address in an hour...
 BAN_HOURS = 24          # ...ban it for this long (admins can lift it on the Security page)
 EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the roster",
-               "link_limit": "Sign-in link limit reached", "bad_link": "Used, expired or made-up sign-in link",
-               "passkey_failed": "Passkey sign-in failed"}
+               "link_limit": "Sign-in link limit reached", "bad_link": "A sign-in link the app never sent",
+               "passkey_failed": "Passkey sign-in failed", "probe": "Scanner probe (an address only attack tools ask for)",
+               "cross_site": "Refused: sent from another site's page", "refused": "Refused: not allowed for this member",
+               "too_big": "Refused: upload over the size limit"}
+UNKNOWN_LOGGED = 20  # unknown-address requests recorded per address an hour (the reply is the same either way)
+NOT_COUNTED = ("cross_site", "refused", "too_big", "unknown_email")  # logged, never toward a ban: a cross-site request carries the victim's address; an unknown address must count like a member's (nothing), or a ban tells them apart
 
 
 def _public(ip: str) -> bool:
@@ -90,6 +100,16 @@ def _public(ip: str) -> bool:
         return ipaddress.ip_address(ip).is_global
     except ValueError:
         return False
+
+
+def ban_key(ip: str) -> str:
+    """What a ban covers: an IPv4 address, or an IPv6 address's /64 (a home gets billions of addresses)."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip  # already a block (2001:db8:1:2::/64), or not an address
+    return str(ipaddress.ip_network(f"{a}/64", strict=False)) if a.version == 6 else str(a)
 
 
 def _hash(token: str) -> str:
@@ -118,11 +138,17 @@ class Auth:
             self.db.execute("alter table sessions add column admin_until integer")
         if "view_as" not in session_cols:
             self.db.execute("alter table sessions add column view_as text")
+        if "view_as_acts" not in session_cols:  # 1.1: acting as the member (test servers only)
+            self.db.execute("alter table sessions add column view_as_acts integer")
         for col in ("ip", "method"):
             if col not in session_cols:
                 self.db.execute(f"alter table sessions add column {col} text")
         if "agent" not in {r["name"] for r in self.db.execute("pragma table_info(events)")}:  # added in 1.0.0
             self.db.execute("alter table events add column agent text")
+        if "ip" not in {r["name"] for r in self.db.execute("pragma table_info(links)")}:  # added in 1.1.0
+            self.db.execute("alter table links add column ip text")
+        if "by" not in {r["name"] for r in self.db.execute("pragma table_info(email_changes)")}:  # added in 1.1.0
+            self.db.execute("alter table email_changes add column by text")
         os.chmod(path, 0o600)
 
     # ---------------- sessions ----------------
@@ -132,35 +158,38 @@ class Auth:
         self.db.execute("insert into sessions (token_hash, member, created, expires, agent, ip, method) values (?,?,?,?,?,?,?)",
                         (_hash(token), member, now, now + self.session_days * 86400, agent[:200], ip, method))
         if method:  # a real sign-in (tests and tools make sessions without one)
-            self.db.execute("insert into signins values (?,?,?,?,?)", (now, member, method, ip, agent[:200]))
+            self.db.execute("insert into signins (at, member, method, ip, agent) values (?,?,?,?,?)", (now, member, method, ip, agent[:200]))
         return token
 
     # ---------------- security log and bans (the admin Security page) ----------------
     def event(self, kind: str, ip: str | None, member: str | None = None, detail: str = "", agent: str = "") -> None:
-        """Record a failed or suspicious sign-in attempt (and the browser's user agent); ban an internet address
-        after BAN_AFTER in an hour."""
+        """Record a failed sign-in attempt or hostile request (and the browser's user agent); ban an internet address
+        after BAN_AFTER in an hour, NOT_COUNTED kinds aside."""
         now = int(time.time())
         self.db.execute("insert into events (at, ip, kind, member, detail, agent) values (?,?,?,?,?,?)",
                         (now, ip, kind, member, detail[:200], (agent or "")[:300]))
-        if ip and _public(ip) and not self.banned(ip):
-            n = self.db.execute("select count(*) from events where ip=? and at>?", (ip, now - 3600)).fetchone()[0]
+        if ip and _public(ip) and kind not in NOT_COUNTED and not self.banned(ip):
+            key = ban_key(ip)
+            n = sum(ban_key(r[0]) == key for r in self.db.execute(
+                f"select ip from events where at>? and ip is not null and kind not in ({','.join('?' * len(NOT_COUNTED))})",
+                (now - 3600, *NOT_COUNTED)))
             if n >= BAN_AFTER:
-                self.ban(ip, BAN_HOURS, f"{n} failed sign-in attempts in an hour", "automatic")
-                log.warning("banned %s after %d failed sign-in attempts", ip, n)
+                self.ban(ip, BAN_HOURS, f"{n} failed sign-ins or scanner probes in an hour", "automatic")
+                log.warning("banned %s after %d failed sign-ins or scanner probes", ip, n)
 
     def banned(self, ip: str | None) -> bool:
         if not ip:
             return False
-        row = self.db.execute("select until from bans where ip=?", (ip,)).fetchone()
-        return bool(row and (row["until"] is None or row["until"] > time.time()))
+        return bool(self.db.execute("select 1 from bans where ip in (?,?) and (until is null or until>?)",  # a 1.0 ban: the address
+                                    (ban_key(ip), ip, time.time())).fetchone())
 
     def ban(self, ip: str, hours: int | None, reason: str, by: str) -> None:
         now = int(time.time())
-        self.db.execute("insert or replace into bans values (?,?,?,?,?)",
-                        (ip, now, now + hours * 3600 if hours else None, reason[:200], by))
+        self.db.execute("insert or replace into bans (ip, at, until, reason, by) values (?,?,?,?,?)",
+                        (ban_key(ip), now, now + hours * 3600 if hours else None, reason[:200], by))
 
     def unban(self, ip: str) -> None:
-        self.db.execute("delete from bans where ip=?", (ip,))
+        self.db.execute("delete from bans where ip in (?,?)", (ip, ban_key(ip)))
 
     def bans(self) -> list[sqlite3.Row]:
         return self.db.execute("select * from bans where until is null or until>? order by at desc", (time.time(),)).fetchall()
@@ -219,18 +248,21 @@ class Auth:
         if not row or not self.club.is_admin(row["member"]):
             return None
         until = int(time.time()) + minutes * 60 if minutes else None
-        self.db.execute("update sessions set admin_until=?, view_as=null where token_hash=?", (until, _hash(token)))
+        self.db.execute("update sessions set admin_until=?, view_as=null, view_as_acts=null where token_hash=?",
+                        (until, _hash(token)))
         return until
 
-    def view_as(self, token: str | None) -> str | None:
-        """The member an admin is viewing the app as (read-only), only while admin mode is on."""
+    def view_as(self, token: str | None) -> tuple[str | None, bool]:
+        """The member an admin is viewing the app as, only while admin mode is on, and whether they act as them
+        (make changes; the web app allows that on a test server only)."""
         if not self.admin_until(token):
-            return None
-        row = self.db.execute("select view_as from sessions where token_hash=?", (_hash(token),)).fetchone()
-        return row["view_as"] if row else None
+            return None, False
+        row = self.db.execute("select view_as, view_as_acts from sessions where token_hash=?", (_hash(token),)).fetchone()
+        return (row["view_as"], bool(row["view_as_acts"])) if row else (None, False)
 
-    def set_view_as(self, token: str, member: str | None) -> None:
-        self.db.execute("update sessions set view_as=? where token_hash=?", (member, _hash(token)))
+    def set_view_as(self, token: str, member: str | None, acts: bool = False) -> None:
+        self.db.execute("update sessions set view_as=?, view_as_acts=? where token_hash=?",
+                        (member, int(acts and bool(member)), _hash(token)))
 
     def end_session(self, token: str | None) -> None:
         if token:
@@ -256,26 +288,32 @@ class Auth:
         member = self.member_by_email(email)
         if not member:
             log.info("login link requested for an address not on the roster")
-            self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
+            if self.db.execute("select count(*) from events where kind='unknown_email' and ip is ? and at>?",
+                               (ip, int(time.time()) - 3600)).fetchone()[0] < UNKNOWN_LOGGED:  # a script mustn't fill the table
+                self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
             return
         now = int(time.time())
-        recent = self.db.execute("select count(*) from links where member=? and created>?",
-                                 (member, now - 3600)).fetchone()[0]
-        if recent >= EMAILS_PER_HOUR:
+
+        def count(since: int, same_ip: bool) -> int:
+            return self.db.execute("select count(*) from links where member=? and created>?" + (" and ip is ?" if same_ip else ""),
+                                   (member, now - since, *((ip,) if same_ip else ()))).fetchone()[0]
+        if count(REPEAT_SECONDS, True):  # a second click while the email is on its way
+            return
+        if count(3600, True) >= EMAILS_PER_HOUR or count(3600, False) >= LINKS_PER_HOUR_ALL:
             log.warning("login link rate limit hit for %s", member)
             self.event("link_limit", ip, member, agent=agent)
             return
-        url = self.create_link(member, next_url, base_url)
+        url = self.create_link(member, next_url, base_url, ip)
         send_email(self.club.members[member].email, f"Your {branding.name(self.club)} sign-in link", only_to=self.club.email_only_to(), to_self=True,
                    body=f"Hi {self.club.members[member].first},\n\n"
                    f"Use this link to sign in to {branding.name(self.club)}. It works once, for {LINK_MINUTES} minutes:\n\n"
                    f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n73,\n{branding.name(self.club)}")
 
-    def create_link(self, member: str, next_url: str = "/", base_url: str | None = None) -> str:
+    def create_link(self, member: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None) -> str:
         now = int(time.time())
         token = secrets.token_urlsafe(32)
-        self.db.execute("insert into links values (?,?,?,?,0,?)",
-                        (_hash(token), member, now + LINK_MINUTES * 60, _safe_next(next_url), now))
+        self.db.execute("insert into links (token_hash, member, expires, next, used, created, ip) values (?,?,?,?,0,?,?)",
+                        (_hash(token), member, now + LINK_MINUTES * 60, _safe_next(next_url), now, ip))
         return f"{(base_url or self.base_url or '').rstrip('/')}/login/link?t={token}"
 
     def use_link(self, token: str) -> tuple[str, str] | None:
@@ -287,43 +325,70 @@ class Auth:
         self.db.execute("update links set used=1 where token_hash=?", (_hash(token),))
         return row["member"], row["next"] or "/"
 
+    def link_issued(self, token: str) -> bool:
+        """An old or used link (members click those all the time), not a made-up one. `links` is never pruned; if it
+        ever is, keep 90 days."""
+        return bool(self.db.execute("select 1 from links where token_hash=?", (_hash(token),)).fetchone())
+
     # ---------------- email changes ----------------
-    def start_email_change(self, member: str, email: str, base_url: str | None = None) -> str | None:
-        """Email a confirmation link to the new address. Returns an error message, or None if sent."""
-        email = email.strip()
+    def start_email_change(self, member: str, email: str, base_url: str | None = None, by: str | None = None,
+                           later=None) -> str | None:
+        """Email a confirmation link to the new address; nothing changes until it's opened. `by`: a roster keeper
+        changing someone else's, whose old address is told at once. Returns an error message, or None if sent.
+        `later` (BackgroundTasks.add_task): the emails go after the reply, so an address in use (no email) and a new one
+        take the same time."""
+        email, by = email.strip(), by or member
         if not valid_email(email):
             return "That doesn't look like an email address."
-        other = self.member_by_email(email)
-        if other and other != member:
-            return "Another member already uses that address."
         now = int(time.time())
         if self.db.execute("select count(*) from email_changes where member=? and created>?",
                            (member, now - 3600)).fetchone()[0] >= EMAILS_PER_HOUR:
             return "Too many tries; please wait an hour."
         token = secrets.token_urlsafe(32)
-        self.db.execute("insert into email_changes values (?,?,?,?,?)",
-                        (_hash(token), member, email, now + LINK_MINUTES * 60, now))
-        url = f"{(base_url or self.base_url or '').rstrip('/')}/profile/email?t={token}"
-        send_email(email, f"Confirm your new {branding.name(self.club)} email", only_to=self.club.email_only_to(), to_self=True,
-                   body=f"Hi {self.club.members[member].first},\n\nTo use this address for {branding.name(self.club)} and the club "
-                   f"roster, open this link within {LINK_MINUTES} minutes:\n\n{url}\n\n"
-                   f"If you didn't ask for this, ignore this email and nothing changes.\n\n73,\n{branding.name(self.club)}")
+        self.db.execute("insert into email_changes (token_hash, member, email, expires, created, by) values (?,?,?,?,?,?)",
+                        (_hash(token), member, email, now + LINK_MINUTES * 60, now, by))
+        base, app, m = (base_url or self.base_url or "").rstrip("/"), branding.name(self.club), self.club.members[member]
+        other = self.member_by_email(email)
+        later = later or (lambda f, *a, **k: f(*a, **k))
+        if not (other and other != member):  # in use: everything as usual but this mail, so nobody can test an address
+            # no names: the new address may be a stranger's (a typo)
+            later(send_email, email, f"Confirm your new {app} email", only_to=self.club.email_only_to(), to_self=by == member,
+                       body=f"Hello,\n\nSomeone asked to use this address for a {app} account. If that's you, open this "
+                       f"link within {LINK_MINUTES} minutes:\n\n{base}/email/confirm?t={token}\n\n"
+                       f"If you don't know what this is, ignore this email and nothing changes.\n\n73,\n{app}")
+        if by == member:
+            return None
+        who = self.club.name(by)
+        if m.email:
+            later(send_email, m.email, f"Your {app} email is being changed", only_to=self.club.email_only_to(),
+                       body=f"Hi {m.first},\n\n{who} asked to change your email on the club roster from this address to "
+                       f"{email}. It changes only when that address confirms it, and then you're signed out everywhere.\n\n"
+                       f"If that's wrong, tell an officer or reply to this email.\n\n73,\n{app}")
         return None
 
-    def confirm_email_change(self, token: str) -> tuple[str, str] | None:
-        """(member, new email) for a valid link, which is then used up."""
-        row = self.db.execute("select member, email, expires from email_changes where token_hash=?",
+    def email_change(self, token: str) -> tuple[str, str, str] | None:
+        """(member, new email, who asked) for a valid link, not used up: use_email_change once the change is saved, so a
+        check that fails (or a roster that can't be written) doesn't spend it."""
+        row = self.db.execute("select member, email, expires, by from email_changes where token_hash=?",
                               (_hash(token),)).fetchone()
-        self.db.execute("delete from email_changes where token_hash=?", (_hash(token),))
         if not row or row["expires"] < time.time():
             return None
-        return row["member"], row["email"]
+        return row["member"], row["email"], row["by"] or row["member"]
+
+    def use_email_change(self, token: str) -> None:
+        self.db.execute("delete from email_changes where token_hash=?", (_hash(token),))
+
+    def confirm_email_change(self, token: str) -> tuple[str, str, str] | None:
+        """email_change, used up at once."""
+        got = self.email_change(token)
+        self.use_email_change(token)
+        return got
 
     # ---------------- passkeys ----------------
     def _challenge(self, kind: str, challenge: bytes, member: str | None = None) -> str:
         cid = secrets.token_urlsafe(16)
         self.db.execute("delete from challenges where expires<?", (time.time(),))
-        self.db.execute("insert into challenges values (?,?,?,?,?)",
+        self.db.execute("insert into challenges (id, challenge, member, kind, expires) values (?,?,?,?,?)",
                         (cid, challenge, member, kind, int(time.time()) + CHALLENGE_SECONDS))
         return cid
 
@@ -374,13 +439,39 @@ class Auth:
                                                user_verification=UserVerificationRequirement.REQUIRED)
         return self._challenge("step-up", opts.challenge, member), options_to_json(opts)
 
-    def step_up_link(self, member: str) -> str:
-        """For an admin without a passkey here: a one-time code, emailed, that only works for them."""
-        return self._challenge("step-up-email", b"", member)
+    def step_up_link(self, member: str, kind: str = "step-up-email") -> str:
+        """For a member without a passkey here: a one-time code, emailed, that only works for them, and only for what it
+        was sent for (admin mode, or "recover-email" for a recovery step)."""
+        return self._challenge(kind, b"", member)
 
-    def use_step_up_link(self, cid: str, member: str) -> bool:
-        ch = self._take_challenge(cid, "step-up-email")
+    def use_step_up_link(self, cid: str, member: str, kind: str = "step-up-email") -> bool:
+        ch = self._take_challenge(cid, kind)
         return bool(ch and ch["member"] == member)
+
+    def prune(self, days: int = 90) -> int:
+        """The daily job: sign-in links, failed attempts, stale challenges and sign-ins older than `days` go (they hold
+        addresses and devices), but each member's latest sign-in stays (Security's "last signed in"). Expired sessions,
+        address changes and bans go too (they were already refused)."""
+        now = time.time()
+        old = now - days * 86400
+        gone = sum(self.db.execute(f"delete from {t} where {c}<?", (now,)).rowcount
+                   for t, c in (("sessions", "expires"), ("email_changes", "expires"), ("bans", "until")))  # a ban with no end stays
+        gone += sum(self.db.execute(f"delete from {t} where {c}<?", (old,)).rowcount
+                    for t, c in (("links", "created"), ("events", "at"), ("challenges", "expires")))
+        return gone + self.db.execute(
+            "delete from signins where at<? and (member, at) not in (select member, max(at) from signins group by member)",
+            (old,)).rowcount
+
+    def forget_removed(self, keep: set[str]) -> set[str]:
+        """A member not in `keep` (Inactive, a Silent Key, or off the roster): their passkeys, sessions, sign-in links, address changes and sign-in records go
+        (the daily job, inside prefs.locked() so a callsign change isn't taken for leaving). Security events stay their 90 days."""
+        gone: set[str] = set()
+        for t in ("passkeys", "sessions", "links", "challenges", "email_changes", "signins"):
+            ids = {r[0] for r in self.db.execute(f"select distinct member from {t} where member is not null")} - keep
+            for mid in ids:
+                self.db.execute(f"delete from {t} where member=?", (mid,))
+            gone |= ids
+        return gone
 
     def authenticate(self, cid: str | None, credential: dict, kind: str = "login", member: str | None = None) -> str:
         ch = self._take_challenge(cid, kind)
@@ -394,7 +485,8 @@ class Auth:
         v = verify_authentication_response(credential=credential, expected_challenge=ch["challenge"],
                                            expected_rp_id=self.rp_id, expected_origin=self.origins,
                                            credential_public_key=row["public_key"],
-                                           credential_current_sign_count=row["sign_count"])
+                                           credential_current_sign_count=row["sign_count"],
+                                           require_user_verification=kind == "step-up")  # admin mode: a PIN or biometric, not just a tap
         self.db.execute("update passkeys set sign_count=?, last_used=? where id=?",
                         (v.new_sign_count, int(time.time()), row["id"]))
         return row["member"]
@@ -430,21 +522,91 @@ def _preview_outbox(recipients, subject, body, attachments, only_to, reply_to) -
 
 
 EMAIL_LOG_KEEP = 1000  # entries kept in email-log.jsonl
+EMAIL_LOG_DAYS = 90  # and none older
+
+
+def hide_tokens(text: str) -> str:
+    """A sign-in, email-confirm or admin-mode link with its one-time token blanked (`t=[hidden]`), for the copies an
+    admin or the server's log can read: the email itself still carries the working link."""
+    return re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text)
+
+
+def _logged_at(line: str) -> float:
+    try:
+        return json.loads(line).get("at", 0)
+    except (ValueError, AttributeError):
+        return 0  # a torn line: dropped at the next prune
+
+
+@contextlib.contextmanager
+def _log_locked():
+    """Held around every change to email-log.jsonl (an append, a prune, a member's lines removed), by the web app and
+    the daily job alike: they're separate processes, and a line appended during a rewrite would be lost."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "email-log.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def _email_log(entry: dict) -> None:
-    """Live site: every email the app sends or holds back (test mode), for admins' Email log page."""
+    """Live site: every email the app sends or holds back (test mode), for admins' Email log page. Links' tokens are
+    hidden: an admin opening the log within 15 minutes could otherwise sign in as the member."""
     p = DATA / "email-log.jsonl"
+    entry = {**entry, "body": hide_tokens(entry.get("body") or "")}
     try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a") as f:
-            f.write(json.dumps({"at": int(time.time()), **entry}) + "\n")
-        p.chmod(0o600)
-        lines = p.read_text().splitlines()
-        if len(lines) > EMAIL_LOG_KEEP * 1.5:
-            p.write_text("\n".join(lines[-EMAIL_LOG_KEEP:]) + "\n")
-    except OSError:
+        with _log_locked():
+            with p.open("a") as f:
+                f.write(json.dumps({"at": int(time.time()), **entry}) + "\n")
+            p.chmod(0o600)
+        prune_email_log()
+    except (OSError, ValueError):  # ValueError: a damaged log (not text); an email must still go
         log.exception("couldn't write the email log")
+
+
+def _rewrite_email_log(p: Path, lines: list[str]) -> None:
+    tmp = p.with_name(f"email-log.{os.getpid()}.tmp")
+    tmp.write_text("".join(line + "\n" for line in lines))
+    tmp.chmod(0o600)
+    tmp.replace(p)
+
+
+def prune_email_log() -> None:
+    """The Email log's last EMAIL_LOG_KEEP entries, none older than EMAIL_LOG_DAYS: after each email, and daily (a quiet
+    site sends none)."""
+    p = DATA / "email-log.jsonl"
+    with _log_locked():
+        if not p.exists():
+            return
+        lines, cutoff = p.read_text().splitlines(), time.time() - EMAIL_LOG_DAYS * 86400
+        if lines and (len(lines) > EMAIL_LOG_KEEP * 1.5 or _logged_at(lines[0]) < cutoff):
+            _rewrite_email_log(p, [line for line in lines[-EMAIL_LOG_KEEP:] if _logged_at(line) >= cutoff])
+
+
+def forget_email_log(addresses: set[str]) -> None:
+    """A member who left: their address out of the Email log. An email to them alone goes whole; one to many (the
+    minutes) stays, less their address."""
+    p = DATA / "email-log.jsonl"
+    with _log_locked():
+        if not addresses or not p.exists():
+            return
+        out = []
+        for line in p.read_text().splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue  # torn: dropped, as the prune does
+            if not isinstance(e, dict):
+                continue
+            rest = {k: [a for a in e.get(k) or [] if a.strip().lower() not in addresses] for k in ("to", "withheld")}
+            if (e.get("to") or e.get("withheld")) and not (rest["to"] or rest["withheld"]):
+                continue
+            if e.get("reply_to"):  # one address, or a list (the minutes: recorder and leader)
+                e["reply_to"] = ", ".join(x.strip() for x in e["reply_to"].split(",") if x.strip().lower() not in addresses) or None
+            out.append(json.dumps({**e, **rest}))
+        _rewrite_email_log(p, out)
 
 
 def email_ready() -> bool:
@@ -468,7 +630,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
         return _preview_outbox(recipients, subject, body, attachments, only_to, reply_to)
     withheld = []
     if STAGE:
-        allowed = recipients if to_self else [ACTOR.get()] if ACTOR.get() else []
+        allowed = recipients if to_self and not ACTING.get() else [ACTOR.get()] if ACTOR.get() else []
         withheld = [r for r in recipients if r not in allowed]
         recipients, subject = allowed, "[STAGE] " + subject
         body = "(From the STAGING server: a test copy of the app, not the live one.)\n\n" + body
@@ -487,8 +649,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
     user = os.environ.get("CLUB_MINUTES_SMTP_USER")
     password = (os.environ.get("CLUB_MINUTES_SMTP_PASSWORD") or "").replace(" ", "")  # Google shows app passwords in groups
     if not (user and password):
-        log.warning("SMTP not configured; email to %s not sent: %s | %s", one_line(", ".join(recipients)), one_line(subject),
-                    one_line(body)[:2000])
+        log.warning("SMTP not configured; email to %s not sent: %s", one_line(", ".join(recipients)), one_line(subject))
         _email_log({**entry, "status": "not sent (no SMTP settings)"})
         return 0
     try:

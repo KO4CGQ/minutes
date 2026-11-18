@@ -35,8 +35,15 @@ def _roles_file(data: Path) -> None:
     tmp.replace(out)
 
 
+def _v3(data: Path) -> None:
+    """3 (1.1.0): nothing to reshape, but 1.1 writes what 1.0 misreads (sign-in columns 1.0's inserts don't expect,
+    suspended admins it would ignore, custom roles its Roles save would drop, minutes versions). Marking it makes the
+    update keep the copy from before, which a failed update puts back, and 1.0 refuses this data instead."""
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
+    (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"
