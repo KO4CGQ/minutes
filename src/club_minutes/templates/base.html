@@ -29,7 +29,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
     'business': ('/business' ~ ('?tab=done' if q.get('tab') == 'done' else ''), 'Business'), 'home': ('/', 'Home'),
     'roster': ('/roster', 'Roster'), 'minutes': ('/minutes', 'Minutes'), 'search': ('/search?q=' ~ (q.get('q', '')|urlencode), 'Search')}.get(q.get('from')) %}
 {%- if came and item %}{% set came = (came[0] ~ '#i' ~ item, came[1]) %}{% endif %}{% if came or href %}{{ crumb(*(came or (href, label))) }}{% endif %}{% endmacro %}
-{% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
+{% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href ~ '/')) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
 <nav class="top">
   {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
   <a class="brand" href="/"><img src="{{ brand() }}" alt="" class="{{ logo_class() }}"><span>{{ app_name() }}</span></a>

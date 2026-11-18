@@ -1,6 +1,7 @@
 """Jitsi Meet sign-in (meet.py): off unless club.yaml turns it on; a short-lived HS256 token saying who joins and
 whether they host (the meet_host permission), for signed-in members only."""
 import base64
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from club_minutes import club as clubmod
 from club_minutes import meet, web
 from club_minutes.auth import Auth
 from club_minutes.club import Club
+from club_minutes.meeting import Meeting
+from club_minutes.store import Archive
 
 FIX = Path(__file__).parent / "fixtures"
 ROSTER = [{"id": "pres", "first": "Jane", "last": "Doe", "role": "President"}, {"id": "n0call", "first": "John", "last": "Doe"}]
@@ -287,3 +290,13 @@ def test_guests_told_members_only_and_own_rooms_expire_when_unused(env):
     c.yaml["jitsi"]["adhoc"] = {"on": True, "guests": True}  # an own room that lets guests in: the guest page while it lasts
     as_("n0call").post("/meet", data={"name": "Net night"})
     assert 'href="https://meet.example.org/net-night"' in as_(None).get("/meet/net-night").text
+
+
+def test_menu_marks_video_meeting_only_on_its_own_pages(env, tmp_path, monkeypatch):
+    """/meetings/… starts with /meet too: the menu marks Minutes there, not Video meeting."""
+    c, as_ = env
+    Meeting(date=dt.date(2026, 10, 15), status="published", sections={}).save(tmp_path / "m")
+    monkeypatch.setattr(web, "archive", Archive(tmp_path / "m", c))
+    assert '<a href="/meet" class="on" aria-current="page">' in as_("n0call").get("/meet").text
+    page = as_("n0call").get("/meetings/2026-10-15").text
+    assert '<a href="/meet" class="">' in page and '<a href="/minutes" class="on">' in page
