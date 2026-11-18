@@ -27,7 +27,9 @@ jobs:
       - name: Known vulnerabilities in the locked packages
         run: |
           uv export --frozen --no-emit-project -o requirements.txt
-          uvx pip-audit -r requirements.txt --disable-pip --strict --progress-spinner off
+          # PyPI times out now and then when many runs ask at once: a longer wait, and one more try
+          audit() { uvx pip-audit -r requirements.txt --disable-pip --strict --progress-spinner off --timeout 60; }
+          audit || { sleep 30; audit; }
   secrets:
     runs-on: ubuntu-latest
     steps:

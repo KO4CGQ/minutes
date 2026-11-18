@@ -1,0 +1,127 @@
+# Dependabot's pull requests: a safe one merges itself once the required checks pass, and a security fix in an app
+# package (high or critical) becomes the patch release in the same PR once the fixed version is 48 hours old: until
+# then it's labelled security-hold, the maintainer is told (a comment, and a review request to the SECURITY_CONTACT
+# variable), and every 6 hours its run is re-run; a `release-now` label releases it at once (dev/dependabot.py
+# decides; developers.md). The App's secrets are needed as Dependabot secrets and as Actions secrets (a label added
+# by a person starts the run as them, and such a run sees only the Actions ones).
+# Needs the repository's GitHub App (AUTOMERGE_APP_ID and AUTOMERGE_APP_KEY, as Dependabot secrets): a PR changed or
+# merged with the built-in token wouldn't start the required checks. Without them this does nothing.
+name: Dependabot
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: "23 */6 * * *"
+permissions: {}
+jobs:
+  auto:
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.repository == 'KO4CGQ/minutes' && (github.event.action != 'labeled' || github.event.label.name == 'release-now')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      HAS_APP: ${{ secrets.AUTOMERGE_APP_ID != '' }}
+    steps:
+      - name: The App's token
+        id: app
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        with:
+          app-id: ${{ secrets.AUTOMERGE_APP_ID }}
+          private-key: ${{ secrets.AUTOMERGE_APP_KEY }}
+          permission-contents: write  # push the release commit, and merge
+          permission-pull-requests: write
+          permission-vulnerability-alerts: read  # Dependabot alerts: the advisory ids
+      - name: What Dependabot updates, and whether it's a security fix
+        id: meta
+        if: env.HAS_APP == 'true'
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98  # v3.1.0
+        with:
+          github-token: ${{ steps.app.outputs.token }}
+          alert-lookup: true  # the advisory ids (ghsa-id), which the App's Dependabot alerts permission can read
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        if: env.HAS_APP == 'true'
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0  # the base, and the last release's tag
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        if: env.HAS_APP == 'true'
+      - name: Decide
+        id: decide
+        if: env.HAS_APP == 'true'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+          GHSA: ${{ steps.meta.outputs.ghsa-id }}
+          CVSS: ${{ steps.meta.outputs.cvss }}
+          UPDATED: ${{ steps.meta.outputs.updated-dependencies-json }}
+          RELEASE_NOW: ${{ contains(github.event.pull_request.labels.*.name, 'release-now') && '1' || '' }}
+        run: python3 dev/dependabot.py decide
+      - name: Held (the fixed version is under 48 hours old), and the maintainer told once
+        if: steps.decide.outputs.verdict == 'hold'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+          GHSA: ${{ steps.meta.outputs.ghsa-id }}
+          CVSS: ${{ steps.meta.outputs.cvss }}
+          CONTACT: ${{ vars.SECURITY_CONTACT }}
+        run: |
+          gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx security-hold && exit 0  # told already
+          gh label create security-hold --repo "$GITHUB_REPOSITORY" --force --color d93f0b \
+            --description "A security fix waiting for its version to be 48 hours old (workflows/dependabot.yml)"
+          gh label create release-now --repo "$GITHUB_REPOSITORY" --force --color b60205 \
+            --description "Release this held security fix at once (workflows/dependabot.yml)"
+          gh pr edit "$PR" --add-label security-hold
+          gh pr comment "$PR" --body "A high or critical security fix ($GHSA, CVSS $CVSS) in one of the app's packages. \
+          It releases itself once the fixed version has been out 48 hours (checked every 6 hours), in case the new \
+          version is itself bad. For a confirmed serious issue, add the **release-now** label to release it at once."
+          if [ -n "$CONTACT" ]; then gh pr edit "$PR" --add-reviewer "$CONTACT" || true; fi
+      - name: The patch release, in this PR
+        if: steps.decide.outputs.verdict == 'release'
+        env:
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+          GHSA: ${{ steps.meta.outputs.ghsa-id }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          version=$(python3 dev/dependabot.py release)
+          git config user.name "$SLUG[bot]"
+          git config user.email "$SLUG[bot]@users.noreply.github.com"
+          git commit -qam "Release $version: $DEPS updated (security)"
+          gh auth setup-git  # pushes as the App, so the required checks run on the new commit
+          git push -q origin "HEAD:refs/heads/$BRANCH"
+      - name: No longer held
+        if: steps.meta.outputs.ghsa-id != '' && steps.decide.outputs.verdict != '' && steps.decide.outputs.verdict != 'hold'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: gh pr edit "$PR" --remove-label security-hold || true  # not there: nothing to do
+      - name: Merge once the required checks pass
+        if: steps.decide.outputs.verdict == 'merge' || steps.decide.outputs.verdict == 'release'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR"
+  recheck:
+    # a held security fix: re-run its last Dependabot run (the same pull request, so the same checks), which releases
+    # it once the fixed version is 48 hours old; the label goes when the decision changes
+    if: github.event_name == 'schedule' && github.repository == 'KO4CGQ/minutes'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for sha in $(gh pr list --repo "$GITHUB_REPOSITORY" --label security-hold --state open --json headRefOid --jq '.[].headRefOid'); do
+            run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow dependabot.yml --commit "$sha" --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId')
+            [ -n "$run" ] && gh run rerun "$run" --repo "$GITHUB_REPOSITORY"
+          done
+

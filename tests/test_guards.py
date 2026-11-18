@@ -28,6 +28,16 @@ def test_screenshots_are_up_to_date():
     assert listed == {p.stem for p in SHOTS.glob("*.png")}, "a picture isn't in demo/screenshots.py, or one is missing"
 
 
+def test_manifest_keeps_pictures_not_retaken(tmp_path, monkeypatch):
+    """screenshots.py retakes only what's out of date: the pictures it skips stay in the manifest, still up to date."""
+    import json
+    monkeypatch.setattr(manifest, "MANIFEST", tmp_path / "manifest.json")
+    manifest.write({"home": {"home.html"}}, {"chow": ["templates/chow.html"]})
+    m = json.loads(manifest.MANIFEST.read_text())
+    assert set(m["shots"]) == {"home", "chow"} and "templates/chow.html" in m["files"] and "templates/base.html" in m["files"]
+    assert manifest.stale() == {}
+
+
 def test_every_screenshot_is_used():
     text = "\n".join(p.read_text() for p in DOCS)
     assert not [p.name for p in SHOTS.glob("*.png") if p.name not in text], "a screenshot no guide or the README shows"
@@ -177,3 +187,10 @@ def test_new_tab_links_have_one_arrow():
              for m in re.finditer(r"<a\b([^>]*)>(.*?)</a>", t.read_text(), re.DOTALL)
              if 'target="_blank"' in m.group(1) and "class=" not in m.group(1) and "↗" in m.group(2)]
     assert not twice, twice
+
+
+def test_changelog_sub_bullets_indent_by_four():
+    """The About page's Markdown (Python-Markdown) shows a 2-space sub-bullet as a flat line; GitHub nests either."""
+    bad = [line for line in (ROOT / "CHANGELOG.md").read_text().splitlines()
+           if re.match(r" +[-*] ", line) and (len(line) - len(line.lstrip())) % 4]
+    assert not bad, f"indent sub-bullets by 4 spaces: {bad[:3]}"
