@@ -39,6 +39,7 @@ from . import branding
 from .club import DATA, PREVIEW, STAGE, Club, one_line, valid_email
 
 ACTOR = contextvars.ContextVar("actor", default=None)  # the signed-in person's email, for stage mode (set per request)
+ACTING = contextvars.ContextVar("acting", default=False)  # an admin acting as a member: no email to anyone else
 
 log = logging.getLogger("club_minutes.auth")
 
@@ -137,6 +138,8 @@ class Auth:
             self.db.execute("alter table sessions add column admin_until integer")
         if "view_as" not in session_cols:
             self.db.execute("alter table sessions add column view_as text")
+        if "view_as_acts" not in session_cols:  # 1.1: acting as the member (test servers only)
+            self.db.execute("alter table sessions add column view_as_acts integer")
         for col in ("ip", "method"):
             if col not in session_cols:
                 self.db.execute(f"alter table sessions add column {col} text")
@@ -245,18 +248,21 @@ class Auth:
         if not row or not self.club.is_admin(row["member"]):
             return None
         until = int(time.time()) + minutes * 60 if minutes else None
-        self.db.execute("update sessions set admin_until=?, view_as=null where token_hash=?", (until, _hash(token)))
+        self.db.execute("update sessions set admin_until=?, view_as=null, view_as_acts=null where token_hash=?",
+                        (until, _hash(token)))
         return until
 
-    def view_as(self, token: str | None) -> str | None:
-        """The member an admin is viewing the app as (read-only), only while admin mode is on."""
+    def view_as(self, token: str | None) -> tuple[str | None, bool]:
+        """The member an admin is viewing the app as, only while admin mode is on, and whether they act as them
+        (make changes; the web app allows that on a test server only)."""
         if not self.admin_until(token):
-            return None
-        row = self.db.execute("select view_as from sessions where token_hash=?", (_hash(token),)).fetchone()
-        return row["view_as"] if row else None
+            return None, False
+        row = self.db.execute("select view_as, view_as_acts from sessions where token_hash=?", (_hash(token),)).fetchone()
+        return (row["view_as"], bool(row["view_as_acts"])) if row else (None, False)
 
-    def set_view_as(self, token: str, member: str | None) -> None:
-        self.db.execute("update sessions set view_as=? where token_hash=?", (member, _hash(token)))
+    def set_view_as(self, token: str, member: str | None, acts: bool = False) -> None:
+        self.db.execute("update sessions set view_as=?, view_as_acts=? where token_hash=?",
+                        (member, int(acts and bool(member)), _hash(token)))
 
     def end_session(self, token: str | None) -> None:
         if token:
@@ -624,7 +630,7 @@ def send_email(to: str | list[str], subject: str, body: str, attachments: list[t
         return _preview_outbox(recipients, subject, body, attachments, only_to, reply_to)
     withheld = []
     if STAGE:
-        allowed = recipients if to_self else [ACTOR.get()] if ACTOR.get() else []
+        allowed = recipients if to_self and not ACTING.get() else [ACTOR.get()] if ACTOR.get() else []
         withheld = [r for r in recipients if r not in allowed]
         recipients, subject = allowed, "[STAGE] " + subject
         body = "(From the STAGING server: a test copy of the app, not the live one.)\n\n" + body

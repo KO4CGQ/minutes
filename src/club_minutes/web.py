@@ -234,9 +234,12 @@ async def require_login(request: Request, call_next):
     real = authn.member_for(token)
     request.state.real_member = real
     request.state.admin_until = authn.admin_until(token) if real else None
-    # "View as": an admin in admin mode sees the app exactly as another member does, read-only.
-    va = authn.view_as(token) if request.state.admin_until else None
+    # "View as": an admin in admin mode sees the app exactly as another member does, read-only; on a test server
+    # (stage, a preview) they may act as them instead: make changes as them, each one in the admin log.
+    va, acts = authn.view_as(token) if request.state.admin_until else (None, False)
     request.state.viewing_as = va if va in archive.club.members and va != real else None
+    request.state.acting_as = bool(request.state.viewing_as and acts and test_server())
+    authmod.ACTING.set(request.state.acting_as)
     request.state.member = request.state.viewing_as or real
     authmod.ACTOR.set(getattr(archive.club.members.get(real or ""), "email", None) or None)  # stage: their email only
     path = request.url.path
@@ -250,10 +253,18 @@ async def require_login(request: Request, call_next):
         return HTMLResponse("Not Found", status_code=404)
     if request.state.viewing_as:
         request.state.admin_until = None  # their permissions, not the admin's
-        if path.startswith(("/account", "/profile/email", "/logout", "/auth/")) or (
-                request.method not in ("GET", "HEAD") and not path.startswith("/admin/")):
-            return HTMLResponse("You're viewing the app as another member, which is read-only. "
-                                "Stop viewing as them (banner at the top) to make changes.", status_code=403)
+        # their sign-ins and private calendar feed (prod's, on stage), even when acting
+        if path.startswith(("/account", "/profile/email", "/logout", "/auth/", "/login", "/email/confirm",
+                            "/calendar/subscribe")):
+            return HTMLResponse("Their sign-in, passkeys and email address stay theirs. "
+                                "Stop viewing as them (banner at the top) first.", status_code=403)
+        if request.method not in ("GET", "HEAD") and not path.startswith("/admin/"):
+            if not request.state.acting_as:
+                return HTMLResponse("You're viewing the app as another member, which is read-only. "
+                                    "Stop viewing as them (banner at the top) to make changes.", status_code=403)
+            _admin_log(request, acted_as=request.state.viewing_as, did=f"{request.method} {path}"[:200])
+            _log.info("%s acting as %s: %s %s", one_line(real), one_line(request.state.viewing_as), request.method,
+                      one_line(path))
     if request.state.member or path.startswith(PUBLIC_PATHS):
         return await call_next(request)
     if request.method == "GET" and path.startswith("/meet/") and meet.members_only(archive.club, path[6:].lower()):
@@ -409,6 +420,7 @@ def _page(request: Request, name: str, **ctx) -> HTMLResponse:
         "meeting_at": f"{(archive.club.meeting_weekday + 1) % 7} {archive.club.meeting_time}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
+        "acting_as": getattr(request.state, "acting_as", False),
         **_money_nav(request, mid),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
@@ -1478,17 +1490,28 @@ def admin_updates_cancel(request: Request, mid: str = Depends(real_me)):
     return RedirectResponse("/admin/updates?note=" + quote("Request withdrawn."), status_code=303)
 
 
+def test_server() -> bool:
+    """Stage or a preview: test copies, where an admin may act as a member (their email only ever reaches the admin)."""
+    return bool(STAGE or PREVIEW)
+
+
 @app.post("/admin/view-as")
-def admin_view_as(request: Request, member: str = Form(""), next: str = Form("/"), mid: str = Depends(real_me)):
-    """Start (member=id) or stop (member empty) viewing the app as another member. Admin mode only; logged."""
+def admin_view_as(request: Request, member: str = Form(""), next: str = Form("/"), act: str = Form(""),
+                  mid: str = Depends(real_me)):
+    """Start (member=id) or stop (member empty) viewing the app as another member, and on a test server act=1 to
+    make changes as them. Admin mode only; logged."""
     _admin(mid)
     if not authn.admin_until(_session_token(request)):
         raise HTTPException(403, "Turn on admin mode first.")
     if member and (member not in archive.club.members or member == mid):
         raise HTTPException(404)
-    authn.set_view_as(_session_token(request), member or None)
-    _admin_log(request, view_as=member or None)
-    _log.info("%s %s", one_line(mid), one_line(f"viewing as {member}" if member else "stopped viewing as another member"))
+    if act and not test_server():
+        raise HTTPException(403, "Acting as a member is for a staging server or a preview only.")
+    acts = bool(act and member)
+    authn.set_view_as(_session_token(request), member or None, acts)
+    _admin_log(request, view_as=member or None, **({"acts": True} if acts else {}))
+    _log.info("%s %s", one_line(mid), one_line(f"{'acting' if acts else 'viewing'} as {member}" if member
+                                               else "stopped viewing as another member"))
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -2071,7 +2094,7 @@ def member(request: Request, mid: str):
     contact = [(f, v if v and club.can_see(viewer, mid, f, elevated) else None, href) for f, (v, href) in values.items()]
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
                 contact=contact, is_me=viewer == mid, is_officer=privileged(request), can_moderate=moderates(request),
-                can_view_as=elevated and mid != request.state.real_member,
+                can_view_as=elevated and mid != request.state.real_member, can_act_as=test_server(),
                 can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=archive.club.role_names(mid))
 
 
@@ -2450,7 +2473,11 @@ def admin_action(e: dict) -> str:
     if "on" in e:
         return f"Turned on admin mode until {clock(e['until'])} ({e.get('confirmed_by')})" if e["on"] and e.get("until") else "Turned off admin mode"
     if "view_as" in e:
-        return f"Viewed the site as {name(e['view_as'])}" if e["view_as"] else "Stopped viewing as another member"
+        if not e["view_as"]:
+            return "Stopped viewing as another member"
+        return f"{'Acted' if e.get('acts') else 'Viewed the site'} as {name(e['view_as'])}"
+    if "acted_as" in e:
+        return f"As {name(e['acted_as'])}: {e.get('did', '')}"
     if "ban" in e:
         return f"Banned {e['ban']} " + (f"for {e['hours']} hours" if e.get("hours") else "until lifted")
     words = {"step_up_email": lambda v: "Asked for an admin sign-in email", "update_requested": lambda v: f"Started the update to {v}",
