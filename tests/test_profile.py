@@ -361,6 +361,59 @@ def test_view_as_is_read_only_and_needs_admin_mode(tmp_path, monkeypatch):
     assert [e.get("view_as") for e in log if "view_as" in e] == ["bob", None, "tess"]
 
 
+def test_act_as_makes_changes_as_the_member_on_a_test_server_only(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import prefs, web
+    from club_minutes.auth import Auth
+    from club_minutes.store import Archive
+    club = Club(FIX / "test-club.yaml", roster=[
+        {"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN", "email": "ann@example.org"},
+        {"id": "bob", "first": "Bob", "last": "Member"}])
+    club.admins = {"n0admn"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(prefs, "DATA", tmp_path)
+    monkeypatch.setattr(web, "STAGE", False)
+    monkeypatch.setattr(web, "PREVIEW", None)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("n0admn"))
+    send_email = web.authmod.send_email                # the real one (admin mode's sign-in replaces it)
+    turn_on_admin_mode(c, monkeypatch)
+    assert "Act as Bob" not in c.get("/members/bob").text                       # the live app: view only
+    assert c.post("/admin/view-as", data={"member": "bob", "act": "1"}).status_code == 403
+    monkeypatch.setattr(web, "STAGE", True)
+    assert "Act as Bob" in c.get("/members/bob").text
+    c.post("/admin/view-as", data={"member": "bob", "act": "1"})
+    assert "Acting as <b>Bob Member</b>" in c.get("/links").text
+    assert c.post("/profile/settings", data={"week_start": "monday"}, follow_redirects=False).status_code == 303
+    assert prefs.settings("bob")["week_start"] == "monday" and prefs.settings("n0admn")["week_start"] == "sunday"
+    assert c.get("/account").status_code == 403 and c.post("/logout").status_code == 403   # their sign-ins stay theirs
+    assert c.get("/calendar/subscribe").status_code == 403                      # nor their private feed address
+    logged = []                                     # acting on stage: even a sign-in link reaches only the admin
+    monkeypatch.setattr(web.authmod, "PREVIEW", None)
+    monkeypatch.setattr(web.authmod, "STAGE", True)
+    monkeypatch.setattr(web.authmod, "_email_log", logged.append)
+    monkeypatch.delenv("CLUB_MINUTES_SMTP_USER", raising=False)
+    actor, acting = web.authmod.ACTOR.set("ann@example.org"), web.authmod.ACTING.set(True)
+    try:
+        send_email("bob@example.org", "Your sign-in link", "…", to_self=True)
+    finally:
+        web.authmod.ACTOR.reset(actor)
+        web.authmod.ACTING.reset(acting)
+    assert logged[0]["to"] == ["ann@example.org"] and logged[0]["withheld"] == ["bob@example.org"]
+    monkeypatch.setattr(web, "STAGE", False)                                     # no longer a test server: read-only
+    assert c.post("/profile/settings", data={"week_start": "sunday"}).status_code == 403
+    monkeypatch.setattr(web, "STAGE", True)
+    c.post("/admin/view-as", data={"member": "bob"})                             # plain View as stays read-only on stage
+    assert c.post("/profile/settings", data={"week_start": "sunday"}).status_code == 403
+    log = [json.loads(x) for x in (tmp_path / "admin-log.jsonl").read_text().splitlines()]
+    assert [(e["acted_as"], e["did"]) for e in log if "acted_as" in e] == [("bob", "POST /profile/settings")]
+    assert web.admin_action(next(e for e in log if e.get("acts"))) == "Acted as Bob Member"
+
+
 def test_live_email_log_records_sent_and_held_back(tmp_path, monkeypatch):
     from club_minutes import auth as auth_mod
     monkeypatch.setattr(auth_mod, "PREVIEW", None)

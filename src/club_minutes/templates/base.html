@@ -58,9 +58,9 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
     {% if club.may(me.id, 'treasurer') or admin_until or keeps_fund %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}{% if show_spending %}{{ navlink('/spending', 'Spending') }}{% endif %}{% if video_ready() %}{{ navlink('/meet', 'Video meeting') }}{% endif %}
     {% if show_support %}<a class="kofi" href="https://ko-fi.com/jflattery" aria-label="Support Club Minutes on Ko-fi (opens in a new tab)">{{ icon('si:kofi') }} Support Club Minutes</a>{% endif %}
   </div></div>{% endif %}
-{% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
+{% if viewing_as %}<div class="adminbar viewas">{% if acting_as %}Acting as <b>{{ club.name(viewing_as) }}</b>: changes you make are made as them and logged; emails reach only you.{% else %}Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.{% endif %}
 <form method="post" action="/admin/view-as"><input type="hidden" name="member" value=""><input type="hidden" name="next" value="/members/{{ viewing_as }}"><button type="submit">Stop</button></form></div>{% endif %}
-{% if viewing_as %}<dialog id="readonly" class="modal" aria-labelledby="readonly-title"><form method="dialog" class="x"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form>
+{% if viewing_as and not acting_as %}<dialog id="readonly" class="modal" aria-labelledby="readonly-title"><form method="dialog" class="x"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form>
   <div class="body"><h2 id="readonly-title">Read-only</h2><p>You're viewing the app as {{ club.name(viewing_as) }}, so nothing can be changed. To make changes, press <b>Stop</b> in the banner at the top.</p>
   <form method="dialog"><button class="btn small">OK</button></form></div></dialog>
 <script nonce="{{ csp_nonce }}">  // viewing as someone: a change opens this dialog instead of a page saying no (the server refuses it either way)

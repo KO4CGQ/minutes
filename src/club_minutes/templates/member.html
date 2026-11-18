@@ -8,6 +8,8 @@
 {% if can_edit_roster %}<a class="btn small ghost" href="/members/{{ member.id }}/edit">Edit roster details</a>{% endif %}
 {% if can_view_as %}<form method="post" action="/admin/view-as"><input type="hidden" name="member" value="{{ member.id }}"><input type="hidden" name="next" value="/">
   <button class="btn small ghost" type="submit" title="See the app exactly as {{ member.first }} does, read-only (admin mode)">View the app as {{ member.first }}</button></form>{% endif %}
+{% if can_view_as and can_act_as %}<form method="post" action="/admin/view-as"><input type="hidden" name="member" value="{{ member.id }}"><input type="hidden" name="next" value="/"><input type="hidden" name="act" value="1">
+  <button class="btn small ghost" type="submit" title="Make changes as {{ member.first }} to test them (test servers only; each change is logged, and emails reach only you)">Act as {{ member.first }}</button></form>{% endif %}
 
 {% set shown = contact|selectattr(1)|list %}
 {% if shown or is_me %}<h2>Contact{% if is_me %} <a class="small" href="/profile">edit</a>{% endif %}</h2>
