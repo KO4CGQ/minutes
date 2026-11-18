@@ -2116,7 +2116,8 @@ async def member_edit(request: Request, background: BackgroundTasks, who: str, m
     try:
         if not first or not last or " " in first:
             raise ValueError("First and last name are both needed; put a middle name with the last name.")
-        if f.get("license_class") not in ("", *membership.CLASSES) or status not in (*STATUSES, m.status):
+        # a class typed some other way in the roster ("Extra") may stay as it is
+        if f.get("license_class") not in ("", *membership.CLASSES, m.license_class) or status not in (*STATUSES, m.status):
             raise ValueError("Pick a license class and status from the lists.")
         if new_email and not valid_email(email):
             raise ValueError(f"{email} doesn't look like an email address.")

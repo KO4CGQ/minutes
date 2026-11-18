@@ -15,7 +15,7 @@
   <label>Callsign <input value="{{ member.callsign or '' }}" readonly tabindex="-1" class="cs">
     <span class="hint">Changed on the <a href="/members/{{ member.id }}/edit?tab=callsign">New callsign</a> tab.</span></label>
   <div class="fixedrow">
-    <label>License class <select name="license_class"><option value="">(none)</option>{% for c in classes %}<option {{ 'selected' if member.license_class == c }}>{{ c }}</option>{% endfor %}</select></label>
+    <label>License class <select name="license_class"><option value="">(none)</option>{% if member.license_class and member.license_class not in classes %}<option selected>{{ member.license_class }}</option>{% endif %}{% for c in classes %}<option {{ 'selected' if member.license_class == c }}>{{ c }}</option>{% endfor %}</select></label>
     <label>Status <select name="status"{{ ' disabled' if no_status }}>{% for s in statuses %}<option {{ 'selected' if member.status == s }}>{{ s }}</option>{% endfor %}</select>{% if no_status %}<span class="hint">{{ no_status }}</span>{% endif %}</label>
   </div>
   <label>Email <input type="email" name="email" value="{{ member.email or '' }}"{{ ' disabled' if no_email }}><span class="hint">{{ no_email or member.first ~ " signs in with this address too. A new one changes only when " ~ member.first ~ " opens the link sent to it; the old address is told at once, and the change signs them out everywhere." }}</span></label>

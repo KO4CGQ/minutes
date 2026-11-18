@@ -78,6 +78,12 @@ def test_keeper_edits_and_undo(env):
     profile.undo(club, profile.history()[2]["id"], "n0aaaa")  # and the details change before it
     assert (b.name, b.role, b.aliases) == ("Bob Bloggs", None, ["Bobby"])
     assert "Pick%20a%20license%20class" in str(c.post("/members/n0bbbb/edit", data=form(status="Retired"), follow_redirects=False).headers["location"])
+    # a class the roster has in another spelling ("Extra") shows as it is and survives a save of other details
+    b.license_class = "Extra"
+    assert "<option selected>Extra</option>" in c.get("/members/n0bbbb/edit").text
+    c.post("/members/n0bbbb/edit", data=form(license_class="Extra", phone="555-0123"))
+    assert b.license_class == "Extra" and sheet_row(tmp, "N0BBBB")["Class"] != ""  # unchanged: never emptied
+    assert "Pick%20a%20license%20class" in str(c.post("/members/n0bbbb/edit", data=form(license_class="Novice"), follow_redirects=False).headers["location"])
     assert "isn't" not in c.get("/members/n0bbbb/edit").text and "Edit roster details" in c.get("/members/n0bbbb").text
 
 

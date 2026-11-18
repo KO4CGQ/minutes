@@ -17,7 +17,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
     - If the minutes email (or a correction's) doesn't go out, leaders and editors can send it again from the minutes page, and it's tried again overnight.
     - A member made Inactive or a Silent Key loses their saved choices, passkeys and sign-in records that night; everyone's old sign-in records and the Email log go after 90 days. The members guide says what's kept and who sees it.
     - Admin → Site marks the fields you change, has Discard changes beside Save, and asks before you leave a tab with changes not yet saved.
-- **Fixed:** a member changing their own email never got the new one; a picture in Help opened full size sits in the middle of the screen, with its ✕ at its corner.
+- **Fixed:** a member changing their own email never got the new one; a license class the roster spells its own way ("Extra") showed as none when editing that member, and saving their details cleared it; a picture in Help opened full size sits in the middle of the screen, with its ✕ at its corner.
 - **Security:** fixes from a security review, including ways a member could see or change more than their role allows. Update soon.
 - **Removed:** restoring backups made before 1.0.0 (a 0.x install restores them).
 - **For server admins:** 1.1.0 upgrades the data, so going back to 1.0.x means restoring the copy the update keeps (a failed update does this by itself). `club-minutes rename-id` finishes a callsign change that stopped partway (server admin guide). The first night after updating, members already Inactive or a Silent Key lose their passkeys and sign-ins.
