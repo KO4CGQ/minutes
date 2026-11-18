@@ -10,7 +10,7 @@ A web app for running an amateur radio club's meetings and records. Whoever take
 |---|---|---|
 | ![Open business items with owners and due dates](docs/screenshots/business.png) | ![Home on a phone](docs/screenshots/home-phone.png) | ![The minutes on a phone in dark mode](docs/screenshots/minutes-phone.png) |
 
-The screenshots are of a made-up club (`demo/`); `uv run python demo/screenshots.py` takes them again.
+The screenshots are of a made-up club (`demo/`); `uv run python demo/screenshots.py` takes again the ones that are out of date (`--all` for every one).
 
 ## What it does
 Every change is listed in [CHANGELOG.md](CHANGELOG.md).

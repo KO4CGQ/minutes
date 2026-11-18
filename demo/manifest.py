@@ -35,9 +35,10 @@ def sha(path: str) -> str:
     return hashlib.sha256((APP / path).read_bytes()).hexdigest()
 
 
-def write(shots: dict[str, set[str]]) -> None:
-    """shots: picture name -> the templates its page rendered."""
-    each = {name: files_for(t) for name, t in sorted(shots.items())}
+def write(shots: dict[str, set[str]], kept: dict[str, list[str]] | None = None) -> None:
+    """shots: picture name -> the templates its page rendered. kept: the pictures not taken again this time, with
+    their files from the manifest (none of them changed, or the picture would have been retaken)."""
+    each = dict(sorted(({**(kept or {}), **{name: files_for(t) for name, t in shots.items()}}).items()))
     files = sorted({f for fs in each.values() for f in fs})
     MANIFEST.write_text(json.dumps({"shots": each, "files": {f: sha(f) for f in files}}, indent=1) + "\n")
 
