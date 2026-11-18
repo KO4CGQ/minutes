@@ -226,7 +226,7 @@ a[target="_blank"]:not([class])::after { content: "\00a0↗"; content: "\00a0↗
 .callout.warning, .callout.important { background: var(--warn-soft); color: var(--warn-text); border-left-color: var(--warn-edge); }
 .callout.caution { background: var(--danger-soft); color: var(--danger-text); border-left-color: var(--danger); }
 .callout.warning a, .callout.important a, .callout.caution a, .callout.warning code, .callout.caution code { color: inherit; }
-form.profile { max-width: 36rem; } form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
+form.profile { max-width: 36rem; } main form.profile[action^="/admin/"] { max-width: none; }  /* Admin pages: the page's width, as Security and Updates */ form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
 form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }
 form.profile input[type=checkbox] { display: inline-block; margin: 0 .3rem 0 0; }
@@ -623,7 +623,7 @@ form.colours input[type=color] { width: 3rem; height: 2rem; padding: 0; border: 
 .tp-muted { color: var(--muted); font-size: .85rem; }
 
 /* Admin → Site: each section a card; collapsible ones open from their heading */
-.sitesec { margin: 0 0 1rem; max-width: 52rem; } fieldset.sitesec { min-width: 0; } /* "Your own formats" only while it's ticked (CSS :has; an older browser just always shows it) */
+.sitesec { margin: 0 0 1rem; } fieldset.sitesec { min-width: 0; } /* "Your own formats" only while it's ticked (CSS :has; an older browser just always shows it) */
 .sitedates:has(input[name=preset]:not([value=custom]):checked) [data-own] { display: none; } .sitesec h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
 details.sitesec > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .5rem; }
 details.sitesec > summary::-webkit-details-marker { display: none; }
@@ -635,7 +635,7 @@ form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items:
 .sitesec label.check.small input { margin-top: 0; }
 main input.changed, main select.changed, main textarea.changed { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }  /* Site: changed, not saved yet */
 main label.changed { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: var(--radius-sm); }  /* small text: the .25rem above would drop the box below its line */
-form.sitevideo { max-width: 52rem; } .sitevideo .pair { display: flex; flex-wrap: wrap; column-gap: .8rem; margin-bottom: .5rem; }  /* Site → Video: name and address side by side */
+.sitevideo .pair { display: flex; flex-wrap: wrap; column-gap: .8rem; margin-bottom: .5rem; }  /* Site → Video: name and address side by side */
 .sitevideo .pair label { flex: 1 1 12rem; } .sitevideo .pair input { width: 100%; } .sitevideo label:has(> select) { display: block; margin: .5rem 0; }
 .sitevideo label.check:has(> input[name^="guests"]:not(:checked)) + fieldset { display: none; }  /* members only: no guest rules to set */
 .sitevideo .guestgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); column-gap: 1rem; }
@@ -644,7 +644,7 @@ label.check > input { flex: none; }  /* anywhere: a wrapped label mustn't squeez
 @media (max-width: 560px) { .fmtgrid { grid-template-columns: 1fr; } .fmtgrid span { margin-bottom: .4rem; } }
 .agendagrid { display: grid; grid-template-columns: auto 3.5rem minmax(10rem, 16rem) 1fr; gap: .45rem .7rem; align-items: center; }
 .agendagrid input[name^=pos] { width: 3.2rem; text-align: center; }
-.officegrid { display: grid; grid-template-columns: minmax(0, 18rem) auto 4.2rem; gap: .45rem 1rem; align-items: center; justify-items: start; }
+.officegrid { display: grid; grid-template-columns: minmax(0, 18rem) auto 4.2rem; gap: .45rem 1rem; align-items: center; justify-items: start; justify-content: start; }
 .officegrid input[name^=title] { width: 100%; min-width: 0; box-sizing: border-box; }
 .rolelist { display: grid; gap: .6rem; }
 .rolelist details.role { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: .5rem .9rem; }
@@ -656,8 +656,8 @@ label.check > input { flex: none; }  /* anywhere: a wrapped label mustn't squeez
 @media (max-width: 560px) { .officegrid { gap: .45rem .6rem; } .officegrid .agh { font-size: .7rem; line-height: 1.2; } }
 @media (max-width: 560px) { .agendagrid { grid-template-columns: auto 3.2rem minmax(0, 1fr); } .agendagrid .agh { display: none; }
   .agendagrid input[name^=hint] { grid-column: 2 / -1; margin-bottom: .6rem; } }
-form.siteagenda { max-width: 52rem; } form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }
-form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-sizing: content; min-height: 4lh; }  /* grows with its text where the browser can */
+form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }
+form.sitewide textarea { width: 100%; field-sizing: content; min-height: 4lh; }  /* grows with its text where the browser can */
 /* the certificate's fields only while it's ticked (CSS :has; an older browser just always shows them) */
 .sitecert:has(input[name=cert_on]:not(:checked)) .certfields { display: none; }
 /* Features → the club's own holidays: a row each; "+ Add a holiday" shows the next empty row (CSS only: a checkbox per row) */
