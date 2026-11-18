@@ -853,17 +853,18 @@ def chow_email(request: Request, mid: str = Depends(chow_leader)):
 
 @app.get("/chow", response_class=HTMLResponse, dependencies=[CHOW])
 @app.get("/chow/{tab}", response_class=HTMLResponse, dependencies=[CHOW])
-def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str = Depends(me)):
+def chow_page(request: Request, tab: str = "schedule", error: str = "", p: str = Query("1", alias="page"),
+              mid: str = Depends(me)):
     s, club = chow.load(), archive.club
     leader = can_edit_chow(request)
     if tab not in ("schedule", "rotation", "history") or (tab != "schedule" and not leader):
         raise HTTPException(404)
     members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
                      key=lambda m: (m.last, m.first))
-    today = dt.date.today()
+    today, ahead = dt.date.today(), chow.upcoming(s, n=len(s["nights"]))
     return page(request, "chow.html", s=s, error=error, leader=leader, tab=tab, members=members,
-                upcoming=chow.upcoming(s, n=16), past=chow.past(s, n=16) if leader else [],
-                mine=[d for d, x in chow.upcoming(s, n=60) if x.get("member") == mid and x.get("status") != "none"],
+                upcoming=ahead, pg=paginate(ahead, p, "", 16), past=chow.past(s, n=16) if leader else [],
+                mine=[d for d, x in ahead if x.get("member") == mid and x.get("status") != "none"],
                 asked=[r for r in s["swaps"] if r["status"] == "pending" and mid in (r["with"], r["requester"])],
                 next_up=chow.next_up(club, s), today=today.isoformat(),
                 default_until=(today + dt.timedelta(days=180)).isoformat(),

@@ -329,3 +329,20 @@ def test_not_provided_says_the_clubs_real_fee_and_section(env, monkeypatch):
     assert console._missed_note(club, THU) == "$12.50 is added to their dues (bylaws VII.F)."
     club.bylaws = {"refs": {"missed_chow": "x" * 99}}
     assert club.cite("missed_chow") == f" (bylaws {'x' * 20})" and club.cite("nothing") == ""  # kept short; unset: nothing
+
+
+def test_the_schedule_pages_through_every_upcoming_night(env, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    club, s, _ = env
+    days = [(dt.date(2099, 1, 1) + dt.timedelta(weeks=i)).isoformat() for i in range(18)]
+    s["nights"] = {d: {"member": "bob", "status": "scheduled"} for d in days}
+    s["nights"][days[17]]["member"] = "amy"  # Amy's only night is on page 2
+    chow.save(s)
+    monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "amy")
+    c = TestClient(web.app)
+    first, second = c.get("/chow").text, c.get("/chow?page=2").text
+    assert "Page 1 of 2" in first and "/members/amy?from=chow" not in first and "Ask to swap" in first
+    assert "/members/amy?from=chow" in second and "Page 2 of 2" in second

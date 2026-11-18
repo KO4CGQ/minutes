@@ -32,7 +32,7 @@ Minutes can be corrected after the meeting. A corrected meeting's footer says wh
 ![A meeting's minutes](screenshots/minutes.png)
 
 ## 🍲 Chow
-**Chow** shows the schedule and your nights. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
+**Chow** shows the schedule and your nights, 16 to a page. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
 
 ## 📌 Business
 **Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting) and the leader reads it out.
