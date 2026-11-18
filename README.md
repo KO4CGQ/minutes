@@ -10,7 +10,7 @@ A web app for running an amateur radio club's meetings and records. Whoever take
 |---|---|---|
 | ![Open business items with owners and due dates](docs/screenshots/business.png) | ![Home on a phone](docs/screenshots/home-phone.png) | ![The minutes on a phone in dark mode](docs/screenshots/minutes-phone.png) |
 
-The screenshots are of a made-up club (`demo/`); `uv run python demo/screenshots.py` takes them again.
+The screenshots are of a made-up club (`demo/`); `uv run python demo/screenshots.py` takes again the ones that are out of date (`--all` for every one).
 
 ## What it does
 Every change is listed in [CHANGELOG.md](CHANGELOG.md).
@@ -41,6 +41,10 @@ The [server admin guide](docs/server-admin.md#getting-started-a-new-club) walks 
 - [Server admin guide](docs/server-admin.md) (a new club starts at Getting started): deploy, config, sign-in and email, admin mode, backups, hardening.
 - [Developer guide](docs/developers.md): running it locally, previews, releases, security checks.
 - [Security](SECURITY.md): reporting a vulnerability privately, and what's checked on every change.
+
+## Support it
+
+Club Minutes is free for every club. If it helps yours, you can chip in toward its servers and new features: [GitHub Sponsors](https://github.com/sponsors/jflattery) or [Ko-fi](https://ko-fi.com/jflattery).
 
 ## License
 Copyright © 2026 James Flattery, KO4CGQ.

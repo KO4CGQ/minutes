@@ -23,6 +23,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Security:** fixes from a security review, including ways a member could see or change more than their role allows. Update soon.
 - **Removed:** restoring backups made before 1.0.0 (a 0.x install restores them).
 - **For server admins:** 1.1.0 upgrades the data, so going back to 1.0.x means restoring the copy the update keeps (a failed update does this by itself). `club-minutes rename-id` finishes a callsign change that stopped partway (server admin guide). The first night after updating, members already Inactive or a Silent Key lose their passkeys and sign-ins.
+- Development only: Dependabot waits 7 days after a release for ordinary updates; its safe pull requests (only `uv.lock` or pinned Actions from trusted publishers, patch or minor, development tools only) merge themselves once the required checks pass, and a high or critical security fix in an app package becomes a patch release in the same pull request once the fixed version has been out 48 hours (a poisoned "fix" is usually pulled by then; meanwhile the maintainer is told, and a `release-now` label releases it at once) (`dev/dependabot.py`, `.github/workflows/dependabot.yml`). Other updates wait for review; ordinary app-package updates go with the next release.
 
 ## 1.0.1 (2026-11-15)
 - **Security:** fixes a way a roster keeper could gain another member's access, an admin's included. Update soon.

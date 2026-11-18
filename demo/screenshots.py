@@ -1,11 +1,14 @@
 """The README's and the guides' screenshots, from the demo club: `uv run python demo/screenshots.py` (writes
-docs/screenshots/*.png).
+docs/screenshots/*.png). It retakes only the pictures that are out of date (a template, CSS or script they show has
+changed), new or missing: the demo club is built around today, so a retaken picture shows today's date. `--all`
+retakes every picture; names (`home chow`) retake just those.
 
 Builds the demo club in a temporary folder (demo/build.py), then serves the app to a real browser straight from
 the test client, as the browser tests do: no server, and never a club's data. Signed in as the demo President.
 The demo runs in preview mode (its email goes nowhere); its PREVIEW banner is hidden from the pictures.
 """
 import datetime as dt
+import json
 import os
 import subprocess
 import sys
@@ -76,11 +79,18 @@ def serve(route):
     route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
 
 
+old = json.loads(manifest.MANIFEST.read_text())["shots"] if manifest.MANIFEST.exists() else {}
+asked = set(sys.argv[1:]) - {"--all"}
+if unknown := asked - {s[0] for s in SHOTS}:
+    sys.exit(f"No such picture: {', '.join(sorted(unknown))}")
+stale = manifest.stale() if old else {}
+todo = [s for s in SHOTS if "--all" in sys.argv or s[0] in asked
+        or (not asked and (s[0] in stale or s[0] not in old or not (OUT / f"{s[0]}.png").exists()))]
 OUT.mkdir(parents=True, exist_ok=True)
 used: dict[str, set[str]] = {}
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    for name, path, phone, dark, as_who, height in SHOTS:
+    for name, path, phone, dark, as_who, height in todo:
         client = who[as_who]
         page = browser.new_page(viewport={"width": 390 if phone else 1280, "height": height}, device_scale_factor=2 if phone else 1,
                                 color_scheme="dark" if dark else "light", timezone_id=club.timezone)
@@ -93,5 +103,6 @@ with sync_playwright() as p:
         used[name] = set(rendered)
         page.close()
     browser.close()
-manifest.write(used)  # for the test that says when a picture is out of date
-print(f"Screenshots in {OUT}")
+# for the test that says when a picture is out of date; pictures dropped from SHOTS leave it
+manifest.write(used, {s[0]: old[s[0]] for s in SHOTS if s[0] not in used and s[0] in old})
+print(f"Retook {len(used)} of {len(SHOTS)}: {', '.join(used) or 'none (all up to date)'}. Screenshots in {OUT}")
