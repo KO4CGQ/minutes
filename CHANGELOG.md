@@ -12,6 +12,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Email changes:** a new address takes effect once its owner confirms it, and the change signs them out everywhere. Only an admin can change another office holder's or an admin's email, status or callsign.
 - **Support the app:** a Support Club Minutes link (Ko-fi) at the foot of the menu, and both ways to give (GitHub Sponsors or Ko-fi) on the About page.
 - **Officers guide:** Choosing an admin, with a template admin agreement.
+- **Video meetings guide:** setting up the club's own Jitsi Meet server, step by step, in Help for admins.
 - **Smaller changes:**
     - Replies to the minutes email go to whoever took them and whoever led the meeting, each only if they share their email with members; otherwise to the club's address.
     - If the minutes email (or a correction's) doesn't go out, leaders and editors can send it again from the minutes page, and it's tried again overnight.
