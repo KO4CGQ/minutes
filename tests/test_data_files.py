@@ -20,6 +20,7 @@ NO_MEMBER_IDS = {
     "site-settings.json": "club-wide settings",
     "stage-sync-status.json": "when stage last synced",
     "update-check.json": "the latest release on GitHub",
+    "update-check-next.json": "the next branch's latest commit on GitHub",
     "update-request.json": "an update asked for (a member id is the asker, gone once it runs)",
     "update-settings.json": "update times",
 }
