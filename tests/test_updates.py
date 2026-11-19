@@ -315,3 +315,20 @@ def test_update_from_route(env, tmp_path, monkeypatch):
     assert c.post("/admin/updates/from", data={"source": "bogus"}).status_code == 400
     assert c.post("/admin/updates/from", data={"source": "rc"}, follow_redirects=False).status_code == 303
     assert updates.source() == "rc" and 'value="rc" checked' in c.get("/admin/updates").text
+
+
+def test_stale_running_file_and_torn_caches(env):
+    import os
+    import time
+    run = env / "update-running.json"
+    run.write_text(json.dumps({"to": "0.7.0"}))
+    assert not updates.status().get("stuck")                               # just started
+    old = time.time() - updates.STALE_RUN - 60
+    os.utime(run, (old, old))                                              # a reboot left it behind
+    assert updates.status()["stuck"]
+    assert updates.cancel() and "running" not in updates.status()
+    for name in ("update-check.json", "update-check-next.json", "update-settings.json"):
+        (env / name).write_text('{"at": 17')                               # torn
+    assert updates.auto_settings()["on"] is False
+    assert updates.latest(lambda: [{"tag_name": "v0.7.0", "body": ""}], force=True)["version"] == "0.7.0"
+    assert json.loads((env / "update-check.json").read_text())["releases"]

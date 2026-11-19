@@ -2442,7 +2442,7 @@ def email_log(request: Request, mid: str = Depends(real_me)):
     if not admin_mode(request):  # bodies can hold members' contact details
         return RedirectResponse("/admin/confirm?next=/admin/email", status_code=303)
     p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
-    mail = [json.loads(line) for line in p.read_text().splitlines() if line.strip()][::-1][:300] if p.exists() else []
+    mail = authmod.read_log(p)[::-1][:300]
     return page(request, "outbox.html", mail=mail, test_mode=archive.club.email_only_to() is not None)
 
 
@@ -2538,7 +2538,7 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
     failed = sum(e["at"] > day for e in authn.events(200))
     p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
     week = time.time() - 7 * 86400
-    mail = [json.loads(x) for x in p.read_text().splitlines()[-500:] if x.strip()] if p.exists() else []
+    mail = authmod.read_log(p, 500)
     held = sum(1 for m in mail if m.get("at", 0) >= week and m.get("withheld"))  # someone it wasn't sent to
     sp = DATA / "stage-sync-status.json"
     try:

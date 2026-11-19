@@ -80,6 +80,9 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
                 raise ValueError(f"{show_date(date, 'long')}'s minutes are already in the archive. To fix something, "
                                  "use Correct these minutes on that page.")
             return m
+        if (archive.root / date.isoformat() / "minutes.md").exists():  # on disk but not loaded: unreadable
+            raise ValueError(f"{show_date(date, 'long')}'s minutes exist but can't be read, so a new draft would replace them. "
+                             "Ask an admin to look at the file (see the server log).")
         if (open_ := [m for m in archive.meetings if m.status == "draft"]):
             raise ValueError(f"The minutes of {show_date(open_[0].date, 'long')} are still open: continue them, or discard them, "
                              "before starting another meeting.")

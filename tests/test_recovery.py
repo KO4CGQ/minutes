@@ -199,3 +199,11 @@ def test_inactive_and_silent_key_members_get_no_recovery_email_and_no_sign_in(cl
     assert a.member_by_email("n0call@example.org") is None  # and no sign-in link is made for them
     a.send_link("n0call@example.org", ip="203.0.113.9")
     assert not a.db.execute("select 1 from links").fetchone()
+
+
+def test_damaged_state_files_fall_back_instead_of_breaking_every_page(club, tmp_path):
+    for name in ("roles.json", "admins.json", "admins-suspended.json", "recovery.json"):
+        (tmp_path / name).write_text('["torn')
+    assert club._picked() is None and club.app_admins == set() and club.suspended == set() and recovery.load() is None
+    (tmp_path / "email-log.jsonl").write_text('{"at": 1}\n{"at": 2, "to\n{"at": 3}\n')
+    assert [e["at"] for e in authmod.read_log(tmp_path / "email-log.jsonl", 500)] == [1, 3]

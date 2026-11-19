@@ -531,6 +531,19 @@ def hide_tokens(text: str) -> str:
     return re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text)
 
 
+def read_log(p: Path, last: int | None = None) -> list[dict]:
+    """The entries of a .jsonl log, oldest first; a line torn by a crash is skipped."""
+    out = []
+    for line in (p.read_text().splitlines()[-last:] if last else p.read_text().splitlines()) if p.exists() else []:
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(e, dict):
+            out.append(e)
+    return out
+
+
 def _logged_at(line: str) -> float:
     try:
         return json.loads(line).get("at", 0)

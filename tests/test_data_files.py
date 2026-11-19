@@ -22,6 +22,7 @@ NO_MEMBER_IDS = {
     "update-check.json": "the latest release on GitHub",
     "update-check-next.json": "the next branch's latest commit on GitHub",
     "update-request.json": "an update asked for (a member id is the asker, gone once it runs)",
+    "update-running.json": "that request while the updater runs it",
     "update-settings.json": "update times",
 }
 

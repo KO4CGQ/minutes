@@ -186,3 +186,11 @@ def test_passphrase_suggest_strength_and_leaks(monkeypatch):
     import httpx
     monkeypatch.setattr("httpx.get", lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("offline")))
     assert "couldn't reach" in backup.check(s)[1]
+
+
+def test_update_files_stay_out(tmp_path):
+    """A restore must not start an update or leave one "running"."""
+    (tmp_path / "members.json").write_text("{}")
+    for n in ("update-request.json", "update-running.json", "update-check.json", "update-check-next.json"):
+        (tmp_path / n).write_text("{}")
+    assert backup.data_size(tmp_path) == 2

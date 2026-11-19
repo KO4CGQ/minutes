@@ -490,7 +490,14 @@ class Club:
             return None
         key = (p, st.st_mtime_ns, st.st_ino, st.st_size)  # each save replaces the file (a new inode): two saves in one clock tick differ
         if getattr(self, "_rj", (None, None))[0] != key:
-            self._rj = (key, json.loads(p.read_text()))
+            try:
+                data = json.loads(p.read_text())
+                if not isinstance(data, dict):
+                    raise TypeError("not an object")
+            except (OSError, ValueError, TypeError):
+                log.exception("%s is damaged; using the roster's ticks", p)  # every permission check reads it
+                data = None
+            self._rj = (key, data)
         return self._rj[1]
 
     def office_list(self) -> list[dict]:
@@ -595,7 +602,11 @@ class Club:
     def app_admins(self) -> set[str]:
         """Admins added in the app (Admin → Security → Admins), besides club.yaml's `admins:` (self.admins)."""
         p = DATA / "admins.json"
-        return set(json.loads(p.read_text())) if p.exists() else set()
+        try:
+            return set(json.loads(p.read_text())) if p.exists() else set()
+        except (OSError, ValueError, TypeError):
+            log.exception("%s is damaged; only club.yaml's admins count", p)
+            return set()
 
     @property
     def all_admins(self) -> set[str]:
@@ -606,7 +617,11 @@ class Club:
     def suspended(self) -> set[str]:
         """Admins suspended by a recovery: their admin rights don't count, club.yaml's included; another admin lifts it."""
         p = DATA / "admins-suspended.json"
-        return {self.canonical(a) for a in json.loads(p.read_text())} if p.exists() else set()
+        try:
+            return {self.canonical(a) for a in json.loads(p.read_text())} if p.exists() else set()
+        except (OSError, ValueError, TypeError):
+            log.exception("%s is damaged; nobody is suspended", p)
+            return set()
 
     def save_suspended(self, ids: set[str]) -> None:
         p = DATA / "admins-suspended.json"

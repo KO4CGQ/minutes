@@ -15,11 +15,14 @@ import contextlib
 import fcntl
 import functools
 import json
+import logging
 import secrets
 import time
 
 from . import auth, branding
 from .club import DATA, Club, show_date
+
+log = logging.getLogger(__name__)
 
 WAIT_DAYS, WAIT_DAYS_OBJECTED = 7, 14
 LAPSE_DAYS = 30  # not approved and accepted by then: it ends by itself, so one officer or nominee can't hold it forever
@@ -54,7 +57,11 @@ def _path():
 def load() -> dict | None:
     """The open recovery, or None."""
     p = _path()
-    return json.loads(p.read_text()) if p.exists() else None
+    try:
+        return json.loads(p.read_text()) if p.exists() else None
+    except (OSError, ValueError):
+        log.exception("%s is damaged; treating it as no recovery", p)
+        return None
 
 
 def _save(r: dict | None) -> None:
