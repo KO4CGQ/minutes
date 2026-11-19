@@ -5,6 +5,8 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+
+## 1.1.0 (2026-11-19)
 - **Custom roles:** a club decides what each role may do and who has it (by office, or member by member), and can add roles of its own. Leading meetings (Meeting leader) and fixing published minutes (Minutes editor) are now separate roles, and a Secretary role gets the roster emails.
 - **Correct these minutes:** the meeting's leader or recorder, a Minutes editor or an admin can correct minutes in the archive, with a reason and a side-by-side preview. Earlier versions are kept (for editors only, if a correction takes out private details), and members can be emailed what changed. Imported minutes can be marked as reviewed.
 - **Video meetings (optional):** members join the club's own Jitsi Meet server already signed in; officers and meeting leaders host, and guests wait in the lobby. Each room has its own rules for who comes straight in and what guests may do, members can open rooms of their own, and a calendar event can name a room. Setting up the server: the video meetings guide, in Help for admins.
