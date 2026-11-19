@@ -44,7 +44,7 @@
   <div class="formrow"><button class="btn small">Record</button></div>
 </form>{% endif %}
 <table class="list"><thead><tr><th>Date</th><th>What</th><th>Who</th><th class="n">Amount</th><th class="opt">Account</th><th class="opt">Note</th></tr></thead>
-<tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ e.date|listdate }}{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" style="display:block" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn">Delete</button></form>{% endif %}</td><td>{{ labels[e.kind] }}{% if e.kind == 'expense' %}{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/category" class="inline"><select name="category" data-autosubmit aria-label="Category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if e.category == k }}>{{ v }}</option>{% endfor %}</select></form>{% elif e.category %}<br><span class="muted small">{{ cats[e.category] }}</span>{% endif %}{% endif %}</td>
+<tbody>{% for e in entries %}<tr><td data-sort="{{ e.date }}">{{ e.date|listdate }}{% if edit or e.account in kept %}<form method="post" action="/treasurer/entries/{{ e.id }}/delete" class="inline" style="display:block" data-confirm="Delete this entry? Use it for mistakes; it stays in the log."><button class="linkbtn" aria-label="Delete the {{ money(-e.cents) if e.kind == 'expense' else money(e.cents) }} entry of {{ e.date|listdate }}{{ ': ' ~ e.note if e.note }}">Delete</button></form>{% endif %}</td><td>{{ labels[e.kind] }}{% if e.kind == 'expense' %}{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/category" class="inline"><select name="category" data-autosubmit aria-label="Category">{% for k, v in cats.items() %}<option value="{{ k }}" {{ 'selected' if e.category == k }}>{{ v }}</option>{% endfor %}</select></form>{% elif e.category %}<br><span class="muted small">{{ cats[e.category] }}</span>{% endif %}{% endif %}</td>
   <td>{% if e.member %}<a href="/members/{{ e.member }}?from=treasurer">{{ club.name(e.member) }}</a>{% endif %}</td>
   <td class="n" data-sort="{{ -e.cents if e.kind == 'expense' else e.cents }}">{{ money(-e.cents) if e.kind == 'expense' else money(e.cents) }}</td>
   <td class="opt">{{ e.account or 'on file' }}</td><td class="opt">{% if edit %}<form method="post" action="/treasurer/entries/{{ e.id }}/note" class="inline"><input name="note" value="{{ e.note }}" maxlength="300" data-autosubmit aria-label="Name or note" class="cellinput"></form>{% else %}{{ e.note }}{% endif %}</td>
@@ -74,7 +74,7 @@
       <label>About<input name="amount" inputmode="decimal" required placeholder="80"></label>
       <label>How often<select name="every">{% for k, v in every.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
       <label>Month (yearly)<select name="month"><option value="0">—</option>{% for n in range(1, 13) %}<option value="{{ n }}">{{ '%02d'|format(n) }}</option>{% endfor %}</select></label></div>
-    <div class="formrow"><button class="btn small">Add</button></div></form>
+    <div class="formrow"><button class="btn small" aria-label="Add the bill">Add</button></div></form>
   {% for r in regular_all %}<form method="post" action="/treasurer/regular/{{ r.id }}/remove" class="inline" data-confirm="Stop expecting {{ r.payee }}? Payments already recorded stay."><button class="linkbtn">Remove {{ r.payee }}</button></form> {% endfor %}
 </details>{% endif %}
 <h2>Read at meetings</h2>
@@ -123,7 +123,7 @@
   <p class="hint">The club's amounts{{ cite('dues') }}. When they change, add the new amount with the date it takes effect: earlier weeks keep the old one{% if cert() %}, and the {{ cert().short }}'s price is the one in effect when a member joined{% endif %}.</p>
   <table class="list"><thead><tr><th>What</th><th>From</th><th class="n">Amount</th>{% if edit %}<th></th>{% endif %}</tr></thead><tbody>
   {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ money(x.cents) }}</td>
-    {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}
+    {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline" data-confirm="Remove the {{ label|lower }} amount of {{ money(x.cents) }} from {{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}?"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn" aria-label="Remove the {{ label|lower }} amount from {{ fmt(x['from']) }}">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}
   </tbody></table>
   {% if edit %}<form method="post" action="/treasurer/settings/rate" class="modern"><div class="formrow">
     <label>What<select name="kind">{% for k, label in rates.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
@@ -135,19 +135,19 @@
 <div class="card"><h2>Accounts</h2>
   <p>{{ cfg.accounts|join(' · ') }}</p>
   {% if edit %}<form method="post" action="/treasurer/settings/account" class="modern"><div class="formrow">
-    <label>New account<input name="name" required maxlength="60" placeholder="e.g. Emergency Fund"></label><button class="btn small">Add</button></div></form>
+    <label>New account<input name="name" required maxlength="60" placeholder="e.g. Emergency Fund"></label><button class="btn small">Add account</button></div></form>
   <form method="post" action="/treasurer/settings/account" class="modern"><input type="hidden" name="remove" value="1"><div class="formrow">
-    <label>Remove an unused account<select name="name">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label><button class="btn small ghost">Remove</button></div></form>{% endif %}
+    <label>Remove an unused account<select name="name">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label><button class="btn small ghost" data-confirm="Remove the account chosen in the list?">Remove account</button></div></form>{% endif %}
 </div>
 
 <div class="card"><h2>Spending categories</h2>
   <p class="hint">What the Spending page groups expenses by ({{ 8 }} at most, one colour each). Renaming keeps every expense in it; removing one moves its expenses to Other.</p>
   {% for k, v in cats.items() %}{% if edit %}<form method="post" action="/treasurer/settings/category" class="modern"><input type="hidden" name="key" value="{{ k }}">
     <div class="formrow"><label>{{ 'Category' if loop.first else '' }}<input name="label" value="{{ v }}" maxlength="40" required aria-label="Name of {{ v }}"></label><button class="btn small ghost">Rename</button>
-    {% if k != 'other' %}<button class="btn small ghost" name="remove" value="1" data-confirm="Remove {{ v }}? Its expenses move to Other.">Remove</button>{% endif %}</div></form>
+    {% if k != 'other' %}<button class="btn small ghost" name="remove" value="1" data-confirm="Remove {{ v }}? Its expenses move to Other." aria-label="Remove {{ v }}">Remove</button>{% endif %}</div></form>
   {% else %}<p>{{ v }}</p>{% endif %}{% endfor %}
   {% if edit and cats|length < 8 %}<form method="post" action="/treasurer/settings/category" class="modern"><div class="formrow">
-    <label>New category<input name="label" required maxlength="40" placeholder="e.g. Repeater"></label><button class="btn small">Add</button></div></form>{% endif %}
+    <label>New category<input name="label" required maxlength="40" placeholder="e.g. Repeater"></label><button class="btn small" aria-label="Add the category">Add</button></div></form>{% endif %}
 </div>
 
 <div class="card"><h2>Funds</h2>

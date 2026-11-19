@@ -4,11 +4,22 @@ import os
 from pathlib import Path
 
 
+def dt_date(s: str):
+    import datetime as dt
+    return dt.date.fromisoformat(s)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="club-minutes")
     sub = ap.add_subparsers(dest="cmd", required=True)
     imp = sub.add_parser("import", help="import historical minutes (PDFs + *CORRECTED*.txt) into the archive")
     imp.add_argument("src", type=Path)
+    ic = sub.add_parser("import-correction", help="imported minutes corrected later: the original PDF stays version 1, this PDF becomes version 2 (no notice)")
+    ic.add_argument("date", help="YYYY-MM-DD")
+    ic.add_argument("pdf", type=Path, help="the corrected minutes, as a PDF")
+    ic.add_argument("--by", required=True, help="callsign of who corrected them (e.g. the Secretary)")
+    ic.add_argument("--reason", required=True, help="a line members see with the minutes")
+    ic.add_argument("--on", type=dt_date, help="YYYY-MM-DD they were really corrected (the footer's date); default today")
     sub.add_parser("roster", help="rebuild the roster cache (roster.json) from the roster (roster-sheet.json)")
     lk = sub.add_parser("login-link", help="print a one-time sign-in link for a member (admin recovery)")
     lk.add_argument("who", help="callsign, or the member's email")
@@ -20,6 +31,9 @@ def main() -> None:
     fm.add_argument("--email", required=True, help="their sign-in links go here")
     fm.add_argument("--class", dest="license_class", required=True, help="license class: Technician, General or \"Amateur Extra\"")
     fm.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
+    rn = sub.add_parser("rename-id", help="finish a callsign change that stopped partway (the log says so): with the service stopped")
+    rn.add_argument("old", help="the old id: the old callsign in lowercase")
+    rn.add_argument("new", help="the new id")
     rm = sub.add_parser("delete-meeting", help="delete one meeting's minutes, e.g. after a test (restart the service afterwards)")
     rm.add_argument("date", help="YYYY-MM-DD")
     ci = sub.add_parser("chow-import", help="one-time import of the Secretary's chow .xlsx (prints it; --write saves)")
@@ -56,6 +70,16 @@ def main() -> None:
         from .importer import import_archive
         ms = import_archive(a.src)
         print(f"imported {len(ms)} meetings")
+    elif a.cmd == "import-correction":
+        import datetime as dt
+
+        from .importer import import_correction
+        from .store import Archive
+        try:
+            m = import_correction(Archive(), dt.date.fromisoformat(a.date), a.pdf, a.by.lower(), a.reason, a.on)
+        except ValueError as e:
+            raise SystemExit(str(e)) from None
+        print(f"{m.slug}: now version {m.version}. Restart the web service so it picks it up.")
     elif a.cmd == "backup":
         from . import backup
         from .club import Club
@@ -108,6 +132,9 @@ def main() -> None:
                   "Add it there, then restart the app.")
         print("Their sign-in link (one use, 15 minutes), then add a passkey and the other members in the app:")
         print(Auth(club).create_link(mid, base_url=a.base_url))
+    elif a.cmd == "rename-id":
+        from .callsign import rename_id
+        print(f"Renamed {a.old} to {a.new}: {rename_id(a.old.lower(), a.new.lower())}. Start the service again.")
     elif a.cmd == "delete-meeting":
         import datetime as dt
         import shutil
@@ -131,6 +158,43 @@ def main() -> None:
         club = Club()
         url = f"https://{club.auth.get('rp_id')}"
         today = dt.date.today()
+        if not a.dry_run:
+            try:
+                from . import recovery
+                if recovery.tick(club, url):
+                    print("recovered admin access (recovery.py)")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't check the admin recovery: {e}")
+            from .auth import Auth
+            try:  # each housekeeping step on its own: one failing never stops the reminders below
+                if n := Auth(club).prune():
+                    print(f"pruned {n} old sign-in records")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't prune the sign-in records: {e}")
+            try:
+                auth.prune_email_log()  # a quiet site sends no email to trigger it
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't prune the Email log: {e}")
+            for name in ("admin-log.jsonl", "api-log.jsonl"):
+                try:
+                    auth.prune_old_lines(name)
+                except Exception as e:  # noqa: BLE001
+                    print(f"couldn't prune {name}: {e}")
+            try:
+                if n := prefs.purge_removed():
+                    print(f"dropped the settings and sign-ins of {n} member(s) now Inactive, a Silent Key or off the roster")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't drop the settings of members who left: {e}")
+            try:  # minutes and corrected-minutes emails that failed or never went (a restart mid-send)
+                from . import console, corrections, pdf
+                from .store import Archive
+                archive = Archive(club=club)
+                for note in console.drop_old_pending(archive):
+                    print(f"dropped the unsent-email note {note} (over {console.PENDING_DAYS} days old)")
+                if n := corrections.retry_pending(archive, lambda m: pdf.render_pdf(archive, m, club.auth.get("rp_id"))):
+                    print(f"sent {n} minutes email(s) again")
+            except Exception as e:  # the reminders below still go  # noqa: BLE001
+                print(f"couldn't retry the minutes emails: {e}")
         with business.locked():
             s = business.load()
             due = business.due_reminders(s, today, int(club.info.get("remind_days_before", 3)))

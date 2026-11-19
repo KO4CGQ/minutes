@@ -10,12 +10,15 @@ from pathlib import Path
 
 import pytest
 
+from club_minutes import auth as authmod
 from club_minutes.auth import Auth
 from club_minutes.club import Club
+from club_minutes.web import SITE_TABS
 
 FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
-EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")] + ["/help/officers", "/help/server-admin"]
+EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")] + ["/help/officers", "/help/server-admin", "/help/jitsi"]
+EXTRA += [f"/admin/site/{t[0]}" for t in SITE_TABS if t[0] != "look"]  # every Site tab
 IPV6 = "2001:db8:85a3:1234:5678:8a2e:370:7334"  # real addresses can be this long
 ENGINES = ["chromium", "firefox", "webkit"]  # Chrome/Edge, Firefox, and Safari's engine (close to Safari, not the same)
 # Text whose contrast with what's behind it is under 3:1 (WCAG's floor for large text; body text wants 4.5):
@@ -39,6 +42,42 @@ LOW_CONTRAST = """() => {
   }
   return out;
 }"""
+# What a person using a screen reader, a thumb or old eyes would trip on, per page (returns problem lists):
+#  - a field with no label of its own (a wrapping label, for=, aria-label or aria-labelledby; hidden fields excepted)
+#  - a checkbox or radio under 24px (WCAG 2.2, 2.5.8). Its label counts when it is the input's label: a tap on a label
+#    switches the box, so a label of 24px or more is a big enough target, as WCAG's "same function" rule has it
+#  - two buttons, or two links to different places, of one name in different rows, list items or cards ("Remove", "Edit": which one?)
+#  - a .fmtgrid (Site's form grids, three columns; hidden fields take no cell) whose cells don't fill whole rows: one missing cell shifts the rest
+AUDIT = """() => {
+  const shown = (el) => el.getClientRects().length > 0 && !el.closest("[hidden]");
+  const nm = (el) => { if (el.nodeType === 3) return el.textContent; if (el.nodeType !== 1 || el.getAttribute("aria-hidden") === "true") return "";
+    const l = el.getAttribute("aria-label"); if (l) return l; if (el.tagName === "IMG") return el.alt;
+    return [...el.childNodes].map(nm).join(""); };
+  const name = (el) => (el.getAttribute("aria-label") || (el.getAttribute("aria-labelledby") || "").split(/\\s+/).map((i) => document.getElementById(i)?.textContent || "").join(" ")
+    || [...el.childNodes].map(nm).join("") || el.title || "").replace(/\\s+/g, " ").trim().toLowerCase();
+  const out = { unlabelled: [], small: [], repeated: [], grid: [] };
+  const desc = (el) => `${el.tagName.toLowerCase()}[${el.name || el.id || el.type || ""}]`;
+  for (const el of document.querySelectorAll("input, select, textarea")) {
+    if (["hidden", "submit", "button", "reset", "image"].includes(el.type)) continue;
+    const ids = (el.getAttribute("aria-labelledby") || "").split(/\\s+/).filter((i) => document.getElementById(i));
+    if (!el.getAttribute("aria-label") && !ids.length && !el.labels.length) out.unlabelled.push(desc(el));
+    if (["checkbox", "radio"].includes(el.type) && shown(el) && getComputedStyle(el).opacity !== "0") {
+      const big = (r) => r.width >= 24 && r.height >= 24;
+      if (!big(el.getBoundingClientRect()) && ![...el.labels].some((l) => shown(l) && big(l.getBoundingClientRect()))) {
+        const r = el.getBoundingClientRect(); out.small.push(`${desc(el)} ${Math.round(r.width)}x${Math.round(r.height)}`); }
+    }
+  }
+  const byName = {};
+  for (const el of document.querySelectorAll("button, a[href], input[type=submit]")) {
+    const row = el.closest("tr, li, .card"), n = el.matches("input") ? el.value.toLowerCase() : name(el);
+    if (row && n && shown(el)) (byName[n] ??= new Map()).set(row, el.matches("a") ? el.getAttribute("href") : el);
+  }
+  for (const [n, rows] of Object.entries(byName)) if (new Set(rows.values()).size > 1) out.repeated.push(`"${n}" x${rows.size}`);
+  for (const g of document.querySelectorAll(".fmtgrid")) if ([...g.children].filter((c) => c.type !== "hidden").length % 3) out.grid.push(`${g.children.length} cells: ${g.textContent.trim().slice(0, 30)}`);
+  return out;
+}"""
+# Identical names that are fine, with the reason (matched on the lower-case name)
+SAME_NAME_OK = {}
 LONG_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
 
@@ -53,10 +92,12 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     from fastapi.testclient import TestClient
 
     from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True},
+                                               {"id": "n0nomn", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
     club.admins = {"n0admn"}
     from club_minutes import branding, theme, treasurer
     monkeypatch.setattr(branding, "DATA", tmp_path)  # the colours saved below stay in this test
+    monkeypatch.setattr(treasurer, "DATA", tmp_path)  # each engine starts with the same books
     ts = treasurer.load()
     treasurer.set_general(ts, "n0admn", "preview", "2026-01-01", 4, 2, True)  # so Who owes what has rows
     treasurer.set_fund(ts, "n0admn", "Drinks fund", "Cash", ["n0admn"])
@@ -77,6 +118,21 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     a.event("bad_link", "203.0.113.7", agent=LONG_AGENT)  # not banned: the row keeps its Ban button
     web._admin_log(type("R", (), {"state": type("S", (), {"real_member": "n0admn"}), "client": type("C", (), {"host": IPV6})})(),
                    on=True, until=1794143748, confirmed_by="passkey")
+    # pages that need something behind their address: minutes to correct, an emailed confirmation link, a recovery under way
+    import datetime as _d
+
+    from club_minutes import recovery
+    from club_minutes.meeting import Item, Meeting
+    monkeypatch.setattr(recovery, "DATA", tmp_path)
+    sent = []
+    monkeypatch.setattr(authmod, "send_email", lambda to, subject, body, **kw: sent.append(body))
+    m = Meeting(date=_d.date(2026, 10, 15), status="published", leader="n0admn", in_person=["n0admn"],
+                sections={"Old Business": [Item("Ordered patches")]})
+    monkeypatch.setattr(web.archive, "meetings", [m])
+    monkeypatch.setattr(web.archive, "by_slug", {m.slug: m})
+    assert a.start_email_change("n0admn", "new@example.org", base_url="http://testserver") is None
+    token = sent[-1].split("/email/confirm?t=")[1].split()[0]
+    extra_pages = [f"/meetings/{m.slug}/correct", f"/email/confirm?t={token}"]
     c = TestClient(web.app)
     c.cookies.set(web.COOKIE, tok)
 
@@ -92,19 +148,40 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
             pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_page(viewport={"width": 375, "height": 800})
         page.route("http://testserver/**", serve)
-        too_wide, blocked, path, seen = {}, [], "", []
+        too_wide, blocked, path, seen, audit = {}, [], "", [], {}
         # the security policy runs no inline handlers or unmarked scripts: anything it blocks, or any script error, fails
         page.on("console", lambda m: m.type == "error" and ("Content Security Policy" in m.text or "Pattern attribute" in m.text) and blocked.append((path, m.text[:200])))
         page.on("pageerror", lambda e: blocked.append((path, str(e)[:200])))
-        for path in pages(web.app):
+
+        def inspect(label):  # the checks every page gets, once it is showing
+            if (w := page.evaluate("document.documentElement.scrollWidth")) > 375:
+                too_wide[label] = w
+            page.evaluate("document.querySelectorAll('details').forEach((d) => d.open = true)")  # closed parts count too
+            found = page.evaluate(AUDIT)
+            found["repeated"] = [n for n in found["repeated"] if n.rsplit(" x", 1)[0].strip('"') not in SAME_NAME_OK]
+            if bad := {k: v[:6] for k, v in found.items() if v}:
+                audit[label] = bad
+
+        for path in pages(web.app) + extra_pages:
             r = c.get(path, follow_redirects=False)
             if r.status_code != 200 or "text/html" not in r.headers.get("content-type", ""):
                 continue
             page.goto("http://testserver" + path)
             seen.append(path)
-            w = page.evaluate("document.documentElement.scrollWidth")
-            if w > 375:
-                too_wide[path] = w
+            inspect(path)
+        # a recovery under way (the page above showed no recovery), and the correction's preview, which only a POST shows
+        recovery.start(club, "n0admn", "n0nomn", [], "Motion to restore admin access", "http://testserver")
+        page.goto("http://testserver/recover")
+        seen.append("/recover")
+        inspect("/recover (under way)")
+        page.goto(f"http://testserver/meetings/{m.slug}/correct")
+        page.locator("summary:has-text('Old Business')").click()
+        page.locator("textarea").first.fill("Ordered the patches")
+        page.locator("input[name=reason]").fill("A typing mistake")
+        path = "the correction preview"
+        page.get_by_role("button", name="Preview the changes").click()
+        page.wait_for_selector("table.diff")
+        inspect(path)
         # each of Moved by / Seconded by leaves out whoever is in the other
         page.goto("http://testserver/business?tab=motions")
         lists = []
@@ -151,7 +228,8 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     assert tried != was and cancelled == (True, True, theme.DEFAULT) and colours == ("#4f6f2a", True, True), (cancelled, colours)
     assert not dim, f"dark mode: text too faint for its background: {dim}"
     assert details == (True, True, True, True), details
-    assert lists == [["(nobody)"], ["(nobody)"]], lists
+    assert lists == [["(nobody)", "Jane Doe"]] * 2, lists  # Amy is left out of the other box, whichever she is in
+    assert not audit, f"labels, touch targets, repeated button names, form grids: {audit}"
     assert not too_wide, f"pages wider than a 375px phone: {too_wide}"
     assert not blocked, f"blocked by the security policy, or a script error: {blocked}"
 
@@ -162,7 +240,7 @@ def test_view_as_shows_a_dialog_instead_of_sending_changes(tmp_path, monkeypatch
     from fastapi.testclient import TestClient
 
     from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True},
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True},
                                                {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"}])
     club.admins = {"n0admn"}
     a = Auth(club, tmp_path / "auth.sqlite")
@@ -203,7 +281,7 @@ def test_a_business_card_opens_its_dialog_and_comes_back_after_a_comment(tmp_pat
     from fastapi.testclient import TestClient
 
     from club_minutes import business, web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "officer": True}])
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True}])
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -356,3 +434,76 @@ def test_a_tap_on_a_home_items_box_opens_the_item(engine):
         hit = page.evaluate(f"document.elementFromPoint({box[0]}, {box[1]}).closest('a')?.id")
         browser.close()
     assert hit == "it"
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_site_video_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, engine):
+    """Site → Video: Enter in a room's name saves (never presses a room's Delete); a change is marked and brings up
+    Discard; a room's Delete deletes it alone; leaving a Site tab with unsaved changes asks first."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from club_minutes import club as clubmod
+    from club_minutes import meet, web
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True}])
+    club.modules["jitsi"] = True
+    club.yaml = {**club.yaml, "modules": {**(club.yaml.get("modules") or {}), "jitsi": True}, "jitsi": {"domain": "meet.example.org", "app_id": "club-minutes"}}
+    club.save_app_admins({"n0admn"})
+    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "x" * 40)
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tok = a.new_session("n0admn")
+    a.set_admin(tok, 60)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, tok)
+    c.post("/admin/site/video", data={"rows": "2", "name0": "Club meeting", "slug0": "club", "name1": "Board", "slug1": "board"})
+    assert [r["slug"] for r in meet.rooms(club)] == ["club", "board"]
+
+    def serve(route):
+        q = route.request
+        r = c.request(q.method, q.url.replace("http://testserver", ""), content=q.post_data_buffer,
+                      headers={"content-type": q.headers.get("content-type", "")}, follow_redirects=q.method == "POST")
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        page.route("http://testserver/**", serve)
+        asked = []
+        page.on("dialog", lambda d: (asked.append(d.type), d.accept() if d.type == "confirm" else d.dismiss()))
+        page.goto("http://testserver/admin/site/video")
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        page.fill("input[name=name0]", "Club night")
+        with page.expect_navigation():
+            page.press("input[name=name0]", "Enter")
+        assert [r["name"] for r in meet.rooms(club)] == ["Club night", "Board"] and not asked
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        assert page.is_hidden("[data-discard]")
+        page.fill("input[name=name0]", "Not saved")
+        assert "changed" in page.get_attribute("input[name=name0]", "class") and page.is_visible("[data-discard]")
+        page.fill("input[name=name0]", "Club night")  # back as it was: nothing to save
+        assert "changed" not in page.get_attribute("input[name=name0]", "class") and page.is_hidden("[data-discard]")
+        page.fill("input[name=name0]", "Not saved")
+        page.locator("details.role").nth(1).evaluate("e => e.open = true")
+        with page.expect_navigation():
+            page.click("text=Delete Board")
+        assert [r["name"] for r in meet.rooms(club)] == ["Club night"] and asked == ["confirm"]  # Board alone; the typing discarded
+        asked.clear()
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        page.fill("input[name=name0]", "Thrown away")
+        with page.expect_navigation():
+            page.click("text=Discard changes")
+        assert page.input_value("input[name=name0]") == "Club night" and not asked
+        page.locator("details.role").first.evaluate("e => e.open = true")
+        page.fill("input[name=name0]", "Unsaved")
+        try:
+            page.goto("http://testserver/", timeout=3000)
+        except Exception:  # noqa: BLE001, S110  # the dismissed "Leave site?" stops the navigation
+            pass
+        assert asked == ["beforeunload"]
+        browser.close()

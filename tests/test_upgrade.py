@@ -60,6 +60,23 @@ def test_undo_puts_back_the_copy_from_this_update_only(tmp_path, steps):
     assert not upgrade.undo(1, tmp_path)  # once: the data is at 1 again
 
 
+
+def test_undo_stopped_halfway_runs_again(tmp_path, steps, monkeypatch):
+    """Expert sweep (1.1 freeze): a crash (a reboot) in the middle of an undo must not leave the data folder half
+    empty with the undo refusing to run again."""
+    import shutil
+    (tmp_path / "business.json").write_text('{"items": [1]}')
+    (tmp_path / "links.json").write_text("[]")
+    upgrade.run(tmp_path)
+    real = shutil.copytree
+    monkeypatch.setattr(shutil, "copytree", lambda *a, **k: (_ for _ in ()).throw(OSError("power cut")))
+    with pytest.raises(OSError):
+        upgrade.undo(1, tmp_path)  # everything deleted, nothing copied back yet
+    monkeypatch.setattr(shutil, "copytree", real)
+    assert upgrade.undo(1, tmp_path)
+    assert json.loads((tmp_path / "business.json").read_text()) == {"items": [1]} and (tmp_path / "links.json").exists()
+    assert upgrade.version(tmp_path) == 1
+
 def test_backups_leave_out_the_copy(tmp_path, steps):
     (tmp_path / "business.json").write_text('{"items": []}')
     upgrade.run(tmp_path)
@@ -85,3 +102,14 @@ def test_step_2_moves_the_editor_ticks_to_roles_json(tmp_path):
     empty.mkdir()
     upgrade._roles_file(empty)  # a new server, no roster yet: nothing written, the roster's ticks are read until Site saves
     assert not (empty / "roles.json").exists()
+
+
+def test_step_3_marks_1_1_data_so_a_failed_update_puts_the_copy_back(tmp_path):
+    """Data & reliability sweep: 1.1 writes what 1.0 misreads, so it's data version 3: the copy from before is kept
+    (and put back by data-undo), and 1.0 (which knows up to 2) refuses it instead of misreading it."""
+    (tmp_path / "data-version").write_text("2\n")
+    (tmp_path / "admins.json").write_text('["n0call"]')
+    assert upgrade.run(tmp_path)[-1].startswith("1.1.0's data") and upgrade.version(tmp_path) == 3
+    assert upgrade.version(tmp_path / upgrade.COPY) == 2 and (tmp_path / upgrade.COPY / "admins.json").exists()
+    (tmp_path / "admins-suspended.json").write_text('["n0call"]')  # written by 1.1
+    assert upgrade.undo(2, tmp_path) and upgrade.version(tmp_path) == 2 and not (tmp_path / "admins-suspended.json").exists()

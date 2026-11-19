@@ -15,6 +15,13 @@ from pathlib import Path
 
 import yaml
 
+FENCE = re.compile(r"(?m)^---[ \t]*$")  # the front matter's fence: a line of its own, so "---" inside a value isn't one
+
+
+def split_front(text: str) -> list[str]:
+    """["", front matter, body] for a file starting with a fenced front matter."""
+    return FENCE.split(text, 2)
+
 # The built-in sections (each has something behind it: bills, reports, business tracking, the calendar, chow), in
 # their usual order. A club's agenda (club.yaml meeting: sections:) picks from these and adds its own free-text ones.
 SECTIONS = [
@@ -33,6 +40,15 @@ WHEN_TAG = re.compile(r"\s*<!--\s*when:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s
 UNTIL_TAG = re.compile(r"\s*<!--\s*until:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
 CAL_TAG = re.compile(r"\s*<!--\s*cal:\s*(community|planning)\s*-->")
 EVENT_HOURS = 2  # how long a timed event with no end is taken to last
+
+
+def one_line(text: str) -> str:
+    """Typed text as one plain item line: every line break splitlines() knows becomes a space, and no "<!--", so typing
+    can't start a section or an item or forge a member/when tag (an arrow "-->" stays: without "<!--" it's no tag)."""
+    text = " ".join(part.strip() for part in text.splitlines() if part.strip())  # splitlines knows every break; no regex to backtrack
+    while (clean := text.replace("<!--", "")) != text:
+        text = clean
+    return text.strip()
 
 
 @dataclass
@@ -86,10 +102,19 @@ class Meeting:
     guests: list[dict] = field(default_factory=list)  # {name, callsign}
     visitors: int = 0  # guests counted but not named (e.g. family, minors)
     sections: dict[str, list[Item]] = field(default_factory=dict)
+    # Each correction, oldest first: {version (the one it made), at (unix time), by (roster id), reason, notice (bool)}.
+    # The versions before it are kept beside minutes.md as minutes.v1.md, minutes.v2.md… (corrections.py).
+    corrections: list[dict] = field(default_factory=list)
+    reviewed: dict | None = None  # imported minutes someone looked over: {by, at}
 
     @property
     def slug(self) -> str:
         return self.date.isoformat()
+
+    @property
+    def corrected(self) -> dict | None:
+        """The latest correction, if any."""
+        return self.corrections[-1] if self.corrections else None
 
     @property
     def attendance(self) -> int:
@@ -115,6 +140,8 @@ class Meeting:
             "attendance": {"in_person": self.in_person, "remote": self.remote},
             "guests": self.guests,
             "visitors": self.visitors,
+            "corrections": self.corrections,
+            "reviewed": self.reviewed,
         }
         fm = {k: v for k, v in fm.items() if v not in (None, [], {}, 0)}
         out = ["---", yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip(), "---", ""]
@@ -122,13 +149,13 @@ class Meeting:
             out.append(f"## {name}")
             for it in self.items(name):
                 tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "")
-                out.append(f"- {it.text}{tag}")
+                out.append(f"- {one_line(it.text)}{tag}")
             out.append("")
         return "\n".join(out)
 
     @classmethod
     def from_markdown(cls, text: str) -> Meeting:
-        _, fm_text, body = text.split("---", 2)
+        _, fm_text, body = split_front(text)
         fm = yaml.safe_load(fm_text) or {}
         att = fm.get("attendance") or {}
         m = cls(
@@ -143,6 +170,8 @@ class Meeting:
             remote=att.get("remote") or [],
             guests=fm.get("guests") or [],
             visitors=fm.get("visitors", 0),
+            corrections=fm.get("corrections") or [],
+            reviewed=fm.get("reviewed"),
         )
         current = None
         for line in body.splitlines():
@@ -166,7 +195,9 @@ class Meeting:
         d = root / self.slug
         d.mkdir(parents=True, exist_ok=True)
         p = d / "minutes.md"
-        p.write_text(self.to_markdown())
+        tmp = d / "minutes.md.tmp"
+        tmp.write_text(self.to_markdown())
+        tmp.replace(p)  # a crash mid-write leaves the old minutes, never half of them
         return p
 
     @classmethod

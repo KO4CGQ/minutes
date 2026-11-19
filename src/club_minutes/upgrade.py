@@ -35,8 +35,15 @@ def _roles_file(data: Path) -> None:
     tmp.replace(out)
 
 
+def _v3(data: Path) -> None:
+    """3 (1.1.0): nothing to reshape, but 1.1 writes what 1.0 misreads (sign-in columns 1.0's inserts don't expect,
+    suspended admins it would ignore, custom roles its Roles save would drop, minutes versions). Marking it makes the
+    update keep the copy from before, which a failed update puts back, and 1.0 refuses this data instead."""
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
+    (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"
@@ -86,11 +93,16 @@ def undo(was: int, data: Path = DATA) -> bool:
     """Put back the copy taken before an upgrade from data version `was` (update.sh, when the new version didn't
     start). Only if the data has moved on from `was` since, so an old copy never replaces newer data."""
     copy = data / COPY
-    if not (copy / "data-version").exists() or version(copy) != was or version(data) <= was:
+    if not (copy / "data-version").exists() or version(copy) != was:
+        return False
+    # No data-version means an undo stopped halfway (it goes first, and comes back last): run it again
+    if (data / "data-version").exists() and version(data) <= was:
         return False
     with _locked(data):
+        (data / "data-version").unlink(missing_ok=True)
         for p in data.iterdir():
             if p.name not in SKIP and not p.name.endswith(".lock"):
                 shutil.rmtree(p) if p.is_dir() and not p.is_symlink() else p.unlink()
-        shutil.copytree(copy, data, dirs_exist_ok=True)
+        shutil.copytree(copy, data, dirs_exist_ok=True, ignore=lambda d, _names: ["data-version"] if Path(d) == copy else [])
+        shutil.copy2(copy / "data-version", data / "data-version")
     return True

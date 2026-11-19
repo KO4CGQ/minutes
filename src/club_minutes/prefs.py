@@ -6,12 +6,18 @@ chow changes to your own night and security emails aren't covered: they always g
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
+import fcntl
 import json
+import logging
+import os
 from pathlib import Path
 
 from . import branding, business, calview, chow
 from .club import DATA, Club, num, show_date
+
+log = logging.getLogger(__name__)
 
 # kind: (heading, {choice: what it means}, default), in the order the Email tab shows them. "roster" is for the Secretaries.
 KINDS = {
@@ -41,12 +47,28 @@ def _path(name: str) -> Path:
 
 def _read(name: str) -> dict:
     p = _path(name)
-    return json.loads(p.read_text()) if p.exists() else {}
+    try:
+        return json.loads(p.read_text()) if p.exists() else {}
+    except ValueError:
+        log.exception("%s is damaged; using defaults", p)  # every page reads it: a torn file mustn't stop them all
+        return {}
+
+
+@contextlib.contextmanager
+def locked():
+    """Held around read-merge-write of email-prefs.json and settings.json, by the web app and the daily job alike."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "prefs.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def _write(name: str, d: dict) -> None:
     p = _path(name)
-    tmp = p.with_suffix(".tmp")
+    tmp = p.with_name(f"{p.stem}.{os.getpid()}.tmp")  # the daily job writes here too: never the same temp file
     tmp.write_text(json.dumps(d, indent=1, sort_keys=True))
     tmp.replace(p)
 
@@ -63,15 +85,17 @@ def save(mid: str, choices: dict) -> dict:
     """Keep only valid choices (this is a trust boundary: it comes from a form)."""
     clean = {k: v for k, v in choices.items() if k in KINDS and v in KINDS[k][1]}
     clean["chow_days"] = sorted({num(d) for d in choices.get("chow_days", []) if num(d) in CHOW_DAYS}, reverse=True)
-    allp = _read("email-prefs.json")
-    allp[mid] = clean
-    _write("email-prefs.json", allp)
+    with locked():
+        allp = _read("email-prefs.json")
+        allp[mid] = clean
+        _write("email-prefs.json", allp)
     return get(mid)
 
 
 # ---------------- other settings (Your profile → Settings), in settings.json ----------------
 
-SETTINGS = {"week_start": ("First day of the week", {"sunday": "Sunday", "monday": "Monday"}, "sunday")}
+SETTINGS = {"week_start": ("First day of the week", {"sunday": "Sunday", "monday": "Monday"}, "sunday"),
+            "support_link": ("Support Club Minutes in the menu", {"show": "Show it", "hide": "Hide it: I already give toward the app's development and upkeep"}, "show")}
 
 
 def settings(mid: str | None) -> dict:
@@ -81,10 +105,11 @@ def settings(mid: str | None) -> dict:
 
 
 def save_settings(mid: str, choices: dict) -> dict:
-    """Keep only valid choices (they come from a form)."""
-    alls = _read("settings.json")
-    alls[mid] = {k: v for k, v in choices.items() if k in SETTINGS and v in SETTINGS[k][1]}
-    _write("settings.json", alls)
+    """Keep only valid choices (they come from a form); settings not in this form stay as they were."""
+    with locked():
+        alls = _read("settings.json")
+        alls[mid] = alls.get(mid, {}) | {k: v for k, v in choices.items() if k in SETTINGS and v in SETTINGS[k][1]}
+        _write("settings.json", alls)
     return settings(mid)
 
 
@@ -152,6 +177,27 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
         out.append((m.id, f"digest:{today}:{m.id}", f"{club.label} meeting tonight",
                     f"Hi {m.first},\n\n" + "\n\n".join(lines) + f"\n\nTo stop this email, or choose which others you get: {url}/profile/email\n\n{_sign(club)}"))
     return out
+
+
+def purge_removed(load_club=Club) -> int:
+    """Drop what's kept about members who are Inactive or a Silent Key, or no longer on the roster (privacy): their
+    email choices and settings, and their passkeys, sessions and sign-in records. Returns how many members."""
+    from .auth import Auth, forget_email_log
+    gone = set()
+    with locked():  # the roster read inside the lock: a callsign change in between would look like a member leaving
+        club = load_club()
+        if not club.members:  # a roster that didn't load isn't everyone leaving
+            return 0
+        keep = {mid for mid, m in club.members.items() if m.status.lower() not in ("inactive", "silent key")}
+        gone |= Auth(club).forget_removed(keep)
+        for name in ("email-prefs.json", "settings.json"):
+            d = _read(name)
+            if drop := set(d) - keep:
+                gone |= drop
+                _write(name, {k: v for k, v in d.items() if k not in drop})
+        # their Email log lines too (an address is known only while they're on the roster)
+        forget_email_log({m.email.strip().lower() for mid in gone if (m := club.members.get(mid)) and m.email})
+    return len(gone)
 
 
 def unsent(keys: list[str]) -> set[str]:

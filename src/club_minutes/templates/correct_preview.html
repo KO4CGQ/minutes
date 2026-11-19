@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% block title %}Check the correction, {{ m.date|listdate }}{% endblock %}{% block crumb %}{{ back('/meetings/' ~ m.slug, m.date|listdate) }}{% endblock %}{% block body %}
+<h1>Check the correction</h1>
+{% if not rows %}<p class="msg warn">Nothing was changed.</p>
+{% else %}
+<p class="muted">The minutes of {{ m.date|longdate }}: only the parts that change. Why: <em>{{ reason }}</em>.
+  {{ 'Members get an email saying what changed (removed lines aren\'t quoted).' if notice else 'No notice is sent: the footer will say so.' }}{% if private %} Private details: the version before stays visible only to those who can correct minutes.{% endif %}</p>
+<table class="diff">
+  <thead><tr><th>Version {{ m.version }} (now)</th><th>Version {{ m.version + 1 }}</th></tr></thead>
+  {% for part, lines in rows %}<tbody><tr><th colspan="2" class="part">{{ part }}</th></tr>
+    {% for kind, a, b in lines %}{% if kind == 'changed' %}{% set a, b = words(a, b) %}{% endif %}<tr class="{{ kind }}">
+      <td class="old">{% if a is not none %}<span class="sr">{{ 'removed: ' if kind == 'removed' else 'was: ' if kind == 'changed' }}</span>{{ a }}{% endif %}</td>
+      <td class="new">{% if b is not none %}<span class="sr">{{ 'added: ' if kind == 'added' else 'now: ' if kind == 'changed' }}</span>{{ b }}{% endif %}</td></tr>
+    {% endfor %}</tbody>{% endfor %}
+</table>
+{% endif %}
+<form method="post" action="/meetings/{{ m.slug }}/correct">
+  {% for k, v in fields %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <p>{% if rows %}<button class="btn">Save version {{ m.version + 1 }}</button> {% endif %}<button class="btn ghost" formaction="/meetings/{{ m.slug }}/correct/edit">Back to editing</button></p>
+</form>
+{% endblock %}

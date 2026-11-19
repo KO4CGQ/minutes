@@ -12,7 +12,7 @@ FIX = Path(__file__).parent / "fixtures"
 @pytest.fixture
 def a(tmp_path, monkeypatch):
     club = Club(FIX / "test-club.yaml",
-                roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "Jane@Example.org", "officer": True},
+                roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "Jane@Example.org", "role": "President", "officer": True},
                         {"id": "n0bbbb", "first": "Old", "last": "Timer", "email": "old@example.org", "status": "Silent Key"}])
     club.auth = {"rp_id": "localhost"}
     sent = []
@@ -41,10 +41,39 @@ def test_unknown_and_inactive_addresses_get_nothing(a):
     assert a.sent == []
 
 
-def test_rate_limit(a):
-    for _ in range(8):
-        a.send_link("jane@example.org")
+def test_link_limits_per_address_and_overall(a, monkeypatch):
+    clock = [1_000_000_000.0]
+    monkeypatch.setattr(auth_mod.time, "time", lambda: clock[0])
+
+    def ask(ip, n=1, gap=auth_mod.REPEAT_SECONDS + 1):
+        for _ in range(n):
+            clock[0] += gap
+            a.send_link("jane@example.org", ip=ip)
+
+    ask("9.9.9.9", 8)                                     # someone else asks again and again
     assert len(a.sent) == auth_mod.EMAILS_PER_HOUR
+    ask("8.8.8.8")                                        # the member's own request still gets through
+    assert len(a.sent) == auth_mod.EMAILS_PER_HOUR + 1
+    ask("8.8.8.8", 3, gap=5)                              # quick repeats: nothing sent, nothing counted
+    assert len(a.sent) == auth_mod.EMAILS_PER_HOUR + 1
+    assert [e["ip"] for e in a.events() if e["kind"] == "link_limit"] == ["9.9.9.9"] * 3
+    for ip in ("1.1.1.1", "1.0.0.1", "4.4.4.4", "4.2.2.2"):  # many addresses: 15 an hour in all
+        ask(ip, 5)
+    assert len(a.sent) == auth_mod.LINKS_PER_HOUR_ALL
+    clock[0] += 3600                                      # an hour later, links again
+    ask("8.8.8.8")
+    assert len(a.sent) == auth_mod.LINKS_PER_HOUR_ALL + 1
+
+
+def test_old_links_table_gets_its_ip_column(a, tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / "old.sqlite")
+    db.execute("create table links (token_hash text primary key, member text not null, expires integer not null, "
+               "next text, used integer default 0, created integer not null)")
+    db.commit()
+    db.close()
+    b = auth_mod.Auth(a.club, tmp_path / "old.sqlite")
+    assert b.use_link("x") is None and "ip" in {r["name"] for r in b.db.execute("pragma table_info(links)")}
 
 
 def test_sessions(a):
@@ -139,11 +168,18 @@ def test_email_links_ignore_forged_host(monkeypatch):
 
 
 def test_failed_attempts_ban_internet_addresses_only(a):
-    for _ in range(auth_mod.BAN_AFTER - 1):
+    for _ in range(auth_mod.BAN_AFTER * 2):  # links asked for unknown addresses: logged, never counted (a member's
+        a.send_link("stranger@example.org", ip="9.9.9.9")  # address isn't, so a ban would tell them apart)
+    assert not a.banned("9.9.9.9")
+    for _ in range(auth_mod.UNKNOWN_LOGGED):
         a.send_link("stranger@example.org", ip="9.9.9.9")
+    count = "select count(*) from events where kind='unknown_email' and ip=?"
+    assert a.db.execute(count, ("9.9.9.9",)).fetchone()[0] == auth_mod.UNKNOWN_LOGGED  # a script can't fill the table
+    for _ in range(auth_mod.BAN_AFTER - 1):
+        a.event("bad_link", "9.9.9.9")
         a.event("bad_link", "192.168.1.50")
     assert not a.banned("9.9.9.9")
-    a.send_link("nobody@example.org", ip="9.9.9.9")                  # the tenth in an hour
+    a.event("bad_link", "9.9.9.9")                                      # the tenth in an hour
     assert a.banned("9.9.9.9") and a.bans()[0]["by"] == "automatic"
     a.event("bad_link", "192.168.1.50")                                 # LAN: logged, never auto-banned
     assert not a.banned("192.168.1.50") and not a.banned(None)
@@ -168,8 +204,12 @@ def test_banned_address_is_blocked_and_security_page_is_admins_only(tmp_path, mo
     c.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
     assert c.get("/admin/security").status_code == 404                  # not an admin
     a.ban("testclient", None, "test", "n0aaaa")                           # the test client's "address"
+    monkeypatch.setattr(web.archive, "club", club)
+    assert c.get("/profile").status_code == 200                          # signed in: a ban doesn't stop members
+    c.cookies.clear()
     r = c.get("/login")
-    assert r.status_code == 403 and "blocked" in r.text
+    assert r.status_code == 403 and "blocked" in r.text                  # signing in from it does
+    assert c.get("/calendar/public").status_code != 403                  # the public calendar stays open
     assert web.device("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36") == "Chrome on Windows"
     assert [web.where(x) for x in ("9.9.9.9", "192.168.1.5", "100.64.0.5", "127.0.0.1")] == \
         ["internet", "LAN", "tailnet", "this server"]
@@ -186,20 +226,6 @@ def test_failed_attempts_from_before_1_0_get_the_browser_column(tmp_path):
     a.event("bad_link", "203.0.113.9", agent="Firefox/150")
     assert [r["agent"] for r in a.events()] == ["Firefox/150", None]
 
-
-def test_sign_in_from_before_the_rename_still_works(tmp_path, monkeypatch):
-    from fastapi.testclient import TestClient
-
-    from club_minutes import web
-    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0aaaa", "first": "Jane", "last": "Doe", "email": "jane@example.org"}])
-    a = Auth(club, tmp_path / "auth.sqlite")
-    monkeypatch.setattr(web, "authn", a)
-    monkeypatch.setattr(web.archive, "club", club)
-    c = TestClient(web.app)
-    c.cookies.set(web.OLD_COOKIE, a.new_session("n0aaaa"))  # set by 0.19.0 or earlier
-    assert c.get("/profile", follow_redirects=False).status_code == 200
-    r = c.post("/logout", follow_redirects=False)
-    assert web.OLD_COOKIE in r.headers.get("set-cookie", "") and not a.all_sessions()
 
 def test_security_page_tabs(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
@@ -291,3 +317,152 @@ def test_no_passkey_offer_on_a_browser_that_has_one(tmp_path, monkeypatch):
     req = Request({"type": "http", "headers": [(b"cookie", b"pk_here=n0aaaa.a-b")], "method": "GET", "path": "/"})
     r = web.passkey_here(req, Response(), "n0bbbb")
     assert "pk_here=n0aaaa.n0bbbb;" in r.headers["set-cookie"] and "Max-Age=31536000" in r.headers["set-cookie"]
+
+
+class _SoftPasskey:
+    """A software passkey for tests: signs WebAuthn assertions with chosen flags (UP 0x01, UV 0x04)."""
+
+    def __init__(self, a, member):
+        import cbor2
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.key, self.id = ec.generate_private_key(ec.SECP256R1()), "c29mdC1wYXNza2V5LTE"  # base64url of "soft-passkey-1"
+        n = self.key.public_key().public_numbers()
+        cose = cbor2.dumps({1: 2, 3: -7, -1: 1, -2: n.x.to_bytes(32, "big"), -3: n.y.to_bytes(32, "big")})
+        a.db.execute("insert into passkeys (id, member, public_key, sign_count, created) values (?,?,?,0,0)", (self.id, member, cose))
+        self.a, self.count = a, 0
+
+    def assertion(self, options_json: str, flags: int) -> dict:
+        import base64
+        import hashlib
+        import json as js
+        import struct
+
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+        b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+        self.count += 1
+        client = js.dumps({"type": "webauthn.get", "challenge": js.loads(options_json)["challenge"],
+                           "origin": self.a.origins[0]}).encode()
+        auth = hashlib.sha256(self.a.rp_id.encode()).digest() + bytes([flags]) + struct.pack(">I", self.count)
+        sig = self.key.sign(auth + hashlib.sha256(client).digest(), ec.ECDSA(hashes.SHA256()))
+        return {"id": self.id, "rawId": self.id, "type": "public-key",
+                "response": {"clientDataJSON": b64(client), "authenticatorData": b64(auth), "signature": b64(sig)}}
+
+
+def test_admin_step_up_needs_user_verification_but_sign_in_doesnt(tmp_path):
+    """FIXES → a: turning on admin mode with a passkey needs user verification (a PIN, fingerprint or face), not just a
+    tap; ordinary sign-in still takes a tap alone, so older security keys keep working."""
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin", "callsign": "N0ADMN"}])
+    a = Auth(club, tmp_path / "auth.sqlite")
+    a.rp_id, a.origins = "club.example.org", ["https://club.example.org"]
+    key = _SoftPasskey(a, "n0admn")
+    cid, opts = a.step_up_options("n0admn")
+    with pytest.raises(Exception, match="(?i)verif"):
+        a.authenticate(cid, key.assertion(opts, 0x01), kind="step-up", member="n0admn")   # tapped, not verified
+    cid, opts = a.step_up_options("n0admn")
+    assert a.authenticate(cid, key.assertion(opts, 0x05), kind="step-up", member="n0admn") == "n0admn"  # verified
+    cid, opts = a.authentication_options()
+    assert a.authenticate(cid, key.assertion(opts, 0x01)) == "n0admn"                    # sign-in: a tap is enough
+
+
+def test_email_me_a_link_answers_before_the_email_is_sent(monkeypatch):
+    """FIXES → b: the sign-in email goes out after the reply, so a member's address (an email to send, ~1.3 s) and anyone
+    else's answer in the same time and the page can't be used to find out who's a member."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    order = []
+    monkeypatch.setattr(web.authn, "send_link", lambda *a, **k: order.append("email sent"))
+
+    async def watch(scope, receive, send):  # the app, noting when the reply is finished
+        async def noted(msg):
+            await send(msg)
+            if msg["type"] == "http.response.body" and not msg.get("more_body"):
+                order.append("reply finished")
+        await web.app(scope, receive, noted)
+    r = TestClient(watch).post("/login/email", data={"email": "amy@example.org"}, follow_redirects=False)
+    assert r.status_code == 303 and order == ["reply finished", "email sent"]
+
+
+def test_ipv6_bans_cover_the_64_and_old_bans_still_hold(a):
+    for i in range(auth_mod.BAN_AFTER):                                  # failures spread over one home's /64
+        a.event("bad_link", f"2001:4860:1:2::{i + 1:x}")
+    assert a.banned("2001:4860:1:2:ffff::9") and not a.banned("2001:4860:1:3::1")
+    assert a.bans()[0]["ip"] == "2001:4860:1:2::/64"                   # the Security page shows the block
+    a.unban("2001:4860:1:2::/64")
+    assert not a.banned("2001:4860:1:2::1")
+    a.ban("2001:4860:9:9::5", None, "by hand", "n0aaaa")                 # an admin's IPv6 ban covers the /64 too
+    assert a.banned("2001:4860:9:9::77")
+    a.unban("2001:4860:9:9::5")                                          # unbanning by an address in it lifts it
+    assert not a.banned("2001:4860:9:9::77")
+    a.db.execute("insert into bans values ('2001:4860:7:7::1', 0, null, 'from 1.0', 'automatic')")  # 1.0 kept the address
+    assert a.banned("2001:4860:7:7::1")
+    assert auth_mod.ban_key("9.9.9.9") == "9.9.9.9"
+
+
+def test_old_links_dont_count_toward_a_ban_made_up_ones_do(a, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web, "authn", a)
+    c = TestClient(web.app)
+    a.send_link("jane@example.org")
+    t = link_token(a.sent[0][1])
+    assert c.get(f"/login/link?t={t}", follow_redirects=False).status_code == 303   # signs in
+    c.cookies.clear()
+    r = c.get(f"/login/link?t={t}")                                     # used: "expired or already used"
+    assert "expired or was already used" in r.text and not a.events()
+    c.get("/login/link?t=made-up")
+    assert [e["kind"] for e in a.events()] == ["bad_link"]
+
+
+def test_hostile_requests_are_logged_and_only_probes_count_toward_a_ban(a, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", a.club)
+    monkeypatch.setattr(web, "client_ip", lambda request: "9.9.9.9")
+    out = TestClient(web.app, base_url="https://testserver")
+    kinds = lambda: sorted((e["kind"], e["detail"]) for e in a.events())
+    assert out.get("/.env").status_code == 404 and out.get("/wp-login.php").status_code == 404
+    assert out.get("/no-such-page", follow_redirects=False).status_code == 303   # an ordinary unknown address: just the sign-in page
+    assert kinds() == [("probe", "GET /.env"), ("probe", "GET /wp-login.php")]   # not the ordinary one
+    me = TestClient(web.app, base_url="https://testserver")
+    me.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
+    assert me.post("/logout", headers={"origin": "https://evil.example"}).status_code == 403
+    assert me.post("/roster/new", data={"first": "X"}).status_code in (403, 404)       # above a plain member's role
+    monkeypatch.setattr(web.limits, "max_upload", lambda: 10)
+    assert me.post("/upload", content=b"x" * (web.limits.FORM_ROOM + 100)).status_code == 413
+    got = [k for k, _ in kinds()]
+    assert "cross_site" in got and "too_big" in got
+    for _ in range(20):
+        me.post("/logout", headers={"origin": "https://evil.example"})               # never counted: the victim's address
+    assert not a.banned("9.9.9.9")
+    for _ in range(30):
+        me.post("/upload", content=b"x" * (web.limits.FORM_ROOM + 100))              # logged up to a cap an hour, then not
+    assert [k for k, _ in kinds()].count("too_big") == auth_mod.UNKNOWN_LOGGED
+    for _ in range(8):
+        out.get("/.git/config")
+    assert a.banned("9.9.9.9")                                                       # 10 probes in an hour
+
+
+def test_a_member_refused_an_action_is_logged(a, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", a.club)
+    me = TestClient(web.app, base_url="https://testserver")
+    me.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
+
+    @web.app.post("/test-refused")
+    def _refused():
+        raise web.HTTPException(403, "Only the Treasurer can do that.")
+    try:
+        assert me.post("/test-refused").status_code == 403
+        assert me.get("/test-refused").status_code == 405
+    finally:
+        web.app.router.routes.pop()
+    (e,) = a.events()
+    assert (e["kind"], e["member"], e["detail"]) == ("refused", "n0aaaa", "POST /test-refused")

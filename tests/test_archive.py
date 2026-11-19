@@ -226,6 +226,11 @@ def test_links_to_pages_of_the_app_stay_relative(tmp_path, monkeypatch):
     assert web.link_host("/bylaws") == "on this site"
     bad = {**form, "url": ["//evil.example/x", "/calendar", "https://discord.example/x"]}
     assert "error=" in TestClient(web.app).post("/links", data=bad, follow_redirects=False).headers["location"]
+    saved.clear()
+    r = TestClient(web.app).post("/links", data={}, follow_redirects=False)  # not from the page: it always sends its rows
+    assert r.status_code == 400 and "nothing was changed" in r.text and saved == []
+    blank = {"label": [""], "url": [""], "icon": [""], "show": ["both"]}  # every row blanked on the page: the links cleared
+    assert TestClient(web.app).post("/links", data=blank, follow_redirects=False).status_code == 303
 
 
 def test_link_icons():
@@ -306,7 +311,7 @@ def test_help_pages_show_the_guides(monkeypatch):
     assert 'popovertarget="shot1"' in admin and '<div popover id="shot1"' in admin and "<p><button" not in admin  # pictures open full size
     assert c.get("/help/developers").status_code == 404 and c.get("/help/..%2Fsecrets").status_code == 404
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: True)
-    assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin"))
+    assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin", "jitsi"))
     found = c.get("/search", params={"q": "passphrase", "kind": "help"}).text  # the search finds guide sections
     assert 'href="/help/server-admin#backups"' in found and 'id="backups"' in c.get("/help/server-admin").text
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: False)
@@ -371,7 +376,7 @@ def test_join_online_is_the_first_video_link(client, monkeypatch):
     c = web.archive.club
     monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"},
                                            {"label": "Weekly meeting", "url": "https://us02web.zoom.us/j/123"}])
-    assert 'href="https://us02web.zoom.us/j/123">Join online (Weekly meeting)' in client.get("/").text
+    assert 'href="https://us02web.zoom.us/j/123" target="_blank" rel="noopener">Join online (Weekly meeting)</a>' in client.get("/").text
     monkeypatch.setattr(c, "_yaml_links", [{"label": "Club Discord", "url": "https://discord.com/invite/x"}])
     assert "Join online" not in client.get("/").text
 
@@ -426,3 +431,22 @@ def test_anydate_formats_dates_and_leaves_typed_text():
     assert anydate("2025-07-25") != "2025-07-25"
     assert anydate("2026-11-05T19:30") == anydate("2026-11-05")
     assert anydate("spring 2019") == "spring 2019" and anydate("2025-13-45") == "2025-13-45" and anydate(None) == ""
+
+
+def test_one_unreadable_minutes_file_doesnt_stop_the_archive(tmp_path, m):
+    """Data sweep: Archive.reload parsed every file unguarded, so one bad file stopped the app."""
+    from club_minutes.store import Archive
+    m.save(tmp_path)
+    (tmp_path / "2026-01-01").mkdir()
+    (tmp_path / "2026-01-01" / "minutes.md").write_bytes(b"---\n: [unclosed\n---\n\xff")
+    assert [x.slug for x in Archive(tmp_path, club).meetings] == [m.slug]
+
+
+def test_front_matter_value_with_dashes_round_trips(m):
+    """A "---" typed in a value (a correction's reason, a guest's note) isn't the front matter's fence."""
+    import dataclasses
+    c = dataclasses.replace(m, corrections=[{"version": 2, "by": "n0call", "reason": "wrong date: Oct 5 --- not Oct 6",
+                                             "private": True, "notice": True}],
+                            reviewed={"by": "n0call", "at": "2026-01-01"})
+    back = Meeting.from_markdown(c.to_markdown())
+    assert back.corrections == c.corrections and back.reviewed == c.reviewed

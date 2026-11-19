@@ -33,7 +33,7 @@
 {% elif tab == 'notes' %}
 <p class="hint">Can't make it, or have news for the club? Leave a note: the leader sees it during Community Reports and reads it out.</p>
 <div class="cards">{% for n in my_notes %}<article class="card"><div class="muted small">Your note for {{ fmt(n.meeting) }}
-  <form method="post" action="/business/notes/{{ n.id }}/withdrawn" class="inline"><button class="linkbtn">Withdraw</button></form></div>
+  <form method="post" action="/business/notes/{{ n.id }}/withdrawn" class="inline" data-confirm="Withdraw this note?"><button class="linkbtn">Withdraw</button></form></div>
   <div class="card-text">{{ n.text }}</div></article>{% endfor %}</div>
 <form method="post" action="/business/notes" class="modern card">
   <label>For the meeting on<select name="meeting">{% for d in next_meetings %}<option value="{{ d.isoformat() }}">{{ d|date('weekday') }}</option>{% endfor %}</select></label>

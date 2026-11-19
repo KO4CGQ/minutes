@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import fcntl
 import json
+import logging
 import os
 import re
 import threading
@@ -21,7 +22,10 @@ import yaml
 from . import regions
 from .meeting import SECTIONS
 
+log = logging.getLogger(__name__)
+
 ROOT = Path(os.environ.get("CLUB_MINUTES_ROOT", Path(__file__).resolve().parents[2]))
+_site_lock = threading.Lock()
 DATA = Path(os.environ.get("CLUB_MINUTES_DATA", ROOT / "data"))
 MEETINGS = DATA / "meetings"
 ROSTER_CACHE = DATA / "roster.json"
@@ -80,7 +84,7 @@ def roster_locked(fn):
 # SMTP, and roster edits go to a local copy of the sheet, never the real one.
 PREVIEW = os.environ.get("CLUB_MINUTES_PREVIEW") or None
 # Stage mode (a staging server: docs/server-admin.md → Staging server): prod's data, pulled one way each night. Email
-# goes only to the person clicking (auth.send_email); the app doesn't update itself.
+# goes only to the person clicking (auth.send_email); it updates from what Admin → Updates → Update from says (updates.source()).
 STAGE = bool(os.environ.get("CLUB_MINUTES_STAGE"))
 
 
@@ -109,7 +113,8 @@ def _agenda(raw) -> list[dict]:
 
 # Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
 # chow: a rotation of members bringing food to meetings (the Chow page, reminders, the console's step, a missed-night fee).
-MODULES = {"chow": False}
+# jitsi: members join the club's own Jitsi Meet server signed in from here (meet.py; needs the jitsi: block and its secret).
+MODULES = {"chow": False, "jitsi": False}
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,4}$", re.IGNORECASE)  # 4 letters: some countries issue them, and examples like N0CALL can't be anyone's
 
 
@@ -174,37 +179,58 @@ class Member:
 
 
 # What a member may do, and the roles that allow it (Admin → Site → Roles). Each check in the app asks Club.may(member,
-# permission); admins, in admin mode, may do everything. In 1.0 the roles and what each allows are fixed; who has a
-# role comes from the offices they hold, or (Minutes editor, Calendar editor) from roles.json, set on Site → Roles.
+# permission); admins, in admin mode, may do everything (admin isn't a role, and no role edit can give it). A role is
+# given by whole office titles (exact, any capitals; titles that aren't offices give nothing) and by members picked by
+# hand; admins change both, and what each role allows, on Site → Roles (roles.json).
 PERMISSIONS = {
     "lead": "lead meetings and edit the minutes",
+    "correct": "correct minutes in the archive",
     "calendar": "change the club calendars",
     "chow": "change the chow schedule",
     "contacts": "see every member's contact details",
-    "oversee": "see Roster changes and undo them, the calendar change log and business suggestions; change any business item; take down a picture",
+    "oversee": "see Roster changes and undo them",
+    "moderate": "moderate: any business item, motions, suggestions, comments, pictures, the calendar log",
     "treasurer": "look at the Treasurer pages",
     "money": "record money and change the Treasurer settings",
-    "members": "add members and change their details",
+    "members": "add members and edit their details",
+    "emails": "change another member's email",
+    "status": "change a member's status",
+    "roster_emails": "get the roster emails",
+    "meet_host": "host video meetings",
 }
-# key: (name, who has it, permissions)
-ROLES: dict[str, tuple[str, str, tuple[str, ...]]] = {
-    "officer": ("Officer", "Holders of an officer's office", ("lead", "calendar", "chow", "contacts", "oversee", "treasurer")),
-    "board": ("Board", "Holders of any office", ()),
-    "treasurer": ("Treasurer", "Holders of an office named Treasurer", ("money",)),
-    "roster_keeper": ("Roster keeper", "Holders of an office that adds members", ("members",)),
-    "minutes_editor": ("Minutes editor", "Members picked here", ("lead", "calendar")),
-    "calendar_editor": ("Calendar editor", "Members picked here", ("calendar",)),
+# The built-in roles: key: (name, what it allows until an admin changes it). The keys are older than the names:
+# "board" is Minutes editor and "minutes_editor" is Meeting leader (roles.json and the roster's columns keep the keys).
+ROLES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "officer": ("Officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer", "meet_host")),
+    "board": ("Minutes editor", ("correct",)),
+    "treasurer": ("Treasurer", ("treasurer", "money")),
+    "roster_keeper": ("Roster keeper", ("members", "emails", "status")),
+    "secretary": ("Secretary", ("roster_emails",)),
+    "minutes_editor": ("Meeting leader", ("lead", "calendar", "meet_host")),
+    "calendar_editor": ("Calendar editor", ("calendar",)),
 }
-PICKED = ("minutes_editor", "calendar_editor")  # roles given to members by hand (roles.json), not by an office
+PICKED = ("minutes_editor", "calendar_editor")  # built-in roles given only by hand (before roles.json: the roster's ticks)
+DEFAULT_OFFICES = ["President", "Vice President", "Secretary", "Treasurer"]
 
+
+
+def office_list(raw: list) -> list[dict]:
+    """[{title, officer, seats}]: club.yaml entries are a title (an officer's office, one seat) or
+    {title, officer: false, seats: 3} (e.g. the elected trustees). Empty: DEFAULT_OFFICES."""
+    out = []
+    for o in raw or DEFAULT_OFFICES:
+        o = {"title": o} if isinstance(o, str) else dict(o)
+        out.append({"title": str(o["title"]), "officer": bool(o.get("officer", True)), "seats": int(o.get("seats", 1))})
+    return out
 
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
-                                    "invite_after_visits", "remind_days_before", "public_calendars")} | {
+                                    "invite_after_visits", "remind_days_before", "public_calendars", "supports_app")} | {
     ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
-    ("", "offices"), ("", "roster_keepers")}  # "": a top-level club.yaml setting
+    ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc"), ("modules", "jitsi"),
+    ("jitsi", "domain"), ("jitsi", "app_id")}  # "": a top-level club.yaml setting
 
 
 # club.yaml settings renamed since 1.0.0: (section, old name) -> (section, new name). The old name keeps working
@@ -254,33 +280,38 @@ class Club:
     def site_settings(self) -> dict:
         """What admins saved on Admin → Site: {section: {key: value}}, over club.yaml's."""
         p = DATA / "site-settings.json"
-        return json.loads(p.read_text()) if p.exists() else {}
+        try:
+            return json.loads(p.read_text()) if p.exists() else {}
+        except ValueError:
+            log.exception("%s is damaged; using club.yaml's settings", p)  # every page reads it: a torn file mustn't stop them all
+            return {}
 
     def save_site_settings(self, values: dict) -> None:
         """Set Site page settings together ({(section, key): value}; None: back to club.yaml's). Checked as the app
         checks club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
-        if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS]:
-            raise ValueError(f"{', '.join(bad)} can't be changed here.")
-        site = self.site_settings
-        for (section, key), value in values.items():
-            if value is None:
-                site.get(section, {}).pop(key, None)
-            else:
-                site.setdefault(section, {})[key] = value
-        site = {k: v for k, v in site.items() if v}
-        cfg = _overlay(self.yaml, site)
-        probe = Club.__new__(Club)
-        try:
-            probe._configure(cfg)
-            _ = (probe.meeting_weekday, probe.meeting_time, probe.timezone)
-        except Exception:
-            set_dates(self.info.get("date_formats"))  # the probe may have set the shared formats already
-            raise
-        p = DATA / "site-settings.json"
-        tmp = p.with_suffix(".tmp")
-        tmp.write_text(json.dumps(site, indent=1))
-        tmp.replace(p)
-        self._configure(cfg)
+        with _site_lock:  # two admins saving at once: one after the other, neither lost
+            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS]:
+                raise ValueError(f"{', '.join(bad)} can't be changed here.")
+            site = self.site_settings
+            for (section, key), value in values.items():
+                if value is None:
+                    site.get(section, {}).pop(key, None)
+                else:
+                    site.setdefault(section, {})[key] = value
+            site = {k: v for k, v in site.items() if v}
+            cfg = _overlay(self.yaml, site)
+            probe = Club.__new__(Club)
+            try:
+                probe._configure(cfg)
+                _ = (probe.meeting_weekday, probe.meeting_time, probe.timezone)
+            except Exception:
+                set_dates(self.info.get("date_formats"))  # the probe may have set the shared formats already
+                raise
+            p = DATA / "site-settings.json"
+            tmp = p.with_suffix(".tmp")
+            tmp.write_text(json.dumps(site, indent=1))
+            tmp.replace(p)
+            self._configure(cfg)
 
     def _configure(self, cfg: dict) -> None:
         """The settings, from club.yaml with the Site page's on top. Raises ValueError for a wrong one."""
@@ -376,7 +407,11 @@ class Club:
     def links(self) -> list[dict]:
         """Club links: label, url, optional icon, and where they show (page / minutes, both by default)."""
         p = DATA / "links.json"
-        return json.loads(p.read_text()) if p.exists() else self._yaml_links
+        try:
+            return json.loads(p.read_text()) if p.exists() else self._yaml_links
+        except ValueError:
+            log.exception("%s is damaged; using club.yaml's links", p)
+            return self._yaml_links
 
     def save_links(self, links: list[dict]) -> None:
         p = DATA / "links.json"
@@ -446,37 +481,112 @@ class Club:
         return out
 
     # ---- permissions ----
-    @staticmethod
-    def _picked() -> dict[str, list[str]] | None:
+    def _picked(self) -> dict | None:
+        """roles.json, read again only when it changes (every permission check asks)."""
         p = DATA / "roles.json"
-        return json.loads(p.read_text()) if p.exists() else None
+        try:
+            st = p.stat()
+        except FileNotFoundError:
+            return None
+        key = (p, st.st_mtime_ns, st.st_ino, st.st_size)  # each save replaces the file (a new inode): two saves in one clock tick differ
+        if getattr(self, "_rj", (None, None))[0] != key:
+            try:
+                data = json.loads(p.read_text())
+                if not isinstance(data, dict):
+                    raise TypeError("not an object")
+            except (OSError, ValueError, TypeError):
+                log.exception("%s is damaged; using the roster's ticks", p)  # every permission check reads it
+                data = None
+            self._rj = (key, data)
+        return self._rj[1]
 
-    def save_roles(self, picked: dict[str, list[str]]) -> None:
-        """Who has the roles given by hand (PICKED): {role: [member ids]}. Used at once."""
-        out = {k: sorted({self.canonical(i) for i in picked.get(k, []) if self.canonical(i) in self.members}) for k in PICKED}
+    def office_list(self) -> list[dict]:
+        return office_list(self.offices)
+
+    def _default_offices(self, key: str) -> list[str]:
+        offs = self.office_list()
+        pick = {"officer": lambda o: o["officer"], "board": lambda o: True,
+                "treasurer": lambda o: o["title"].lower() == "treasurer", "secretary": lambda o: o["title"].lower() == "secretary",
+                "roster_keeper": lambda o: o["title"].lower() in self.roster_keepers}.get(key, lambda o: False)
+        return [o["title"] for o in offs if pick(o)]
+
+    def role_table(self) -> dict[str, dict]:
+        """Every role, built-in first: {key: {name, perms, offices, members, builtin, edited}}. Offices are only the
+        club's current ones; a built-in role an admin hasn't changed follows today's offices."""
+        rj, offs = self._picked() or {}, {o["title"].lower(): o["title"] for o in self.office_list()}
+        table = rj.get("table") or {}
+        out = {}
+        for k in [*ROLES, *(k for k in table if k not in ROLES)]:
+            name, perms = ROLES.get(k, ("", ()))
+            t = table.get(k) or {}
+            # before roles.json, only the hand-given built-ins have picks: the roster's old ticks (never is_officer/is_board)
+            picked = rj.get(k) if k in rj else [m.id for m in self.members.values() if k in PICKED and getattr(m, k)]
+            out[k] = {"name": t.get("name") or name, "perms": [p for p in PERMISSIONS if p in t.get("perms", perms)],
+                      "offices": [offs[o.lower()] for o in t.get("offices", self._default_offices(k)) if o.lower() in offs],
+                      "members": [self.canonical(i) for i in picked or [] if self.canonical(i) in self.members],
+                      "builtin": k in ROLES, "edited": bool(t)}
+        return out
+
+    def save_roles(self, table: dict[str, dict]) -> None:
+        """Site → Roles: {key: {name, perms, offices, members}} for every role (a built-in left out is refused; a role
+        of the club's own left out is removed). Each built-in kept as it ships unless it differs. Used at once."""
+        if missing := [ROLES[k][0] for k in ROLES if k not in table]:
+            raise ValueError(f"The built-in roles can't be removed: {', '.join(missing)}.")
+        offs = {o["title"].lower(): o["title"] for o in self.office_list()}
+        names, out = set(), {}
+        for k, r in table.items():
+            name = " ".join(str(r.get("name") or "").split())[:40]
+            if not name:
+                raise ValueError("Every role needs a name.")
+            if name.lower() in names or name.lower() == "admin":
+                raise ValueError(f"Two roles can't both be called {name}.")
+            names.add(name.lower())
+            perms = {p for p in r.get("perms", []) if p in PERMISSIONS} | ({"treasurer"} if "money" in r.get("perms", []) else set())
+            out[k] = {"name": name, "perms": [p for p in PERMISSIONS if p in perms],
+                      "offices": [offs[o.lower()] for o in r.get("offices", []) if o.lower() in offs],
+                      "members": sorted({self.canonical(i) for i in r.get("members", []) if self.canonical(i) in self.members})}
+        if lost := [PERMISSIONS[p] for p in PERMISSIONS if not any(p in r["perms"] for r in out.values())]:
+            raise ValueError(f"No role would be allowed to {lost[0]}: give it to at least one role.")
+        rj = {k: r["members"] for k, r in out.items()}
+        rj["table"] = {k: {"name": r["name"], "perms": r["perms"], "offices": r["offices"]} for k, r in out.items()
+                       if k not in ROLES or (r["name"], tuple(r["perms"]), r["offices"])
+                       != (ROLES[k][0], tuple(p for p in PERMISSIONS if p in ROLES[k][1]), self._default_offices(k))}
         p = DATA / "roles.json"
         tmp = p.with_suffix(".tmp")
-        tmp.write_text(json.dumps(out, indent=1))
+        tmp.write_text(json.dumps(rj, indent=1))
         tmp.replace(p)
         for m in self.members.values():
             for k in PICKED:
-                setattr(m, k, m.id in out[k])
+                setattr(m, k, m.id in rj[k])
 
-    def roles(self, mid: str | None) -> list[str]:
-        """The member's roles (ROLES keys), in ROLES order. Admin isn't one: it's admin mode."""
+    def holds_office(self, mid: str | None) -> bool:
+        """Holds one of the club's offices (a whole title, any capitals): the board."""
+        m, offs = self.members.get(mid or ""), {o["title"].lower() for o in self.office_list()}
+        return bool(m) and any(t.strip().lower() in offs for t in (m.role or "").split(","))
+
+    def roles(self, mid: str | None, table: dict | None = None) -> list[str]:
+        """The member's roles (role_table keys), built-in first. Admin isn't one: it's admin mode."""
         m = self.members.get(mid or "")
         if not m:
             return []
-        has = {"officer": m.officer, "board": m.board, "treasurer": bool(m.role and "treasurer" in m.role.lower()),
-               "roster_keeper": bool(m.role and any(k in m.role.lower() for k in self.roster_keepers)),
-               "minutes_editor": m.minutes_editor, "calendar_editor": m.calendar_editor}
-        return [k for k in ROLES if has[k]]
+        held = {t.strip().lower() for t in (m.role or "").split(",")}
+        return [k for k, r in (table or self.role_table()).items() if m.id in r["members"] or held & {o.lower() for o in r["offices"]}]
+
+    def role_names(self, mid: str | None) -> list[str]:
+        t = self.role_table()
+        return [t[k]["name"] for k in self.roles(mid)]
+
+    def perms(self, mid: str | None) -> set[str]:
+        """Everything the member's roles allow."""
+        t = self.role_table()
+        return {p for k in self.roles(mid, t) for p in t[k]["perms"]}
 
     def may(self, mid: str | None, perm: str) -> bool:
         """Whether a member's roles allow `perm` (PERMISSIONS). The web app adds admins in admin mode."""
         if perm not in PERMISSIONS:
             raise KeyError(perm)
-        return any(perm in ROLES[k][2] for k in self.roles(mid))
+        t = self.role_table()
+        return any(perm in t[k]["perms"] for k in self.roles(mid, t))
 
     def can_lead(self, mid: str) -> bool:
         """Officers and minutes editors may lead a meeting and edit minutes."""
@@ -492,11 +602,37 @@ class Club:
     def app_admins(self) -> set[str]:
         """Admins added in the app (Admin → Security → Admins), besides club.yaml's `admins:` (self.admins)."""
         p = DATA / "admins.json"
-        return set(json.loads(p.read_text())) if p.exists() else set()
+        try:
+            return set(json.loads(p.read_text())) if p.exists() else set()
+        except (OSError, ValueError, TypeError):
+            log.exception("%s is damaged; only club.yaml's admins count", p)
+            return set()
 
     @property
     def all_admins(self) -> set[str]:
-        return {self.canonical(a) for a in self.admins | self.app_admins}  # club.yaml may still have an old call
+        """club.yaml's and the app's admins, less any suspended by the officers (recovery.py)."""
+        return {self.canonical(a) for a in self.admins | self.app_admins} - self.suspended  # club.yaml may still have an old call
+
+    @property
+    def suspended(self) -> set[str]:
+        """Admins suspended by a recovery: their admin rights don't count, club.yaml's included; another admin lifts it."""
+        p = DATA / "admins-suspended.json"
+        try:
+            return {self.canonical(a) for a in json.loads(p.read_text())} if p.exists() else set()
+        except (OSError, ValueError, TypeError):
+            log.exception("%s is damaged; nobody is suspended", p)
+            return set()
+
+    def save_suspended(self, ids: set[str]) -> None:
+        p = DATA / "admins-suspended.json"
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(sorted(ids)))
+        tmp.replace(p)
+
+    @property
+    def active_admins(self) -> set[str]:
+        """Admins who can still sign in (an Inactive or Silent Key admin can't, so they don't count)."""
+        return {a for a in self.all_admins if a in self.members and self.members[a].status.lower() == "active"}
 
     def save_app_admins(self, ids: set[str]) -> None:
         p = DATA / "admins.json"
@@ -518,8 +654,8 @@ class Club:
 
     @property
     def secretaries(self) -> list[str]:
-        """Members whose title includes Secretary (they keep the roster)."""
-        return [m.id for m in self.members.values() if m.role and "secretary" in m.role.lower()]
+        """Who gets the roster emails (the "roster_emails" permission; the Secretary's office by default)."""
+        return [mid for mid in self.members if self.may(mid, "roster_emails")]
 
     @property
     def leaders(self) -> list[str]:

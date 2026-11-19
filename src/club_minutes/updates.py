@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import subprocess
 import time
 from importlib.metadata import version as installed_version
+from pathlib import Path
 
 from . import branding
 from .club import DATA, PREVIEW, STAGE
@@ -22,7 +25,24 @@ from .club import DATA, PREVIEW, STAGE
 log = logging.getLogger("club_minutes.updates")
 REPO = "KO4CGQ/minutes"
 STUCK_AFTER = 600  # seconds a request may wait before the page says the updater didn't pick it up
+STALE_RUN = 1200  # seconds: past the unit's 15-minute timeout, a running file is left over from a kill or reboot
 CHECK_EVERY = 3600  # GitHub allows 60 unauthenticated checks an hour; one is plenty
+
+
+def _read(p: Path) -> dict:
+    """A cache or setting file; an unreadable one counts as none (the web app and the hourly job both write them)."""
+    try:
+        d = json.loads(p.read_text()) if p.exists() else {}
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        log.error("%s is unreadable; ignoring it", p)
+        return {}
+
+
+def _write(p: Path, d: dict) -> None:
+    tmp = p.with_name(f"{p.stem}.{os.getpid()}.tmp")  # the other process writes here too: never the same temp file
+    tmp.write_text(json.dumps(d))
+    tmp.replace(p)
 
 
 def running() -> str:
@@ -30,12 +50,68 @@ def running() -> str:
 
 
 def _v(s: str) -> tuple[int, ...]:
-    return tuple(int(x) for x in re.findall(r"\d+", s)[:3])
+    """Sort key for X.Y.Z, X.Y.Z-rc.N (a tag) or X.Y.ZrcN (pyproject): a release candidate sorts before its release."""
+    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-?rc\.?(\d+))?", s) or re.match(r"v?(\d+)\.(\d+)\.(\d+)()", s)
+    if not m:
+        raise ValueError(f"Not a version: {s}")
+    rc = m.group(4)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)), 0 if rc else 1, int(rc or 0))
 
 
 def newer(a: str, b: str) -> bool:
     """Is version a newer than version b?"""
     return _v(a) > _v(b)
+
+
+SOURCES = ("releases", "rc", "next")
+
+
+def source() -> str:
+    """What this server updates from: "releases", "rc" (release candidates too) or "next" (the next branch).
+    Only a staging server may choose; every other server always updates from releases."""
+    s = auto_settings().get("from")
+    return s if STAGE and s in SOURCES else "releases"
+
+
+def set_source(value: str) -> None:
+    if not STAGE or value not in SOURCES:
+        raise ValueError("Only a staging server chooses what to update from.")
+    _save_auto({**auto_settings(), "from": value})
+
+
+def running_commit() -> str:
+    """The commit this install is at ("" if it can't tell)."""
+    try:
+        return subprocess.run(["git", "-C", str(Path(__file__).resolve().parents[2]), "rev-parse", "HEAD"],
+                              capture_output=True, text=True, timeout=10, check=True).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _latest_next(fetch=None, force: bool = False) -> dict | None:
+    """The head of the next branch, as a pseudo-release (cached in update-check-next.json)."""
+    cache = DATA / "update-check-next.json"
+    if not force:
+        c = _read(cache)
+        if time.time() - c.get("at", 0) < CHECK_EVERY and c.get("next"):
+            return c["next"]
+    try:
+        if fetch is None:
+            import requests
+            r = requests.get(f"https://api.github.com/repos/{REPO}/branches/next", timeout=10,
+                             headers={"Accept": "application/vnd.github+json"})
+            r.raise_for_status()
+            d = r.json()
+        else:
+            d = fetch()
+        sha = d["commit"]["sha"]
+        rel = {"version": "next", "commit": sha[:7], "notes": d["commit"]["commit"]["message"].splitlines()[0],
+               "url": f"https://github.com/{REPO}/commit/{sha}", "deploy_notes": ""}
+        _write(cache, {"at": int(time.time()), "next": rel})
+        return rel
+    except Exception as e:  # noqa: BLE001
+        log.warning("update check failed: %s", e)
+        return _read(cache).get("next")
 
 
 def deploy_notes(notes: str) -> str:
@@ -60,10 +136,12 @@ def latest(fetch=None, force: bool = False) -> dict | None:
     """The latest GitHub release: {version, notes, url, deploy_notes}; the releases are cached in update-check.json.
     With several releases newer than the running one, notes and deploy_notes cover them all (newest first), so
     steps by hand in a release in between aren't skipped by going straight to the newest."""
+    if source() == "next":
+        return _latest_next(fetch, force)
     cache = DATA / "update-check.json"
     rels = None
-    if not force and cache.exists():
-        c = json.loads(cache.read_text())
+    if not force:
+        c = _read(cache)
         if time.time() - c.get("at", 0) < CHECK_EVERY:
             rels = c.get("releases") or ([c["release"]] if c.get("release") else [])
     if rels is None:
@@ -78,15 +156,16 @@ def latest(fetch=None, force: bool = False) -> dict | None:
                 data = fetch()
             data = [data] if isinstance(data, dict) else data
             rels = [{"version": d["tag_name"].lstrip("v"), "notes": d.get("body") or "", "url": d.get("html_url"),
-                     "deploy_notes": deploy_notes(d.get("body") or "")}
-                    for d in data if not d.get("draft") and not d.get("prerelease") and re.fullmatch(r"v?\d+\.\d+\.\d+", d.get("tag_name", ""))]
-            cache.write_text(json.dumps({"at": int(time.time()), "releases": rels}))
+                     "deploy_notes": deploy_notes(d.get("body") or ""), "rc": "-rc." in d["tag_name"]}
+                    for d in data if not d.get("draft") and (not d.get("prerelease") or "-rc." in d.get("tag_name", "")) and re.fullmatch(r"v?\d+\.\d+\.\d+(-rc\.\d+)?", d.get("tag_name", ""))]
+            _write(cache, {"at": int(time.time()), "releases": rels})
         except Exception as e:  # noqa: BLE001
             log.warning("update check failed: %s", e)
-            if not cache.exists():
+            c = _read(cache)
+            if not c:
                 return None
-            c = json.loads(cache.read_text())
             rels = c.get("releases") or ([c["release"]] if c.get("release") else [])
+    rels = [r for r in rels if source() == "rc" or not r.get("rc")]
     if not rels:
         return None
     rels = sorted(rels, key=lambda r: _v(r["version"]), reverse=True)
@@ -99,8 +178,10 @@ def latest(fetch=None, force: bool = False) -> dict | None:
 
 
 def available(fetch=None) -> dict | None:
-    """The latest release if it's newer than what's running."""
+    """The latest release (or the next branch's head) if it's newer than what's running."""
     rel = latest(fetch)
+    if rel and rel["version"] == "next":
+        return rel if rel["commit"] != running_commit()[:7] else None  # can't tell: offer it
     return rel if rel and newer(rel["version"], running()) else None
 
 
@@ -118,26 +199,34 @@ def status() -> dict:
     req = out.get("requested")
     if req and "running" not in out and time.time() - req.get("at", 0) > STUCK_AFTER:
         out["stuck"] = True  # nothing on the server picked it up: the updater isn't installed or failed to start
+    try:
+        if "running" in out and time.time() - (DATA / "update-running.json").stat().st_mtime > STALE_RUN:
+            out["stuck"] = True  # a reboot or kill left it behind: Cancel clears it
+    except FileNotFoundError:
+        pass  # the updater finished between the read and now
     return out
 
 
 def cancel() -> bool:
-    """Withdraw a request the updater never picked up."""
-    p = DATA / "update-request.json"
-    if p.exists():
-        p.unlink()
-        return True
-    return False
+    """Withdraw a request the updater never picked up, or clear a stale running file it left behind."""
+    st = status()
+    names = ["update-request.json"] + (["update-running.json"] if "running" in st and st.get("stuck") else [])
+    gone = [DATA / n for n in names if (DATA / n).exists()]
+    for p in gone:
+        p.unlink(missing_ok=True)
+    return bool(gone)
 
 
 def request(by: str, target: str, notes_confirmed: bool) -> None:
     """Ask the root-owned updater to run. Raises ValueError if it can't be asked now."""
-    if PREVIEW or STAGE:
-        raise ValueError("Previews and the staging server don't update themselves (deploy/preview.sh, deploy/stage-push.sh).")
+    if PREVIEW:
+        raise ValueError("Previews don't update themselves (deploy/preview.sh).")
+    rel = latest()
+    if not rel or target != rel["version"]:  # exactly what this server would install now (its Update from)
+        raise ValueError("That isn't something this server updates to.")
     st = status()
     if "requested" in st or "running" in st:
         raise ValueError("An update is already waiting or running.")
-    rel = latest()
     if rel and rel.get("deploy_notes") and not notes_confirmed:
         raise ValueError("This release needs the steps under Deploy notes first. Tick the box once they're done.")
     p = DATA / "update-request.json"
@@ -151,16 +240,15 @@ def request(by: str, target: str, notes_confirmed: bool) -> None:
 AUTO_HOUR = 2  # the default: the small hours, away from Thursday meetings
 
 def auto_settings() -> dict:
-    """{"on": bool, "hour": 0-23 (local), "told": [versions the admins were already emailed about]} (update-settings.json)."""
+    """{"on": bool, "hour": 0-23 (local), "told": [versions the admins were already emailed about], "from": see source()}
+    (update-settings.json)."""
     p = DATA / "update-settings.json"
-    return {"on": False, "hour": AUTO_HOUR, "told": [], **(json.loads(p.read_text()) if p.exists() else {})}
+    return {"on": False, "hour": AUTO_HOUR, "told": [], "from": "releases", **_read(p)}
 
 
 def _save_auto(s: dict) -> None:
     p = DATA / "update-settings.json"
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(s))
-    tmp.replace(p)
+    _write(p, s)
 
 
 def set_auto(on: bool, hour: int | None = None) -> None:
@@ -182,13 +270,14 @@ def auto(club, url: str, wait: float = 900, poll: float = 10, now=None) -> str:
     """The nightly run: if automatic updates are on and a newer release needs no steps by hand, back up, ask the
     updater for exactly that release, wait for the outcome and email the admins. Returns what it did."""
     s = auto_settings()
-    if PREVIEW or STAGE or not s["on"]:
+    if PREVIEW or not s["on"]:
         return "automatic updates are off"
     import datetime as dt
     if (now or dt.datetime.now()).hour != s["hour"]:
         return f"not now: automatic updates run at {s['hour']}:30"
     rel = latest(force=True)
-    if not rel or not newer(rel["version"], running()):
+    nxt = source() == "next"
+    if not rel or not ((running_commit() or rel["commit"])[:7] != rel["commit"] if nxt else newer(rel["version"], running())):
         return "up to date"
     v, page = rel["version"], f"{url}/admin/updates"
     last = status().get("last") or {}

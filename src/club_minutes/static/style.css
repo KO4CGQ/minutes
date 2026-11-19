@@ -73,9 +73,10 @@ input[type=text], input[type=search], input[type=email], input[type=tel], input[
 select, textarea {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm); padding: .45rem .65rem; }
+input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
 fieldset { min-width: 0; }  select { max-width: 100%; }  /* long option text ("Every year on the 1st Thursday of January") mustn't widen a phone page */
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
-input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1rem; height: 1rem; }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1.5rem; height: 1.5rem; }
 textarea { resize: vertical; line-height: 1.45; }
 
 /* buttons */
@@ -148,6 +149,9 @@ table.list { width: 100%; border-collapse: separate; border-spacing: 0; backgrou
 .list tbody tr:hover td { background: var(--accent-soft); }
 .list tbody tr:last-child td { border-bottom: 0; }
 .list .nw { white-space: nowrap; } .list td.wrap { overflow-wrap: anywhere; }
+code.wrap { overflow-wrap: anywhere; }
+.sitesec select { max-width: 100%; }
+button.chip { border: 0; cursor: pointer; font: inherit; font-size: .84rem; color: inherit; }
 .list .n { text-align: right; font-variant-numeric: tabular-nums; }
 .list td a { text-decoration: none; font-weight: 500; } .list td a:hover { text-decoration: underline; }
 th.asc::after { content: " ▲"; } th.desc::after { content: " ▼"; } .list thead th { cursor: pointer; user-select: none; }
@@ -202,16 +206,17 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .changelog details { border-bottom: 1px solid var(--border, #dde); padding: .4rem 0; } .changelog summary { cursor: pointer; }
 .changelog pre, .deploynotes pre, .guide pre { overflow-x: auto; max-width: 100%; }  /* a long command scrolls inside its box on a phone */
 .guide { overflow-wrap: break-word; } .guide code, .minutes.guide a { overflow-wrap: anywhere; word-break: normal; }  /* long paths and inline code wrap; words only if they must */
-a[target="_blank"]:not([class])::after { content: " ↗"; content: " ↗" / " (opens in a new tab)"; }  /* another site, in a new tab: says so, to screen readers too */
+a[target="_blank"]:not([class])::after { content: "\00a0↗"; content: "\00a0↗" / " (opens in a new tab)"; }  /* another site, in a new tab: says so, to screen readers too; a no-break space keeps ↗ with the last word */
 .guide pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem .8rem; } .guide pre code { background: none; padding: 0; }
 .guide img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); display: block; }
 .guide .shot { border: 0; padding: 0; background: none; cursor: zoom-in; width: min(100%, 24rem); margin: .4rem 0; }  /* a thumbnail; tap for full size */
 .guide .shot:hover img, .guide .shot:focus-visible img { outline: 2px solid var(--accent); outline-offset: 2px; }
-.modal.shotbig[popover] { width: auto; max-width: calc(100vw - 2rem); padding: 0; background: none; box-shadow: none; overflow: visible; }
-.shotbig img { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); border: 0; }
+.modal.shotbig[popover] { width: fit-content; height: fit-content;  /* the picture's size, so the popover centres it and its ✕ */
+   max-width: calc(100vw - 2rem); padding: 0; background: none; box-shadow: none; overflow: visible; }
+.shotbig img { display: block; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); border: 0; }
 .modal.shotbig > .calclose { background: var(--surface); border-radius: 50%; width: 2rem; height: 2rem; }
 .guide table { display: block; overflow-x: auto; border-collapse: collapse; } .guide th, .guide td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; vertical-align: top; }
-.guide h2 { scroll-margin-top: 4rem; } .guide h2 + p, .guide h2 + ul { margin-top: .4rem; }
+:target, .guide h2 { scroll-margin-top: 4rem; }  /* a link to #something lands below the sticky top bar */ .guide h2 + p, .guide h2 + ul { margin-top: .4rem; }
 .toc { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 1.4rem; }  /* the guide's sections, as chips */
 .toc a { background: var(--accent-soft); color: var(--accent-text); border-radius: 1rem; padding: .2rem .75rem; font-size: .88rem; text-decoration: none; }
 .toc a:hover { text-decoration: underline; }
@@ -221,9 +226,9 @@ a[target="_blank"]:not([class])::after { content: " ↗"; content: " ↗" / " (o
 .callout.warning, .callout.important { background: var(--warn-soft); color: var(--warn-text); border-left-color: var(--warn-edge); }
 .callout.caution { background: var(--danger-soft); color: var(--danger-text); border-left-color: var(--danger); }
 .callout.warning a, .callout.important a, .callout.caution a, .callout.warning code, .callout.caution code { color: inherit; }
-form.profile { max-width: 36rem; } form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
+form.profile { max-width: 36rem; } main form.profile[action^="/admin/"] { max-width: none; }  /* Admin pages: the page's width, as Security and Updates */ form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
-form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }
+form.profile input[name=motion], form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }
 form.profile input[type=checkbox] { display: inline-block; margin: 0 .3rem 0 0; }
 form.profile .hint { display: block; font-weight: normal; }
 form.profile fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 1rem 0; padding: .7rem 1rem; background: var(--surface); }
@@ -244,6 +249,11 @@ details.edit[open] { display: block; background: var(--surface-2); border: 1px s
 /* ---------- cards (business items, notes, suggestions) ---------- */
 .cards { display: flex; flex-direction: column; gap: .8rem; margin: .5rem 0 1.2rem; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .95rem 1.15rem; box-shadow: var(--shadow); }
+.cards.rooms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 21rem)); justify-content: center; }  /* Video meeting: one size (at most 21rem, so a narrow screen never widens them), 1 to 3 across, centred */
+form.card.room { max-width: none; }
+.cards.choice .card { display: flex; flex-direction: column; } .cards.choice .card > :last-child { margin-top: auto; }  /* signed out at a room: Sign in and Join as a guest level */
+.card.room > * { margin: .45rem 0; } .card.room > :first-child { margin-top: 0; } .card.room > :last-child { margin-bottom: 0; }  /* Video meeting's rooms: no page-sized gaps inside */
+.card.room .btn { min-height: 44px; display: inline-flex; align-items: center; }  /* an easy tap on a phone */
 .card.overdue { border-left: 4px solid var(--danger); } .card.done { background: var(--surface-2); } .card.done .card-text { color: var(--muted); }
 .card-head { display: flex; gap: .8rem; align-items: flex-start; justify-content: space-between; }
 .card-text { font-size: 1.04rem; white-space: pre-wrap; line-height: 1.45; }
@@ -414,6 +424,9 @@ nav.top a.start.soon { animation: startpulse 1.6s ease-in-out infinite; }
 .drawer .panel a { color: var(--nav-text); text-decoration: none; padding: .6rem .8rem; border-radius: .5rem; font-size: 1rem; }
 .drawer .panel a:hover { background: var(--nav-hover); } .drawer .panel a.on { background: var(--nav-on); box-shadow: inset 3px 0 0 var(--accent); }
 .drawer .panel .sep { border-top: 1px solid var(--nav-hover); margin: .4rem .2rem; }
+.drawer .panel a.kofi { margin-top: auto; align-self: flex-start; display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .95rem;
+  border-radius: 2rem; background: var(--nav-hover); font-size: .92rem; }  /* the menu's foot: Support Club Minutes */
+.drawer .panel a.kofi .ico { width: 1.2rem; height: 1.2rem; color: #ff5e5b; }  /* Ko-fi's red, on the logo only (contrast) */
 .drawer .panel form { margin: 0 0 .5rem; }
 .drawer .panel input[type=search] { width: 100%; padding: .5rem .9rem; border-radius: 2rem; border: 1px solid transparent; font-size: 16px;
   background: rgba(255, 255, 255, .92); color: #1b1f17; }  /* the same light pill as the bar's search, in either theme */
@@ -610,7 +623,7 @@ form.colours input[type=color] { width: 3rem; height: 2rem; padding: 0; border: 
 .tp-muted { color: var(--muted); font-size: .85rem; }
 
 /* Admin → Site: each section a card; collapsible ones open from their heading */
-.sitesec { margin: 0 0 1rem; max-width: 52rem; } fieldset.sitesec { min-width: 0; } /* "Your own formats" only while it's ticked (CSS :has; an older browser just always shows it) */
+.sitesec { margin: 0 0 1rem; } fieldset.sitesec { min-width: 0; } /* "Your own formats" only while it's ticked (CSS :has; an older browser just always shows it) */
 .sitedates:has(input[name=preset]:not([value=custom]):checked) [data-own] { display: none; } .sitesec h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
 details.sitesec > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .5rem; }
 details.sitesec > summary::-webkit-details-marker { display: none; }
@@ -618,19 +631,33 @@ details.sitesec > summary::before { content: "›"; font-size: 1.3rem; line-heig
 details.sitesec[open] > summary::before { transform: rotate(90deg); }
 details.sitesec > summary h2 { margin: 0; } details.sitesec[open] > summary { margin-bottom: .7rem; }
 form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items: flex-start; padding: .45rem 0; margin: 0; }
-.sitesec label.check input { margin-top: .25rem; }
+.sitesec label.check input { margin-top: .25rem; flex: none; }  /* a wrapped label mustn't squeeze the box */
+.sitesec label.check.small input { margin-top: 0; }
+main input.changed, main select.changed, main textarea.changed { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }  /* Site: changed, not saved yet */
+main label.changed { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: var(--radius-sm); }  /* small text: the .25rem above would drop the box below its line */
+.sitevideo .pair { display: flex; flex-wrap: wrap; column-gap: .8rem; margin-bottom: .5rem; }  /* Site → Video: name and address side by side */
+.sitevideo .pair label { flex: 1 1 12rem; } .sitevideo .pair input { width: 100%; } .sitevideo label:has(> select) { display: block; margin: .5rem 0; }
+.sitevideo label.check:has(> input[name^="guests"]:not(:checked)) + fieldset { display: none; }  /* members only: no guest rules to set */
+.sitevideo .guestgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); column-gap: 1rem; }
+label.check > input { flex: none; }  /* anywhere: a wrapped label mustn't squeeze its box (Settings, Roles) */
 .fmtgrid { display: grid; grid-template-columns: max-content minmax(8rem, 20rem) 1fr; gap: .5rem .8rem; align-items: center; }
 @media (max-width: 560px) { .fmtgrid { grid-template-columns: 1fr; } .fmtgrid span { margin-bottom: .4rem; } }
 .agendagrid { display: grid; grid-template-columns: auto 3.5rem minmax(10rem, 16rem) 1fr; gap: .45rem .7rem; align-items: center; }
 .agendagrid input[name^=pos] { width: 3.2rem; text-align: center; }
-.officegrid { display: grid; grid-template-columns: minmax(0, 18rem) auto 4.2rem auto; gap: .45rem 1rem; align-items: center; justify-items: start; }
+.officegrid { display: grid; grid-template-columns: minmax(0, 18rem) auto 4.2rem; gap: .45rem 1rem; align-items: center; justify-items: start; justify-content: start; }
 .officegrid input[name^=title] { width: 100%; min-width: 0; box-sizing: border-box; }
+.rolelist { display: grid; gap: .6rem; }
+.rolelist details.role { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: .5rem .9rem; }
+.rolelist details.role[open] > summary { margin-bottom: .4rem; } .rolelist .role p { margin: .3rem 0; }
+.rolelist .role summary { cursor: pointer; } .rolelist .role summary span { display: inline-block; margin-left: 1.1em; } .rolelist .role fieldset { margin: .5rem 0; }
+.rolelist details.role:has(.rmrole input:checked) > summary { text-decoration: line-through; opacity: .6; }  /* removed on Save */
+.rolelist .role fieldset label.check { display: flex; gap: .4rem; margin: .15rem 0; }
 .officegrid input[type=number] { width: 4rem; } .officegrid input[readonly] { background: var(--surface-2); }
 @media (max-width: 560px) { .officegrid { gap: .45rem .6rem; } .officegrid .agh { font-size: .7rem; line-height: 1.2; } }
 @media (max-width: 560px) { .agendagrid { grid-template-columns: auto 3.2rem minmax(0, 1fr); } .agendagrid .agh { display: none; }
   .agendagrid input[name^=hint] { grid-column: 2 / -1; margin-bottom: .6rem; } }
-form.siteagenda { max-width: 52rem; } form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }
-form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-sizing: content; min-height: 4lh; }  /* grows with its text where the browser can */
+form.profile .sitesec input[type=number] { display: inline-block; width: 4.5rem; margin: 0 .35rem 0 0; }
+form.sitewide textarea { width: 100%; field-sizing: content; min-height: 4lh; }  /* grows with its text where the browser can */
 /* the certificate's fields only while it's ticked (CSS :has; an older browser just always shows them) */
 .sitecert:has(input[name=cert_on]:not(:checked)) .certfields { display: none; }
 /* Features → the club's own holidays: a row each; "+ Add a holiday" shows the next empty row (CSS only: a checkbox per row) */
@@ -649,10 +676,6 @@ form.sitewide { max-width: 52rem; } form.sitewide textarea { width: 100%; field-
 .holrows .rm:has(input:focus-visible) { outline: 2px solid var(--accent); }
 .holrows .rm .rm-undo, .holrows .rm:has(input:checked) .rm-do { display: none; } .holrows .rm:has(input:checked) .rm-undo { display: inline; }
 .holrows .hrow:has(.rm input:checked) > :not(.rm) { opacity: .4; text-decoration: line-through; }
-.rolelist { display: grid; gap: .8rem; } .rolelist .role { border-top: 1px solid var(--border); padding-top: .6rem; }
-.rolelist .role h3 { margin: 0 0 .2rem; font-size: 1rem; } .rolelist .role p { margin: .2rem 0; }
-.permtable { width: 100%; border-collapse: collapse; font-size: .9rem; } .permtable th, .permtable td { text-align: left; vertical-align: top; padding: .35rem .5rem; border-bottom: 1px solid var(--border); }
-.rolelist ul.allows { margin: .1rem 0 .3rem; padding-left: 1.2rem; } .rolelist ul.allows li { margin: .05rem 0; }
 /* fields.js: a round ✕ inside the right edge of an optional date or time box, while it has a value (an iPhone fills a
    box in when tapped and its picker can't empty it) */
 .clearwrap { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
@@ -687,3 +710,30 @@ input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
   .startform label > * { width: 100%; min-width: 0; box-sizing: border-box; }
   .startform .btn { grid-column: 1 / -1; margin-top: .3rem; padding-block: .7rem; justify-content: center; text-align: center; }
 }
+/* Correct these minutes: each item's box grows with its text; the attendance radios centred under their heading */
+form.correct textarea { width: 100%; field-sizing: content; min-height: 2.6em; font-weight: normal; }
+form.correct details.sec { margin: 0 0 .8rem; padding: .6rem 1.15rem; }
+form.correct details.sec > summary { cursor: pointer; font-weight: 600; list-style: none; padding: .2rem 0; }
+form.correct details.sec > summary::-webkit-details-marker { display: none; }
+form.correct details.sec > summary::after { content: " ▾"; color: var(--muted); } form.correct details.sec[open] > summary::after { content: " ▴"; }
+form.correct details.sec[open] > summary { margin-bottom: .6rem; } form.correct details.sec > summary .muted { font-weight: normal; margin-left: .3rem; }
+.att-edit td:not(:first-child), .att-edit th:not(:first-child) { text-align: center; }
+form.correct fieldset.guest { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: .5rem .9rem .7rem; margin: 0 0 .7rem; }
+form.correct fieldset.guest legend { font-weight: 600; padding: 0 .3rem; }
+form.correct .item { display: flex; gap: .4rem; align-items: flex-start; flex-wrap: wrap; margin: 0 0 .5rem; } form.correct .item textarea { flex: 1 1 16rem; }
+form.correct .item .hint { flex-basis: 100%; margin: 0; }
+/* the preview of a correction: version now | new version, like a side-by-side diff */
+table.diff { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0 0 1.2rem; background: var(--surface); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+table.diff th, table.diff td { padding: .4rem .7rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+table.diff td.old { border-right: 1px solid var(--border); } table.diff th.part { background: var(--surface-2); }
+table.diff tr.same td { color: var(--muted); }
+table.diff tr.removed td.old, table.diff del { background: var(--danger-soft); color: var(--danger-text); }
+table.diff tr.added td.new, table.diff ins { background: color-mix(in srgb, #2e7d32 22%, var(--surface)); }
+table.diff del, table.diff ins { border-radius: 3px; padding: 0 .1em; } table.diff ins { text-decoration: underline; } table.diff del { text-decoration: line-through; }  /* not by colour alone */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Remove: a checkbox that strikes the row out (and back) */
+form.correct .rm input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+form.correct .rm:has(:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+form.correct .rm .on, form.correct .rm:has(:checked) .off { display: none; } form.correct .rm:has(:checked) .on { display: inline; }
+form.correct :is(.item, .guest):has(> .rm :checked) :is(textarea, input:not([type=checkbox])) { text-decoration: line-through; opacity: .5; }
+form.correct .rm { width: fit-content; }

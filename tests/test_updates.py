@@ -103,7 +103,7 @@ def test_admin_page(env, tmp_path, monkeypatch):
     c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1})
     c.cookies.set(web.COOKIE, a.new_session("bob"))
     assert "of the app is available" not in c.get("/links").text                 # not for members
-    assert c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1}).status_code == 403
+    assert c.post("/admin/updates/run", data={"target": "0.7.0", "notes_done": 1}).status_code == 404
 
 
 def test_backup_before_update(env, tmp_path, monkeypatch):
@@ -233,7 +233,7 @@ def test_auto_update_switch(env, tmp_path, monkeypatch):
     c.post("/admin/updates/auto", data={"on": 0})
     assert not updates.auto_settings()["on"]
     c.cookies.set(web.COOKIE, a.new_session("bob"))
-    assert c.post("/admin/updates/auto", data={"on": 1}).status_code == 403  # not for members
+    assert c.post("/admin/updates/auto", data={"on": 1}).status_code == 404  # not for members
 
 
 def test_several_releases_waiting(env):
@@ -251,3 +251,84 @@ def test_several_releases_waiting(env):
     assert updates.latest()["deploy_notes"] == rel["deploy_notes"]          # the same from the cache
     (env / "update-check.json").write_text(json.dumps({"at": 9e12, "release": {"version": "0.7.0", "notes": "", "url": "u", "deploy_notes": ""}}))
     assert updates.latest()["version"] == "0.7.0"                           # a cache from before this change still reads
+
+
+def test_update_from(env, monkeypatch):
+    """Release candidates order before their release; each source sees its own; only a staging server chooses."""
+    assert updates._v("1.0.1") < updates._v("1.1.0-rc.1") < updates._v("1.1.0-rc.2") < updates._v("1.1.0")
+    assert updates._v("1.1.0rc1") == updates._v("1.1.0-rc.1") and updates.newer("1.1.0", "1.1.0rc1")
+    assert updates.newer("1.1.1", "1.1.0.dev0") and not updates.newer("1.1.0", "1.1.0.dev0")  # a dev build: its X.Y.Z
+    with pytest.raises(ValueError):
+        updates._v("1.1")
+    data = [{"tag_name": "v1.1.0-rc.1", "body": "", "prerelease": True}, {"tag_name": "v1.0.1", "body": ""},
+            {"tag_name": "v1.1.0-rc.2", "body": "", "draft": True}, {"tag_name": "v1.0.2", "body": "", "prerelease": True}]
+    monkeypatch.setattr(updates, "running", lambda: "1.0.0")
+    monkeypatch.setattr(updates, "STAGE", True)
+    updates._save_auto({"from": "rc"})
+    assert updates.latest(lambda: data, force=True)["version"] == "1.1.0-rc.1"
+    updates.set_source("releases")
+    assert updates.latest()["version"] == "1.0.1"                           # the cache holds both; "releases" hides the rc
+    with pytest.raises(ValueError):
+        updates.request("n0admn", "1.1.0-rc.1", True)
+    with pytest.raises(ValueError):
+        updates.request("n0admn", "next", True)
+    with pytest.raises(ValueError):
+        updates.set_source("main")
+    updates.set_source("next")
+    fake = {"commit": {"sha": "abc1234def", "commit": {"message": "Add a thing\n\nmore"}}}
+    rel = updates.latest(lambda: fake, force=True)
+    assert rel["version"] == "next" and rel["commit"] == "abc1234" and rel["notes"] == "Add a thing"
+    monkeypatch.setattr(updates, "running_commit", lambda: "abc1234def")
+    assert updates.available() is None
+    monkeypatch.setattr(updates, "running_commit", lambda: "")
+    assert updates.available()["commit"] == "abc1234"
+    updates.request("n0admn", "next", True)
+    monkeypatch.setattr(updates, "STAGE", False)
+    assert updates.source() == "releases"                                   # the file is ignored off stage
+    with pytest.raises(ValueError):
+        updates.set_source("rc")
+
+
+def test_update_from_route(env, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    from club_minutes.club import Club
+    from club_minutes.store import Archive
+    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[{"id": "n0admn", "first": "Ann", "last": "Admin"}])
+    club.admins = {"n0admn"}
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "archive", Archive(root=tmp_path, club=club))
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setattr(updates, "latest", lambda *a, **k: None)
+    c = TestClient(web.app)
+    token = a.new_session("n0admn")
+    c.cookies.set(web.COOKIE, token)
+    a.set_admin(token, 60)
+    assert c.post("/admin/updates/from", data={"source": "rc"}).status_code == 400   # not a staging server
+    assert "Update from" not in c.get("/admin/updates").text
+    monkeypatch.setattr(updates, "STAGE", True)
+    assert c.post("/admin/updates/from", data={"source": "bogus"}).status_code == 400
+    assert c.post("/admin/updates/from", data={"source": "rc"}, follow_redirects=False).status_code == 303
+    assert updates.source() == "rc" and 'value="rc" checked' in c.get("/admin/updates").text
+
+
+def test_stale_running_file_and_torn_caches(env):
+    import os
+    import time
+    run = env / "update-running.json"
+    run.write_text(json.dumps({"to": "0.7.0"}))
+    assert not updates.status().get("stuck")                               # just started
+    old = time.time() - updates.STALE_RUN - 60
+    os.utime(run, (old, old))                                              # a reboot left it behind
+    assert updates.status()["stuck"]
+    assert updates.cancel() and "running" not in updates.status()
+    for name in ("update-check.json", "update-check-next.json", "update-settings.json"):
+        (env / name).write_text('{"at": 17')                               # torn
+    assert updates.auto_settings()["on"] is False
+    assert updates.latest(lambda: [{"tag_name": "v0.7.0", "body": ""}], force=True)["version"] == "0.7.0"
+    assert json.loads((env / "update-check.json").read_text())["releases"]

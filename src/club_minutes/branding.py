@@ -164,6 +164,8 @@ def _open(data: bytes):
             raise ValueError("That picture is too big.")
         img.load()  # decode it all now: a damaged or cut-off file fails here, with a message, not later
         return ImageOps.exif_transpose(img).convert("RGBA")
+    except Image.DecompressionBombError:  # claims billions of pixels: Pillow refuses before our cap is checked
+        raise ValueError("That picture is too big.")
     except (UnidentifiedImageError, OSError):  # not a picture, or a damaged one
         raise ValueError("That file isn't a picture we can read. Use a PNG, JPEG or WebP.")
 

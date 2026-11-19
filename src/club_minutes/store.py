@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import difflib
 import html
+import logging
 import re
 import sqlite3
 from collections import defaultdict
@@ -66,6 +67,9 @@ def spellings(club: Club) -> dict[str, set[str]]:
     return out
 
 
+log = logging.getLogger("club_minutes.store")
+
+
 class Archive:
     def __init__(self, root: Path = MEETINGS, club: Club | None = None):
         self.root = root
@@ -73,8 +77,12 @@ class Archive:
         self.reload()
 
     def reload(self) -> None:
-        paths = sorted(self.root.glob("*/minutes.md"), reverse=True)
-        self.meetings: list[Meeting] = [self._canonicalize(Meeting.load(p)) for p in paths]
+        self.meetings: list[Meeting] = []
+        for p in sorted(self.root.glob("*/minutes.md"), reverse=True):
+            try:
+                self.meetings.append(self._canonicalize(Meeting.load(p)))
+            except Exception:  # one unreadable file mustn't take the whole archive (and the app) down
+                log.exception("skipped unreadable minutes %s", p)
         self.by_slug = {m.slug: m for m in self.meetings}
         self.db = sqlite3.connect(":memory:", check_same_thread=False)
         self.db.execute("create virtual table docs using fts5(slug unindexed, section unindexed, member unindexed, text, tokenize='porter')")
@@ -84,7 +92,7 @@ class Archive:
         ]
         rows += [(m.slug, "Guests", "", f"{g['name']} {g.get('callsign', '')} {g.get('notes', '')}")
                  for m in self.meetings for g in m.guests]
-        self.db.executemany("insert into docs values (?,?,?,?)", rows)
+        self.db.executemany("insert into docs (slug, section, member, text) values (?,?,?,?)", rows)
         self.db.execute("create virtual table vocab using fts5vocab(docs, 'row')")
 
     def _canonicalize(self, m: Meeting) -> Meeting:
@@ -92,6 +100,10 @@ class Archive:
         c = self.club.canonical
         m.in_person = [c(x) for x in m.in_person]
         m.remote = [c(x) for x in m.remote]
+        m.leader, m.recorder = m.leader and c(m.leader), m.recorder and c(m.recorder)  # who may correct them
+        m.corrections = [{**x, "by": c(x["by"])} if x.get("by") else x for x in m.corrections]
+        if m.reviewed and m.reviewed.get("by"):
+            m.reviewed = {**m.reviewed, "by": c(m.reviewed["by"])}
         for items in m.sections.values():
             for it in items:
                 if it.member:

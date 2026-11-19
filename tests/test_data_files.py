@@ -1,0 +1,100 @@
+"""Checks over the source itself, for kinds of bug that reviews found: data files that miss a callsign change, writes
+that can leave half a file, and SQL that breaks when a table gains a column."""
+import re
+from pathlib import Path
+
+from club_minutes import callsign
+
+SRC = sorted((Path(__file__).parents[1] / "src" / "club_minutes").glob("*.py"))
+
+# JSON files in the data folder that a callsign change (callsign.STATE_FILES) doesn't rewrite, and why.
+NO_MEMBER_IDS = {
+    "backup-status.json": "when the last backup ran",
+    "branding.json": "the club's look",
+    "limits.json": "the upload limit",
+    "links.json": "the club's links",
+    "reminders-sent.json": "keys of reminders already sent (an id inside only stops a repeat; dropped after 60 days)",
+    "roster.json": "the roster cache: rebuilt from the sheet, which the rename rewrites",
+    "roster-sheet.json": "the sheet itself: the rename rewrites it row by row",
+    "preview-sheet.json": "the preview's sheet, as roster-sheet.json",
+    "site-settings.json": "club-wide settings",
+    "stage-sync-status.json": "when stage last synced",
+    "update-check.json": "the latest release on GitHub",
+    "update-check-next.json": "the next branch's latest commit on GitHub",
+    "update-request.json": "an update asked for (a member id is the asker, gone once it runs)",
+    "update-running.json": "that request while the updater runs it",
+    "update-settings.json": "update times",
+}
+
+
+def test_every_data_file_with_member_ids_follows_a_callsign_change():
+    """A file of member ids left out of callsign.STATE_FILES keeps the old callsign (a suspension lifted by a rename)."""
+    pattern = r'\b[Dd][Aa][Tt][Aa] / "([\w.-]+\.json)"|\b_(?:read|write|path)\("([\w.-]+\.json)"'  # prefs.py: _path("...")
+    found = {m for p in SRC for g in re.findall(pattern, p.read_text()) for m in g if m}
+    assert found - set(callsign.STATE_FILES) - set(NO_MEMBER_IDS) == set(), "add to callsign.STATE_FILES, or to NO_MEMBER_IDS with a reason"
+    assert not set(callsign.STATE_FILES) & set(NO_MEMBER_IDS)
+
+
+# Each renamed file and what keeps a callsign change from racing a save of it: the lock the change takes (web.py's
+# member_callsign holds them all), or "none" and why. One owner per file: a save elsewhere takes the same lock.
+LOCK = {"chow.json": "_chow_lock", "business.json": "business.locked()", "events.json": "events.locked()",
+        "treasurer.json": "treasurer.locked()", "recovery.json": "recovery.locked()", "admins.json": "recovery.locked()",
+        "admins-suspended.json": "recovery.locked()", "roles.json": "none: an admin's Roles save, rarely",
+        "email-prefs.json": "prefs.locked()", "settings.json": "prefs.locked()",
+        "calendar-feeds.json": "none: a member's own feed list", "ask-about.json": "none: one meeting leader at a time",
+        "meet-rooms.json": "none: written when a host opens a room"}
+
+
+def test_every_renamed_file_has_one_lock_owner_a_callsign_change_takes():
+    assert set(LOCK) == set(callsign.STATE_FILES), 'a file added to STATE_FILES needs its lock named here, or "none: why"'
+    route = (SRC[0].parent / "web.py").read_text().split("def member_callsign", 1)[1].split("\n@app", 1)[0]
+    assert all(h in route for h in {v for v in LOCK.values() if not v.startswith("none")}), "member_callsign must hold each"
+
+
+# Writes that aren't a temporary file then .replace(): "not atomic yet", except the locks and markers (nothing to tear).
+NOT_ATOMIC = {
+    ("callsign.py", "keep"): "a backup copy made before a rename",
+    ("auth.py", "p"): "the email log trimmed to its last lines",
+    ("console.py", "state_path(archive, slug)"): "a console's saved state",
+    ("console.py", "(archive.root / slug / name)"): "a console status file",
+    ("backup.py", "(d / name)"): "a backup file being fetched",
+    ("backup.py", "p"): "backup-status.json",
+    ("events.py", "marker"): "a marker file",
+    ("events.py", '(DATA / "events-meeting-added")'): "a marker file",
+    ("updates.py", "cache"): "the release check's cache",
+    ("calview.py", "p"): "calendar-feeds.json",
+    ("web.py", '(DATA / "stage-sync-request")'): "a request file the sync timer reads",
+    ("web.py", "f"): "the stage sync's pause marker",
+    ("club.py", 'open(DATA / "roster.lock", "w")'): "a lock",
+    ("events.py", 'open(DATA / "events.lock", "w")'): "a lock",
+    ("business.py", 'open(DATA / "business.lock", "w")'): "a lock",
+    ("recovery.py", 'open(DATA / "recovery.lock", "w")'): "a lock",
+    ("prefs.py", 'open(DATA / "prefs.lock", "w")'): "a lock",
+    ("auth.py", 'open(DATA / "email-log.lock", "w")'): "a lock",
+    ("corrections.py", 'open(archive.root / s / ".send.lock", "w")'): "a lock",
+    ("treasurer.py", 'open(DATA / "treasurer.lock", "w")'): "a lock",
+    ("upgrade.py", 'open(data / "upgrade.lock", "w")'): "a lock",
+}
+
+
+def test_every_data_file_write_is_atomic_or_listed():
+    """A crash mid-write leaves half a file: write to a .tmp path and .replace() it, or be on NOT_ATOMIC with a reason."""
+    bad = []
+    for p in SRC:
+        lines = p.read_text().splitlines()
+        for i, line in enumerate(lines):
+            m = re.search(r"(\S.*?)\.write_(?:text|bytes)\(", line) or re.search(r'(?:with )?(open\([^)]*, "w"\))', line)
+            if not m:
+                continue
+            what = m.group(1).removeprefix("with ").strip()
+            if "tmp" in what and ".replace(" in "\n".join(lines[i + 1:i + 5]):
+                continue
+            if (p.name, what) not in NOT_ATOMIC:
+                bad.append(f"{p.name}:{i + 1} {what}")
+    assert not bad, bad
+
+
+def test_every_sql_insert_names_its_columns():
+    """`insert into t values (...)` breaks when a new release adds a column to t: name the columns."""
+    bad = [p.name for p in SRC if re.search(r"insert\s+(?:or\s+\w+\s+)?into\s+\w+\s+values", p.read_text(), re.IGNORECASE)]
+    assert not bad, bad

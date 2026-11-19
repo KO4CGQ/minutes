@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import datetime as dt
 import functools
+import hashlib
 import itertools
 import json
 import logging
 import os
 import re
+import secrets
 import string
 import threading
 import time
@@ -34,7 +36,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from markupsafe import Markup, escape
+from markupsafe import Markup
 from starlette.concurrency import (
     run_in_threadpool,  # async routes hand slow work (the roster sheet, email, S3) to a thread
 )
@@ -49,12 +51,15 @@ from . import (
     calview,
     chow,
     console,
+    corrections,
     events,
     limits,
+    meet,
     membership,
     offices,
     prefs,
     profile,
+    recovery,
     regions,
     theme,
     treasurer,
@@ -63,6 +68,7 @@ from . import (
 )
 from . import auth as authmod
 from . import callsign as callsign_mod
+from . import pdf as pdfmod
 from .auth import Auth, _safe_next
 from .backup import KEY_FILE
 from .club import (
@@ -70,7 +76,6 @@ from .club import (
     DATA,
     DATES,
     PERMISSIONS,
-    PICKED,
     PREVIEW,
     ROLES,
     STAGE,
@@ -78,6 +83,7 @@ from .club import (
     _agenda,
     _server_timezone,
     num,
+    office_list,
     one_line,
     show_date,
     valid_email,
@@ -87,6 +93,7 @@ from .roster import COLUMNS, SHAREABLE, SheetError
 # Not birthday and share (the member's own choice), nor the role ticks (Admin → Site → Roles, roles.json)
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share", "minutes_editor", "calendar_editor"))
 from .meeting import SECTIONS
+from .pdf import linkify
 from .store import SEARCH_WORDS, Archive, spellings
 
 HERE = Path(__file__).parent
@@ -109,17 +116,10 @@ if not _log.handlers:
     _log.propagate = False
 
 COOKIE = "club_minutes_session"
-OLD_COOKIE = "w8lbz_session"  # shortcut: sign-ins from before 1.0.0 (the app's earlier name); drop once they've expired
 CHALLENGE_COOKIE = "club_minutes_pk"
-PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico",
+PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico", "/email/confirm",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
                 "/api/roster")  # its own token, and only from the server itself
-URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
-
-
-def linkify(text: str) -> Markup:
-    return Markup(URL_RE.sub(r'<a href="\1">\1</a>', str(escape(text))))
-
 
 def by_last_name(ids):
     c = archive.club
@@ -186,6 +186,7 @@ def _assets_stamp() -> str:
 templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
+                             video_ready=lambda: bool(meet.settings(archive.club)),  # Jitsi on, set up, and its secret set
                              cite=lambda rule: archive.club.cite(rule),
                              email_ready=authmod.email_ready,  # a new server, before its SMTP settings: links go to its log
                              cert=lambda: archive.club.certificate,
@@ -211,33 +212,67 @@ def _theme_stamp() -> str:
 # ---------------- login gate ----------------
 
 def _session_token(request: Request) -> str | None:
-    return request.cookies.get(COOKIE) or request.cookies.get(OLD_COOKIE)
+    return request.cookies.get(COOKIE)
+
+
+# Addresses only attack tools ask for: other apps' admin pages, secrets files, scripts this app never has.
+PROBE = re.compile(r"^/(\.(env|git|aws|ssh|svn|htaccess|DS_Store)|wp-|wordpress|phpmyadmin|pma/|xmlrpc|cgi-bin|vendor/|"
+                   r"actuator|server-status|boaform|HNAP1|owa/|autodiscover|solr/|druid/)|\.(php|aspx?|jsp|cgi|env)$", re.IGNORECASE)
+
+
+def _security_event(request: Request, kind: str) -> None:
+    """Log a hostile or refused request on the Security page: what was tried, from where, by which member if any."""
+    who = getattr(request.state, "real_member", None) or authn.member_for(_session_token(request))
+    authn.event(kind, client_ip(request), who, f"{request.method} {request.url.path}"[:200],
+                agent=request.headers.get("user-agent", ""))
 
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
-    if authn.banned(client_ip(request)):
-        return HTMLResponse("This address has been blocked after repeated failed sign-ins. "
-                            "If that's a mistake, ask a club officer.", status_code=403)
     archive.club.refresh()  # pick up a roster sync without a restart
     token = _session_token(request)
     real = authn.member_for(token)
     request.state.real_member = real
     request.state.admin_until = authn.admin_until(token) if real else None
-    # "View as": an admin in admin mode sees the app exactly as another member does, read-only.
-    va = authn.view_as(token) if request.state.admin_until else None
+    # "View as": an admin in admin mode sees the app exactly as another member does, read-only; on a test server
+    # (stage, a preview) they may act as them instead: make changes as them, each one in the admin log.
+    va, acts = authn.view_as(token) if request.state.admin_until else (None, False)
     request.state.viewing_as = va if va in archive.club.members and va != real else None
+    request.state.acting_as = bool(request.state.viewing_as and acts and test_server())
+    authmod.ACTING.set(request.state.acting_as)
     request.state.member = request.state.viewing_as or real
     authmod.ACTOR.set(getattr(archive.club.members.get(real or ""), "email", None) or None)  # stage: their email only
     path = request.url.path
+    # A ban stops signing in, not members already signed in (an address can be the clubhouse's or a phone carrier's)
+    if not real and not path.startswith(("/calendar/public", "/calendar/feed/", "/static/", "/brand/", "/favicon.ico")) \
+            and authn.banned(client_ip(request)):
+        return HTMLResponse("This address has been blocked after repeated failed sign-ins. "
+                            "If that's a mistake, ask a club officer.", status_code=403)
+    if not real and PROBE.search(path):  # before the sign-in redirect, which every unknown address gets
+        _security_event(request, "probe")
+        return HTMLResponse("Not Found", status_code=404)
     if request.state.viewing_as:
         request.state.admin_until = None  # their permissions, not the admin's
-        if path.startswith(("/account", "/profile/email", "/logout", "/auth/")) or (
-                request.method not in ("GET", "HEAD") and not path.startswith("/admin/")):
-            return HTMLResponse("You're viewing the app as another member, which is read-only. "
-                                "Stop viewing as them (banner at the top) to make changes.", status_code=403)
+        # their sign-ins and private calendar feed (prod's, on stage), even when acting
+        if path.startswith(("/account", "/profile/email", "/logout", "/auth/", "/login", "/email/confirm",
+                            "/calendar/subscribe")):
+            return HTMLResponse("Their sign-in, passkeys and email address stay theirs. "
+                                "Stop viewing as them (banner at the top) first.", status_code=403)
+        if request.method not in ("GET", "HEAD") and not path.startswith("/admin/"):
+            if not request.state.acting_as:
+                return HTMLResponse("You're viewing the app as another member, which is read-only. "
+                                    "Stop viewing as them (banner at the top) to make changes.", status_code=403)
+            _admin_log(request, acted_as=request.state.viewing_as, did=f"{request.method} {path}"[:200])
+            _log.info("%s acting as %s: %s %s", one_line(real), one_line(request.state.viewing_as), request.method,
+                      one_line(path))
     if request.state.member or path.startswith(PUBLIC_PATHS):
         return await call_next(request)
+    if request.method == "GET" and path.startswith("/meet/") and meet.members_only(archive.club, path[6:].lower()):
+        refused = page(request, "meet.html", members_only=True, room=path[6:].lower())
+        refused.status_code = 403
+        return refused
+    if request.method == "GET" and path.startswith("/meet/") and (g := meet.guest_room(archive.club, path[6:].lower())):
+        return page(request, "meet.html", guest=g, domain=meet.settings(archive.club)["domain"])  # sign in, or join as a guest
     if request.method == "GET" and not path.startswith("/api/"):
         target = path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
@@ -251,6 +286,7 @@ async def upload_limit(request: Request, call_next):
     """Turn away a request bigger than the admin's upload limit before reading it (a huge upload would fill the disk)."""
     size = request.headers.get("content-length", "")
     if (num(size) or 0) > limits.max_upload() + limits.FORM_ROOM:
+        _security_event(request, "too_big")
         return HTMLResponse(f"That's too big to upload: {limits.upload_mb()} MB at most. Go back and pick a smaller file.",
                             status_code=413)
     return await call_next(request)
@@ -264,6 +300,7 @@ async def same_origin_only(request: Request, call_next):
         origin = request.headers.get("origin")
         if (request.headers.get("sec-fetch-site") in ("cross-site", "same-site")
                 or (origin is not None and urlsplit(origin).netloc != request.headers.get("host", ""))):
+            _security_event(request, "cross_site")
             return HTMLResponse("That came from another site, so it was refused. Open the app itself and try again.", status_code=403)
     return await call_next(request)
 
@@ -276,8 +313,10 @@ async def security_headers(request: Request, call_next):
     h = response.headers
     # scripts only from the app's own files or a <script> block this page was given the nonce for: injected markup
     # (an <img onerror=...>, a <script> in typed text) doesn't run. Inline style= attributes are still allowed.
+    # form-action holds for every redirect after a form, so /meet's "Open it" may end on the club's Jitsi server
+    to = f" https://{j['domain']}" if request.url.path == "/meet" and (j := meet.settings(archive.club)) else ""
     h.setdefault("Content-Security-Policy", f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
-                 "img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+                 f"img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'{to}")
     h.setdefault("X-Content-Type-Options", "nosniff")
     h.setdefault("Referrer-Policy", "same-origin")
     h.setdefault("X-Robots-Tag", "noindex, nofollow")  # members-only; keep the public hostname out of search engines
@@ -301,13 +340,25 @@ def admin_mode(request: Request) -> bool:
 
 
 def privileged(request: Request) -> bool:
-    """Officers (the "oversee" permission), and admins while admin mode is on: the change log, undo, any business item."""
+    """Officers (the "oversee" permission), and admins while admin mode is on: Roster changes and undoing them."""
     return archive.club.may(getattr(request.state, "member", None), "oversee") or admin_mode(request)
+
+
+def moderates(request: Request) -> bool:
+    """The "moderate" permission (officers, as it ships), and admins in admin mode: any business item, motions and
+    suggestions, comments, pictures, the calendar change log."""
+    return archive.club.may(getattr(request.state, "member", None), "moderate") or admin_mode(request)
+
+
+def moderator(request: Request) -> str:
+    if not moderates(request):
+        raise HTTPException(403, "Only officers can do that.")
+    return request.state.member
 
 
 def leader(request: Request) -> str:
     if not (archive.club.can_lead(request.state.member) or admin_mode(request)):
-        raise HTTPException(403, "Only officers and minutes editors can lead a meeting.")
+        raise HTTPException(403, "Only officers and meeting leaders can lead a meeting.")
     return request.state.member
 
 
@@ -336,6 +387,8 @@ def passkey_here(request: Request, response: Response, member: str) -> Response:
 async def http_error(request: Request, exc: StarletteHTTPException):
     """A page, not a line of JSON, when a browser opens an address that isn't there (or isn't allowed); the
     app's own scripts ask for JSON and still get it."""
+    if exc.status_code == 403 and request.method not in ("GET", "HEAD") and getattr(request.state, "real_member", None):
+        _security_event(request, "refused")  # a member trying something their role doesn't allow
     if request.method == "GET" and "text/html" in request.headers.get("accept", "") and exc.status_code in (403, 404):
         r = page(request, "error.html", code=exc.status_code, detail=exc.detail if exc.status_code == 403 else "")
         r.status_code = exc.status_code
@@ -367,12 +420,15 @@ def _page(request: Request, name: str, **ctx) -> HTMLResponse:
         "meeting_at": f"{(archive.club.meeting_weekday + 1) % 7} {archive.club.meeting_time}",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
+        "acting_as": getattr(request.state, "acting_as", False),
         **_money_nav(request, mid),
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         # an open meeting from another day (say, last week's never submitted): leaders get "Continue minutes"
         "open_draft": next((m for m in archive.meetings if m.status == "draft"), None),
         "update_available": _update_badge(request),
+        # the menu's Support link: off when the club supports the app (Site → Features) or the member hid it
+        "show_support": bool(mid) and not archive.club.info.get("supports_app") and prefs.settings(mid)["support_link"] == "show",
         "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id and not has_passkey_here(request, mid)),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
 
@@ -387,8 +443,8 @@ def _money_nav(request: Request, mid: str | None) -> dict:
 
 def _update_badge(request: Request) -> str | None:
     """For admins (in admin mode or not): the newer version, if there is one (cached check, see updates.py)."""
-    if STAGE or not archive.club.is_admin(getattr(request.state, "real_member", None)):
-        return None  # stage is updated by hand (deploy/stage-push.sh)
+    if PREVIEW or not archive.club.is_admin(getattr(request.state, "real_member", None)):
+        return None  # previews have no updater
     try:
         rel = updates.available()
     except Exception:  # noqa: BLE001
@@ -465,15 +521,20 @@ def brand_picture(name: str):
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, next: str = "/", sent: int = 0, error: str = ""):
+def login_page(request: Request, next: str = "/", sent: int = 0, error: str = "", note: str = ""):
     if request.state.member:
         return RedirectResponse(_safe_next(next), status_code=303)
-    return page(request, "login.html", next=_safe_next(next), sent=sent, error=error)
+    return page(request, "login.html", next=_safe_next(next), sent=sent, error=error, note=LOGIN_NOTES.get(note, ""))
+
+
+LOGIN_NOTES = {"email": "Your email has changed, and you're signed out everywhere: sign in again."}  # codes, never text from the link
 
 
 @app.post("/login/email")
-def login_email(request: Request, email: str = Form(...), next: str = Form("/")):
-    authn.send_link(email, next, base_url=base_url(request), ip=client_ip(request), agent=request.headers.get("user-agent", ""))
+def login_email(request: Request, background: BackgroundTasks, email: str = Form(...), next: str = Form("/")):
+    # After the reply: a member's address (an email to send) and anyone else's must answer alike, or the time tells
+    background.add_task(authn.send_link, email, next, base_url=base_url(request), ip=client_ip(request),
+                        agent=request.headers.get("user-agent", ""))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
@@ -481,7 +542,8 @@ def login_email(request: Request, email: str = Form(...), next: str = Form("/"))
 def login_link(request: Request, t: str = ""):
     used = authn.use_link(t)
     if not used:
-        authn.event("bad_link", client_ip(request), agent=request.headers.get("user-agent", ""))
+        if not authn.link_issued(t):  # an old link isn't an attack; a made-up one counts toward a ban
+            authn.event("bad_link", client_ip(request), agent=request.headers.get("user-agent", ""))
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
@@ -495,7 +557,6 @@ def logout(request: Request):
     authn.end_session(_session_token(request))
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE)
-    response.delete_cookie(OLD_COOKIE)
     return response
 
 
@@ -554,8 +615,8 @@ def owner_id(value: str | None) -> str | None:
 
 def manages_business(request: Request, meeting: str = "") -> bool:
     """Who changes any business item: officers (and admins in admin mode) on the Business page, and whoever
-    leads a meeting from its console (`meeting` set). Minutes editors don't get it on the Business page."""
-    return privileged(request) or bool(meeting and can_lead_now(request))
+    leads a meeting from its console (`meeting` set). Meeting leaders don't get it on the Business page."""
+    return moderates(request) or bool(meeting and can_lead_now(request))
 
 
 def _may_edit_item(request: Request, s: dict, iid: str, meeting: str = "") -> None:
@@ -624,7 +685,7 @@ def followups_after_submit(slug: str) -> None:
 
 
 @app.post("/business/suggest")
-def business_suggest(request: Request, meeting: str = Form(...), mid: str = Depends(officer)):
+def business_suggest(request: Request, meeting: str = Form(...), mid: str = Depends(moderator)):
     if not ai.configured(archive.club):
         raise HTTPException(404)
     get_meeting(meeting)
@@ -637,13 +698,13 @@ def business_suggest(request: Request, meeting: str = Form(...), mid: str = Depe
 
 @app.post("/business/suggestions/{sid}/accept")
 def suggestion_accept(request: Request, sid: str, text: str = Form(""), owner: str = Form(""), due: str = Form(""),
-                      mid: str = Depends(officer)):
+                      mid: str = Depends(moderator)):
     return business_change(request, lambda s: business.accept_suggestion(s, sid, mid, text or None, owner_id(owner) or "", due),
                            back="/business?tab=suggestions")
 
 
 @app.post("/business/suggestions/{sid}/dismiss")
-def suggestion_dismiss(request: Request, sid: str, mid: str = Depends(officer)):
+def suggestion_dismiss(request: Request, sid: str, mid: str = Depends(moderator)):
     return business_change(request, lambda s: business.dismiss_suggestion(s, sid, mid), back="/business?tab=suggestions")
 
 
@@ -670,7 +731,7 @@ def business_motion(request: Request, mover: str = Form(""), seconder: str = For
 
 @app.post("/business/{iid}/motion")
 def business_motion_edit(request: Request, iid: str, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
-                         result: str = Form(""), mid: str = Depends(officer)):
+                         result: str = Form(""), mid: str = Depends(moderator)):
     return business_change(request, lambda s: business.set_motion(s, archive.club, iid, mid, owner_id(mover),
                                                                   owner_id(seconder), what, result),
                            back=f"/business?tab=motions#i{iid}")
@@ -699,7 +760,7 @@ def business_comment(request: Request, iid: str, text: str = Form(...), back: st
 
 @app.post("/business/{iid}/comments/{cid}/delete")
 def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), mid: str = Depends(me)):
-    return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, privileged(request)),
+    return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, moderates(request)),
                            back=_back(back, iid, f"/business#i{iid}"))
 
 
@@ -756,7 +817,7 @@ _chow_lock = threading.Lock()
 
 def can_edit_chow(request: Request) -> bool:
     """Changing the schedule: officers (it's the Secretary's job day to day) and admins in admin mode.
-    Minutes editors see the member view; they record chow on meeting night from the console."""
+    Meeting leaders see the member view; they record chow on meeting night from the console."""
     return archive.club.may(request.state.member, "chow") or admin_mode(request)
 
 
@@ -804,17 +865,18 @@ def chow_email(request: Request, mid: str = Depends(chow_leader)):
 
 @app.get("/chow", response_class=HTMLResponse, dependencies=[CHOW])
 @app.get("/chow/{tab}", response_class=HTMLResponse, dependencies=[CHOW])
-def chow_page(request: Request, tab: str = "schedule", error: str = "", mid: str = Depends(me)):
+def chow_page(request: Request, tab: str = "schedule", error: str = "", p: str = Query("1", alias="page"),
+              mid: str = Depends(me)):
     s, club = chow.load(), archive.club
     leader = can_edit_chow(request)
     if tab not in ("schedule", "rotation", "history") or (tab != "schedule" and not leader):
         raise HTTPException(404)
     members = sorted((m for m in club.members.values() if m.status.lower() not in ("inactive", "silent key")),
                      key=lambda m: (m.last, m.first))
-    today = dt.date.today()
+    today, ahead = dt.date.today(), chow.upcoming(s, n=len(s["nights"]))
     return page(request, "chow.html", s=s, error=error, leader=leader, tab=tab, members=members,
-                upcoming=chow.upcoming(s, n=16), past=chow.past(s, n=16) if leader else [],
-                mine=[d for d, x in chow.upcoming(s, n=60) if x.get("member") == mid and x.get("status") != "none"],
+                upcoming=ahead, pg=paginate(ahead, p, "", 16), past=chow.past(s, n=16) if leader else [],
+                mine=[d for d, x in ahead if x.get("member") == mid and x.get("status") != "none"],
                 asked=[r for r in s["swaps"] if r["status"] == "pending" and mid in (r["with"], r["requester"])],
                 next_up=chow.next_up(club, s), today=today.isoformat(),
                 default_until=(today + dt.timedelta(days=180)).isoformat(),
@@ -1090,7 +1152,7 @@ def _admin_log(request: Request, **entry) -> None:
 
 def _admin(mid: str) -> str:
     if not archive.club.is_admin(mid):
-        raise HTTPException(403, "You aren't listed as an admin.")
+        raise HTTPException(404)  # as for an address that doesn't exist, like every other admin page
     return mid
 
 
@@ -1169,6 +1231,197 @@ def admin_confirm_link(request: Request, t: str = "", next: str = "/", mid: str 
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
+# ---------------- Jitsi Meet sign-in (an optional module; meet.py) ----------------
+
+def _room_roles(room: dict) -> str:
+    """The names of the roles a room lets straight in: "Board and Officer"."""
+    t = archive.club.role_table()
+    names = [t[k]["name"] for k in room.get("roles") or [] if k in t] or ["nobody"]
+    return ", ".join(names[:-1]) + (" and " if len(names) > 1 else "") + names[-1]
+
+
+@app.get("/meet", response_class=HTMLResponse)
+def meet_home(request: Request, error: str = "", mid: str = Depends(real_me)):
+    """The club's video rooms this member may join (the Jitsi server's bare address comes here, so nobody starts a
+    random room). One room too: its card, so Join always opens a new tab."""
+    s = meet.settings(archive.club)
+    if not s:
+        raise HTTPException(404)
+    rooms = [r | {"for": _room_roles(r) if r["roles"] else "", "inside": admin_mode(request) or meet.lets_in(archive.club, mid, r)}
+             for r in meet.rooms(archive.club)]
+    rooms, adhoc = [r for r in rooms if r["inside"] or r["others"] == "knock"], meet.adhoc(archive.club)
+    return page(request, "meet.html", rooms=rooms, adhoc=adhoc, mine=meet.mine(mid) if adhoc else [], base=base_url(request), error=error)
+
+
+@app.post("/meet")
+async def meet_open(request: Request, mid: str = Depends(real_me)):
+    """Open a room of one's own (while the admin allows them): its opener hosts it for a day."""
+    form = await request.form()
+    name = " ".join((form.get("name") or "").split())
+    room = meet.slug(name)
+    if not meet.settings(archive.club) or not meet.adhoc(archive.club):
+        raise HTTPException(404)
+    if not meet.ROOM.match(room) or room in {r["slug"] for r in meet.rooms(archive.club)}:
+        return RedirectResponse("/meet?error=" + quote("Give the room a name of letters and numbers, not one of the club's rooms."), status_code=303)
+    if not request.state.viewing_as:
+        try:
+            meet.open_room(room, mid, name)
+        except ValueError as e:
+            return RedirectResponse("/meet?error=" + quote(str(e)), status_code=303)
+    return RedirectResponse(f"/meet/{room}", status_code=303)
+
+
+@app.get("/meet/{room}")
+def meet_room(request: Request, room: str, mid: str = Depends(real_me)):
+    """Signed-in members only (others get the sign-in page, then come back): a token for this room, minutes long,
+    hosting if their roles allow it (or they opened this room of their own), with the room's rules for guests, and on
+    to the Jitsi server. A room that's neither the club's nor allowed as one of their own: 404. Never while viewing
+    the app as someone else."""
+    s, room = meet.settings(archive.club), room.lower()  # Jitsi's room names are lower case: NET is net, with net's rules
+    if not s or not meet.ROOM.match(room):
+        raise HTTPException(404)
+    named = next((r for r in meet.rooms(archive.club) if r["slug"] == room), None)
+    room_rules = named or meet.adhoc(archive.club)
+    if room_rules is None:
+        raise HTTPException(404)
+    if request.state.viewing_as:
+        raise HTTPException(403, "Stop viewing the app as another member first: you'd join as them.")
+    inside = admin_mode(request) or meet.lets_in(archive.club, mid, room_rules)
+    if not inside and room_rules.get("others") == "no":
+        raise HTTPException(403, f"{room_rules['name']} is for {_room_roles(room_rules)} only.")
+    # a host must also be let straight in: a meeting leader who isn't on the board knocks at the board's room
+    host = inside and (archive.club.may(mid, "meet_host") or admin_mode(request) or (not named and meet.opener(room) == mid))
+    jwt = meet.token(archive.club, mid, room, host, room_rules=room_rules, straight_in=inside)
+    if not named:
+        meet.touch(room)
+    r = RedirectResponse(f"https://{s['domain']}/{room}?jwt={jwt}{meet.p2p_off(room_rules)}", status_code=303)
+    r.headers["Referrer-Policy"] = "no-referrer"  # the token is in the address: don't hand it on
+    return r
+
+
+# ---------------- recover admin access (officers; recovery.py) ----------------
+
+_recover_errors: dict[str, str] = {}  # session token hash -> the app's refusal, shown once after the redirect
+_recover_ok: dict[str, float] = {}  # session token hash -> until: confirmed it's them (as for admin mode), for 5 minutes
+
+
+def _recover_confirmed(request: Request) -> bool:
+    return _recover_ok.get(authmod._hash(_session_token(request) or ""), 0) > time.time()
+
+
+def _recover_mark(request: Request) -> None:
+    now = time.time()
+    for k in [k for k, until in _recover_ok.items() if until < now]:  # gone once expired
+        del _recover_ok[k]
+    _recover_ok[authmod._hash(_session_token(request) or "")] = now + 300
+
+
+@app.get("/recover", response_class=HTMLResponse)
+def recover_page(request: Request, note: str = "", mid: str = Depends(real_me)):
+    """Where a recovery stands, for every member (they're all told); officers start or approve it, the nominee accepts,
+    admins (in admin mode) object."""
+    club = archive.club
+    recovery.tick(club, base_url(request))
+    r = recovery.load()
+    return page(request, "recover.html", r=r, st=recovery.state(club, r) if r else None, officers=recovery.officers(club),
+                is_officer=mid in recovery.officers(club), error=_recover_errors.pop(authmod._hash(_session_token(request) or ""), ""),
+                note="Done. Every member has been told." if note == "done" else "", wait=recovery.WAIT_DAYS,
+                wait_objected=recovery.WAIT_DAYS_OBJECTED, lapse=recovery.LAPSE_DAYS, ts=lambda t: dt.datetime.fromtimestamp(t).strftime("%b %-d, %Y %-I:%M %p"),
+                members=sorted((m for m in club.members.values() if m.status.lower() == "active"), key=lambda m: (m.last, m.first)))
+
+
+@app.post("/recover/act")
+async def recover_act(request: Request, mid: str = Depends(real_me)):
+    """start, approve, accept, cancel (after confirming it's them, at most 5 minutes before), or object (an admin in
+    admin mode)."""
+    form, club, url = await request.form(), archive.club, base_url(request)
+    do = form.get("do")
+    if do not in ("start", "approve", "accept", "cancel", "object"):
+        raise HTTPException(400)
+    if do == "object" and not admin_mode(request):
+        return RedirectResponse("/admin/confirm?next=/recover", status_code=303)
+    if do != "object" and not _recover_confirmed(request):
+        return RedirectResponse("/recover/confirm", status_code=303)
+    try:
+        if do == "start":
+            recovery.start(club, mid, form.get("nominee", ""), form.getlist("suspend"), form.get("motion", ""), url)
+        elif do == "object":
+            recovery.object_(club, mid, url)
+        else:
+            {"approve": recovery.approve, "accept": recovery.accept, "cancel": recovery.cancel}[do](club, mid, url)
+    except ValueError as e:  # kept here for this session, never carried in a link (someone could send words of their own)
+        _recover_errors[authmod._hash(_session_token(request) or "")] = str(e)
+        return RedirectResponse("/recover", status_code=303)  # a reload never sends the form again
+    _admin_log(request, recovery=do)
+    return RedirectResponse("/recover?note=done", status_code=303)
+
+
+@app.get("/recover/confirm", response_class=HTMLResponse)
+def recover_confirm(request: Request, sent: int = 0, error: str = "", mid: str = Depends(real_me)):
+    passkey = request.url.hostname == authn.rp_id and bool(authn.passkeys(mid))
+    return page(request, "admin_confirm.html", next="/recover", passkey=passkey, sent=sent, error=error, base="/recover/confirm",
+                heading="Confirm it's you", why="Starting, approving or accepting a recovery of admin access needs you "
+                "to confirm it's really you, as admins do for admin mode. It lasts 5 minutes.", email=archive.club.members[mid].email)
+
+
+@app.post("/recover/confirm/options")
+def recover_confirm_options(mid: str = Depends(real_me)):
+    cid, options = authn.step_up_options(mid)
+    response = Response(options, media_type="application/json")
+    response.set_cookie(CHALLENGE_COOKIE, cid, max_age=300, httponly=True, samesite="strict", secure=True)
+    return response
+
+
+@app.post("/recover/confirm/verify")
+async def recover_confirm_verify(request: Request, mid: str = Depends(real_me)):
+    body = await _json(request)
+    try:
+        authn.authenticate(request.cookies.get(CHALLENGE_COOKIE), body["credential"], kind="step-up", member=mid)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e))
+    _recover_mark(request)
+    return {"ok": True, "next": "/recover"}
+
+
+@app.post("/recover/confirm/email")
+def recover_confirm_email(request: Request, mid: str = Depends(real_me)):
+    m = archive.club.members[mid]
+    if not m.email:
+        raise HTTPException(400, "There's no email address for you on the roster.")
+    url = f"{base_url(request)}/recover/confirm/link?t={authn.step_up_link(mid, 'recover-email')}"
+    if PREVIEW:
+        return RedirectResponse(url, status_code=303)
+    authmod.send_email(m.email, "Confirm it's you", f"Hi {m.first},\n\nSomeone signed in as you asked to confirm it's you, to "
+                       f"act on a recovery of admin access in {branding.name(archive.club)}. If that was you, open this link in the "
+                       f"same browser within 5 minutes:\n\n{url}\n\nIf it wasn't you, don't open it, and sign out your other "
+                       f"sessions on your profile page.\n\n73,\n{branding.name(archive.club)}")
+    return RedirectResponse("/recover/confirm?sent=1", status_code=303)
+
+
+@app.get("/recover/confirm/link")
+def recover_confirm_link(request: Request, t: str = "", mid: str = Depends(real_me)):
+    if not authn.use_step_up_link(t, mid, "recover-email"):  # an admin-mode link doesn't work here, nor the other way
+        return RedirectResponse("/recover/confirm?error=" + quote("That link has expired or was already used."), status_code=303)
+    _recover_mark(request)
+    return RedirectResponse("/recover", status_code=303)
+
+
+@app.post("/admin/security/admins/lift")
+def admins_lift(request: Request, member: str = Form("")):
+    """Lift a suspension from a recovery: another admin, in admin mode (a suspended admin isn't one)."""
+    _security_admin(request)
+    club = archive.club
+    if member not in club.suspended:
+        raise HTTPException(400)
+    before = club.all_admins
+    with recovery.locked():
+        club.save_suspended(club.suspended - {member})
+    _admin_log(request, admin_unsuspended=member)
+    _tell_admins(request, before, f"{club.name(member)}'s admin suspension was lifted",
+                 f"{club.name(request.state.real_member)} lifted the suspension of {club.name(member)} as an admin.")
+    return RedirectResponse("/admin/security/admins?note=" + quote(f"{club.name(member)} is an admin again."), status_code=303)
+
+
 # ---------------- updating the app (admins, admin mode) ----------------
 
 @app.get("/admin/updates", response_class=HTMLResponse)
@@ -1177,7 +1430,7 @@ def admin_updates(request: Request, error: str = "", note: str = "", mid: str = 
     if not admin_mode(request):
         return RedirectResponse("/admin/confirm?next=/admin/updates", status_code=303)
     return page(request, "updates.html", running=updates.running(), rel=updates.latest(), st=updates.status(),
-                newer=updates.available(), error=error, note=note, auto=updates.auto_settings(),
+                newer=updates.available(), error=error, note=note, auto=updates.auto_settings(), source=updates.source(), stage=updates.STAGE,
                 backup_ready=len(os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE", "")) >= 12)
 
 
@@ -1186,7 +1439,8 @@ def admin_updates_check(request: Request, mid: str = Depends(real_me)):
     _admin(mid)
     rel = updates.latest(force=True)
     msg = "Couldn't reach GitHub." if rel is None else (
-        f"Version {rel['version']} is available." if updates.newer(rel["version"], updates.running()) else "You're up to date.")
+        ("A newer commit on the next branch is available." if rel["version"] == "next" else f"Version {rel['version']} is available.")
+        if updates.available() else "You're up to date.")
     return RedirectResponse("/admin/updates?note=" + quote(msg), status_code=303)
 
 
@@ -1227,6 +1481,20 @@ def admin_updates_auto(request: Request, on: int = Form(0), hour: str = Form("")
                                                            else "Automatic updates are off."), status_code=303)
 
 
+@app.post("/admin/updates/from")
+def admin_updates_from(request: Request, source: str = Form(""), mid: str = Depends(real_me)):
+    _admin(mid)
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")
+    try:
+        updates.set_source(source)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    updates.latest(force=True)
+    _admin_log(request, update_from=source)
+    return RedirectResponse("/admin/updates?note=" + quote("Saved."), status_code=303)
+
+
 @app.post("/admin/updates/cancel")
 def admin_updates_cancel(request: Request, mid: str = Depends(real_me)):
     _admin(mid)
@@ -1237,16 +1505,28 @@ def admin_updates_cancel(request: Request, mid: str = Depends(real_me)):
     return RedirectResponse("/admin/updates?note=" + quote("Request withdrawn."), status_code=303)
 
 
+def test_server() -> bool:
+    """Stage or a preview: test copies, where an admin may act as a member (their email only ever reaches the admin)."""
+    return bool(STAGE or PREVIEW)
+
+
 @app.post("/admin/view-as")
-def admin_view_as(request: Request, member: str = Form(""), next: str = Form("/"), mid: str = Depends(real_me)):
-    """Start (member=id) or stop (member empty) viewing the app as another member. Admin mode only; logged."""
+def admin_view_as(request: Request, member: str = Form(""), next: str = Form("/"), act: str = Form(""),
+                  mid: str = Depends(real_me)):
+    """Start (member=id) or stop (member empty) viewing the app as another member, and on a test server act=1 to
+    make changes as them. Admin mode only; logged."""
+    _admin(mid)
     if not authn.admin_until(_session_token(request)):
         raise HTTPException(403, "Turn on admin mode first.")
     if member and (member not in archive.club.members or member == mid):
         raise HTTPException(404)
-    authn.set_view_as(_session_token(request), member or None)
-    _admin_log(request, view_as=member or None)
-    _log.info("%s %s", one_line(mid), one_line(f"viewing as {member}" if member else "stopped viewing as another member"))
+    if act and not test_server():
+        raise HTTPException(403, "Acting as a member is for a staging server or a preview only.")
+    acts = bool(act and member)
+    authn.set_view_as(_session_token(request), member or None, acts)
+    _admin_log(request, view_as=member or None, **({"acts": True} if acts else {}))
+    _log.info("%s %s", one_line(mid), one_line(f"{'acting' if acts else 'viewing'} as {member}" if member
+                                               else "stopped viewing as another member"))
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
@@ -1314,7 +1594,7 @@ def profile_photo_remove(mid: str = Depends(me)):
 
 
 @app.post("/members/{who}/photo/remove")
-def member_photo_remove(request: Request, who: str, mid: str = Depends(officer)):
+def member_photo_remove(request: Request, who: str, mid: str = Depends(moderator)):
     """Officers (and admins in admin mode) can take down someone's picture."""
     if avatars.remove(who):
         _log.info("%s removed the profile picture of %s", one_line(mid), one_line(who))
@@ -1333,7 +1613,7 @@ def avatar_file(name: str, mid: str = Depends(me)):
 
 
 @app.post("/profile")
-async def profile_save(request: Request, mid: str = Depends(me)):
+async def profile_save(request: Request, background: BackgroundTasks, mid: str = Depends(me)):
     form = await request.form()
     m = archive.club.members[mid]
     address = clean_address(form.get("address", ""))
@@ -1354,23 +1634,40 @@ async def profile_save(request: Request, mid: str = Depends(me)):
         return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
     email = form.get("email", "").strip()
     if email and email.lower() != (m.email or "").lower():
-        err = await run_in_threadpool(authn.start_email_change, mid, email, base_url(request))
+        err = await run_in_threadpool(authn.start_email_change, mid, email, base_url(request), later=background.add_task)
         if err:
             return RedirectResponse("/profile?saved=1&error=" + quote(err), status_code=303)
         return RedirectResponse("/profile?saved=1&email_sent=" + quote(email), status_code=303)
     return RedirectResponse("/profile?saved=1", status_code=303)
 
 
-@app.get("/profile/email")
-def profile_email_confirm(request: Request, t: str = "", mid: str = Depends(me)):
-    got = authn.confirm_email_change(t)
-    if not got or got[0] != mid:
-        return RedirectResponse("/profile?error=" + quote("That confirmation link is invalid or expired."), status_code=303)
+@app.get("/email/confirm", response_class=HTMLResponse)
+def email_confirm_page(request: Request, t: str = ""):
+    """A new address's confirmation link (the member's own change, or a roster keeper's). Signed in or not: the link
+    proves the address. A button, so a mail scanner opening the link changes nothing."""
+    got = authn.email_change(t)
+    return page(request, "email_confirm.html", t=t if got else "", email=got[1] if got else "",
+                error="" if got else "That confirmation link is invalid or expired.")
+
+
+@app.post("/email/confirm")
+def email_confirm(request: Request, t: str = Form("")):
+    got = authn.email_change(t)
+    if not got or got[0] not in archive.club.members:
+        return page(request, "email_confirm.html", t="", error="That confirmation link is invalid or expired.")
+    mid, email, by = got
+    other = authn.member_by_email(email)
+    err = ("Another member uses that address now." if other and other != mid else
+           None if by == mid or archive.club.is_admin(by) else why_not_change(archive.club, by, mid, "emails", "email"))
+    if err:  # things changed in the 15 minutes since it was asked for
+        return page(request, "email_confirm.html", t="", error=f"{err} Nothing was changed.")
     try:
-        profile.change(archive.club, mid, {"email": got[1]}, by=mid, url=base_url(request))
-    except SheetError as e:
-        return RedirectResponse("/profile?error=" + quote(str(e)), status_code=303)
-    return RedirectResponse("/profile?saved=1", status_code=303)
+        profile.change(archive.club, mid, {"email": email}, by=by, url=base_url(request))
+    except (ValueError, SheetError) as e:
+        return page(request, "email_confirm.html", t="", error=str(e))
+    authn.use_email_change(t)
+    authn.end_all_sessions(mid)  # a session from before the change doesn't carry on
+    return RedirectResponse("/login?note=email", status_code=303)
 
 
 def roster_keeper(request: Request) -> str:
@@ -1588,12 +1885,132 @@ def index(request: Request, period: str = "", p: str = Query("1", alias="page"),
     return page(request, "index.html", pg=paginate(ms, p, per), years=years(), period=period, label=label)
 
 
-@app.get("/meetings/{slug}", response_class=HTMLResponse)
-def view(request: Request, slug: str):
+def _version(request: Request, slug: str, v: str):
+    """The minutes, or with ?v=1 an earlier version of them (404 for any other v, and for one a correction ticked
+    "This removes private details" replaced, unless you may correct these minutes)."""
     m = get_meeting(slug)
-    has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
-    return page(request, "meeting.html", m=m, has_original=has_original,
-                emailed=console.email_status(archive, slug))
+    if not v:
+        return m
+    old = corrections.load_version(archive, slug, num(v) or 0)
+    if not old or corrections.hidden_version(m, old.version) and not _may_see_hidden(request, m):
+        raise HTTPException(404, "No such version of these minutes")
+    return old
+
+
+@app.post("/meetings/{slug}/send-now")
+async def send_now(request: Request, slug: str):
+    """Send it now: a minutes or corrected-minutes email that failed or never went (still once each)."""
+    m, mid = get_meeting(slug), request.state.member
+    if not (mid and archive.club.may(mid, "lead") or corrections.may_correct(archive.club, m, mid, admin_mode(request))):
+        raise HTTPException(403, "Only a meeting leader, a Minutes editor or an admin can send the minutes.")
+    n = await run_in_threadpool(corrections.retry_pending, archive, render_pdf, slug)  # the button's own rule: failed, or 10 minutes gone
+    result = "failed" if console.unsent(archive, slug) else "sent" if n else "waiting"
+    return RedirectResponse(f"/meetings/{m.slug}?sent={result}", status_code=303)  # m.slug: the archive's
+
+
+SENT_NOTES = {"sent": ("ok", "Sent to members."),  # codes, never text from the link
+              "failed": ("warn", "Tried again just now, and it didn't go out. An admin can see why on the Email log."),
+              "waiting": ("warn", "Nothing was sent: it may still be going out. Try again in a few minutes.")}
+
+
+def _may_see_hidden(request: Request, m) -> bool:
+    return corrections.may_correct(archive.club, m, request.state.member, admin_mode(request))
+
+
+def _original_hidden(request: Request, m) -> bool:
+    """The imported PDF is version 1's source: hidden whenever version 1 is."""
+    return corrections.hidden_version(m, 1) and not _may_see_hidden(request, m)
+
+
+@app.get("/meetings/{slug}", response_class=HTMLResponse)
+def view(request: Request, slug: str, v: str = "", sent: str = ""):
+    current, m = get_meeting(slug), _version(request, slug, v)
+    has_original = (bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
+                    and not _original_hidden(request, current))
+    return page(request, "meeting.html", m=m, current=current, has_original=has_original,
+                emailed=console.email_status(archive, slug), unsent=console.unsent(archive, slug), sent_note=SENT_NOTES.get(sent),
+                notice=console.email_status(archive, slug, f"emailed.v{current.version}.json") if current.version > 1 else None,
+                can_correct=corrections.may_correct(archive.club, current, request.state.member, admin_mode(request)),
+                prev_hidden=m.version > 1 and corrections.hidden_version(current, m.version - 1) and not _may_see_hidden(request, current))
+
+
+def _corrector(request: Request, slug: str):
+    m = get_meeting(slug)
+    if m.status == "draft":
+        raise HTTPException(409, "These minutes are still open in the console.")
+    if not corrections.may_correct(archive.club, m, request.state.member, admin_mode(request)):
+        raise HTTPException(403, "Only the meeting's leader or recorder, a board member, or an admin can correct these minutes.")
+    return m
+
+
+@app.get("/meetings/{slug}/correct", response_class=HTMLResponse)
+def correct_page(request: Request, slug: str, error: str = ""):
+    return _correct_page(request, slug, error)
+
+
+def _correct_page(request: Request, slug: str, error: str = "", posted: dict | None = None):
+    m = _corrector(request, slug)
+    sections = m.section_order(archive.club.sections())
+    extra = {}  # rows added in the browser before a preview: shown again on Back to editing
+    if posted:
+        extra = {"g": [i for i in corrections._posted(posted, r"g(\d+)-name") if i >= len(m.guests)]}
+        extra |= {f"s{n}": [j for j in corrections._posted(posted, rf"s{n}-(\d+)") if j >= len(m.items(sec))]
+                  for n, sec in enumerate(sections)}
+    return page(request, "correct.html", m=m, error=error, attendance=corrections.attendance_rows(archive, m),
+                sections=sections, reason_max=corrections.REASON_MAX, posted=posted, extra=extra)
+
+
+@app.post("/meetings/{slug}/correct/edit", response_class=HTMLResponse)
+async def correct_back(request: Request, slug: str):
+    """Back to editing from the preview: the edit page again, filled in from what was sent (no history.back(), which
+    some browsers answer by asking to resend the form or by dropping the rows added)."""
+    form = await request.form()
+    return _correct_page(request, slug, posted={k: v for k, v in form.multi_items() if isinstance(v, str)})
+
+
+@app.post("/meetings/{slug}/correct/preview", response_class=HTMLResponse)
+async def correct_preview(request: Request, slug: str):
+    """The changes side by side before saving; Save sends the same fields on to /correct."""
+    m = _corrector(request, slug)
+    form = await request.form()
+    return page(request, "correct_preview.html", m=m, words=corrections.words, rows=corrections.diff(m, corrections.from_form(archive, m, form), archive.club),
+                fields=[(k, v) for k, v in form.multi_items() if isinstance(v, str)],
+                reason=" ".join(str(form.get("reason") or "").split()), notice=bool(form.get("notice")), private=bool(form.get("private")))
+
+
+@app.post("/meetings/{slug}/correct")
+async def correct_save(request: Request, background: BackgroundTasks, slug: str):
+    m = _corrector(request, slug)
+    form = await request.form()
+    new = corrections.from_form(archive, m, form)
+    private = bool(form.get("private"))
+    what = corrections.changes(m, new, archive.club, private)
+    notice = bool(form.get("notice"))
+    if notice:  # first: a crash after the save leaves a note, so the daily job sends the notice
+        console.mark_pending(archive, slug, f"emailed.v{m.version + 1}.json", f"{base_url(request)}/meetings/{slug}", what)
+    try:
+        m = await run_in_threadpool(corrections.correct, archive, slug, request.state.member, str(form.get("reason") or ""),
+                                    num(str(form.get("version") or "")) or 0, new, notice, private)  # file writes and a reload: off the event loop
+    except ValueError as e:
+        if notice and archive.by_slug[slug].version == m.version:  # nothing saved: no notice to send
+            (archive.root / slug / f"emailed.v{m.version + 1}.json.pending").unlink(missing_ok=True)
+        return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
+    _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
+    if notice:
+        background.add_task(corrections.email_notice, archive, slug, what, lambda: render_pdf(archive.by_slug[slug]),
+                            f"{base_url(request)}/meetings/{slug}")
+    return RedirectResponse(f"/meetings/{m.slug}", status_code=303)
+
+
+@app.post("/meetings/{slug}/reviewed")
+def mark_reviewed(request: Request, slug: str):
+    m = _corrector(request, slug)
+    try:
+        corrections.mark_reviewed(archive, slug, request.state.member)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    _admin_log(request, reviewed=slug)
+    return RedirectResponse(f"/meetings/{m.slug}", status_code=303)
 
 
 def html_to_pdf(template: str, **ctx) -> bytes:
@@ -1606,13 +2023,16 @@ def html_to_pdf(template: str, **ctx) -> bytes:
 
 
 def render_pdf(m) -> tuple[str, bytes]:
-    """(file name, PDF bytes) for submitted minutes."""
-    return f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes.pdf".lower(), html_to_pdf("minutes_doc.html", m=m)
+    """(file name, PDF bytes) for submitted minutes: 15-oct-26-minutes.pdf, or -v2.pdf for a corrected version."""
+    try:
+        return pdfmod.render_pdf(archive, m, authn.rp_id)
+    except OSError as e:  # missing system libraries (pango)
+        raise HTTPException(503, f"PDF rendering unavailable on this server: {e}")
 
 
 @app.get("/meetings/{slug}/minutes.pdf")
-def pdf(request: Request, slug: str):
-    m = get_meeting(slug)
+def pdf(request: Request, slug: str, v: str = ""):
+    m = _version(request, slug, v)
     if m.status == "draft":
         raise HTTPException(409, "This meeting is still in progress; the PDF is available once the minutes are submitted.")
     fname, data = render_pdf(m)
@@ -1621,10 +2041,10 @@ def pdf(request: Request, slug: str):
 
 
 @app.get("/meetings/{slug}/original.pdf")
-def original(slug: str):
-    get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
+def original(request: Request, slug: str):
+    m = get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
     p = archive.root / slug / "original.pdf"
-    if not p.exists():
+    if not p.exists() or _original_hidden(request, m):
         raise HTTPException(404)
     return FileResponse(p, media_type="application/pdf")
 
@@ -1694,16 +2114,17 @@ def member(request: Request, mid: str):
     elevated = admin_mode(request)
     contact = [(f, v if v and club.can_see(viewer, mid, f, elevated) else None, href) for f, (v, href) in values.items()]
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
-                contact=contact, is_me=viewer == mid, is_officer=privileged(request), is_officer_or_admin=privileged(request),
-                can_view_as=elevated and mid != request.state.real_member,
-                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=[ROLES[k][0] for k in archive.club.roles(mid)])
+                contact=contact, is_me=viewer == mid, is_officer=privileged(request), can_moderate=moderates(request),
+                can_view_as=elevated and mid != request.state.real_member, can_act_as=test_server(),
+                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=archive.club.role_names(mid))
 
 
 STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
 
 
 @app.get("/members/{who}/edit", response_class=HTMLResponse)
-def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, tab: str = "details", mid: str = Depends(roster_keeper)):
+def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, tab: str = "details", email_sent: str = "",
+                     mid: str = Depends(roster_keeper)):
     """Roster keepers (and admins in admin mode) edit what the roster sheet holds about a member."""
     if who not in archive.club.members:
         raise HTTPException(404)
@@ -1712,14 +2133,16 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
     office_titles = {o["title"] for o in offices.offices(club)}
     held = [t for t in offices.titles(m.role) if t in office_titles]  # shown, changed only on the Offices page
     in_use = {t for x in club.members.values() for t in offices.titles(x.role)} - office_titles
-    return page(request, "member_edit.html", member=m, error=error, saved=saved, classes=membership.CLASSES,
+    return page(request, "member_edit.html", member=m, error=error, saved=saved, email_sent=email_sent[:200], classes=membership.CLASSES,
                 tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
-                events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=[ROLES[k][0] for k in club.roles(who)])
+                no_email=may_change(request, who, "emails", "email"), no_status=may_change(request, who, "status", "status"),
+                no_callsign=may_change(request, who, "members", "callsign"),
+                events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=club.role_names(who))
 
 
 @app.post("/members/{who}/edit")
-async def member_edit(request: Request, who: str, mid: str = Depends(roster_keeper)):
+async def member_edit(request: Request, background: BackgroundTasks, who: str, mid: str = Depends(roster_keeper)):
     if who not in archive.club.members:
         raise HTTPException(404)
     m, f = archive.club.members[who], await request.form()
@@ -1732,30 +2155,58 @@ async def member_edit(request: Request, who: str, mid: str = Depends(roster_keep
         except (ValueError, SheetError) as e:
             return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
         return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
-    first, last, email = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split()), f.get("email", "").strip()
+    first, last = " ".join(f.get("first", "").split()), " ".join(f.get("last", "").split())
+    email, status = f.get("email", m.email or "").strip(), f.get("status") or m.status  # a field they can't change isn't sent
+    new_email = email.lower() != (m.email or "").lower()
     try:
         if not first or not last or " " in first:
             raise ValueError("First and last name are both needed; put a middle name with the last name.")
-        if f.get("license_class") not in ("", *membership.CLASSES) or f.get("status") not in (*STATUSES, m.status):
+        # a class typed some other way in the roster ("Extra") may stay as it is
+        if f.get("license_class") not in ("", *membership.CLASSES, m.license_class) or status not in (*STATUSES, m.status):
             raise ValueError("Pick a license class and status from the lists.")
-        if email and not valid_email(email):
+        if new_email and not valid_email(email):
             raise ValueError(f"{email} doesn't look like an email address.")
         for a in (x.strip() for x in f.get("aliases", "").split(",")):
             other = archive.club.former_ids.get(a.lower()) if CALLSIGN.match(a) else None
             if CALLSIGN.match(a) and (a.lower() in archive.club.members and a.lower() != who or other not in (None, who)):
                 raise ValueError(f"{a.upper()} is another member's callsign: it can't be one of {m.first}'s other spellings.")
-        # An address is a way to sign in (and an admin's, to confirm admin mode): only an admin changes an admin's.
-        if email.lower() != (m.email or "").lower() and archive.club.is_admin(who) and not admin_mode(request):
-            raise ValueError("Only an admin, in admin mode, can change an admin's email.")
-        new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": f.get("status", ""),
+        for changed, perm, what in ((new_email, "emails", "email"), (status != m.status, "status", "status")):
+            if changed and (err := may_change(request, who, perm, what)):
+                raise ValueError(err)
+        if status.lower() != "active" and not archive.club.active_admins - {who} and who in archive.club.active_admins:
+            raise ValueError(f"{m.first} is the last active admin: add another admin first, so the club isn't locked out.")
+        new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": status,
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
-               "email": email, "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
+               "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
         if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
             new["address"] = m.address or ""
         await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
+        if new_email:  # waits for the new address to confirm it; the old one is told now
+            if err := await run_in_threadpool(authn.start_email_change, who, email, base_url(request), mid, later=background.add_task):
+                raise ValueError(err)
+            return RedirectResponse(_safe_next(back + "saved=1&email_sent=" + quote(email)), status_code=303)
     except (ValueError, SheetError) as e:
         return RedirectResponse(_safe_next(back + "error=" + quote(str(e))), status_code=303)
     return RedirectResponse(_safe_next(back + "saved=1"), status_code=303)
+
+
+def may_change(request: Request, who: str, perm: str, what: str) -> str | None:
+    """Changing another member's email or status: the permission, and never someone who can do more than you (an
+    admin, or a permission you lack). Admins in admin mode may change anyone. Returns why not, or None."""
+    return None if admin_mode(request) else why_not_change(archive.club, request.state.member, who, perm, what)
+
+
+def why_not_change(club, mid: str, who: str, perm: str, what: str) -> str | None:
+    """may_change without admin mode: also asked again when a new email is confirmed."""
+    if not club.may(mid, perm):
+        return f"Your roles don't allow changing a member's {what}."
+    if club.is_admin(who) and who != mid:
+        return f"Only an admin, in admin mode, can change an admin's {what}."
+    if club.holds_office(who) and who != mid:  # even if an admin trimmed what offices allow (Jim, 2026-11-15)
+        return f"Locked: {club.members[who].first} holds an office, so an admin changes their {what}."
+    if more := club.perms(who) - club.perms(mid):
+        return f"Locked: {club.members[who].first} can {PERMISSIONS[min(more)].split(' (')[0]}, which you can't."
+    return None
 
 
 def _edit_url(who: str, tab: str) -> str:
@@ -1784,11 +2235,14 @@ def member_titles(m, f) -> str:
 @app.post("/members/{who}/callsign")
 def member_callsign(request: Request, who: str, callsign: str = Form(""), date: str = Form(""),
                     mid: str = Depends(roster_keeper)):
-    """A new callsign: the roster sheet, and the member's id in every record (callsign.py). Backed up first."""
+    """A new callsign: the roster sheet, and the member's id in every record (callsign.py). Backed up first. Like email
+    and status, never for someone who holds an office or can do more than you (an admin in admin mode may)."""
     if who not in archive.club.members:
         raise HTTPException(404)
     try:
-        with business.locked(), events.locked(), _chow_lock:  # nothing else writes those files meanwhile
+        if err := may_change(request, who, "members", "callsign"):
+            raise ValueError(err)
+        with business.locked(), events.locked(), treasurer.locked(), _chow_lock, recovery.locked(), prefs.locked():  # nothing else writes those files meanwhile
             new = callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
     except (ValueError, SheetError, backup.BackupError) as e:
@@ -1899,7 +2353,7 @@ def dependencies() -> list[dict]:
     return sorted(out, key=lambda d: d["name"].lower())
 
 
-GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin"}  # docs/<name>.md; not developers.md
+GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin", "jitsi": "Video meetings"}  # docs/<name>.md; not developers.md
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 # GitHub's alert syntax ("> [!TIP]" on a blockquote's first line), so a box looks the same here and on GitHub
 CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Important", "WARNING": "⚠️ Warning", "CAUTION": "🛑 Caution"}
@@ -1907,9 +2361,9 @@ CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Importan
 
 def guides_for(request: Request) -> dict:
     """The guides offered to this member: everyone gets the members guide, leaders, officers and admins the
-    officers guide (it has admins' setup steps too), admins the server admin guide."""
+    officers guide (it has admins' setup steps too), admins the server admin and video meetings guides."""
     mid, admin = request.state.member, archive.club.is_admin(real_me(request))
-    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request), "server-admin": admin}
+    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or moderates(request), "server-admin": admin, "jitsi": admin}
     return {g: t for g, t in GUIDES.items() if show[g]}
 
 
@@ -1988,7 +2442,7 @@ def email_log(request: Request, mid: str = Depends(real_me)):
     if not admin_mode(request):  # bodies can hold members' contact details
         return RedirectResponse("/admin/confirm?next=/admin/email", status_code=303)
     p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
-    mail = [json.loads(line) for line in p.read_text().splitlines() if line.strip()][::-1][:300] if p.exists() else []
+    mail = authmod.read_log(p)[::-1][:300]
     return page(request, "outbox.html", mail=mail, test_mode=archive.club.email_only_to() is not None)
 
 
@@ -2016,6 +2470,7 @@ def where(ip: str | None) -> str:
 
 templates.env.filters["device"] = device
 templates.env.filters["where"] = where
+templates.env.filters["ban_key"] = authmod.ban_key
 
 
 def _security_admin(request: Request) -> str:
@@ -2039,7 +2494,11 @@ def admin_action(e: dict) -> str:
     if "on" in e:
         return f"Turned on admin mode until {clock(e['until'])} ({e.get('confirmed_by')})" if e["on"] and e.get("until") else "Turned off admin mode"
     if "view_as" in e:
-        return f"Viewed the site as {name(e['view_as'])}" if e["view_as"] else "Stopped viewing as another member"
+        if not e["view_as"]:
+            return "Stopped viewing as another member"
+        return f"{'Acted' if e.get('acts') else 'Viewed the site'} as {name(e['view_as'])}"
+    if "acted_as" in e:
+        return f"As {name(e['acted_as'])}: {e.get('did', '')}"
     if "ban" in e:
         return f"Banned {e['ban']} " + (f"for {e['hours']} hours" if e.get("hours") else "until lifted")
     words = {"step_up_email": lambda v: "Asked for an admin sign-in email", "update_requested": lambda v: f"Started the update to {v}",
@@ -2056,7 +2515,9 @@ def admin_action(e: dict) -> str:
              "site_privacy": lambda v: "Never-recorded names back to club.yaml's" if v == "club.yaml" else "Changed the never-recorded names",
              "site_bylaws": lambda v: "Bylaws settings back to club.yaml's" if v == "club.yaml" else f"Bylaws: {v.replace('_', ' ')}",
              "site_dates": lambda v: "Dates back to club.yaml's" if v == "yaml" else f"Dates: {DATE_PRESETS[v][0] if v in DATE_PRESETS else 'own formats'}",
-             "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin"}
+             "admin_added": lambda v: f"Made {name(v)} an admin", "admin_removed": lambda v: f"Removed {name(v)} as an admin",
+             "corrected": lambda v: f"Corrected the minutes of {v.replace(' v', ' (version ')})", "reason": lambda v: f"why: {v}",
+             "notice": lambda v: "members told" if v else "no notice sent", "reviewed": lambda v: f"Marked the imported minutes of {v} reviewed"}
     rest = {k: v for k, v in e.items() if k not in ("at", "member", "ip")}
     return "; ".join(words[k](v) if k in words else f"{k.replace('_', ' ')}: {v}" for k, v in rest.items())
 
@@ -2077,14 +2538,14 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
     failed = sum(e["at"] > day for e in authn.events(200))
     p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
     week = time.time() - 7 * 86400
-    mail = [json.loads(x) for x in p.read_text().splitlines()[-500:] if x.strip()] if p.exists() else []
+    mail = authmod.read_log(p, 500)
     held = sum(1 for m in mail if m.get("at", 0) >= week and m.get("withheld"))  # someone it wasn't sent to
     sp = DATA / "stage-sync-status.json"
     try:
-        upd = None if STAGE else updates.available()
+        upd = None if PREVIEW else updates.available()
     except Exception:  # GitHub not reachable: just don't say  # noqa: BLE001
         upd = None
-    return page(request, "admin.html", failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
+    return page(request, "admin.html", only_admin=len(archive.club.active_admins) == 1, failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
                 passphrase_set=len(os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE", "")) >= 12, upd=upd,
                 stage_last=json.loads(sp.read_text()) if STAGE and sp.exists() else None)
 
@@ -2131,8 +2592,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
 
 
 @app.post("/admin/security/limits")
-def security_limits(request: Request, upload_mb: int = Form(...)):
-    _security_admin(request)
+def security_limits(request: Request, upload_mb: int = Form(...), _mid: str = Depends(_security_admin)):  # checked before the form
     try:
         limits.set_upload_mb(upload_mb)
     except ValueError as e:
@@ -2165,7 +2625,8 @@ def admins_add(request: Request, member: str = Form("")):
     if confirmed < time.time() - FRESH_SECONDS:
         return RedirectResponse("/admin/confirm?next=" + quote(f"/admin/security/admins?add={member}"), status_code=303)
     before = club.all_admins
-    club.save_app_admins(club.app_admins | {member})
+    with recovery.locked():
+        club.save_app_admins(club.app_admins | {member})
     _admin_log(request, admin_added=member)
     _tell_admins(request, before, f"{club.name(member)} is now an admin", f"{club.name(mid)} made {club.name(member)} an admin of "
                  f"{branding.name(club)}. If that's a surprise, ask {club.members[mid].first} about it.")
@@ -2178,9 +2639,10 @@ def admins_remove(request: Request, member: str = Form("")):
     if member not in club.app_admins:
         raise HTTPException(400, "Only admins added here can be removed here; those in club.yaml are changed on the server.")
     before = club.all_admins
-    if before == {member}:
-        raise HTTPException(400, "That's the last admin: add another first.")
-    club.save_app_admins(club.app_admins - {member})
+    if not club.active_admins - {member}:
+        raise HTTPException(400, "That's the last active admin: add another first, so the club isn't locked out.")
+    with recovery.locked():
+        club.save_app_admins(club.app_admins - {member})
     _admin_log(request, admin_removed=member)
     _tell_admins(request, before, f"{club.name(member)} is no longer an admin",
                  f"{club.name(mid)} removed {club.name(member)} as an admin of {branding.name(club)}.")
@@ -2188,14 +2650,14 @@ def admins_remove(request: Request, member: str = Form("")):
 
 
 @app.post("/admin/security/ban")
-def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), reason: str = Form("")):
-    mid = _security_admin(request)
+def security_ban(request: Request, ip: str = Form(...), hours: int = Form(0), reason: str = Form(""),
+                 mid: str = Depends(_security_admin)):
     import ipaddress
     try:
         ip = str(ipaddress.ip_address(ip.strip()))
     except ValueError:
         raise HTTPException(400, "That isn't an IP address.")
-    if ip == client_ip(request) or ipaddress.ip_address(ip).is_loopback:
+    if authmod.ban_key(ip) == authmod.ban_key(client_ip(request) or "") or ipaddress.ip_address(ip).is_loopback:
         raise HTTPException(400, "That's the address you're using (or this server); banning it would lock you out.")
     authn.ban(ip, hours or None, reason or "banned by an admin", mid)
     _admin_log(request, ban=ip, hours=hours or None)
@@ -2256,17 +2718,16 @@ def security_backup_download(request: Request, name: str):
 
 
 @app.post("/admin/security/unban")
-def security_unban(request: Request, ip: str = Form(...)):
-    _security_admin(request)
+def security_unban(request: Request, ip: str = Form(...), _mid: str = Depends(_security_admin)):
     authn.unban(ip)
     _admin_log(request, unban=ip)
     return RedirectResponse("/admin/security/bans", status_code=303)
 
 
 @app.post("/admin/security/signout")
-def security_signout(request: Request, session: list[int] = Form(...), member: str = Form("")):  # noqa: B008 (FastAPI's form fields)
+def security_signout(request: Request, session: list[int] = Form(...), member: str = Form(""),  # noqa: B008 (FastAPI's form fields)
+                     _mid: str = Depends(_security_admin)):
     """Sign out one device, or every ticked one."""
-    _security_admin(request)
     for sid in session:
         _admin_log(request, signed_out=authn.end_session_id(sid))
     return RedirectResponse("/admin/security/devices" + (f"?member={quote(member)}" if member else ""), status_code=303)
@@ -2277,11 +2738,12 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
 SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("bylaws", "Bylaws"),
-             ("dates", "Dates"), ("privacy", "Privacy"))
+             ("dates", "Dates"), ("privacy", "Privacy"), ("video", "Video"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
-FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"))
+FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
+                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
@@ -2291,20 +2753,24 @@ DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B
 @app.get("/admin/site", response_class=HTMLResponse)
 @app.get("/admin/site/{tab}", response_class=HTMLResponse)
 def site_page(request: Request, tab: str = "look", error: str = "", note: str = "", mid: str = Depends(real_me)):
-    if not archive.club.is_admin(mid) or tab not in dict(SITE_TABS):
+    if not archive.club.is_admin(mid) or tab not in dict(_site_tabs()):
         raise HTTPException(404)
     if not admin_mode(request):
         return RedirectResponse(f"/admin/confirm?next=/admin/site/{tab}", status_code=303)
     club = archive.club
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
-    return page(request, "site.html", tab=tab, tabs=SITE_TABS, error=error, note=note,
+    return page(request, "site.html", tab=tab, tabs=_site_tabs(), error=error, note=note,
+                video_rooms=meet.rooms(club), video_adhoc=meet.adhoc(club), video_leaves=meet.LEAVES, video_others=meet.OTHERS,
+                video_roles={k: r["name"] for k, r in club.role_table().items()},
+                jitsi_secret=len(meet.secret()) >= 32, jitsi_source=(src := meet.secret_source()) and src[0],
+                jitsi_made=dt.date.fromtimestamp(src[1]) if src and src[0] == "app" else None, jitsi_domain=meet._setting(club, "domain") or "", jitsi_app_id=meet._setting(club, "app_id") or "",
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
-                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), perm_rows=[(label, [n for n, _h, ps in ROLES.values() if p in ps]) for p, label in PERMISSIONS.items()], regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
+                agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), roles_stamp=_roles_stamp(), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source,
@@ -2316,9 +2782,9 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
 
 
 def _site_admin(request: Request) -> str:
-    mid = getattr(request.state, "real_member", None)
-    if not (archive.club.is_admin(mid) and admin_mode(request)):
-        raise HTTPException(404)
+    mid = _admin(getattr(request.state, "real_member", None))
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")  # as the other admin actions answer
     return mid
 
 
@@ -2339,7 +2805,7 @@ async def site_dates(request: Request):
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
 
 
-OFF = {("modules", "chow"): False, ("club", "public_calendars"): [], ("calendar", "holidays"): "",
+OFF = {("modules", "jitsi"): False, ("jitsi", "domain"): "", ("jitsi", "app_id"): "", ("modules", "chow"): False, ("club", "public_calendars"): [], ("club", "supports_app"): False, ("calendar", "holidays"): "",
        ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
 
 
@@ -2393,7 +2859,15 @@ async def site_features(request: Request):
             hol = next((code for code, name in regs["holidays"].items() if typed.lower() in (code, name.lower())), typed.lower())  # a name or a code
             if hol and hol not in regs["holidays"] or ele and ele not in regs["elections"]:
                 raise ValueError("Pick a region from the list.")
-            values = _keep_changes(club, {("modules", "chow"): bool(form.get("chow")),
+            domain, app_id = (" ".join((form.get(k) or "").split()).strip("/") for k in ("jitsi_domain", "jitsi_app_id"))
+            if domain.startswith(("https://", "http://")):
+                domain = domain.split("://", 1)[1].strip("/")
+            if form.get("jitsi") and not (domain and app_id):
+                raise ValueError("Video meetings: give the Jitsi server's address and the app ID, or untick it.")
+            if domain and not meet.DOMAIN.match(domain) or app_id and not meet.APP_ID.match(app_id):
+                raise ValueError("Video meetings: the address is the Jitsi server's name (meet.example.org), the app ID letters, numbers, dots, - and _.")
+            values = _keep_changes(club, {("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
+                                          ("modules", "chow"): bool(form.get("chow")), ("club", "supports_app"): bool(form.get("supports_app")),
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
                                           ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})
@@ -2402,6 +2876,76 @@ async def site_features(request: Request):
         return RedirectResponse("/admin/site/features?error=" + quote("The club's own holidays: each needs a name, a month and a day." if "extra_holidays" in str(e) else str(e)), status_code=303)
     _admin_log(request, site_features="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
     return RedirectResponse("/admin/site/features?note=" + quote("Saved."), status_code=303)
+
+
+def _site_tabs():
+    return [t for t in SITE_TABS if t[0] != "video" or archive.club.has("jitsi")]
+
+
+def _video_rules(form, k: str) -> dict:
+    """One room's (or the ad-hoc rooms') rules for guests, from the Video tab's ticks: k is the row's suffix."""
+    return {"guests": bool(form.get(f"guests{k}"))} | {f"guest_{g}": bool(form.get(f"{g}{k}")) for g in meet.GUEST} | {
+        "last_host_leaves": form.get(f"leaves{k}") if form.get(f"leaves{k}") in meet.LEAVES else "stay", "p2p": form.get(f"p2p{k}") == "direct"}
+
+
+@app.post("/admin/site/video")
+async def site_video(request: Request):
+    """Video tab: the named rooms and their rules for guests, and whether members may open rooms of their own."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    if not club.has("jitsi"):
+        raise HTTPException(404)
+    try:
+        if form.get("back"):
+            values = {("jitsi", "rooms"): None, ("jitsi", "adhoc"): None}
+        elif gone := form.get("delete"):  # one room's Delete: that room alone, the rest as saved
+            rooms = [r for r in meet.rooms(club) if r["slug"] != gone]
+            if len(rooms) == len(meet.rooms(club)):
+                raise ValueError("That room was already gone.")
+            if not rooms:
+                raise ValueError("Keep at least one room: it's where Video meeting in the menu goes.")
+            values = {("jitsi", "rooms"): rooms}
+        else:
+            rooms = []
+            for i in range(min(num(form.get("rows")) or 0, 30)):
+                name = " ".join((form.get(f"name{i}") or "").split())[:60]
+                if not name:  # a new row left empty
+                    continue
+                slug = (form.get(f"slug{i}") or "").strip().lower() or meet.slug(name)
+                if not meet.ROOM.match(slug):
+                    raise ValueError(f"{name}: its address is letters, numbers, - and _ only.")
+                if slug in {r["slug"] for r in rooms}:
+                    raise ValueError(f"Two rooms have the address {slug}: change one.")
+                known = club.role_table()
+                # a role removed since keeps meaning "nobody" (the form can't show it): never everyone after a save
+                gone = [k for r in meet.rooms(club) if r["slug"] == slug for k in r["roles"] if k not in known]
+                rooms.append({"slug": slug, "name": name, "about": " ".join((form.get(f"about{i}") or "").split())[:300], "roles": [k for k in form.getlist(f"roles{i}") if k in known] + gone,
+                              "others": form.get(f"others{i}") if form.get(f"others{i}") in meet.OTHERS else "knock"} | _video_rules(form, i))
+            if not rooms:
+                raise ValueError("Keep at least one room: it's where Video meeting in the menu goes.")
+            values = {("jitsi", "rooms"): rooms, ("jitsi", "adhoc"): {"on": bool(form.get("adhoc"))} | _video_rules(form, "_a")}
+        club.save_site_settings(values)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/video?error=" + quote(str(e)), status_code=303)
+    short = lambda r: (f"straight in: {', '.join(r['roles'])}, others {r['others']}; " if r.get("roles") else "") + ("guests" if r["guests"] else "members only") + "".join(f" {g}" for g in meet.GUEST if r[f"guest_{g}"]) + f", last host: {r['last_host_leaves']}" + (", peer-to-peer" if r["p2p"] else "")
+    if form.get("delete"):
+        _admin_log(request, site_video=f"deleted {form.get('delete')}")
+        return RedirectResponse("/admin/site/video?note=" + quote("Room deleted."), status_code=303)
+    _admin_log(request, site_video="club.yaml" if form.get("back") else "; ".join(f"{r['slug']} ({short(r)})" for r in rooms)
+               + (f"; own rooms ({short(values[('jitsi', 'adhoc')])})" if not form.get("back") and form.get("adhoc") else ""))
+    return RedirectResponse("/admin/site/video?note=" + quote("Saved. Meetings already going on keep the rules they started with."), status_code=303)
+
+
+@app.post("/admin/site/jitsi-secret", response_class=HTMLResponse)
+def site_jitsi_secret(request: Request):
+    """Make a new secret for the Jitsi server and show it once (never again: the card then only says it's set)."""
+    _site_admin(request)
+    if meet.secret_source() and meet.secret_source()[0] == "env":
+        return RedirectResponse("/admin/site/features?error=" + quote("The server's env file sets the secret: change it there."), status_code=303)
+    value = meet.new_secret()
+    _admin_log(request, jitsi_secret="made a new one")
+    r = page(request, "jitsi_secret.html", value=value, domain=meet._setting(archive.club, "domain") or "", app_id=meet._setting(archive.club, "app_id") or "club-minutes")
+    r.headers["Cache-Control"] = "no-store"  # shown once: never kept by the browser
+    return r
 
 
 @app.post("/admin/site/bylaws")
@@ -2488,32 +3032,39 @@ async def site_agenda(request: Request):
     return RedirectResponse("/admin/site/agenda?note=" + quote("Saved."), status_code=303)
 
 
+def _roles_stamp() -> str:
+    """roles.json as the page saw it, so a save from an out-of-date page can't drop what another admin added."""
+    p = DATA / "roles.json"
+    return hashlib.sha256(p.read_bytes()).hexdigest()[:16] if p.exists() else "none"
+
+
+def _shown_perms(club) -> dict[str, str]:
+    """The permissions Site → Roles shows: a module's only while it's on (Jitsi's meet_host)."""
+    return {p: label for p, label in PERMISSIONS.items() if p != "meet_host" or club.has("jitsi")}
+
+
 def _role_rows(club) -> list[dict]:
-    """Roles tab: each role, what it allows, the offices that give it, and who has it."""
-    offs, keepers = offices.offices(club), set(club.roster_keepers)
-    given = {"officer": [o["title"] for o in offs if o["officer"]], "board": [o["title"] for o in offs],
-             "treasurer": [o["title"] for o in offs if "treasurer" in o["title"].lower()],
-             "roster_keeper": [o["title"] for o in offs if o["title"].lower() in keepers]}
-    by_name = sorted(club.members.values(), key=lambda m: m.name.lower())
-    return [{"key": k, "name": name, "how": how, "can": [PERMISSIONS[p] for p in perms], "offices": given.get(k, []),
-             "who": [m.id for m in by_name if k in club.roles(m.id)], "picked": k in PICKED,
-             "choices": [m.id for m in by_name if m.status.lower() not in ("inactive", "silent key") or getattr(m, k, False)]}
-            for k, (name, how, perms) in ROLES.items()]
+    """Roles tab: each role, what it allows, the offices that give it, the members picked for it, and who has it."""
+    by_name, table = sorted(club.members.values(), key=lambda m: m.name.lower()), club.role_table()
+    has = {m.id: club.roles(m.id, table) for m in by_name}
+    return [{**r, "key": k, "who": [m.id for m in by_name if k in has[m.id]],
+             "choices": [m.id for m in by_name if m.status.lower() not in ("inactive", "silent key") or m.id in r["members"]]}
+            for k, r in table.items()]
 
 
 def _office_rows(club) -> list[dict]:
-    """Offices tab rows: the club's offices (who holds each, whether its holders add members), then two empty rows."""
-    keepers = set(club.roster_keepers)
-    return ([{**o, "keeper": o["title"].lower() in keepers, "held": bool(offices.holders(club, o["title"]))} for o in offices.offices(club)]
-            + [{"title": "", "officer": False, "seats": 1, "keeper": False, "held": False}] * 2)
+    """Offices tab rows: the club's offices (who holds each), then an empty one (+ Add an office adds more)."""
+    return ([{**o, "held": bool(offices.holders(club, o["title"]))} for o in offices.offices(club)]
+            + [{"title": "", "officer": False, "seats": 1, "held": False}])
 
 
 @app.post("/admin/site/offices")
 async def site_offices(request: Request):
-    """Offices tab: the club's offices (an officer's office or a board seat, how many seats), and which offices' holders
-    add members to the roster. An office someone holds can't be removed or renamed here: hand it over first."""
+    """Offices tab: the club's offices (an officer's office or a board seat, how many seats). An office someone holds
+    can't be removed or renamed here: hand it over first. (Which offices add members is the Roster keeper role's.)"""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
     keys = (("", "offices"), ("", "roster_keepers"))
+    had = {o["title"].lower() for o in offices.offices(club)}
     try:
         if form.get("back"):
             values = dict.fromkeys(keys)
@@ -2529,7 +3080,7 @@ async def site_offices(request: Request):
                 seats = num(form.get(f"seats{i}"))
                 if seats is None or not 1 <= seats <= 20:
                     raise ValueError(f"Seats for {title}: a whole number from 1 to 20.")
-                rows.append({"title": title, "officer": bool(form.get(f"officer{i}")), "seats": seats, "keeper": bool(form.get(f"keeper{i}"))})
+                rows.append({"title": title, "officer": bool(form.get(f"officer{i}")), "seats": seats})
             if not rows:
                 raise ValueError("Keep at least one office.")
             gone = [o["title"] for o in offices.offices(club) if o["title"].lower() not in seen and offices.holders(club, o["title"])]
@@ -2538,33 +3089,57 @@ async def site_offices(request: Request):
                                  "over on the Offices page (Roster → Offices) before removing or renaming it here.")
             new_offices = [r["title"] if r["officer"] and r["seats"] == 1 else {"title": r["title"], "officer": r["officer"], "seats": r["seats"]}
                            for r in rows]
-            keepers = [r["title"] for r in rows if r["keeper"]]
-            if not keepers:
-                raise ValueError("Tick at least one office whose holders add members (usually the Secretary).")
-            same_offices = offices.offices(type("C", (), {"offices": club.yaml.get("offices") or []})()) == \
-                offices.offices(type("C", (), {"offices": new_offices})())
-            yaml_keepers = {str(x).lower() for x in club.yaml.get("roster_keepers") or ["Secretary", "Treasurer"]}
-            values = {("", "offices"): None if same_offices else new_offices,
-                      ("", "roster_keepers"): None if {k.lower() for k in keepers} == yaml_keepers else keepers}
+            values = {("", "offices"): None if office_list(club.yaml.get("offices") or []) == office_list(new_offices) else new_offices}
         club.save_site_settings(values)
     except ValueError as e:
         return RedirectResponse("/admin/site/roles?error=" + quote(str(e)), status_code=303)
-    _admin_log(request, site_offices="club.yaml" if form.get("back") else ", ".join(k.replace("roster_keepers", "who adds members")
-                                                                                  for (_, k), v in values.items() if v is not None) or "club.yaml")
-    return RedirectResponse("/admin/site/roles?note=" + quote("Saved."), status_code=303)
+    _admin_log(request, site_offices="club.yaml" if form.get("back") or values[("", "offices")] is None else "offices")
+    new = {o["title"].lower(): o["title"] for o in offices.offices(club) if o["title"].lower() not in had}
+    held = sorted({(new[t.lower()], club.name(m.id)) for m in club.members.values() for t in offices.titles(m.role) if t.lower() in new})
+    note = "Saved." + "".join(f" {who} already had “{title}” as a title, so now holds that office (and its roles)." for title, who in held)
+    return RedirectResponse("/admin/site/roles?note=" + quote(note), status_code=303)
 
 
 @app.post("/admin/site/roles")
 async def site_roles(request: Request):
-    """Roles tab: who has the roles given by hand (Minutes editor, Calendar editor). The rest follow the offices."""
+    """Roles tab: each role's name, what it allows, the offices that give it and the members picked for it; add a role
+    of the club's own, remove one (not a built-in), or put a built-in back as it ships. Admin stays outside: no role
+    gives it. Refused if a permission would be left with no role."""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
-    before = {k: {m.id for m in club.members.values() if getattr(m, k)} for k in PICKED}
-    picked = {k: [i for i in form.getlist(k) if i in club.members] for k in PICKED}
-    club.save_roles(picked)
-    changes = [f"{ROLES[k][0]} {'+' if add else '-'}{club.name(i)}" for k in PICKED
-               for add, ids in ((True, set(picked[k]) - before[k]), (False, before[k] - set(picked[k]))) for i in sorted(ids)]
-    _admin_log(request, site_roles=", ".join(changes) or "no change")
-    return RedirectResponse("/admin/site/roles?note=" + quote("Saved." if changes else "Nothing changed."), status_code=303)
+    before = club.role_table()
+    if form.get("stamp") is not None and form.get("stamp") != _roles_stamp():
+        return RedirectResponse("/admin/site/roles?error=" + quote("Someone changed the roles while you had this page open: "
+                                "here they are now. Make your change again.") + "#roles", status_code=303)
+    if (back := form.get("back")) in ROLES:  # Back to the built-in (its own form): name, permissions, offices; picks stay
+        table = {**before, back: {"name": ROLES[back][0], "perms": list(ROLES[back][1]),
+                                  "offices": club._default_offices(back), "members": before[back]["members"]}}
+    else:
+        keys = [k for k in form.getlist("key") if k in before][:60]
+        hidden = [p for p in PERMISSIONS if p not in _shown_perms(club)]  # not on the page: kept as they were
+        table = {k: {"name": form.get(f"name.{k}") or before[k]["name"], "perms": form.getlist(f"perms.{k}") + [p for p in before[k]["perms"] if p in hidden],
+                     "offices": form.getlist(f"offices.{k}"), "members": form.getlist(f"members.{k}")}
+                 for k in keys if not (form.get(f"remove.{k}") and k not in ROLES)}
+        for k in ROLES:
+            table.setdefault(k, before[k])  # a hand-made request can't drop a built-in
+    if new := " ".join((form.get("new") or "").split())[:40]:
+        table["c" + secrets.token_hex(4)] = {"name": new, "perms": [], "offices": [], "members": []}
+    try:
+        club.save_roles(table)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/roles?error=" + quote(str(e)) + "#roles", status_code=303)
+    after, changes = club.role_table(), []
+    for k in dict.fromkeys([*before, *after]):
+        a, b = before.get(k), after.get(k)
+        if not b or not a:
+            changes.append(f"{'added' if b else 'removed'} {(b or a)['name']}")
+            continue
+        for f in ("name", "perms", "offices", "members"):
+            if a[f] != b[f]:
+                show = (lambda v: club.name(v)) if f == "members" else str
+                changes.append(f"{b['name']} {f}: " + (f"{a[f]} → {b[f]}" if f == "name" else ", ".join(
+                    [f"+{show(x)}" for x in b[f] if x not in a[f]] + [f"-{show(x)}" for x in a[f] if x not in b[f]])))
+    _admin_log(request, site_roles="; ".join(changes) or "no change")
+    return RedirectResponse("/admin/site/roles?note=" + quote("Saved." if changes else "Nothing changed.") + "#roles", status_code=303)
 
 
 @app.post("/admin/site/privacy")
@@ -2727,8 +3302,11 @@ def stage_page(request: Request, mid: str = Depends(real_me)):
 
 @app.post("/admin/stage")
 def stage_action(request: Request, action: str = Form(""), mid: str = Depends(real_me)):
-    if not (STAGE and archive.club.is_admin(mid) and admin_mode(request)):
+    if not STAGE:
         raise HTTPException(404)
+    _admin(mid)
+    if not admin_mode(request):
+        raise HTTPException(403, "Turn on admin mode first.")
     if action == "sync":
         (DATA / "stage-sync-request").write_text(mid)  # club-stage-sync.path starts the sync
     elif action in ("pause", "resume"):
@@ -2828,7 +3406,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
     return page(request, "calendar.html", view=view, lo=lo, hi=hi, first=first, today=today, by_day=by_day, note=note, public=public,
                 items=items, repeats=repeats, weekdays=[dt.date(2024, 1, 1 + (ws + i) % 7).strftime("%a") for i in range(7)],
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
-                can_edit=not public and can_edit_calendar_now(request), is_officer=not public and privileged(request),
+                can_edit=not public and can_edit_calendar_now(request), can_moderate=not public and moderates(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
                 timedelta=dt.timedelta, weeks=weeks, agenda_weeks=AGENDA_WEEKS)
 
@@ -2839,7 +3417,7 @@ def _feed_url(request: Request, path: str) -> str:
 
 
 @app.get("/calendar/changes", response_class=HTMLResponse)
-def calendar_changes(request: Request, p: str = Query("1", alias="page"), per: str = "", mid: str = Depends(officer)):
+def calendar_changes(request: Request, p: str = Query("1", alias="page"), per: str = "", mid: str = Depends(moderator)):
     """Who changed what on the club calendars (calendar-log.jsonl), newest first."""
     return page(request, "calendar_changes.html", pg=paginate(events.history(5000), p, per, 50), cals=events.CALS)
 
@@ -2897,12 +3475,13 @@ def can_edit_calendar_now(request: Request) -> bool:
 
 def _calendar_editor(request: Request) -> None:
     if not can_edit_calendar_now(request):
-        raise HTTPException(403, "Only leaders, minutes editors and calendar editors can change the club calendars.")
+        raise HTTPException(403, "Only members whose role allows it can change the club calendars.")
 
 
 def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
     r = page(request, "calendar_edit.html", f=f, id=id, d=d, cals=events.CALS, error=error, repeats=repeats, scopes=events.SCOPES,
-             repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()), zones=events.ZONES, club_tz=_club_tz())
+             repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()), zones=events.ZONES, club_tz=_club_tz(),
+             video_rooms=[(f"{base_url(request)}/meet/{x['slug']}", x["name"], x["slug"]) for x in meet.rooms(archive.club)] if meet.settings(archive.club) else [])
     r.status_code = status
     return r
 
@@ -3026,6 +3605,8 @@ async def links_save(request: Request, mid: str = Depends(me)):
     if not admin_mode(request):
         raise HTTPException(403, "Turn on admin mode to edit the club links.")
     form = await request.form()
+    if "label" not in form:  # the page always sends its rows (blank ones clear the links): this one wasn't from it
+        raise HTTPException(400, "No links were sent, so nothing was changed.")
     rows = zip(form.getlist("label"), form.getlist("url"), form.getlist("icon"), form.getlist("show"))
     out = []
     own = f"https://{authn.rp_id}/".lower() if authn.rp_id else None
@@ -3064,7 +3645,7 @@ def roster_api(request: Request):
     """Active members' callsign, name, email, officer tick and former callsigns, for the club's other tools (the Discord bot, in its
     own container on the same Proxmox host). Only from this server itself or the addresses in
     CLUB_MINUTES_ROSTER_API_ALLOW (comma-separated), never through the web proxy, with the token in CLUB_MINUTES_ROSTER_API_TOKEN
-    (both in /etc/club-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
+    (both in /etc/club-minutes/env). Off (404) without that token. Calls from an allowed address are logged in api-log.jsonl (kept 90 days)."""
     import hmac
     import os
     want = os.environ.get("CLUB_MINUTES_ROSTER_API_TOKEN", "")
@@ -3076,13 +3657,14 @@ def roster_api(request: Request):
     former: dict[str, list[str]] = {}  # earlier callsigns (kept as aliases), so the bot can follow a callsign change
     for old, mid in archive.club.former_ids.items():
         former.setdefault(mid, []).append(old.upper())
-    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": m.officer, "former": sorted(former.get(m.id, []))}
+    rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": "officer" in archive.club.roles(m.id), "former": sorted(former.get(m.id, []))}
             for m in sorted(archive.club.members.values(), key=lambda m: (m.last, m.first)) if m.status.lower() == "active"] if ok else []
-    p = DATA / "api-log.jsonl"
-    with p.open("a") as f:
-        f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
-                            "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
-    p.chmod(0o600)
+    if want and local:  # only the bot's own calls, right or wrong token: anyone on the internet can reach this path
+        p = DATA / "api-log.jsonl"
+        with p.open("a") as f:
+            f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
+                                "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
+        p.chmod(0o600)
     if not want:
         raise HTTPException(404)
     if not ok:
@@ -3096,7 +3678,7 @@ def live_fragment(request: Request, slug: str):
     return templates.get_template("_minutes.html").render(m=get_meeting(slug), pdf=False, club=archive.club)
 
 
-# ---------------- leader console (officers + minutes editors) ----------------
+# ---------------- leader console (officers + meeting leaders) ----------------
 
 @app.get("/console", response_class=HTMLResponse)
 def console_home(request: Request, error: str = "", mid: str = Depends(leader)):
@@ -3121,7 +3703,7 @@ def console_start(date: str = Form(...), leader_id: str = Form("", alias="leader
 @app.get("/console/{slug}", response_class=HTMLResponse)
 def console_page(request: Request, slug: str, mid: str = Depends(leader)):
     m = get_meeting(slug)
-    if m.status == "published":
+    if m.status != "draft":  # submitted or imported: corrected on its page, never in the console
         return RedirectResponse(f"/meetings/{slug}", status_code=303)
     ctx = console.context(archive, m)
     return page(request, "console.html", m=m, data=json.dumps(ctx).replace("<", "\\u003c"),  # "</script>" in any text can't end the script
@@ -3165,9 +3747,14 @@ async def console_release(request: Request, slug: str, mid: str = Depends(leader
     return {"ok": True}
 
 
+CONSOLE_SAVE_MAX = 256 * 1024  # a long meeting's minutes and console state are a few KB
+
+
 @app.put("/api/meetings/{slug}")
 async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
+    if len(await request.body()) > CONSOLE_SAVE_MAX:
+        raise HTTPException(413, "That's too much to save at once. Reload the console and try again.")
     data = await _json(request)
     if not isinstance(data, dict) or not isinstance(data.get("meeting"), dict):
         raise HTTPException(400, "That request wasn't readable.")
@@ -3180,6 +3767,8 @@ async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
         _held_by_other(slug, None, mid)  # a console from before this version (no tab): only someone else's hold stops it
     try:
         console.apply(archive, slug, data)
+    except console.Unreadable:
+        raise HTTPException(400, "That request wasn't readable.") from None
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}
@@ -3193,7 +3782,17 @@ def email_minutes(slug: str, url: str) -> None:
 def console_submit(request: Request, background: BackgroundTasks, slug: str, mid: str = Depends(leader)):
     get_meeting(slug)
     _held_by_other(slug, None, mid)
-    console.submit(archive, slug, by=mid)
+    fresh = archive.by_slug[slug].status == "draft"  # a note for minutes already in the archive is a real one: leave it
+    if fresh:  # first: a crash after the submit leaves a note, so the daily job sends the email
+        console.mark_pending(archive, slug, "emailed.json", f"{base_url(request)}/meetings/{slug}")
+    try:
+        console.submit(archive, slug, by=mid)
+    except BaseException as e:  # not submitted: no note to email unsubmitted minutes
+        if fresh:
+            (archive.root / slug / "emailed.json.pending").unlink(missing_ok=True)
+        if isinstance(e, ValueError):  # already in the archive: never rebuilt or emailed again
+            raise HTTPException(409, str(e))
+        raise
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)

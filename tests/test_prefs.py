@@ -101,8 +101,8 @@ def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):
 
     from club_minutes import web
     from club_minutes.auth import Auth
-    assert prefs.settings("n0aaaa") == prefs.settings(None) == {"week_start": "sunday"}
-    assert prefs.save_settings("n0aaaa", {"week_start": "friday", "evil": "x"}) == {"week_start": "sunday"}  # not a choice
+    assert prefs.settings("n0aaaa") == prefs.settings(None) == {"week_start": "sunday", "support_link": "show"}
+    assert prefs.save_settings("n0aaaa", {"week_start": "friday", "evil": "x"})["week_start"] == "sunday"  # not a choice
     c = club()
     a = Auth(c, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
@@ -117,3 +117,62 @@ def test_week_start_setting_and_month_grid(tmp_path, monkeypatch):
     page = month()
     assert "<th>Mon</th><th>Tue</th>" in page and page.index("<th>Sun</th>") > page.index("<th>Sat</th>")
     assert 'aria-label="Monday, October 26"' in page and 'aria-label="Sunday, December 6"' in page
+
+
+def test_support_link_member_hides_it_club_turns_it_off(tmp_path, monkeypatch):
+    """The menu's Support Club Minutes link (Ko-fi): on by default; a member hides it or brings it back on Your
+    profile → Settings; an admin's "the club supports Club Minutes" takes it away for everyone."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    c = club()
+    a = Auth(c, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", c)
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, a.new_session("n0aaaa"))
+    link = 'class="kofi" href="https://ko-fi.com/jflattery"'  # at the foot of the menu, on by default
+    assert link in t.get("/").text and "ko-fi.com/jflattery" in t.get("/about").text
+    prefs.save_settings("n0aaaa", {"week_start": "monday"})
+    t.post("/profile/settings", data={"support_link": "hide"})
+    assert link not in t.get("/").text and "I already give toward the app" in (st := t.get("/profile/settings").text)
+    assert 'href="https://github.com/sponsors/jflattery"' in st and 'href="https://ko-fi.com/jflattery"' in st
+    assert prefs.settings("n0aaaa") == {"week_start": "monday", "support_link": "hide"}  # a form with one setting keeps the other
+    t.post("/profile/settings", data={"support_link": "<script>"})  # not a choice: nothing changes
+    assert prefs.settings("n0aaaa")["support_link"] == "hide"
+    t.post("/profile/settings", data={"support_link": "show"})
+    assert link in t.get("/").text
+    c.info["supports_app"] = True  # Site → Features (or club.yaml): the club supports the app
+    about = t.get("/about").text
+    assert link not in t.get("/").text and "Your club supports Club Minutes" in about and "ko-fi.com/jflattery" in about
+    assert "isn't shown to anyone" in t.get("/profile/settings").text  # the setting says why
+
+
+def test_settings_saved_at_once_all_survive():
+    import threading
+    ts = [threading.Thread(target=prefs.save_settings, args=(f"member-{i}", {"week_start": "monday"})) for i in range(20)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert all(prefs.settings(f"member-{i}")["week_start"] == "monday" for i in range(20))
+
+
+def test_a_removed_members_choices_are_dropped_and_no_one_elses(tmp_path, monkeypatch):
+    prefs.save("n0aaaa", {"minutes": "link"})
+    prefs.save("n0gone", {"minutes": "link"})
+    prefs.save_settings("n0gone", {"support_link": "hide"})
+    prefs.save_settings("n0cccc", {"support_link": "hide"})  # a Silent Key: theirs go too (Jim, 2026-11-16)
+    from club_minutes import auth
+    monkeypatch.setattr(auth, "DATA", tmp_path)  # its own sign-in database, not the session's shared one
+    a = auth.Auth(club())
+    a.new_session("n0gone", "Mozilla/5.0", "192.0.2.1", "passkey")
+    a.new_session("n0aaaa", "Mozilla/5.0", "192.0.2.2", "passkey")
+    a.new_session("n0cccc", "Mozilla/5.0", "192.0.2.3", "passkey")
+    assert prefs.purge_removed(lambda: Club(FIX / "test-club.yaml", roster=[])) == 0  # a roster that didn't load: nothing goes
+    assert prefs.purge_removed(club) == 2 and prefs.purge_removed(club) == 0
+    assert prefs.get("n0aaaa")["minutes"] == "link" and prefs.settings("n0cccc")["support_link"] == "show"
+    assert prefs.get("n0gone")["minutes"] == "pdf" and prefs.settings("n0gone")["support_link"] == "show"
+    members = {r[0] for t in ("sessions", "signins") for r in a.db.execute(f"select member from {t}")}
+    assert members == {"n0aaaa"}                                                   # their sign-ins went too, no one else's

@@ -122,3 +122,35 @@ def test_callsign_change_from_the_page(env, monkeypatch):
     club.members["n0bbbb"].role = "Secretary"  # the roster reload dropped the test's in-memory title
     assert "error=" in c.post("/members/w0amya/callsign", data={"callsign": "N0BBBB", "date": "2026-11-08"},
                               follow_redirects=False).headers["location"]
+
+
+def test_a_change_that_stops_partway_says_how_to_finish_and_rename_id_finishes_it(env, monkeypatch, caplog):
+    club, d = env
+    real, calls = callsign._write, []
+    def flaky(p, text):  # the second file write fails, as a full disk would
+        calls.append(p)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        real(p, text)
+    monkeypatch.setattr(callsign, "_write", flaky)
+    with pytest.raises(OSError):
+        callsign.change(club, "n0aaaa", "w0amya", "2026-11-08", "n0bbbb")
+    assert "club-minutes rename-id n0aaaa w0amya" in caplog.text
+    left = [f for f in ("chow.json", "business.json", "email-prefs.json", "treasurer.json") if "n0aaaa" in (d / f).read_text()]
+    assert left  # stopped partway
+    monkeypatch.setattr(callsign, "_write", real)
+    callsign.rename_id("n0aaaa", "w0amya", d)  # what the command runs; safe to run again
+    assert not [f for f in ("chow.json", "email-prefs.json", "treasurer.json") if "n0aaaa" in (d / f).read_text()]
+    assert (d / "avatars" / "w0amya.jpg").exists() and "w0amya" in (d / "meetings" / "2026-11-05" / "minutes.md").read_text()
+
+
+def test_rename_follows_recorder_corrections_review_and_earlier_versions(tmp_path):
+    md = ("---\ndate: 2026-11-05\nrecorder: n0aaaa\ncorrections:\n- version: 2\n  at: 1\n  by: n0aaaa\n  reason: fix\n"
+          "reviewed:\n  by: n0aaaa\n  at: 1\n---\n\n## Old Business\n- Keep n0aaaa as text\n")
+    for name in ("minutes.md", "minutes.v1.md"):
+        (tmp_path / "meetings" / "2026-11-05").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "meetings" / "2026-11-05" / name).write_text(md)
+    assert callsign.rename_id("n0aaaa", "w0amya", tmp_path)["minutes"] == 2
+    for name in ("minutes.md", "minutes.v1.md"):
+        out = (tmp_path / "meetings" / "2026-11-05" / name).read_text()
+        assert out.count("w0amya") == 3 and "Keep n0aaaa as text" in out and "recorder: w0amya" in out

@@ -25,15 +25,16 @@ from pathlib import Path
 
 from . import backup, profile
 from .club import CALLSIGN, DATA, ROSTER_CACHE, Club, inside, one_line, roster_locked
+from .meeting import split_front
 from .membership import LOG_TAB
 from .roster import Sheet
 
 log = logging.getLogger("club_minutes.callsign")
 # Current-state files that hold member ids (as values, or as keys): renamed. *.jsonl logs are history: left alone.
 STATE_FILES = ("chow.json", "business.json", "events.json", "calendar-feeds.json", "ask-about.json", "email-prefs.json",
-               "settings.json", "treasurer.json", "admins.json", "roles.json")
+               "settings.json", "treasurer.json", "admins.json", "roles.json", "admins-suspended.json", "recovery.json", "meet-rooms.json")
 AUTH_COLUMNS = {"sessions": ("member", "view_as"), "links": ("member",), "passkeys": ("member",), "challenges": ("member",),
-                "email_changes": ("member",), "signins": ("member",), "events": ("member",)}
+                "email_changes": ("member", "by"), "signins": ("member",), "events": ("member",)}
 
 
 def _swap(x, old: str, new: str):
@@ -66,12 +67,12 @@ def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
             if after != before:
                 _write(p, json.dumps(after, indent=1))
                 done["files"] += 1
-    # Minutes: the front matter's attendance lists and leader, and the report tags. Body text is left alone.
-    item = re.compile(rf"(?m)^(\s*-\s+|leader:\s+){re.escape(old)}\s*$")
+    # Minutes: the front matter's attendance lists, leader, recorder, correction and review names, and the report tags. Body text is left alone.
+    item = re.compile(rf"(?m)^(\s*-\s+|leader:\s+|recorder:\s+|\s*(?:-\s+)?by:\s+){re.escape(old)}\s*$")
     tag = re.compile(rf"<!--\s*member:\s*{re.escape(old)}\s*-->")
-    for p in sorted((data / "meetings").glob("*/minutes.md")):
+    for p in sorted((data / "meetings").glob("*/minutes*.md")):  # and the earlier versions, minutes.vN.md
         text = p.read_text()
-        _, fm, body = text.split("---", 2) if text.startswith("---") else ("", "", text)
+        _, fm, body = split_front(text) if text.startswith("---") else ("", "", text)
         new_text = (f"---{item.sub(lambda m: m.group(1) + new, fm)}---" if fm else "") + tag.sub(f"<!-- member: {new} -->", body)
         if new_text != text:
             _write(p, new_text)
@@ -130,7 +131,12 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
     sheet.add_row({"callsign": new_call, "full_name": m.name, "date": date, "event": "Callsign Change",
                    "note": f"{old_call or '(none)'} to {new_call}"}, tab=LOG_TAB, optional=("note",))
 
-    done = rename_id(mid, new)
+    try:
+        done = rename_id(mid, new)
+    except Exception:  # the sheet already has the new callsign: say how to finish (rename_id can run again safely)
+        log.exception("callsign change %s -> %s stopped partway; with the service stopped, finish it with "
+                      "`club-minutes rename-id %s %s`, then start the service", one_line(mid), one_line(new), one_line(mid), one_line(new))
+        raise
     event = {"date": date, "event": "Callsign Change", "note": f"{old_call or '(none)'} to {new_call}"}
     row.update(id=new, callsign=new_call, aliases=aliases, events=list(row.get("events") or []) + [event])
     if ROSTER_CACHE.exists():

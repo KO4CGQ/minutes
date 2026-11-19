@@ -29,7 +29,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
     'business': ('/business' ~ ('?tab=done' if q.get('tab') == 'done' else ''), 'Business'), 'home': ('/', 'Home'),
     'roster': ('/roster', 'Roster'), 'minutes': ('/minutes', 'Minutes'), 'search': ('/search?q=' ~ (q.get('q', '')|urlencode), 'Search')}.get(q.get('from')) %}
 {%- if came and item %}{% set came = (came[0] ~ '#i' ~ item, came[1]) %}{% endif %}{% if came or href %}{{ crumb(*(came or (href, label))) }}{% endif %}{% endmacro %}
-{% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href)) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
+{% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href ~ '/')) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
 <nav class="top">
   {% if me %}<button type="button" class="burger" aria-label="All pages and search" aria-expanded="false" aria-controls="drawer">☰</button>{% endif %}
   <a class="brand" href="/"><img src="{{ brand() }}" alt="" class="{{ logo_class() }}"><span>{{ app_name() }}</span></a>
@@ -55,11 +55,12 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
     {# search only below 820px, where the bar has no room for it #}
     <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business{{ ', chow' if module('chow') }} and calendar"></form>
     {% for href, label in PAGES if href != '/chow' or module('chow') %}{% if href == '/business' %}<div class="sep"></div>{% endif %}{{ navlink(href, label) }}{% endfor %}
-    {% if me.officer or admin_until or keeps_fund %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}{% if show_spending %}{{ navlink('/spending', 'Spending') }}{% endif %}
+    {% if club.may(me.id, 'treasurer') or admin_until or keeps_fund %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}{% if show_spending %}{{ navlink('/spending', 'Spending') }}{% endif %}{% if video_ready() %}{{ navlink('/meet', 'Video meeting') }}{% endif %}
+    {% if show_support %}<a class="kofi" href="https://ko-fi.com/jflattery" aria-label="Support Club Minutes on Ko-fi (opens in a new tab)">{{ icon('si:kofi') }} Support Club Minutes</a>{% endif %}
   </div></div>{% endif %}
-{% if viewing_as %}<div class="adminbar viewas">Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.
+{% if viewing_as %}<div class="adminbar viewas">{% if acting_as %}Acting as <b>{{ club.name(viewing_as) }}</b>: changes you make are made as them and logged; emails reach only you.{% else %}Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.{% endif %}
 <form method="post" action="/admin/view-as"><input type="hidden" name="member" value=""><input type="hidden" name="next" value="/members/{{ viewing_as }}"><button type="submit">Stop</button></form></div>{% endif %}
-{% if viewing_as %}<dialog id="readonly" class="modal" aria-labelledby="readonly-title"><form method="dialog" class="x"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form>
+{% if viewing_as and not acting_as %}<dialog id="readonly" class="modal" aria-labelledby="readonly-title"><form method="dialog" class="x"><button class="calclose" aria-label="Close">{{ emoji('✖️', 'x') }}</button></form>
   <div class="body"><h2 id="readonly-title">Read-only</h2><p>You're viewing the app as {{ club.name(viewing_as) }}, so nothing can be changed. To make changes, press <b>Stop</b> in the banner at the top.</p>
   <form method="dialog"><button class="btn small">OK</button></form></div></dialog>
 <script nonce="{{ csp_nonce }}">  // viewing as someone: a change opens this dialog instead of a page saying no (the server refuses it either way)

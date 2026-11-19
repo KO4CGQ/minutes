@@ -102,7 +102,7 @@ def mail_archive(tmp_path, monkeypatch, only_to):
     FakeSMTP.outbox = []
     c = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
         {"id": "doe", "first": "Jane", "last": "Doe", "email": "jane@example.org", "minutes_editor": True},
-        {"id": "kim", "first": "Sam", "last": "Kim", "email": "sam@example.org"},
+        {"id": "kim", "first": "Sam", "last": "Kim", "email": "sam@example.org", "share": ["email"]},
         {"id": "roe", "first": "Rick", "last": "Roe", "email": "rick@example.org", "status": "Silent Key"},
         {"id": "dummy", "first": "Jane", "last": "Dummy"}])
     c.email = {"only_to": only_to} if only_to is not None else {}
@@ -116,7 +116,8 @@ def test_email_minutes_test_mode_only_reaches_allowlist(tmp_path, monkeypatch):
     assert [m["To"] for m in FakeSMTP.outbox] == ["jane@example.org"]  # Sam is on the roster but withheld
     assert st["sent"] == 1 and st["roster"] == 2 and st["test_mode"]
     msg = FakeSMTP.outbox[0]
-    assert msg["Reply-To"] == "jane@example.org" and "November 12, 2026" in msg["Subject"]
+    assert msg["Reply-To"] is None and "November 12, 2026" in msg["Subject"]  # Jane doesn't share her email
+    assert "Replies go to the club." in msg.get_body(("plain",)).get_content()
     assert [p.get_filename() for p in msg.iter_attachments()] == ["m.pdf"]
     console.email_minutes(a, "2026-11-12", lambda: ("m.pdf", b"%PDF"), "u")  # only once
     assert len(FakeSMTP.outbox) == 1
@@ -315,3 +316,46 @@ def test_the_meeting_follows_the_clubs_agenda(tmp_path):
     for bad in (["Attendance"], ["Old Business", "Old Business"], ["x" * 61], [""], [{"hint": "no name"}]):
         with pytest.raises(ValueError, match="meeting: sections"):
             club_mod._agenda(bad)
+
+
+def test_console_saves_of_the_wrong_shape_or_size_are_refused_and_attendance_is_roster_ids(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    from club_minutes.auth import Auth
+    a = archive_with_prev(tmp_path)
+    a.club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": "doe", "first": "Jane", "last": "Doe", "minutes_editor": True},
+        {"id": "w0demo", "first": "Sam", "last": "Kim", "aliases": ["N0OLDE"]},
+        {"id": "roe", "first": "Ray", "last": "Roe", "status": "Inactive"}])
+    monkeypatch.setattr(web, "archive", a)
+    auth = Auth(a.club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", auth)
+    t = TestClient(web.app)
+    t.cookies.set(web.COOKIE, auth.new_session("doe"))
+    m = console.start(a, dt.date(2026, 11, 12), "doe")
+    url = f"/api/meetings/{m.slug}"
+    for bad in ({"visitors": [1]}, {"sections": {"Community Reports": [{"text": 5}]}}, {"guests": ["Pat"]},
+                {"in_person": 5}, {"sections": ["Old Business"]}, {"leader": ["doe"]}):
+        r = t.put(url, json={"meeting": bad, "tab": "j"})
+        assert r.status_code == 400 and r.json()["detail"] == "That request wasn't readable.", bad
+    assert t.put(url, json={"meeting": {}, "state": {"x": "y" * 300_000}, "tab": "j"}).status_code == 413
+    ok = {"meeting": {"in_person": ["doe", "<script>x</script>", "n0olde", "roe"], "remote": ["nobody", 7],
+                      "guests": [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}], "visitors": 2},
+          "state": {}, "tab": "j"}
+    assert t.put(url, json=ok).status_code == 200
+    m = a.by_slug[m.slug]
+    assert m.in_person == ["doe", "w0demo", "roe"] and m.remote == []   # an Inactive member and an old callsign kept
+    assert m.guests == [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}] and m.visitors == 2
+
+
+def test_replies_to_the_minutes_go_to_the_recorder_and_the_leader(tmp_path, monkeypatch):
+    """Each only if they share their email with members (Jim, 2026-11-16); neither: the club's address."""
+    a = mail_archive(tmp_path, monkeypatch, None)
+    Meeting(date=dt.date(2026, 11, 19), status="published", leader="kim", recorder="doe").save(tmp_path)
+    a = Archive(tmp_path, a.club)
+    console.email_minutes(a, "2026-11-19", lambda: ("m.pdf", b"%PDF"), "http://x/meetings/2026-11-19")
+    msg = FakeSMTP.outbox[0]
+    assert msg["Reply-To"] == "sam@example.org" and "Replies go to Sam." in msg.get_body(("plain",)).get_content()
+    a.club.members["doe"].share = ["email"]  # the recorder shares too: both, recorder first
+    assert console.reply_addresses(a.club.members["doe"], a.club.members["kim"], a.club.members["kim"]) == "jane@example.org, sam@example.org"

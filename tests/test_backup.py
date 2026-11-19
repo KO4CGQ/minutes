@@ -43,12 +43,13 @@ def test_backup_round_trip(data, tmp_path):
         backup.restore(blob, PW, out)
 
 
-def test_backup_from_before_the_rename_still_opens(monkeypatch):
-    monkeypatch.setattr(backup, "MAGIC", backup.OLD_MAGIC)  # made by 0.19.0 or earlier
+def test_a_backup_from_before_1_0_says_so(monkeypatch):
+    """0.x backups (the app's earlier name) aren't read since 1.1.0: a 0.x install restores them."""
+    monkeypatch.setattr(backup, "MAGIC", b"W8LBZ-BACKUP-1\n")
     old = backup.encrypt(b"data", PW)
     monkeypatch.undo()
-    assert old.startswith(b"W8LBZ-BACKUP-1") and backup.decrypt(old, PW) == b"data"
-    assert backup.encrypt(b"data", PW).startswith(backup.MAGIC) and backup.MAGIC != backup.OLD_MAGIC
+    with pytest.raises(backup.BackupError, match="made before 1.0.0"):
+        backup.decrypt(old, PW)
 
 
 class FakeDrive:
@@ -185,3 +186,11 @@ def test_passphrase_suggest_strength_and_leaks(monkeypatch):
     import httpx
     monkeypatch.setattr("httpx.get", lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("offline")))
     assert "couldn't reach" in backup.check(s)[1]
+
+
+def test_update_files_stay_out(tmp_path):
+    """A restore must not start an update or leave one "running"."""
+    (tmp_path / "members.json").write_text("{}")
+    for n in ("update-request.json", "update-running.json", "update-check.json", "update-check-next.json"):
+        (tmp_path / n).write_text("{}")
+    assert backup.data_size(tmp_path) == 2

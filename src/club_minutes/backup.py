@@ -36,13 +36,13 @@ KEY_FILE = Path(os.environ.get("CLUB_MINUTES_GOOGLE_KEY", ROOT / "private" / "go
 
 log = logging.getLogger("club_minutes.backup")
 MAGIC = b"CLUB-MINUTES-BACKUP-1\n"
-OLD_MAGIC = b"W8LBZ-BACKUP-1\n"  # backups made before 1.0.0 (the app's earlier name)
 KEEP_LOCAL = 7  # the default; the Backups page changes it
 # What the Backups page recommends: the data folder is small (MBs), so daily backups cost next to nothing.
 RECOMMENDED = {"every": "daily", "hour": 2, "keep_local": 7, "drive_keep": 30, "s3_days": 90}
 SKIP_SUFFIXES = (".lock", ".tmp")
 SKIP_DIRS = ("backups", "before-upgrade")  # the second: a copy of the data, taken before an upgrade (upgrade.py)
-SKIP_FILES = ("backup-settings.json",)  # holds the S3 secret: re-enter it after a restore
+SKIP_FILES = ("backup-settings.json",  # holds the S3 secret: re-enter it after a restore
+              "update-request.json", "update-running.json", "update-check.json", "update-check-next.json")  # a restore must not start or leave an update
 
 
 class BackupError(Exception):
@@ -131,12 +131,13 @@ def encrypt(data: bytes, pw: str) -> bytes:
 def decrypt(blob: bytes, pw: str) -> bytes:
     from cryptography.exceptions import InvalidTag
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    magic = next((m for m in (MAGIC, OLD_MAGIC) if blob.startswith(m)), None)
-    if not magic:
+    if blob.startswith(b"W8LBZ-BACKUP-1\n"):  # 0.x, under the app's earlier name: dropped in 1.1.0
+        raise BackupError("That backup was made before 1.0.0: restore it with a 0.x install, then back up again.")
+    if not blob.startswith(MAGIC):
         raise BackupError("That isn't a backup from this app.")
-    b = blob[len(magic):]
+    b = blob[len(MAGIC):]
     try:
-        return AESGCM(_key(pw, b[:16])).decrypt(b[16:28], b[28:], magic)
+        return AESGCM(_key(pw, b[:16])).decrypt(b[16:28], b[28:], MAGIC)
     except InvalidTag:
         raise BackupError("Wrong passphrase, or the file is damaged.")
 
