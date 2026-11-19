@@ -46,12 +46,12 @@
   </details>
   {% endfor %}
 
-  <label>Why <input name="reason" value="{{ v('reason', '') }}" required maxlength="{{ reason_max }}" placeholder="e.g. Corrected a misspelled name">
+  <label>Why are you correcting these minutes? <input name="reason" value="{{ v('reason', '') }}" required maxlength="{{ reason_max }}" placeholder="e.g. Corrected a misspelled name">
     <span class="hint">A line: members see it with the minutes.</span></label>
   <label class="check"><input type="checkbox" name="notice" value="1" {{ on('notice', true) }}> Send the corrected minutes to members</label>
+  <p class="hint">Members get an email saying what changed, with the PDF or a link, the same way they get the minutes. If you untick it, the footer says "no notice sent".</p>
   <label class="check"><input type="checkbox" name="private" value="1" {{ on('private', false) }}> This removes private details</label>
-  <p class="hint">Tick it when you're taking out something that shouldn't have been recorded (a health matter, a phone number): the email then shows no old words at all, and the version before stays visible only to those who can correct minutes. Removed lines are never quoted in the email either way.</p>
-  <p class="hint">With what changed, the same way they get the minutes (PDF or link). If you don't, the footer says "no notice sent".</p>
+  <p class="hint">Tick it when you're taking out something that shouldn't have been recorded (a health matter, a phone number): the email then shows no old words at all, and every earlier version stays visible only to those who can correct minutes. Removed lines are never quoted in the email either way.</p>
   <p><button class="btn">Preview the changes</button> <a class="btn ghost" href="/meetings/{{ m.slug }}">Cancel</a></p>
 </form>
 <script nonce="{{ csp_nonce }}">

@@ -59,7 +59,9 @@
 </form>
 {% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'roles' %}
-<p class="muted">Roles say what a member may do in the app; most come from the offices a member holds. Below: the club's offices, then each role, what it allows and who has it. Who holds each office is on the <a href="/offices">Offices</a> page. Each change is in the admin log and wins over club.yaml on the server.</p>
+<p class="muted">A role is a set of things a member may do. Officers get theirs from their office.</p>
+<details class="muted"><summary>More about roles</summary>
+<p>Most roles come from the offices a member holds. Below: the club's offices, then each role, what it allows and who has it. Who holds each office is on the <a href="/offices">Offices</a> page. Each change is in the admin log and wins over club.yaml on the server.</p></details>
 <form method="post" action="/admin/site/offices" class="profile siteoffices">
 <input type="hidden" name="rows" value="{{ office_rows|length }}">
 <div class="card sitesec"><h2>Offices {{ origin('.offices') }}</h2>
@@ -76,7 +78,7 @@
 <template id="t-office">{{ office_row('__i__', {'title': '', 'officer': False, 'seats': 1, 'held': False}) }}</template>
 <p><button type="button" class="btn small" data-add="t-office" data-next="{{ office_rows|length }}" hidden>+ Add an office</button></p>
 <p class="hint">Clear an office's name to remove it when you save. Greyed names are held: hand them over on the Offices page before renaming them. What each office's holders may do is under Roles, below.</p>
-<p class="row"><button class="btn" aria-label="Save the offices">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
+<p class="row"><button class="btn">Save offices</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </div>
 </form>
 {% if here_keys|select('in', ['.offices', '.roster_keepers'])|list %}<form method="post" action="/admin/site/offices" data-confirm="Go back to club.yaml's offices?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
@@ -84,7 +86,7 @@
 <p class="hint">What each role allows, and who has it: the holders of the offices ticked, and the members picked. Only an office gives a role: other titles (Net Manager, say) give none, so pick that member instead. A member with several roles may do everything any of them allows. Only admins, in admin mode, change roles. Admin isn't a role: admins are added on <a href="/admin">Admin</a> → Security, and in admin mode may do everything.</p>
 <form method="post" action="/admin/site/roles" class="profile"><input type="hidden" name="stamp" value="{{ roles_stamp }}">
 <div class="rolelist">{% for r in role_rows %}{% set k = r.key %}
-<details class="role"><summary><b>{{ r.name }}</b><br><span class="muted small">{{ r.who|length }} {{ 'member' if r.who|length == 1 else 'members' }} · {{ r.perms|length }} of {{ permissions|length }} permissions{{ ' · built-in' if r.builtin }}{{ ', changed' if r.edited and r.builtin }}</span></summary>
+<details class="role"><summary><b>{{ r.name }}</b><br><span class="muted small">{{ r.who|length }} {{ 'member' if r.who|length == 1 else 'members' }} {{ ' · built-in' if r.builtin }}{{ ', changed' if r.edited and r.builtin }}</span></summary>
   <input type="hidden" name="key" value="{{ k }}">
   <label class="small">Name <input name="name.{{ k }}" value="{{ r.name }}" maxlength="40"></label>
   <fieldset><legend class="small"><b>Allows</b></legend>
@@ -104,7 +106,7 @@
 </details>{% endfor %}</div>
 <p class="row"><label>Add a role <input name="new" maxlength="40" placeholder="e.g. Net manager"></label></p>
 <p class="hint">Recording money always comes with looking at the Treasurer pages. A meeting's own leader and recorder may always correct its minutes. The roster emails are new members, roster changes and the chow list; a new email for someone else waits until its owner confirms it. Every permission needs at least one role: a save that would leave one with none is refused.</p>
-<p class="row"><button class="btn" aria-label="Save the roles">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
+<p class="row"><button class="btn">Save roles</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% for r in role_rows if r.builtin and r.edited %}<form id="roleback-{{ r.key }}" method="post" action="/admin/site/roles" data-confirm="Put {{ r.name }} back as it ships (its name, what it allows and its offices)? The members picked for it stay."><input type="hidden" name="back" value="{{ r.key }}"></form>{% endfor %}
 </div>

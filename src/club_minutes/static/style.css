@@ -228,7 +228,7 @@ a[target="_blank"]:not([class])::after { content: "\00a0↗"; content: "\00a0↗
 .callout.warning a, .callout.important a, .callout.caution a, .callout.warning code, .callout.caution code { color: inherit; }
 form.profile { max-width: 36rem; } main form.profile[action^="/admin/"] { max-width: none; }  /* Admin pages: the page's width, as Security and Updates */ form.profile > label { display: block; margin: .9rem 0; font-weight: 600; }
 form.profile input, form.profile textarea { display: block; margin-top: .25rem; font-weight: normal; }
-form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }
+form.profile input[name=motion], form.profile input[type=email], form.profile input[type=tel], form.profile input[type=url], form.profile textarea { width: 100%; }
 form.profile input[type=checkbox] { display: inline-block; margin: 0 .3rem 0 0; }
 form.profile .hint { display: block; font-weight: normal; }
 form.profile fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 1rem 0; padding: .7rem 1rem; background: var(--surface); }
