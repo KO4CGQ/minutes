@@ -15,6 +15,13 @@ from pathlib import Path
 
 import yaml
 
+FENCE = re.compile(r"(?m)^---[ \t]*$")  # the front matter's fence: a line of its own, so "---" inside a value isn't one
+
+
+def split_front(text: str) -> list[str]:
+    """["", front matter, body] for a file starting with a fenced front matter."""
+    return FENCE.split(text, 2)
+
 # The built-in sections (each has something behind it: bills, reports, business tracking, the calendar, chow), in
 # their usual order. A club's agenda (club.yaml meeting: sections:) picks from these and adds its own free-text ones.
 SECTIONS = [
@@ -139,7 +146,7 @@ class Meeting:
 
     @classmethod
     def from_markdown(cls, text: str) -> Meeting:
-        _, fm_text, body = text.split("---", 2)
+        _, fm_text, body = split_front(text)
         fm = yaml.safe_load(fm_text) or {}
         att = fm.get("attendance") or {}
         m = cls(
