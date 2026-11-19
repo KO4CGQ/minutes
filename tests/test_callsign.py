@@ -142,3 +142,15 @@ def test_a_change_that_stops_partway_says_how_to_finish_and_rename_id_finishes_i
     callsign.rename_id("n0aaaa", "w0amya", d)  # what the command runs; safe to run again
     assert not [f for f in ("chow.json", "email-prefs.json", "treasurer.json") if "n0aaaa" in (d / f).read_text()]
     assert (d / "avatars" / "w0amya.jpg").exists() and "w0amya" in (d / "meetings" / "2026-11-05" / "minutes.md").read_text()
+
+
+def test_rename_follows_recorder_corrections_review_and_earlier_versions(tmp_path):
+    md = ("---\ndate: 2026-11-05\nrecorder: n0aaaa\ncorrections:\n- version: 2\n  at: 1\n  by: n0aaaa\n  reason: fix\n"
+          "reviewed:\n  by: n0aaaa\n  at: 1\n---\n\n## Old Business\n- Keep n0aaaa as text\n")
+    for name in ("minutes.md", "minutes.v1.md"):
+        (tmp_path / "meetings" / "2026-11-05").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "meetings" / "2026-11-05" / name).write_text(md)
+    assert callsign.rename_id("n0aaaa", "w0amya", tmp_path)["minutes"] == 2
+    for name in ("minutes.md", "minutes.v1.md"):
+        out = (tmp_path / "meetings" / "2026-11-05" / name).read_text()
+        assert out.count("w0amya") == 3 and "Keep n0aaaa as text" in out and "recorder: w0amya" in out

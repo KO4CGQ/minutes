@@ -19,7 +19,7 @@ from markupsafe import Markup, escape
 
 from .club import show_date
 from .console import email_status, reply_address, send_to_members
-from .meeting import Item, Meeting
+from .meeting import Item, Meeting, one_line
 from .store import Archive
 
 REASON_MAX = 300
@@ -287,8 +287,8 @@ def from_form(archive: Archive, m: Meeting, form) -> Meeting:
 
 
 def _text(v) -> str:
-    """A field as typed (two spaces after a full stop stay two), less line breaks: an item is one line in minutes.md."""
-    return re.sub(r"\s*[\r\n]+\s*", " ", str(v or "")).strip()
+    """A field as typed (two spaces after a full stop stay two), less line breaks and comment markers: an item is one line in minutes.md."""
+    return one_line(str(v or ""))
 
 
 def attendance_rows(archive: Archive, m: Meeting) -> list[tuple[str, str, str]]:
