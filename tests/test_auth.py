@@ -439,6 +439,9 @@ def test_hostile_requests_are_logged_and_only_probes_count_toward_a_ban(a, tmp_p
     for _ in range(20):
         me.post("/logout", headers={"origin": "https://evil.example"})               # never counted: the victim's address
     assert not a.banned("9.9.9.9")
+    for _ in range(30):
+        me.post("/upload", content=b"x" * (web.limits.FORM_ROOM + 100))              # logged up to a cap an hour, then not
+    assert [k for k, _ in kinds()].count("too_big") == auth_mod.UNKNOWN_LOGGED
     for _ in range(8):
         out.get("/.git/config")
     assert a.banned("9.9.9.9")                                                       # 10 probes in an hour

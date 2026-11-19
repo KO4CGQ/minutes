@@ -3645,7 +3645,7 @@ def roster_api(request: Request):
     """Active members' callsign, name, email, officer tick and former callsigns, for the club's other tools (the Discord bot, in its
     own container on the same Proxmox host). Only from this server itself or the addresses in
     CLUB_MINUTES_ROSTER_API_ALLOW (comma-separated), never through the web proxy, with the token in CLUB_MINUTES_ROSTER_API_TOKEN
-    (both in /etc/club-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
+    (both in /etc/club-minutes/env). Off (404) without that token. Calls from an allowed address are logged in api-log.jsonl (kept 90 days)."""
     import hmac
     import os
     want = os.environ.get("CLUB_MINUTES_ROSTER_API_TOKEN", "")
@@ -3659,11 +3659,12 @@ def roster_api(request: Request):
         former.setdefault(mid, []).append(old.upper())
     rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": "officer" in archive.club.roles(m.id), "former": sorted(former.get(m.id, []))}
             for m in sorted(archive.club.members.values(), key=lambda m: (m.last, m.first)) if m.status.lower() == "active"] if ok else []
-    p = DATA / "api-log.jsonl"
-    with p.open("a") as f:
-        f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
-                            "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
-    p.chmod(0o600)
+    if want and local:  # only the bot's own calls, right or wrong token: anyone on the internet can reach this path
+        p = DATA / "api-log.jsonl"
+        with p.open("a") as f:
+            f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
+                                "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
+        p.chmod(0o600)
     if not want:
         raise HTTPException(404)
     if not ok:

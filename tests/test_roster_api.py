@@ -27,7 +27,7 @@ def test_roster_api(tmp_path, monkeypatch):
     assert local.get("/api/roster", headers={**auth, "X-Forwarded-For": "203.0.113.9"}).status_code == 403  # the proxy
     assert TestClient(web.app, client=("192.168.1.20", 50000)).get("/api/roster", headers=auth).status_code == 403
     log = (tmp_path / "api-log.jsonl").read_text().splitlines()
-    assert len(log) == 5 and '"ok": true' in log[1] and '"ok": false' in log[2]
+    assert len(log) == 2 and '"ok": true' in log[0] and '"ok": false' in log[1]  # not the 404, the proxy's or the LAN's calls
 
 
 def test_roster_api_allowlist(tmp_path, monkeypatch):
