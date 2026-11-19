@@ -1,6 +1,6 @@
 [project]
 name = "club-minutes"
-version = "1.0.1"
+version = "1.1.0rc1"
 description = "Meeting minutes, attendance and club records for an amateur radio club"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
