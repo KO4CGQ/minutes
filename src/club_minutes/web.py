@@ -1917,10 +1917,16 @@ def _may_see_hidden(request: Request, m) -> bool:
     return corrections.may_correct(archive.club, m, request.state.member, admin_mode(request))
 
 
+def _original_hidden(request: Request, m) -> bool:
+    """The imported PDF is version 1's source: hidden whenever version 1 is."""
+    return corrections.hidden_version(m, 1) and not _may_see_hidden(request, m)
+
+
 @app.get("/meetings/{slug}", response_class=HTMLResponse)
 def view(request: Request, slug: str, v: str = "", sent: str = ""):
     current, m = get_meeting(slug), _version(request, slug, v)
-    has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
+    has_original = (bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
+                    and not _original_hidden(request, current))
     return page(request, "meeting.html", m=m, current=current, has_original=has_original,
                 emailed=console.email_status(archive, slug), unsent=console.unsent(archive, slug), sent_note=SENT_NOTES.get(sent),
                 notice=console.email_status(archive, slug, f"emailed.v{current.version}.json") if current.version > 1 else None,
@@ -2035,10 +2041,10 @@ def pdf(request: Request, slug: str, v: str = ""):
 
 
 @app.get("/meetings/{slug}/original.pdf")
-def original(slug: str):
-    get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
+def original(request: Request, slug: str):
+    m = get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
     p = archive.root / slug / "original.pdf"
-    if not p.exists():
+    if not p.exists() or _original_hidden(request, m):
         raise HTTPException(404)
     return FileResponse(p, media_type="application/pdf")
 

@@ -341,6 +341,27 @@ def test_removed_lines_are_never_quoted_and_private_hides_the_version_before(tmp
 
 
 
+def test_private_hides_every_earlier_version_and_the_original_pdf(tmp_path, monkeypatch):
+    """Expert sweep (1.1 freeze): a private detail kept through an ordinary correction (v2) and only then taken out (v3)
+    is hidden in v1 and v2 alike, and in the imported original PDF, from members; editors still see them."""
+    from club_minutes import web
+    a, member = web_as(tmp_path, monkeypatch, "n0call")
+    (a.root / "2026-10-15" / "original.pdf").write_bytes(b"%PDF-1.4 the source")
+    m = a.by_slug["2026-10-15"]
+    m = corrections.correct(a, m.slug, "roe", "A typo", 1, edit(m, sections={**m.sections, "New Business": [Item("A typo fixed")]}), notice=False)
+    assert member.get("/meetings/2026-10-15/original.pdf").status_code == 200  # nothing private yet
+    corrections.correct(a, m.slug, "roe", "Took out a private detail", 2, edit(m, sections={**m.sections, "Community Reports": []}),
+                        notice=False, private=True)
+    for v in (1, 2):
+        assert member.get(f"/meetings/2026-10-15?v={v}").status_code == 404
+        assert member.get(f"/meetings/2026-10-15/minutes.pdf?v={v}").status_code == 404
+    assert member.get("/meetings/2026-10-15/original.pdf").status_code == 404
+    editor = TestClient(web.app)
+    editor.cookies.set(web.COOKIE, web.authn.new_session("kim"))  # the recorder
+    assert editor.get("/meetings/2026-10-15?v=1").status_code == 200 and editor.get("/meetings/2026-10-15/original.pdf").status_code == 200
+
+
+
 # ---------------- what goes out by email ----------------
 
 def _mail(monkeypatch, tmp_path):

@@ -169,8 +169,9 @@ def changes(old: Meeting, new: Meeting, club, private: bool = False) -> list[str
 
 
 def hidden_version(m: Meeting, v: int) -> bool:
-    """Version v was replaced by a correction ticked "This removes private details": only those who may correct see it."""
-    return any(c.get("private") and c.get("version") == v + 1 for c in m.corrections)
+    """Version v came before a correction ticked "This removes private details" (any later one, since the details may
+    have stayed through corrections in between): only those who may correct see it."""
+    return any(c.get("private") and c.get("version", 0) > v for c in m.corrections)
 
 
 def pdf_name(m: Meeting) -> str:
