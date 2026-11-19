@@ -93,11 +93,16 @@ def undo(was: int, data: Path = DATA) -> bool:
     """Put back the copy taken before an upgrade from data version `was` (update.sh, when the new version didn't
     start). Only if the data has moved on from `was` since, so an old copy never replaces newer data."""
     copy = data / COPY
-    if not (copy / "data-version").exists() or version(copy) != was or version(data) <= was:
+    if not (copy / "data-version").exists() or version(copy) != was:
+        return False
+    # No data-version means an undo stopped halfway (it goes first, and comes back last): run it again
+    if (data / "data-version").exists() and version(data) <= was:
         return False
     with _locked(data):
+        (data / "data-version").unlink(missing_ok=True)
         for p in data.iterdir():
             if p.name not in SKIP and not p.name.endswith(".lock"):
                 shutil.rmtree(p) if p.is_dir() and not p.is_symlink() else p.unlink()
-        shutil.copytree(copy, data, dirs_exist_ok=True)
+        shutil.copytree(copy, data, dirs_exist_ok=True, ignore=lambda d, _names: ["data-version"] if Path(d) == copy else [])
+        shutil.copy2(copy / "data-version", data / "data-version")
     return True
