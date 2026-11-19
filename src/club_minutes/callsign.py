@@ -25,6 +25,7 @@ from pathlib import Path
 
 from . import backup, profile
 from .club import CALLSIGN, DATA, ROSTER_CACHE, Club, inside, one_line, roster_locked
+from .meeting import split_front
 from .membership import LOG_TAB
 from .roster import Sheet
 
@@ -71,7 +72,7 @@ def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
     tag = re.compile(rf"<!--\s*member:\s*{re.escape(old)}\s*-->")
     for p in sorted((data / "meetings").glob("*/minutes.md")):
         text = p.read_text()
-        _, fm, body = text.split("---", 2) if text.startswith("---") else ("", "", text)
+        _, fm, body = split_front(text) if text.startswith("---") else ("", "", text)
         new_text = (f"---{item.sub(lambda m: m.group(1) + new, fm)}---" if fm else "") + tag.sub(f"<!-- member: {new} -->", body)
         if new_text != text:
             _write(p, new_text)

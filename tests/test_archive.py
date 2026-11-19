@@ -440,3 +440,13 @@ def test_one_unreadable_minutes_file_doesnt_stop_the_archive(tmp_path, m):
     (tmp_path / "2026-01-01").mkdir()
     (tmp_path / "2026-01-01" / "minutes.md").write_bytes(b"---\n: [unclosed\n---\n\xff")
     assert [x.slug for x in Archive(tmp_path, club).meetings] == [m.slug]
+
+
+def test_front_matter_value_with_dashes_round_trips(m):
+    """A "---" typed in a value (a correction's reason, a guest's note) isn't the front matter's fence."""
+    import dataclasses
+    c = dataclasses.replace(m, corrections=[{"version": 2, "by": "n0call", "reason": "wrong date: Oct 5 --- not Oct 6",
+                                             "private": True, "notice": True}],
+                            reviewed={"by": "n0call", "at": "2026-01-01"})
+    back = Meeting.from_markdown(c.to_markdown())
+    assert back.corrections == c.corrections and back.reviewed == c.reviewed
