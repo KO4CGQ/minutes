@@ -89,7 +89,7 @@ EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the ro
                "passkey_failed": "Passkey sign-in failed", "probe": "Scanner probe (an address only attack tools ask for)",
                "cross_site": "Refused: sent from another site's page", "refused": "Refused: not allowed for this member",
                "too_big": "Refused: upload over the size limit"}
-UNKNOWN_LOGGED = 20  # unknown-address requests recorded per address an hour (the reply is the same either way)
+UNKNOWN_LOGGED = 20  # requests of each NOT_COUNTED kind recorded per address an hour (the reply is the same either way)
 NOT_COUNTED = ("cross_site", "refused", "too_big", "unknown_email")  # logged, never toward a ban: a cross-site request carries the victim's address; an unknown address must count like a member's (nothing), or a ban tells them apart
 
 
@@ -166,6 +166,9 @@ class Auth:
         """Record a failed sign-in attempt or hostile request (and the browser's user agent); ban an internet address
         after BAN_AFTER in an hour, NOT_COUNTED kinds aside."""
         now = int(time.time())
+        if kind in NOT_COUNTED and self.db.execute("select count(*) from events where kind=? and ip is ? and at>?",
+                                                   (kind, ip, now - 3600)).fetchone()[0] >= UNKNOWN_LOGGED:
+            return  # a script mustn't fill the table
         self.db.execute("insert into events (at, ip, kind, member, detail, agent) values (?,?,?,?,?,?)",
                         (now, ip, kind, member, detail[:200], (agent or "")[:300]))
         if ip and _public(ip) and kind not in NOT_COUNTED and not self.banned(ip):
@@ -288,9 +291,7 @@ class Auth:
         member = self.member_by_email(email)
         if not member:
             log.info("login link requested for an address not on the roster")
-            if self.db.execute("select count(*) from events where kind='unknown_email' and ip is ? and at>?",
-                               (ip, int(time.time()) - 3600)).fetchone()[0] < UNKNOWN_LOGGED:  # a script mustn't fill the table
-                self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
+            self.event("unknown_email", ip, agent=agent)  # the address itself isn't kept
             return
         now = int(time.time())
 
@@ -523,6 +524,7 @@ def _preview_outbox(recipients, subject, body, attachments, only_to, reply_to) -
 
 EMAIL_LOG_KEEP = 1000  # entries kept in email-log.jsonl
 EMAIL_LOG_DAYS = 90  # and none older
+LOG_DAYS = 90  # admin-log.jsonl and api-log.jsonl
 
 
 def hide_tokens(text: str) -> str:
@@ -567,7 +569,7 @@ def _email_log(entry: dict) -> None:
 
 
 def _rewrite_email_log(p: Path, lines: list[str]) -> None:
-    tmp = p.with_name(f"email-log.{os.getpid()}.tmp")
+    tmp = p.with_name(f"{p.stem}.{os.getpid()}.tmp")
     tmp.write_text("".join(line + "\n" for line in lines))
     tmp.chmod(0o600)
     tmp.replace(p)
@@ -583,6 +585,17 @@ def prune_email_log() -> None:
         lines, cutoff = p.read_text().splitlines(), time.time() - EMAIL_LOG_DAYS * 86400
         if lines and (len(lines) > EMAIL_LOG_KEEP * 1.5 or _logged_at(lines[0]) < cutoff):
             _rewrite_email_log(p, [line for line in lines[-EMAIL_LOG_KEEP:] if _logged_at(line) >= cutoff])
+
+
+def prune_old_lines(name: str) -> None:
+    """Drop lines older than LOG_DAYS from a log that only grows (admin-log.jsonl, api-log.jsonl), in the daily job."""
+    p = DATA / name
+    if not p.exists():
+        return
+    lines, cutoff = p.read_text().splitlines(), time.time() - LOG_DAYS * 86400
+    if any(_logged_at(line) < cutoff for line in lines):
+        # shortcut: an append during this rewrite could be lost; rare in a daily job, lock like the email log if it matters
+        _rewrite_email_log(p, [line for line in lines if _logged_at(line) >= cutoff])
 
 
 def forget_email_log(addresses: set[str]) -> None:

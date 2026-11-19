@@ -525,6 +525,18 @@ def test_a_quiet_site_prunes_the_email_log_daily(tmp_path, monkeypatch):
     assert (tmp_path / "email-log.jsonl").read_text() == ""
 
 
+def test_the_daily_job_trims_the_admin_and_api_logs_to_90_days(tmp_path, monkeypatch):
+    import time
+
+    from club_minutes import auth as auth_mod
+    monkeypatch.setattr(auth_mod, "DATA", tmp_path)
+    new = json.dumps({"at": int(time.time()), "x": "new"})
+    for name in ("admin-log.jsonl", "api-log.jsonl"):
+        (tmp_path / name).write_text(json.dumps({"at": int(time.time()) - 91 * 86400}) + "\n" + new + "\n")
+        auth_mod.prune_old_lines(name)
+        assert (tmp_path / name).read_text() == new + "\n"
+
+
 def test_forget_email_log_removes_a_leaver_alone_or_from_a_list(tmp_path, monkeypatch):
     from club_minutes import auth as auth_mod
     monkeypatch.setattr(auth_mod, "DATA", tmp_path)
