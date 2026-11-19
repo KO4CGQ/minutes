@@ -177,12 +177,21 @@ def import_correction(archive, day: dt.date, pdf: Path, by: str, reason: str, on
     v1, v2 = parse(pdf_text(original), archive.club), parse(pdf_text(pdf), archive.club)
     if v2.date != day:
         raise ValueError(f"{pdf.name}'s Date line says {v2.date}, not {day}")
+    path = archive.root / m.slug / "minutes.md"
+    before = path.read_text()
     m.in_person, m.remote, m.guests, m.visitors, m.sections = v1.in_person, v1.remote, v1.guests, v1.visitors, v1.sections
     m.note = None  # it said "Corrected version…", which version 1 no longer is
     m.source = pdf_name(m)  # was the corrected .txt; version 1 is the original PDF again
     m.save(archive.root)
     archive.reload()
-    m = correct(archive, m.slug, by, reason, 1, v2, notice=False)
+    try:  # correct() copies minutes.md as version 1, so it must hold v1 first; if it refuses or fails, put it back
+        m = correct(archive, m.slug, by, reason, 1, v2, notice=False)
+    except BaseException:
+        tmp = path.with_name("minutes.md.tmp")
+        tmp.write_text(before)
+        tmp.replace(path)  # as Meeting.save: never half a file
+        archive.reload()
+        raise
     if on:
         m.corrections[-1]["at"] = m.reviewed["at"] = int(dt.datetime.combine(on, dt.time(12)).timestamp())
         m.save(archive.root)

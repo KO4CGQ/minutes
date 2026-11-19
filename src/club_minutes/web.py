@@ -1917,10 +1917,16 @@ def _may_see_hidden(request: Request, m) -> bool:
     return corrections.may_correct(archive.club, m, request.state.member, admin_mode(request))
 
 
+def _original_hidden(request: Request, m) -> bool:
+    """The imported PDF is version 1's source: hidden whenever version 1 is."""
+    return corrections.hidden_version(m, 1) and not _may_see_hidden(request, m)
+
+
 @app.get("/meetings/{slug}", response_class=HTMLResponse)
 def view(request: Request, slug: str, v: str = "", sent: str = ""):
     current, m = get_meeting(slug), _version(request, slug, v)
-    has_original = bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
+    has_original = (bool(m.source) and (archive.root / slug / "original.pdf").exists()  # only minutes imported from before the app
+                    and not _original_hidden(request, current))
     return page(request, "meeting.html", m=m, current=current, has_original=has_original,
                 emailed=console.email_status(archive, slug), unsent=console.unsent(archive, slug), sent_note=SENT_NOTES.get(sent),
                 notice=console.email_status(archive, slug, f"emailed.v{current.version}.json") if current.version > 1 else None,
@@ -2035,10 +2041,10 @@ def pdf(request: Request, slug: str, v: str = ""):
 
 
 @app.get("/meetings/{slug}/original.pdf")
-def original(slug: str):
-    get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
+def original(request: Request, slug: str):
+    m = get_meeting(slug)  # only a real meeting's folder: no "..", nothing else in the data folder
     p = archive.root / slug / "original.pdf"
-    if not p.exists():
+    if not p.exists() or _original_hidden(request, m):
         raise HTTPException(404)
     return FileResponse(p, media_type="application/pdf")
 
@@ -2436,7 +2442,7 @@ def email_log(request: Request, mid: str = Depends(real_me)):
     if not admin_mode(request):  # bodies can hold members' contact details
         return RedirectResponse("/admin/confirm?next=/admin/email", status_code=303)
     p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
-    mail = [json.loads(line) for line in p.read_text().splitlines() if line.strip()][::-1][:300] if p.exists() else []
+    mail = authmod.read_log(p)[::-1][:300]
     return page(request, "outbox.html", mail=mail, test_mode=archive.club.email_only_to() is not None)
 
 
@@ -2532,7 +2538,7 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
     failed = sum(e["at"] > day for e in authn.events(200))
     p = DATA / ("preview-outbox.jsonl" if PREVIEW else "email-log.jsonl")
     week = time.time() - 7 * 86400
-    mail = [json.loads(x) for x in p.read_text().splitlines()[-500:] if x.strip()] if p.exists() else []
+    mail = authmod.read_log(p, 500)
     held = sum(1 for m in mail if m.get("at", 0) >= week and m.get("withheld"))  # someone it wasn't sent to
     sp = DATA / "stage-sync-status.json"
     try:
@@ -3639,7 +3645,7 @@ def roster_api(request: Request):
     """Active members' callsign, name, email, officer tick and former callsigns, for the club's other tools (the Discord bot, in its
     own container on the same Proxmox host). Only from this server itself or the addresses in
     CLUB_MINUTES_ROSTER_API_ALLOW (comma-separated), never through the web proxy, with the token in CLUB_MINUTES_ROSTER_API_TOKEN
-    (both in /etc/club-minutes/env). Off (404) without that token. Every call is logged in api-log.jsonl."""
+    (both in /etc/club-minutes/env). Off (404) without that token. Calls from an allowed address are logged in api-log.jsonl (kept 90 days)."""
     import hmac
     import os
     want = os.environ.get("CLUB_MINUTES_ROSTER_API_TOKEN", "")
@@ -3653,11 +3659,12 @@ def roster_api(request: Request):
         former.setdefault(mid, []).append(old.upper())
     rows = [{"callsign": m.callsign, "name": m.name, "email": m.email, "officer": "officer" in archive.club.roles(m.id), "former": sorted(former.get(m.id, []))}
             for m in sorted(archive.club.members.values(), key=lambda m: (m.last, m.first)) if m.status.lower() == "active"] if ok else []
-    p = DATA / "api-log.jsonl"
-    with p.open("a") as f:
-        f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
-                            "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
-    p.chmod(0o600)
+    if want and local:  # only the bot's own calls, right or wrong token: anyone on the internet can reach this path
+        p = DATA / "api-log.jsonl"
+        with p.open("a") as f:
+            f.write(json.dumps({"at": int(time.time()), "path": "/api/roster", "ip": host, "local": local, "ok": ok,
+                                "agent": request.headers.get("user-agent", "")[:120], "members": len(rows)}) + "\n")
+        p.chmod(0o600)
     if not want:
         raise HTTPException(404)
     if not ok:

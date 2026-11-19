@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import time
@@ -24,7 +25,24 @@ from .club import DATA, PREVIEW, STAGE
 log = logging.getLogger("club_minutes.updates")
 REPO = "KO4CGQ/minutes"
 STUCK_AFTER = 600  # seconds a request may wait before the page says the updater didn't pick it up
+STALE_RUN = 1200  # seconds: past the unit's 15-minute timeout, a running file is left over from a kill or reboot
 CHECK_EVERY = 3600  # GitHub allows 60 unauthenticated checks an hour; one is plenty
+
+
+def _read(p: Path) -> dict:
+    """A cache or setting file; an unreadable one counts as none (the web app and the hourly job both write them)."""
+    try:
+        d = json.loads(p.read_text()) if p.exists() else {}
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        log.error("%s is unreadable; ignoring it", p)
+        return {}
+
+
+def _write(p: Path, d: dict) -> None:
+    tmp = p.with_name(f"{p.stem}.{os.getpid()}.tmp")  # the other process writes here too: never the same temp file
+    tmp.write_text(json.dumps(d))
+    tmp.replace(p)
 
 
 def running() -> str:
@@ -73,8 +91,8 @@ def running_commit() -> str:
 def _latest_next(fetch=None, force: bool = False) -> dict | None:
     """The head of the next branch, as a pseudo-release (cached in update-check-next.json)."""
     cache = DATA / "update-check-next.json"
-    if not force and cache.exists():
-        c = json.loads(cache.read_text())
+    if not force:
+        c = _read(cache)
         if time.time() - c.get("at", 0) < CHECK_EVERY and c.get("next"):
             return c["next"]
     try:
@@ -89,11 +107,11 @@ def _latest_next(fetch=None, force: bool = False) -> dict | None:
         sha = d["commit"]["sha"]
         rel = {"version": "next", "commit": sha[:7], "notes": d["commit"]["commit"]["message"].splitlines()[0],
                "url": f"https://github.com/{REPO}/commit/{sha}", "deploy_notes": ""}
-        cache.write_text(json.dumps({"at": int(time.time()), "next": rel}))
+        _write(cache, {"at": int(time.time()), "next": rel})
         return rel
     except Exception as e:  # noqa: BLE001
         log.warning("update check failed: %s", e)
-        return json.loads(cache.read_text()).get("next") if cache.exists() else None
+        return _read(cache).get("next")
 
 
 def deploy_notes(notes: str) -> str:
@@ -122,8 +140,8 @@ def latest(fetch=None, force: bool = False) -> dict | None:
         return _latest_next(fetch, force)
     cache = DATA / "update-check.json"
     rels = None
-    if not force and cache.exists():
-        c = json.loads(cache.read_text())
+    if not force:
+        c = _read(cache)
         if time.time() - c.get("at", 0) < CHECK_EVERY:
             rels = c.get("releases") or ([c["release"]] if c.get("release") else [])
     if rels is None:
@@ -140,12 +158,12 @@ def latest(fetch=None, force: bool = False) -> dict | None:
             rels = [{"version": d["tag_name"].lstrip("v"), "notes": d.get("body") or "", "url": d.get("html_url"),
                      "deploy_notes": deploy_notes(d.get("body") or ""), "rc": "-rc." in d["tag_name"]}
                     for d in data if not d.get("draft") and (not d.get("prerelease") or "-rc." in d.get("tag_name", "")) and re.fullmatch(r"v?\d+\.\d+\.\d+(-rc\.\d+)?", d.get("tag_name", ""))]
-            cache.write_text(json.dumps({"at": int(time.time()), "releases": rels}))
+            _write(cache, {"at": int(time.time()), "releases": rels})
         except Exception as e:  # noqa: BLE001
             log.warning("update check failed: %s", e)
-            if not cache.exists():
+            c = _read(cache)
+            if not c:
                 return None
-            c = json.loads(cache.read_text())
             rels = c.get("releases") or ([c["release"]] if c.get("release") else [])
     rels = [r for r in rels if source() == "rc" or not r.get("rc")]
     if not rels:
@@ -181,16 +199,22 @@ def status() -> dict:
     req = out.get("requested")
     if req and "running" not in out and time.time() - req.get("at", 0) > STUCK_AFTER:
         out["stuck"] = True  # nothing on the server picked it up: the updater isn't installed or failed to start
+    try:
+        if "running" in out and time.time() - (DATA / "update-running.json").stat().st_mtime > STALE_RUN:
+            out["stuck"] = True  # a reboot or kill left it behind: Cancel clears it
+    except FileNotFoundError:
+        pass  # the updater finished between the read and now
     return out
 
 
 def cancel() -> bool:
-    """Withdraw a request the updater never picked up."""
-    p = DATA / "update-request.json"
-    if p.exists():
-        p.unlink()
-        return True
-    return False
+    """Withdraw a request the updater never picked up, or clear a stale running file it left behind."""
+    st = status()
+    names = ["update-request.json"] + (["update-running.json"] if "running" in st and st.get("stuck") else [])
+    gone = [DATA / n for n in names if (DATA / n).exists()]
+    for p in gone:
+        p.unlink(missing_ok=True)
+    return bool(gone)
 
 
 def request(by: str, target: str, notes_confirmed: bool) -> None:
@@ -219,14 +243,12 @@ def auto_settings() -> dict:
     """{"on": bool, "hour": 0-23 (local), "told": [versions the admins were already emailed about], "from": see source()}
     (update-settings.json)."""
     p = DATA / "update-settings.json"
-    return {"on": False, "hour": AUTO_HOUR, "told": [], "from": "releases", **(json.loads(p.read_text()) if p.exists() else {})}
+    return {"on": False, "hour": AUTO_HOUR, "told": [], "from": "releases", **_read(p)}
 
 
 def _save_auto(s: dict) -> None:
     p = DATA / "update-settings.json"
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(s))
-    tmp.replace(p)
+    _write(p, s)
 
 
 def set_auto(on: bool, hour: int | None = None) -> None:

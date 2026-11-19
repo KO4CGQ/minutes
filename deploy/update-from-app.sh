@@ -26,14 +26,28 @@ print(t if re.fullmatch(r"[0-9]+[.][0-9]+[.][0-9]+(-rc[.][0-9]+)?|next", t) else
   elif [ "$TO" = next ]; then
     if BRANCH=next "$APP/deploy/update.sh" >"$LOG" 2>&1; then ok=true; fi
   elif TAG="v$TO" "$APP/deploy/update.sh" >"$LOG" 2>&1; then ok=true; fi
+  # Root, in a folder the app can write: never follow a link there (one could point at any file on the server).
+  # The request is read without following one; the status is made new (O_EXCL) and handed to the app's user.
   "$APP/.venv/bin/python" - "$RUN" "$LOG" "$OUT" "$ok" "$start" <<'PY'
-import json, sys, time
+import json, os, pwd, sys, time
 run, logf, out, ok, start = sys.argv[1:]
-req = json.load(open(run))
+try:
+    with os.fdopen(os.open(run, os.O_RDONLY | os.O_NOFOLLOW)) as f:
+        req = json.load(f)
+except (OSError, ValueError):
+    req = {}
+req = req if isinstance(req, dict) else {}
 tail = open(logf, errors="replace").read()[-4000:]
-json.dump({**req, "ok": ok == "true", "started": int(start), "finished": int(time.time()), "output": tail}, open(out, "w"))
+try:
+    os.unlink(out)
+except FileNotFoundError:
+    pass
+fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+u = pwd.getpwnam("minutes")
+os.fchown(fd, u.pw_uid, u.pw_gid)
+with os.fdopen(fd, "w") as f:
+    json.dump({**req, "ok": ok == "true", "started": int(start), "finished": int(time.time()), "output": tail}, f)
 PY
-  chown minutes:minutes "$OUT"; chmod 600 "$OUT"
   rm -f "$RUN" "$LOG"
 }
 main "$@"; exit

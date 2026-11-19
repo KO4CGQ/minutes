@@ -15,15 +15,22 @@ import contextlib
 import fcntl
 import functools
 import json
+import logging
 import secrets
 import time
 
 from . import auth, branding
 from .club import DATA, Club, show_date
 
+log = logging.getLogger(__name__)
+
 WAIT_DAYS, WAIT_DAYS_OBJECTED = 7, 14
 LAPSE_DAYS = 30  # not approved and accepted by then: it ends by itself, so one officer or nominee can't hold it forever
 MOTION_MAX = 200
+
+
+SAFETY_NET = ("This is the club's safety net for when its website admins can't be reached. "
+              "You don't need to do anything.\n\n")
 
 
 @contextlib.contextmanager
@@ -54,7 +61,11 @@ def _path():
 def load() -> dict | None:
     """The open recovery, or None."""
     p = _path()
-    return json.loads(p.read_text()) if p.exists() else None
+    try:
+        return json.loads(p.read_text()) if p.exists() else None
+    except (OSError, ValueError):
+        log.exception("%s is damaged; treating it as no recovery", p)
+        return None
 
 
 def _save(r: dict | None) -> None:
@@ -111,7 +122,7 @@ def start(club: Club, by: str, nominee: str, suspend: list[str], motion: str, ur
     _save(r)
     what = f"{club.name(by)} started a recovery of admin access: {m.name} to become an admin" + (
         f", and {', '.join(club.name(a) for a in suspend)} suspended as admin" if suspend else "") + "."
-    _tell(club, "Recovering admin access", what, r, url)
+    _tell(club, "Recovering admin access", what, r, url, first=True)
     return r
 
 
@@ -213,15 +224,15 @@ def tick(club: Club, url: str, now: float | None = None) -> bool:
     return True
 
 
-def _tell(club: Club, subject: str, what: str, r: dict, url: str) -> None:
+def _tell(club: Club, subject: str, what: str, r: dict, url: str, first: bool = False) -> None:
     """Every active member (Jim, 2026-11-14: all of them, at every step), and the suspended admins."""
     st = state(club, r) if load() else None
     how = (f"\n\nApprovals: {st['have']} of the {st['need']} needed ({len(st['officers'])} officers)"
-           + (f"; it completes on {show_date(time.strftime('%Y-%m-%d', time.localtime(st['ready_at'])), 'document')} unless it changes"
+           + (f"; it completes on {show_date(time.strftime('%Y-%m-%d', time.localtime(st['ready_at'])), 'document')} unless an admin objects"
               if st["ready_at"] else "") + ("" if r.get("accepted") else f"; waiting for {club.name(r['nominee'])} to accept") + "."
            if st else "")
     motion = f"\n\nThe board's motion: {r['motion']}" if r.get("motion") else ""
     to = sorted({m.email for m in club.members.values() if m.email and m.status.lower() not in ("inactive", "silent key")
                  and (m.status.lower() == "active" or m.id in r["suspend"])})
     auth.send_email(to, f"{club.label}: {subject}", f"{what}{how}{motion}\n\nWhere it stands, and who has approved: "
-                    f"{url}/recover\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())
+                    f"{url}/recover\n\n{SAFETY_NET if first else ''}73,\n{branding.name(club)}", only_to=club.email_only_to())

@@ -25,6 +25,7 @@ from pathlib import Path
 
 from . import backup, profile
 from .club import CALLSIGN, DATA, ROSTER_CACHE, Club, inside, one_line, roster_locked
+from .meeting import split_front
 from .membership import LOG_TAB
 from .roster import Sheet
 
@@ -66,12 +67,12 @@ def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
             if after != before:
                 _write(p, json.dumps(after, indent=1))
                 done["files"] += 1
-    # Minutes: the front matter's attendance lists and leader, and the report tags. Body text is left alone.
-    item = re.compile(rf"(?m)^(\s*-\s+|leader:\s+){re.escape(old)}\s*$")
+    # Minutes: the front matter's attendance lists, leader, recorder, correction and review names, and the report tags. Body text is left alone.
+    item = re.compile(rf"(?m)^(\s*-\s+|leader:\s+|recorder:\s+|\s*(?:-\s+)?by:\s+){re.escape(old)}\s*$")
     tag = re.compile(rf"<!--\s*member:\s*{re.escape(old)}\s*-->")
-    for p in sorted((data / "meetings").glob("*/minutes.md")):
+    for p in sorted((data / "meetings").glob("*/minutes*.md")):  # and the earlier versions, minutes.vN.md
         text = p.read_text()
-        _, fm, body = text.split("---", 2) if text.startswith("---") else ("", "", text)
+        _, fm, body = split_front(text) if text.startswith("---") else ("", "", text)
         new_text = (f"---{item.sub(lambda m: m.group(1) + new, fm)}---" if fm else "") + tag.sub(f"<!-- member: {new} -->", body)
         if new_text != text:
             _write(p, new_text)

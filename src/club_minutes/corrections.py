@@ -19,7 +19,7 @@ from markupsafe import Markup, escape
 
 from .club import show_date
 from .console import email_status, reply_address, send_to_members
-from .meeting import Item, Meeting
+from .meeting import Item, Meeting, one_line
 from .store import Archive
 
 REASON_MAX = 300
@@ -74,6 +74,10 @@ def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new
         if m.status == "imported" and not m.reviewed:
             m.reviewed = {"by": by, "at": int(time.time())}
         try:
+            try:
+                Meeting.from_markdown(m.to_markdown())  # it must read back before it replaces the file
+            except Exception as e:
+                raise ValueError("Those minutes wouldn't read back, so nothing was saved.") from e
             m.save(archive.root)
         finally:
             archive.reload()  # m is the archive's own: if the save failed, back to what's on disk
@@ -169,8 +173,9 @@ def changes(old: Meeting, new: Meeting, club, private: bool = False) -> list[str
 
 
 def hidden_version(m: Meeting, v: int) -> bool:
-    """Version v was replaced by a correction ticked "This removes private details": only those who may correct see it."""
-    return any(c.get("private") and c.get("version") == v + 1 for c in m.corrections)
+    """Version v came before a correction ticked "This removes private details" (any later one, since the details may
+    have stayed through corrections in between): only those who may correct see it."""
+    return any(c.get("private") and c.get("version", 0) > v for c in m.corrections)
 
 
 def pdf_name(m: Meeting) -> str:
@@ -282,8 +287,8 @@ def from_form(archive: Archive, m: Meeting, form) -> Meeting:
 
 
 def _text(v) -> str:
-    """A field as typed (two spaces after a full stop stay two), less line breaks: an item is one line in minutes.md."""
-    return re.sub(r"\s*[\r\n]+\s*", " ", str(v or "")).strip()
+    """A field as typed (two spaces after a full stop stay two), less line breaks and comment markers: an item is one line in minutes.md."""
+    return one_line(str(v or ""))
 
 
 def attendance_rows(archive: Archive, m: Meeting) -> list[tuple[str, str, str]]:
