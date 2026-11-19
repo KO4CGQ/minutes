@@ -15,7 +15,7 @@ import time
 
 from . import ai, auth, business, chow, prefs
 from .club import DATA, show_date
-from .meeting import Item, Meeting
+from .meeting import Item, Meeting, one_line
 from .store import Archive
 
 log = logging.getLogger("club_minutes.console")
@@ -345,7 +345,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     def text(v) -> str:
         if not isinstance(v, str):
             raise TypeError
-        return v.strip()
+        return one_line(v)
     try:  # everything read first: a save of the wrong shape changes nothing
         leader = d.get("leader")
         if leader is not None and not isinstance(leader, str):

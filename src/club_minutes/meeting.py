@@ -35,6 +35,15 @@ CAL_TAG = re.compile(r"\s*<!--\s*cal:\s*(community|planning)\s*-->")
 EVENT_HOURS = 2  # how long a timed event with no end is taken to last
 
 
+def one_line(text: str) -> str:
+    """Typed text as one plain item line: every line break splitlines() knows becomes a space, and no "<!--", so typing
+    can't start a section or an item or forge a member/when tag (an arrow "-->" stays: without "<!--" it's no tag)."""
+    text = " ".join(part.strip() for part in text.splitlines() if part.strip())  # splitlines knows every break; no regex to backtrack
+    while (clean := text.replace("<!--", "")) != text:
+        text = clean
+    return text.strip()
+
+
 @dataclass
 class Item:
     text: str
@@ -133,7 +142,7 @@ class Meeting:
             out.append(f"## {name}")
             for it in self.items(name):
                 tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "")
-                out.append(f"- {it.text}{tag}")
+                out.append(f"- {one_line(it.text)}{tag}")
             out.append("")
         return "\n".join(out)
 
