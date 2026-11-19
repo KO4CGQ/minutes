@@ -74,6 +74,10 @@ def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new
         if m.status == "imported" and not m.reviewed:
             m.reviewed = {"by": by, "at": int(time.time())}
         try:
+            try:
+                Meeting.from_markdown(m.to_markdown())  # it must read back before it replaces the file
+            except Exception as e:
+                raise ValueError("Those minutes wouldn't read back, so nothing was saved.") from e
             m.save(archive.root)
         finally:
             archive.reload()  # m is the archive's own: if the save failed, back to what's on disk
