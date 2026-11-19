@@ -37,6 +37,7 @@ def test_majority_acceptance_and_the_wait(club):
         recovery.start(club, "n0call", "n0call", [], "", "https://x")
     r = recovery.start(club, "pres", "n0call", ["adm"], "Approved at the board meeting of Nov 1", "https://x")
     assert len(club.sent[-1][0]) == 7 and "Pat Doe to become an admin, and Ann Doe suspended" in club.sent[-1][2]  # everyone
+    assert "safety net" in club.sent[-1][2]
     with pytest.raises(ValueError, match="already under way"):
         recovery.start(club, "vp", "tru", [], "", "https://x")
     with pytest.raises(ValueError, match="Only an officer"):
