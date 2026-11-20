@@ -37,3 +37,9 @@ svg.qr { flex: none; width: 4.2rem; height: auto; background: #fff; }
 body.pdf svg.qr { width: 1.8cm; }
 /* A faint line between community reports (Jim, 2026-11-20): one report can run to lists, links, codes and pictures */
 .minutes ul.reports > li + li { border-top: 1px solid var(--border, #d7e1e5); padding-top: .4rem; margin-top: .4rem; }
+/* Quotes and code in formatted text (richtext.py; Jim, 2026-11-20: a drafted email, a command) */
+blockquote.rquote { margin: .3rem 0; padding: .1rem .7rem; background: var(--surface-2, #eef2f4); border: 1px solid var(--border, #c5d1d6); border-left: 3px solid var(--border, #c5d1d6); border-radius: .5rem; color: var(--text, #111); }
+blockquote.rquote p { margin: .25rem 0; }
+code.rcode { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; background: var(--surface-2, #eef2f4); border-radius: 3px; padding: 0 .25rem; overflow-wrap: anywhere; }
+pre.rcode { margin: .3rem 0; padding: .4rem .6rem; background: var(--surface-2, #eef2f4); border-radius: var(--radius-sm, 4px); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .88em; }
+pre.rcode code { font-family: ui-monospace, Menlo, Consolas, monospace; }

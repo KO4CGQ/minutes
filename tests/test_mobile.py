@@ -472,6 +472,73 @@ def test_the_formatting_toolbar_on_a_phone(engine):
 
 
 @pytest.mark.parametrize("engine", ENGINES)
+def test_quote_and_code_buttons(engine):
+    """format.js: Quote marks the caret's lines (and takes it off again); Enter continues a quote, Enter on an empty quote
+    line ends it; Code wraps a word in backticks, and on an empty line starts a block with the caret inside it."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    root = Path(__file__).parents[1] / "src/club_minutes/static"
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_context(viewport={"width": 390, "height": 600}).new_page()
+        page.set_content(f'<style>{(root / "style.css").read_text()}</style><textarea data-format aria-label="Report"></textarea>')
+        page.add_script_tag(content=(root / "format.js").read_text())
+        box, quote = page.get_by_label("Report"), page.get_by_role("button", name="Quote")
+        box.click()
+        quote.click()  # an empty box: "> ", ready to type
+        box.type("Dear park,")
+        box.press("Enter")
+        box.type("Thanks")
+        box.press("Enter")
+        box.press("Enter")  # an empty quote line: the quote ends
+        box.type("Run ls")
+        assert box.input_value() == "> Dear park,\n> Thanks\nRun ls"
+        box.press("Shift+ArrowLeft")
+        box.press("Shift+ArrowLeft")
+        page.get_by_role("button", name="Code (on lines of its own: a code block)").click()
+        box.press("End")
+        box.press("Enter")
+        page.get_by_role("button", name="Code (on lines of its own: a code block)").click()
+        box.type("uv sync")
+        assert box.input_value() == "> Dear park,\n> Thanks\nRun `ls`\n```\nuv sync\n```"
+        box.press("Control+Home")
+        quote.click()  # all its lines quoted: Quote takes it off
+        assert box.input_value().startswith("Dear park,\n> Thanks")
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_a_quote_goes_on_over_several_lines(engine):
+    """format.js: Quote, then Enter or Shift+Enter, carries the quote to the next line; Enter on an empty quote line ends it.
+    A phone keyboard's Enter (no named key, so no usable keydown) is a bare beforeinput, which must do the same."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    root = Path(__file__).parents[1] / "src/club_minutes/static"
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        page.set_content('<textarea data-format aria-label="Box" rows="1"></textarea>')
+        page.add_script_tag(content=(root / "format.js").read_text())
+        box = page.get_by_label("Box")
+        box.click()
+        page.get_by_role("button", name="Quote").click()
+        box.type("one")
+        page.keyboard.press("Enter")
+        box.type("two")
+        page.keyboard.press("Shift+Enter")
+        box.type("three")
+        box.evaluate("t => t.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertLineBreak', cancelable: true, bubbles: true }))")
+        assert box.input_value() == "> one\n> two\n> three\n> "
+        page.keyboard.press("Enter")
+        assert box.input_value() == "> one\n> two\n> three\n"
+        browser.close()
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
 def test_typing_an_at_sign_picks_a_member(engine):
     """format.js: "@ja" lists matching Active members; Enter writes the mention and a space; Escape closes the list."""
     sync_api = pytest.importorskip("playwright.sync_api")

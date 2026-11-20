@@ -1,4 +1,4 @@
-"""Formatting in reports, business items and comments (richtext.py): only bold, italic, lists and links; typed HTML stays
+"""Formatting in reports, business items and comments (richtext.py): only bold, italic, lists, links, quotes and code; typed HTML stays
 text; links only to http(s) and mailto, always showing their address; a QR code only for an address marked [QR]; old
 plain text reads the same."""
 import datetime as dt
@@ -11,7 +11,7 @@ def test_formatting_and_nothing_else():
     assert str(richtext.render("**2 m** and *new*")) == "<strong>2 m</strong> and <em>new</em>"
     assert "<ul>" in richtext.render("- one\n- two") and "<ol>" in richtext.render("1. first\n2. second")
     for t in ("<script>alert(1)</script>", '<img src=x onerror="alert(1)">', "    indented old line", "# not a heading",
-              "`code`", "![x](https://example.org/x.png)"):
+              "![x](https://example.org/x.png)"):
         out = str(richtext.render(t))
         assert "<script" not in out and "<img" not in out and "<h1" not in out and "<code" not in out and "<pre" not in out, t
     assert str(richtext.render("<b>hi</b>")) == "&lt;b&gt;hi&lt;/b&gt;"  # HTML typed in shows as text
@@ -106,3 +106,18 @@ def test_a_mention_is_a_name_pill_and_nothing_else_becomes_a_link():
     assert str(richtext.render("0 @[Jane D](n0call)", names=n)).count("Jane D") == 1  # typed tokens can't forge a pill
     assert richtext.plain("Thanks @[Jane Doe](n0call), see https://example.org") == "Thanks Jane Doe, see https://example.org"
     assert richtext.mentions("@[A](n0call) @[B](kim) @[C](bad id)") == {"n0call", "kim"}
+
+
+def test_quotes_and_code():
+    """Jim, 2026-11-20 (a drafted email in a business item): "> " lines are a quote, lists and line breaks kept inside;
+    `code` and ``` blocks show exactly as typed (no links, mentions or marks; HTML still text); an unclosed block is text."""
+    q = str(richtext.render("Draft:\n> Dear park,\n> - one\n> - two\n>\n> Thanks,\n> Jim"))
+    assert q.startswith("<p>Draft:</p>") and '<blockquote class="rquote">' in q and "<li>two</li>" in q and "Thanks,<br>" in q
+    assert str(richtext.render("> Hi Jane,\n> See you.\nRun it")).endswith("</blockquote>\n<p>Run it</p>")  # the quote ends
+    assert str(richtext.render("Run `ls *x* <b>`")) == 'Run <code class="rcode">ls *x* &lt;b&gt;</code>'
+    b = str(richtext.render("Set:\n```ini\nurl = https://example.org [QR]\n**not bold** @[Jane D](n0call)\n- not a list\n```\nDone"))
+    assert '<pre class="rcode"><code>url = https://example.org [QR]\n**not bold** @[Jane D](n0call)\n- not a list</code></pre>' in b
+    assert "<a " not in b and "<svg" not in b and b.endswith("<p>Done</p>")
+    assert '<pre class="rcode"><code>a\nb</code></pre>' in str(richtext.render("x\r\n```\r\na\r\nb\r\n```\r\ny"))  # as a form posts it
+    assert "<pre" not in str(richtext.render("```\nnever closed")) and str(richtext.render("5 > 3")) == "5 &gt; 3"
+    assert richtext.plain("> Dear `x`\n```\ncode\n```").strip() == "Dear x\ncode"
