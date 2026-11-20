@@ -2859,7 +2859,7 @@ FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", 
                 ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"),
                 ("club", "pictures_per_day"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
-CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
+CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone", "names")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
                 "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
 
@@ -3285,7 +3285,7 @@ def _meeting_where(since: dt.date) -> tuple[str, str]:
 
 @app.post("/admin/site/club")
 async def site_club(request: Request):
-    """Club tab: name, callsign, meeting day and time, time zone; all saved together, or back to club.yaml's.
+    """Club tab: name, callsign, meeting day and time, time zone, short or full names; all saved together, or back to club.yaml's.
     Only what differs from club.yaml is kept, so later changes there still count for the rest."""
     mid, form, club = _site_admin(request), await request.form(), archive.club
     old_day, old_time = club.meeting_weekday, club.meeting_time
@@ -3310,10 +3310,14 @@ async def site_club(request: Request):
                 raise ValueError("The callsign is letters and digits, like N0CALL.")
         except ValueError as e:
             return RedirectResponse("/admin/site/club?error=" + quote(str(e)), status_code=303)
-        typed = {"name": name, "callsign": call, "meeting_day": (form.get("meeting_day") or "").strip().title(),
+        names = form.get("names") or "short"
+        if names not in ("short", "full"):
+            return RedirectResponse("/admin/site/club?error=" + quote("Names: short or full."), status_code=303)
+        typed = {"name": name, "callsign": call, "names": names, "meeting_day": (form.get("meeting_day") or "").strip().title(),
                  "meeting_time": (form.get("meeting_time") or "").strip()[:5], "timezone": (form.get("timezone") or "").strip()}
         yc = club.yaml.get("club") or {}
-        base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone()}
+        base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone(),
+                                                                    "names": str(yc.get("names") or "short")}
         values = {k: None if v.lower() == base[k].lower() else v for k, v in typed.items()}  # only what differs is kept
     try:
         club.save_site_settings({("club", k): v for k, v in values.items()})

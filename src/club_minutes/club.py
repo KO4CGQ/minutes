@@ -226,7 +226,7 @@ def office_list(raw: list) -> list[dict]:
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
-                                    "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day")} | {
+                                    "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day", "names")} | {
     ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
     ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc"), ("modules", "jitsi"),
@@ -674,6 +674,12 @@ class Club:
     def short(self, mid: str) -> str:
         m = self.members.get(self.canonical(mid))
         return (m.short or m.first or m.last) if m else mid.title()
+
+    def shown_name(self, mid: str) -> str:
+        """A member's name wherever the app shows one in brief (report tags, comments, chow, search, Old Business):
+        short ("Jane D", the default) or full (`club: names: full`; Site → Club). `short` stays the short form, for
+        matching names typed in text."""
+        return self.name(mid) if self.info.get("names") == "full" else self.short(mid)
 
     def unnamed(self, text: str, mid: str | None) -> str:
         """A report without the member's name at its start ("Jim F - Built…", "Jim built…"): the minutes show the name

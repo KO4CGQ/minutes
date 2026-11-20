@@ -15,6 +15,13 @@
 <label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}">{% if app_name() != default_name %}<span class="muted small">Changed here</span>{% else %}<span></span>{% endif %}
 </div>
 <p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
+<div class="card sitesec"><h2>Names {{ origin('names') }}</h2>
+{% set full = club.info.get('names') == 'full' %}
+<div role="radiogroup" aria-label="Names">
+<label class="check"><input type="radio" name="names" value="short"{{ ' checked' if not full }}> <span>Short names, like "Jane D"</span></label>
+<label class="check"><input type="radio" name="names" value="full"{{ ' checked' if full }}> <span>Full names, like "Jane Doe"</span></label></div>
+<p class="hint">How members' names show in brief across the app: the name leading each community report in the minutes and their PDF (past minutes too), owners in Old and New Business (minutes made from now on), comments, the chow schedule and search.</p>
+</div>
 <div class="card sitesec"><h2>Meetings</h2>
 <div class="fmtgrid">
 <label for="c-day">Day</label><select id="c-day" name="meeting_day">{% for d in weekdays %}<option{{ ' selected' if d|lower == (club.info.meeting_day or '')|lower }}>{{ d }}</option>{% endfor %}</select>{{ origin('meeting_day') }}
@@ -30,7 +37,7 @@
 </div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
-{% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, names, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'agenda' %}
 <p class="muted">The meeting's sections, in order, as the leader console and the minutes show them, and two reminders. Each change is in the admin log. Changes here win over club.yaml on the server. Past minutes keep the sections they have.</p>
 <form method="post" action="/admin/site/agenda" class="profile siteagenda">
@@ -50,14 +57,14 @@
 </div></div>
 <div class="card sitesec"><h2>Reminders</h2>
 <div class="fmtgrid">
-<label for="a-inv">Invite a guest to apply after</label><span><input id="a-inv" type="number" name="invite_after_visits" min="1" max="50" value="{{ club.info.get('invite_after_visits', 3) }}" required> visits</span>{{ origin('invite_after_visits') }}
-<label for="a-rem">Remind owners of business items</label><span><input id="a-rem" type="number" name="remind_days_before" min="0" max="60" value="{{ club.info.get('remind_days_before', 3) }}" required> days before the due date</span>{{ origin('remind_days_before') }}
+<label for="a-inv">Invite a guest to apply after</label><span><input id="a-inv" type="number" name="invite_after_visits" min="1" max="50" value="{{ club.info.get('invite_after_visits', 3) }}" required> visits</span>{{ origin('club.invite_after_visits') }}
+<label for="a-rem">Remind owners of business items</label><span><input id="a-rem" type="number" name="remind_days_before" min="0" max="60" value="{{ club.info.get('remind_days_before', 3) }}" required> days before the due date</span>{{ origin('club.remind_days_before') }}
 </div>
 <p class="hint">The leader console reminds the leader when a guest reaches that many visits; item owners get an email that many days before the due date (and once if it's overdue).</p>
 </div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
-{% if set_here|select('in', ['sections', 'invite_after_visits', 'remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['meeting.sections', 'club.invite_after_visits', 'club.remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'roles' %}
 <p class="muted">A role is a set of things a member may do. Officers get theirs from their office.</p>
 <details class="muted"><summary>More about roles</summary>

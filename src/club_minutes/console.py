@@ -231,7 +231,7 @@ def context(archive: Archive, m: Meeting) -> dict:
                          for s in m.section_order(club.sections())},
         },
         "state": load_state(archive, m.slug),
-        "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
+        "members": [{"id": x.id, "name": x.name, "short": club.shown_name(x.id), "callsign": x.callsign}
                     for x in members],
         "history": history,
         "guest_history": guests,

@@ -368,6 +368,13 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
         admin.post("/admin/site/club", data={"back": "1"})
         assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay
+        # short or full names, site-wide: full saved and used; a bad value refused; short again (club.yaml's) keeps nothing
+        short = c.shown_name("n0bbbb")
+        admin.post("/admin/site/club", data={**same, "names": "full"})
+        assert c.site_settings["club"]["names"] == "full" and c.shown_name("n0bbbb") == c.name("n0bbbb") != short
+        assert "msg err" in admin.post("/admin/site/club", data={**same, "names": "<b>"}).text and c.info["names"] == "full"
+        admin.post("/admin/site/club", data={**same, "names": "short"})
+        assert "names" not in c.site_settings["club"] and c.shown_name("n0bbbb") == short
     finally:
         clubmod.set_dates(None)
 
@@ -423,6 +430,11 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
     assert "Agenda: sections, invite after visits" in admin.get("/admin/security/admin").text
     admin.post("/admin/site/agenda", data={"back": "1"})
     assert c.site_settings == {} and "Financial Report" in c.sections() and c.info.get("invite_after_visits") is None
+    # a reminder changed here alone shows "Changed here" and Back to club.yaml (they looked for the wrong key)
+    admin.post("/admin/site/agenda", data=form(remind_days_before="5"))
+    page_ = admin.get("/admin/site/agenda").text
+    assert page_.count("Changed here") == 1 and "Back to club.yaml" in page_
+    admin.post("/admin/site/agenda", data={"back": "1"})
     with _pytest.raises(ValueError, match="invite_after_visits"):
         c._configure({"club": {"invite_after_visits": "three"}})  # club.yaml's too: stops the app at start
     c._configure(c.yaml)

@@ -17,7 +17,7 @@
 <div class="muted small">{% if r.repeat != "Doesn't repeat" %}{{ r.repeat }}{% endif %}{% if r.where %}{{ ' · ' if r.repeat != "Doesn't repeat" }}{{ r.where }}{% endif %}</div></li>
 {% elif k == 'help' %}<li><a href="/help/{{ r.guide }}#{{ r.id }}">{{ r.heading }}</a> <span class="sec">{{ r.label }} guide</span></li>
 {% else %}<li><a href="/meetings/{{ r.slug }}?from=search&amp;q={{ q|urlencode }}">{{ r.date|listdate }}</a> <span class="sec">{{ r.section }}</span>
-{% if r.member %}<a class="who" href="/members/{{ r.member }}?from=search&amp;q={{ q|urlencode }}">{{ club.short(r.member) }}</a>{% endif %}
+{% if r.member %}<a class="who" href="/members/{{ r.member }}?from=search&amp;q={{ q|urlencode }}">{{ club.shown_name(r.member) }}</a>{% endif %}
 <div>{{ r.snippet|safe }}</div></li>{% endif %}{% endfor %}</ul>{% endmacro %}
 
 {% if kind == 'all' %}{% for k, label in kinds.items() if found[k] %}<h2>{{ label }}</h2>

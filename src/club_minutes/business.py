@@ -379,7 +379,7 @@ def for_meeting(s: dict, date: str, since: str | None = None) -> tuple[list[dict
 
 def line(club: Club, x: dict, date: str) -> str:
     """One bullet for the minutes: the text, who has it and by when, and Done if closed tonight."""
-    meta = [club.short(x["owner"]) if x["owner"] else None,
+    meta = [club.shown_name(x["owner"]) if x["owner"] else None,
             f"due {show_date(x['due'], 'short')}" if x["due"] else None]
     meta = [m for m in meta if m]
     out = plain(x["text"]) + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
@@ -396,7 +396,7 @@ def sections(s: dict, club: Club, date: str, since: str | None = None) -> dict[s
 def view(club: Club, x: dict, today: str, since: str | None = None) -> dict:
     """An item for the console and the Business page. `since`: the previous meeting, for "new comments"."""
     cutoff = dt.datetime.fromisoformat(since).timestamp() if since else 0  # from that meeting's day on
-    return {**x, "new_comments": [{**c, "name": club.short(c["by"])} for c in x.get("comments", []) if c["at"] >= cutoff],
+    return {**x, "new_comments": [{**c, "name": club.shown_name(c["by"])} for c in x.get("comments", []) if c["at"] >= cutoff],
             "owner_name": club.name(x["owner"]) if x["owner"] else None,
             "overdue": bool(x["status"] == "open" and x["due"] and x["due"] < today), "quiet": quiet(x, today)}
 
