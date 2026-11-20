@@ -13,6 +13,7 @@
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
   Object.assign(HINTS, D.hints);  // the club's own sections' hints
+  const shint = (...t) => (t[0] ? h("p", { class: "hint shint" }, ...t) : null);  // a section's hint, in its box under the heading
   if (D.events_public) HINTS["Upcoming Events"] += " Dated events also go on the public calendar, which anyone can see, signed in or not: keep anything members-only out of them.";
   const RECENT_GUESTS = 8; // quick-pick buttons; older guests are in the name field's autocomplete
   // A guest on their Nth visit or later gets a reminder to invite them to apply for membership.
@@ -404,7 +405,7 @@
     const treasurer = paid.length ? h("div", { class: "card" }, h("p", { class: "hint" }, "The Treasurer recorded these as paid since the last meeting:"),
       h("ul", {}, paid.map((t) => h("li", {}, t))),
       h("button", { class: "btn small ghost", onclick: () => { set(arr.concat(paid)); render(); save(); } }, "Add to tonight's bills")) : null;
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), treasurer, rows);
+    return h("div", {}, h("h2", {}, sec), shint(hint), treasurer, rows);
   }
 
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
@@ -453,7 +454,7 @@
       cals.replaceChildren(calendarCard(evs, draw));
     };
     draw();
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap, cals);
+    return h("div", {}, h("h2", {}, sec), shint(HINTS[sec]), wrap, cals);
   }
 
   // Two titles that look like the same event: half the shorter one's words in the other (calview.similar)
@@ -571,7 +572,7 @@
       setTimeout(() => box.querySelectorAll("textarea").forEach(grow), 0);
     };
     draw();
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), box);
+    return h("div", {}, h("h2", {}, sec), shint(HINTS[sec]), box);
   }
 
   // ---------- chow: did tonight's member bring it? The rest is read-only, from the chow schedule. ----------
@@ -609,7 +610,7 @@
     };
     draw(); showList();
     return h("div", {}, h("h2", {}, "Chow"), box,
-      h("p", { class: "hint" }, HINTS["Upcoming Chow"], " ", h("a", { href: "/chow", target: "_blank", rel: "noopener" }, "Open the Chow page")),
+      shint(HINTS["Upcoming Chow"], " ", h("a", { href: "/chow", target: "_blank", rel: "noopener" }, "Open the Chow page")),
       h("h3", {}, "In the minutes (Upcoming Chow)"), list);
   }
 

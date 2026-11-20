@@ -24,6 +24,7 @@ textarea { resize: vertical; min-height: 2.4rem; }
 .floor h3 { margin: 0 0 .4rem; font-size: 1.3rem; }
 .past { background: var(--warn-soft); border-left: 3px solid var(--warn-edge); border-radius: .3rem; padding: .4rem .7rem; margin: .5rem 0; font-size: .9rem; }
 .past b { color: var(--warn-text); }
+.shint { background: var(--info-soft); border-left: 3px solid var(--accent); border-radius: .3rem; padding: .4rem .7rem; }  /* a section's hint (Jim, 2026-11-20): boxed like "past", in blue */
 .counter { display: inline-flex; align-items: center; gap: .4rem; }
 .floor textarea { width: 100%; margin: .5rem 0; }
 .invite { display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: .6rem; background: var(--warn-soft); color: var(--warn-text); font-size: .75rem; }
