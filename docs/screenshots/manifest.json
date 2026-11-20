@@ -244,8 +244,8 @@
   "templates/meeting.html": "7fc65e6d6b2ab5d715f92111a551687e0038f3b7f1f2905948878f4b30cc2a5f",
   "templates/member_edit.html": "933e7aa753c4ddf7024567ddc0dea64d28f5f30d5616c82a95619edd3fc355f4",
   "templates/offices.html": "55f94a999da798d60e7586e87c6be06f60550892a5d11068822ef28dccf01ffe",
-  "templates/security.html": "d813e12db4081cf4b13b760c07ecc0f10c8a097183bceed6bbcf2e0d9a9e7fea",
-  "templates/site.html": "09c2aefb08f3a638bd00f1e06af43a6083a9ea6d6fca4ecd7b4f82a53557cd00",
+  "templates/security.html": "a49f34c09cbcc3042e67d24ebadb6ea3765f09b0b83cde84e12e6adfe731da92",
+  "templates/site.html": "66c1e19579c84baf2600af0aa8f884c5ac68c8ca10fa3c6fe14e15454dd8d86f",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "74200ac3bf6cff29497e97c6ebdd98e367b70cb029d2f819c166dec9359dd1e1"
  }

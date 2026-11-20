@@ -2592,7 +2592,7 @@ def _security_admin(request: Request) -> str:
 
 
 SECURITY_TABS = (("signins", "Sign-ins"), ("members", "Members"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
-                 ("bans", "Banned addresses"), ("admins", "Admins"), ("admin", "Admin actions"), ("server", "Server"))
+                 ("bans", "Banned addresses"), ("admins", "Admins"), ("admin", "Admin actions"), ("uploads", "Uploads"))
 # Backups has its own card on the Admin page and its own page; it keeps this address (emails link to it)
 SECURITY_PAGES = dict(SECURITY_TABS) | {"backups": "Backups"}
 
@@ -2682,7 +2682,6 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
         return RedirectResponse(f"/admin/confirm?next={here}", status_code=303)
     p = DATA / "admin-log.jsonl"
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
-    roster = DATA / "roster.json"
     events = authn.events(100)
     bs = backup.settings()
     bs["s3"] = {k: v for k, v in bs["s3"].items() if k != "secret_enc"} | {"secret": bool(bs["s3"].get("secret_enc"))}  # never sent back
@@ -2695,8 +2694,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 by_member=authn.by_member() if tab == "members" else {},
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log,
                 add=request.query_params.get("add", ""), event_names=authmod.EVENT_NAMES,
-                my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
+                my_ip=client_ip(request), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
                 upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
 
 
@@ -2705,9 +2703,9 @@ def security_limits(request: Request, upload_mb: int = Form(...), _mid: str = De
     try:
         limits.set_upload_mb(upload_mb)
     except ValueError as e:
-        return RedirectResponse("/admin/security/server?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/security/uploads?error=" + quote(str(e)), status_code=303)
     _admin_log(request, upload_mb=upload_mb)
-    return RedirectResponse("/admin/security/server?note=" + quote(f"Uploads up to {upload_mb} MB."), status_code=303)
+    return RedirectResponse("/admin/security/uploads?note=" + quote(f"Uploads up to {upload_mb} MB."), status_code=303)
 
 
 FRESH_SECONDS = 300  # making someone an admin needs a passkey or emailed link this recent
