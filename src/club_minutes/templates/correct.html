@@ -68,4 +68,5 @@ document.querySelector("form.correct").addEventListener("click", e => {
   add.previousElementSibling.querySelector("input, textarea").focus();
 });
 </script>
+<script type="application/json" id="mentions">{{ club.mentionable()|tojson }}</script>
 {% endblock %}

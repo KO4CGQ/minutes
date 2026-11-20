@@ -5,7 +5,7 @@ from starlette.testclient import TestClient
 from test_corrections import archive, edit, web_as
 
 from club_minutes import club as clubmod
-from club_minutes import console, corrections, pdf, snapshot, upgrade
+from club_minutes import console, corrections, pdf, richtext, snapshot, upgrade
 from club_minutes.meeting import Item, Meeting
 
 SLUG = "2026-10-15"
@@ -114,6 +114,18 @@ def test_the_upgrade_snapshots_old_minutes_and_their_versions_once_and_undoes(tm
     upgrade._v4(tmp_path)  # again: nothing changes
     assert (d / "minutes.md").read_text() == done
     assert upgrade.undo(3, tmp_path) and "shown" not in (d / "minutes.md").read_text() and upgrade.version(tmp_path) == 3
+
+
+def test_a_mentioned_members_name_is_kept_with_the_minutes(tmp_path):
+    a = archive(tmp_path)
+    m = a.by_slug[SLUG]
+    m.sections["Old Business"][0].text = "Thanks @[Jane D](doe) and @[Gone](nobody)"
+    m.shown = snapshot.take(a.club, m)
+    assert "doe" in m.shown["names"] and "nobody" not in m.shown["names"]
+    a.club.members["doe"].first = "Zed"
+    v = snapshot.View(m, a.club)
+    assert v.known_name("doe") == m.shown["names"]["doe"]["shown"] != a.club.known_name("doe")
+    assert 'class="who"' in str(richtext.render(m.sections["Old Business"][0].text, names=v)) and "Gone" in str(richtext.render("@[Gone](nobody)", names=v))
 
 
 def test_minutes_from_before_1_2_keep_1_1s_report_layout(tmp_path, monkeypatch):

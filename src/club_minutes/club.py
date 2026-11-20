@@ -740,6 +740,15 @@ class Club:
         matching names typed in text."""
         return self.name(mid) if self.info.get("names") == "full" else self.short(mid)
 
+    def known_name(self, mid: str) -> str | None:
+        """The shown name of a member, or None when the id is no member's (a mention in text)."""
+        return self.shown_name(mid) if self.canonical(mid) in self.members else None
+
+    def mentionable(self) -> list[dict]:
+        """Who the @ picker offers: the Active members, as the page's JSON (static/format.js)."""
+        return [{"id": m.id, "name": m.name, "short": self.shown_name(m.id), "callsign": m.callsign}
+                for m in self.members.values() if m.status.lower() == "active"]
+
     def unnamed(self, text: str, mid: str | None) -> str:
         """A report without the member's name at its start ("Jim F - Built…", "Jim built…"): the minutes show the name
         once, as a pill before the report (Jim, 2026-11-20). The saved text keeps it, so the file and emails still say who."""

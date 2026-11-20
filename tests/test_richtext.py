@@ -83,3 +83,26 @@ def test_a_list_typed_right_under_a_line_is_a_list():
     assert "Plans next week<br>" in out  # a single line break stays a break
     out = render("Fruit:\n1. Apple\n2. kiwi\n3.\n- \nDone")
     assert out.count("<li>") == 2 and "3." not in out and "<p>Done</p>" in out  # an empty item (Enter after the last) is dropped
+
+
+class Names:  # what a Club or a snapshot View offers a mention
+    def known_name(self, mid):
+        return {"n0call": "Jane D"}.get(mid)
+
+
+def test_a_mention_is_a_name_pill_and_nothing_else_becomes_a_link():
+    n = Names()
+    assert str(richtext.render("Thanks @[Jane Doe](n0call)!", names=n)) == 'Thanks <a class="who" href="/members/n0call">Jane D</a>!'
+    assert str(richtext.render("@[Jane Doe](n0call)", pdf=True, names=n)) == '<span class="who">Jane D</span>'  # the shown name, no @
+    assert str(richtext.render("**@[Jane D](n0call)**", names=n)).startswith("<strong><a class=\"who\"")
+    assert str(richtext.render("@[Old Member](gone)", names=n)) == "Old Member"  # no member: the typed name, no link
+    assert str(richtext.render("@[Jane D](n0call)")) == "Jane D"  # no names to look up
+    for hostile in ("@[<script>](x)", "@[a](javascript:1)", "@[a](../../admin)", "@[a[b]](n0call)", "@[a](n0call/../x)", "@[x](n0call\"onclick=\"1)"):
+        out = str(richtext.render(hostile, names=n))
+        assert "<script" not in out and "javascript" not in out and 'href="/members/n0call/' not in out and "onclick" not in out.replace("&quot;", ""), hostile
+        assert 'href="../' not in out and "<a " not in out.replace('<a class="who" href="/members/n0call">Jane D</a>', ""), hostile
+    assert str(richtext.render("@[<b>](x)", names=n)) == "&lt;b&gt;"
+    assert str(richtext.render("jane@example.org", names=n)) == "jane@example.org"  # an email's @ stays text
+    assert str(richtext.render("0 @[Jane D](n0call)", names=n)).count("Jane D") == 1  # typed tokens can't forge a pill
+    assert richtext.plain("Thanks @[Jane Doe](n0call), see https://example.org") == "Thanks Jane Doe, see https://example.org"
+    assert richtext.mentions("@[A](n0call) @[B](kim) @[C](bad id)") == {"n0call", "kim"}

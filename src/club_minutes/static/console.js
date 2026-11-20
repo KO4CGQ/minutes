@@ -434,7 +434,7 @@
         nodate.hidden = !!e.when;
         const cal = h("select", { "aria-label": "Calendar", title: "Which calendar it goes on", onchange: (ev) => { e.cal = ev.target.value === "events" ? null : ev.target.value; save(); } },
           [["events", "Club events"], ["community", "Community"], ["planning", "Planning"]].map(([v, t]) => h("option", { value: v, selected: v === (e.cal || "events") }, t)));
-        const ta = h("textarea", { rows: 1, placeholder: "What, and where", "aria-label": "Event",
+        const ta = h("textarea", { rows: 1, "data-format": true, placeholder: "What, and where", "aria-label": "Event",
           oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
         ta.value = e.text;
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,

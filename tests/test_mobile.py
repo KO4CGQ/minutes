@@ -472,6 +472,46 @@ def test_the_formatting_toolbar_on_a_phone(engine):
 
 
 @pytest.mark.parametrize("engine", ENGINES)
+def test_typing_an_at_sign_picks_a_member(engine):
+    """format.js: "@ja" lists matching Active members; Enter writes the mention and a space; Escape closes the list."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    root = Path(__file__).parents[1] / "src/club_minutes/static"
+    js, css = (root / "format.js").read_text(), (root / "style.css").read_text()
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_context(viewport={"width": 390, "height": 600}).new_page()
+        page.set_content(f'<style>{css}</style><textarea data-format aria-label="Report"></textarea><script type="application/json" id="mentions">'
+                         '[{"id":"n0call","name":"Jane Doe","short":"Jane D","callsign":"N0CALL"},{"id":"w0demo","name":"John Roe","short":"John R","callsign":"W0DEMO"}]</script>')
+        page.add_script_tag(content=js)
+        box = page.get_by_label("Report")
+        box.click()
+        box.type("Thanks @ja")
+        assert page.get_by_role("option").count() == 1
+        box.press("Enter")
+        assert box.input_value() == "Thanks @[Jane D](n0call) "
+        assert page.get_by_role("listbox").is_hidden()
+        box.type("@")
+        assert page.get_by_role("option").count() == 2
+        page.get_by_role("option", name="John R").click()  # a tap
+        assert box.input_value() == "Thanks @[Jane D](n0call) @[John R](w0demo) "
+        box.type("@zz")
+        assert page.get_by_role("listbox").is_hidden()  # no match: closed
+        # in a modal dialog (a business item's comments): the list shows inside it and a tap reaches it (it opened
+        # behind the dialog, under its backdrop, where nothing can be tapped: found on stage 2026-11-20)
+        page.evaluate("""document.body.insertAdjacentHTML("beforeend", '<dialog class="modal"><textarea data-format aria-label="Comment"></textarea></dialog>');
+                         document.querySelector("dialog").showModal()""")
+        comment = page.get_by_label("Comment")
+        comment.click()
+        comment.type("Ask @jo")
+        page.get_by_role("option", name="John R").click(timeout=3000)  # fails if covered or inert
+        assert comment.input_value() == "Ask @[John R](w0demo) "
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
 def test_a_tap_on_a_home_items_box_opens_the_item(engine):
     """Home's business items: the box drawn beside each is part of its link (a tap on the box on an iPhone did
     nothing, and the stuck "hover" left the faint tick showing as if it were done)."""

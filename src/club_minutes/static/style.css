@@ -756,3 +756,5 @@ form.correct .rm { width: fit-content; }
 .fmtbar .fmt .ico { width: 1.2rem; height: 1.2rem; display: block; margin: auto; }  /* the toolbar's line icons (format.js) */
 @media (pointer: coarse) { .fmtbar { gap: .4rem; } .fmtbar .fmt { min-width: 44px; min-height: 44px; font-size: 1.15rem; } .fmtbar .fmt .ico { width: 1.5rem; height: 1.5rem; } }  /* a finger-sized tap */
 .js-fmt .picfield { display: none; }
+.mention-menu { position: fixed; z-index: 40; min-width: 12rem; max-width: calc(100vw - 1rem); }  /* the @ list (format.js), under its box */
+.itemtext .who, .ctext .who { white-space: nowrap; font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }  /* a mention on the Business page, like the minutes' name pill */

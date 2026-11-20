@@ -16,6 +16,7 @@
 <div id="endforms"><form id="submitform" method="post" action="/console/{{ m.slug }}/submit"></form>
 <form method="post" action="/console/{{ m.slug }}/discard" data-confirm="Discard this draft completely? This cannot be undone." style="text-align:right">
   <button class="btn small ghost" type="submit">Discard draft</button></form></div>
+<script type="application/json" id="mentions">{{ club.mentionable()|tojson }}</script>
 <script nonce="{{ csp_nonce }}">window.CONSOLE = {{ data|safe }};</script>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
 <script src="/static/console.js?v={{ ASSETS }}"></script>

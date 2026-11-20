@@ -55,7 +55,7 @@
     <div class="formrow"><button class="btn small">Add comment</button></div></form>
   {{ history(x, False) }}
 {% endcall %}{% endmacro %}
-{% macro item_script() %}<script nonce="{{ csp_nonce }}">
+{% macro item_script() %}<script type="application/json" id="mentions">{{ club.mentionable()|tojson }}</script><script nonce="{{ csp_nonce }}">
 // An item's dialog opens from its card (Business) or its line (Home: [data-item]); #i<id> in the address opens one
 // too, so after a comment or an edit the page comes back with that item open.
 const openItem = (id) => { const d = document.getElementById(id); if (d && !d.open) d.showModal(); };

@@ -2,7 +2,7 @@
 name and links and its date formats, and all of those can change later; so each version carries a snapshot in its front
 matter (Meeting.shown) that the page and the PDF read, and a draft has none and follows today's settings. Shape:
 
-    names: {member id: {name, short, first, last, shown}}   everyone the minutes mention (shown: what "names:" chose)
+    names: {member id: {name, short, first, last, shown}}   everyone the minutes mention, @ mentions too (shown: what "names:" chose)
     sections: [section names in order]    chow: whether Upcoming Chow was on
     heading, label: the club's heading line and its label    links: [{label, url}] shown in the minutes
     dates: {document, list, day}: strftime formats
@@ -18,6 +18,7 @@ from markupsafe import Markup
 
 from . import branding, theme
 from .club import DATES, show_date, unname
+from .richtext import mentions
 
 FORMATS = ("document", "list", "day")
 
@@ -25,7 +26,8 @@ FORMATS = ("document", "list", "day")
 def take(club, m) -> dict:
     """The snapshot of `m` as the club stands now."""
     ids = {*m.in_person, *m.remote, m.leader, m.recorder, (m.reviewed or {}).get("by"),
-           *(c.get("by") for c in m.corrections), *(it.member for items in m.sections.values() for it in items)} - {None, ""}
+           *(c.get("by") for c in m.corrections), *(it.member for items in m.sections.values() for it in items),
+           *(i for items in m.sections.values() for it in items for i in mentions(it.text) if i in club.members)} - {None, ""}
     return {"names": names(club, ids), "sections": m.section_order(club.sections()), "chow": club.has("chow"),
             "heading": heading(club),
             "label": club.label,
@@ -58,6 +60,9 @@ class View:
 
     def name(self, mid):
         return n["name"] if (n := self._n(mid)) else self.club.name(mid)
+
+    def known_name(self, mid):  # for a mention in text (richtext.py)
+        return n["shown"] if (n := self._n(mid)) else self.club.known_name(mid)
 
     def logo(self, pdf):
         """The logo kept with these minutes (a file for the PDF), or None: today's (drafts, minutes from before 1.2's

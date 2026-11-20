@@ -87,6 +87,55 @@
     put(box, out[2], out[0], out[1]);
     box.focus();
   });
+  // Typing @ in a box lists the Active members (the page's #mentions JSON, club.mentionable()), narrowed by what follows;
+  // picking one writes "@[Jane D](n0call) " (richtext.py shows it as a name pill). Arrow keys + Enter or a tap picks, Escape closes.
+  const menu = document.createElement("ul");
+  Object.assign(menu, { className: "combo-menu mention-menu", id: "mention-list", hidden: true });
+  menu.setAttribute("role", "listbox"); menu.setAttribute("aria-label", "Members");
+  document.body.append(menu);
+  let people = null, shown = [], at = 0, from = 0;
+  const closeMenu = () => { menu.hidden = true; box?.removeAttribute("aria-activedescendant"); box?.setAttribute("aria-expanded", "false"); };
+  const mark = () => {
+    [...menu.children].forEach((li, i) => { li.classList.toggle("at", i === at); li.setAttribute("aria-selected", i === at); });
+    box.setAttribute("aria-activedescendant", `mention-${at}`); menu.children[at]?.scrollIntoView({ block: "nearest" });
+  };
+  const choose = (p) => {
+    const t = box, name = (p.short || p.name).replace(/[\[\]\n]/g, "").slice(0, 60);
+    closeMenu(); put(t, `@[${name}](${p.id}) `, from, t.selectionStart);
+    t.focus();
+  };
+  const openMenu = (t) => {
+    people ??= JSON.parse(document.getElementById("mentions")?.textContent || "[]");
+    const m = t.value.slice(0, t.selectionStart).match(/(?:^|\s)@([^\n@[\]]{0,30})$/);
+    const q = m?.[1].toLowerCase() ?? "";
+    shown = m ? people.filter((p) => [p.name, p.short, p.callsign].some((x) => (x || "").toLowerCase().includes(q))).slice(0, 8) : [];
+    if (!shown.length) return closeMenu();
+    from = t.selectionStart - q.length - 1; at = 0;
+    menu.replaceChildren(...shown.map((p, i) => {
+      const li = document.createElement("li");
+      li.id = `mention-${i}`; li.setAttribute("role", "option"); li.textContent = p.short || p.name;
+      if (p.name !== p.short || p.callsign) { const s = document.createElement("span"); s.textContent = [p.name !== p.short && p.name, p.callsign].filter(Boolean).join(" · "); li.append(s); }
+      li.addEventListener("mousedown", (e) => { e.preventDefault(); choose(p); });  // keeps the box's focus, also on a tap
+      return li;
+    }));
+    const host = t.closest("dialog") || document.body;  // in a modal dialog (a business item's comments) the list must be
+    if (menu.parentElement !== host) host.append(menu);   // inside it: anything outside is drawn under it and can't be tapped
+    const r = t.getBoundingClientRect();
+    menu.hidden = false; menu.style.left = `${Math.max(4, r.left)}px`;
+    const h = menu.offsetHeight;  // under the box, or over it when the screen ends there
+    menu.style.top = `${r.bottom + h + 8 > innerHeight && r.top > h + 8 ? r.top - h - 4 : r.bottom + 4}px`;
+    box = t; t.setAttribute("aria-controls", menu.id); t.setAttribute("aria-expanded", "true"); mark();
+  };
+  document.addEventListener("input", (e) => { if (e.target.matches?.("textarea[data-format]") && !e.isComposing) { box = e.target; openMenu(e.target); } });
+  document.addEventListener("focusout", (e) => { if (e.target === box) closeMenu(); });
+  document.addEventListener("keydown", (e) => {
+    if (menu.hidden || e.target !== box) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { at = (at + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length; mark(); }
+    else if (e.key === "Enter" || e.key === "Tab") choose(shown[at]);
+    else if (e.key === "Escape") closeMenu();
+    else return;
+    e.preventDefault(); e.stopImmediatePropagation();
+  }, true);
   // Enter on a list line starts the next item ("- " or the next number); Enter on an empty item ends the list.
   document.addEventListener("keydown", (e) => {
     const t = e.target;

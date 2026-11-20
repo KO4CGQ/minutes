@@ -134,7 +134,7 @@ def by_last_name(ids):
 
 templates.env.globals["minutes_view"] = snapshot.View  # _minutes.html
 templates.env.filters["linkify"] = linkify
-templates.env.filters["rich"] = lambda text, pdf=False: richtext.render(text, pdf)  # reports, items, comments (richtext.py)
+templates.env.filters["rich"] = richtext.rich_filter  # reports, items, comments (richtext.py)
 templates.env.filters["plain"] = richtext.plain
 templates.env.filters["firstline"] = richtext.title
 templates.env.filters["date"] = show_date  # {{ d|date("weekday") }}: club.show_date
