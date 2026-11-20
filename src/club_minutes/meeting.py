@@ -52,6 +52,19 @@ def one_line(text: str) -> str:
     return text.strip()
 
 
+ITEM_MAX = 2000  # characters in one item: formatting long, odd text takes time on every view (richtext.py)
+
+
+def item_text(text: str) -> str:
+    """Typed text as an item: line breaks kept (a report may hold a list), but no "<!--", no control characters and no
+    trailing spaces, so typing can't forge a tag; to_markdown indents every line after the first, so none can start a
+    section or an item. At most ITEM_MAX characters."""
+    text = "\n".join(re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", p).rstrip() for p in text.splitlines())[:ITEM_MAX]
+    while (clean := text.replace("<!--", "")) != text:
+        text = clean
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 @dataclass
 class Item:
     text: str
@@ -151,7 +164,8 @@ class Meeting:
             out.append(f"## {name}")
             for it in self.items(name):
                 tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "") + (f" <!-- pictures: {' '.join(it.pictures)} -->" if it.pictures else "")
-                out.append(f"- {one_line(it.text)}{tag}")
+                first, *rest = item_text(it.text).split("\n")  # a report with a list in it: its other lines indented
+                out += [f"- {first}{tag}", *(f"  {x}" for x in rest)]
             out.append("")
         return "\n".join(out)
 
@@ -189,8 +203,10 @@ class Meeting:
                 m.sections[current].append(Item(text, member, when.group(1) if when else None,
                                                 until.group(1) if until and when else None, cal.group(1) if cal and when else None,
                                                 pics.group(1).split() if pics else []))
+            elif current and line.startswith("  ") and m.sections[current]:
+                m.sections[current][-1].text += "\n" + line[2:].rstrip()  # another line of the same item (since 1.1)
             elif current and line.strip() and m.sections[current]:
-                # continuation line of the previous bullet
+                # continuation line of the previous bullet (older files: joined with a space, as they always were)
                 m.sections[current][-1].text += " " + line.strip()
         return m
 

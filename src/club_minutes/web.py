@@ -65,6 +65,7 @@ from . import (
     profile,
     recovery,
     regions,
+    richtext,
     theme,
     treasurer,
     updates,
@@ -131,6 +132,9 @@ def by_last_name(ids):
 
 
 templates.env.filters["linkify"] = linkify
+templates.env.filters["rich"] = lambda text, pdf=False: richtext.render(text, pdf)  # reports, items, comments (richtext.py)
+templates.env.filters["plain"] = richtext.plain
+templates.env.filters["firstline"] = richtext.title
 templates.env.filters["date"] = show_date  # {{ d|date("weekday") }}: club.show_date
 templates.env.filters["longdate"] = lambda d: show_date(d, "document")
 templates.env.filters["listdate"] = show_date
@@ -1978,7 +1982,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
     coming, _ = calview.entries(club, archive, mid, today, today + dt.timedelta(days=13))
     coming = [e for e in coming if e.kind != "chow"][:8]
     # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
-    undated = [i.text for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
+    undated = [richtext.title(i.text) for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
     return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, certificate_note=treasurer.certificate_note(club), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],

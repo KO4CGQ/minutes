@@ -18,11 +18,13 @@ import datetime as dt
 import fcntl
 import json
 import os
+import re
 import secrets
 import time
 
 from . import branding
 from .club import DATA, Club, show_date
+from .richtext import plain
 
 MAX_TEXT = 600
 
@@ -108,9 +110,15 @@ def _note(x: dict, by: str | None, what: str, **detail) -> None:
     x["history"].append({"at": int(time.time()), "by": by, "what": what, **detail})
 
 
+def tidy(text: str | None) -> str:
+    """An item's text: each line's spaces tidied, line breaks kept (it may hold a list), one blank line at most."""
+    lines = [" ".join(x.split()) for x in (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
 def add(s: dict, text: str, by: str | None, owner: str | None = None, due: str | None = None,
         agenda: str | None = None, opened: str | None = None, note: str = "added") -> dict:
-    text = " ".join(text.split())[:MAX_TEXT]
+    text = tidy(text)[:MAX_TEXT]
     if not text:
         raise ValueError("The item needs some text.")
     x = {"id": secrets.token_hex(5), "text": text, "owner": owner or None, "due": _date(due),
@@ -186,7 +194,7 @@ def edit(s: dict, iid: str, by: str, meeting: str | None = None, **fields) -> di
     changes = {}
     for k, v in fields.items():
         if k == "text":
-            v = " ".join((v or "").split())[:MAX_TEXT]
+            v = tidy(v)[:MAX_TEXT]
             if not v:
                 raise ValueError("The item needs some text.")
         elif k in ("due", "agenda"):
@@ -374,7 +382,7 @@ def line(club: Club, x: dict, date: str) -> str:
     meta = [club.short(x["owner"]) if x["owner"] else None,
             f"due {show_date(x['due'], 'short')}" if x["due"] else None]
     meta = [m for m in meta if m]
-    out = x["text"] + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
+    out = plain(x["text"]) + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
     if x["closed"] and x["closed"] <= date:
         out += " Done."
     return out
@@ -424,7 +432,7 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
         days = (due - today).days
         return f"due {show_date(due, 'weekday')}" + (" (today)" if days == 0 else " (tomorrow)" if days == 1 else "")
     late = any(k == "overdue" for _, k in items)
-    lines = "\n".join(f"- {x['text']}\n  {when(x, k)}" for x, k in items)
+    lines = "\n".join(f"- {plain(x['text'])}\n  {when(x, k)}" for x, k in items)
     subject = f"{club.label} club business: " + ("past due" if late else "coming due")
     body = (f"Hi {m.first},\n\nA reminder about club business you're looking after:\n\n{lines}\n\n"
             f"If it's finished, mark it done (or change the date) here: {url}/business\n"

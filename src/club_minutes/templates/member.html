@@ -26,6 +26,6 @@
 {% if h.present %}Last attended {{ h.present[0][0].date|listdate }}.{% endif %}</p>
 <h2>Community reports</h2>
 <ul class="results">{% for m, it in h.reports %}
-<li><a href="/meetings/{{ m.slug }}">{{ m.date|listdate }}</a><div>{{ it.text|linkify }}</div></li>
+<li><a href="/meetings/{{ m.slug }}">{{ m.date|listdate }}</a><div>{{ it.text|rich }}</div></li>
 {% else %}<li class="muted">No reports attributed yet.</li>{% endfor %}</ul>
 {% endblock %}
