@@ -382,7 +382,7 @@
   function itemRows(arr, setArr) {
     const wrap = h("div", {});
     const draw = () => wrap.replaceChildren(
-      ...arr.map((t, i) => {
+      ...(arr.length ? arr : arr.concat("")).map((t, i) => {  // an empty section: one box ready to type in (a blank is never saved)
         const ta = h("textarea", { rows: 1, "data-format": true, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
         ta.value = t;
         return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
@@ -415,6 +415,7 @@
     const wrap = h("div", {});
     const cals = h("div", {});  // the calendar list below, refreshed with the events (one removed shows there again)
     const draw = () => {
+      if (!evs.length) evs.push({ text: "", member: null, when: null });  // one box ready to type in (a blank is never saved)
       wrap.replaceChildren(...evs.map((e, i) => {
         const [d, t] = (e.when || "").split("T"), [ed, et] = (e.until || "").split("T");
         const date = h("input", { type: "date", value: d || "", "aria-label": "Starts" });
@@ -504,8 +505,9 @@
       const r = await fetch(url, { method: "POST", headers: { Accept: "application/json" },
         body: new URLSearchParams({ meeting: M.slug, ...data }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return; }
+      if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return false; }
       D.business = j; saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved"; draw();
+      return true;
     };
     const fmtDate = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const row = (x) => {
@@ -539,10 +541,9 @@
           h("b", {}, ": "), c.text)));
     };
     const add = () => {
-      const ta = h("textarea", { rows: 1, "data-format": true, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });
-      const go = () => { if (ta.value.trim()) send("/business/add", { text: ta.value }); };
-      return h("div", {}, h("div", { class: "row" }, ta, h("button", { class: "btn small", onclick: go }, "+ Add item")),
-        h("button", { class: "btn small ghost", onclick: (e) => e.target.replaceWith(motionForm()) }, "+ Motion"));
+      const ta = h("textarea", { rows: 1, "data-format": true, placeholder: "New item…", "aria-label": "New item", oninput: (e) => grow(e.target) });
+      const go = async () => { if (ta.value.trim() && await send("/business/add", { text: ta.value })) { ta.value = ""; grow(ta); } };
+      return h("div", { class: "row" }, ta, h("button", { class: "btn small", onclick: go }, "+ Add item"));
     };
     // A motion: who moved it, what, who seconded, and how it went (no default: the leader picks the result).
     const motionForm = () => {
@@ -553,22 +554,27 @@
       const result = h("select", { "aria-label": "Result" }, ["", "Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second"]
         .map((v) => h("option", { value: v }, v || "Result…")));
       const val = (w) => w.querySelector("input").value.trim();
-      const go = () => {
+      const go = async () => {
         if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
-        send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value });
+        if (await send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value })) { mform = motionForm(); draw(); }
       };
       const q = quorum();
-      return h("div", { class: "bizitem motion" }, h("b", {}, "Motion"),
+      return h("div", { class: "bizitem motion" },
         q && !q.ok ? h("p", { class: "msg warn", role: "status" }, "No quorum yet: motions shouldn't be brought up until there is one.") :
           q ? h("p", { class: "hint", role: "status" }, `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`) : null,
         h("div", { class: "row" }, mover, h("span", {}, "moved to")), what,
         h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
     };
+    // New Business: two cards, Items and Motions, both open, each with its box ready (Jim, 2026-11-20)
+    const card = (title, rows, form) => h("details", { class: "card bizcard", open: true }, h("summary", {}, h("h3", {}, title)), ...rows, form);
+    let addBox, mform;  // kept across redraws (any save redraws), so a half-typed item or motion isn't lost
     const draw = () => {
       const items = isNew ? D.business.new : D.business.old;
-      box.replaceChildren(
-        ...(items.length ? items.map(row) : [h("p", { class: "muted" }, isNew ? "Nothing new yet." : "No open items.")]),
-        isNew ? add() : h("p", { class: "hint" }, "New items go in New Business. ", h("a", { href: "/business", target: "_blank", rel: "noopener" }, "All business items")));
+      if (isNew) { addBox ??= add(); mform ??= motionForm(); }
+      box.replaceChildren(...(isNew ? [card("Items", items.filter((x) => !x.motion).map(row), addBox),
+        card("Motions", items.filter((x) => x.motion).map(row), mform)]
+        : [...(items.length ? items.map(row) : [h("p", { class: "muted" }, "No open items.")]),
+          h("p", { class: "hint" }, "New items go in New Business. ", h("a", { href: "/business", target: "_blank", rel: "noopener" }, "All business items"))]));
       setTimeout(() => box.querySelectorAll("textarea").forEach(grow), 0);
     };
     draw();
