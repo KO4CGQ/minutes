@@ -17,7 +17,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Longer business text:** a business item, a comment or a note for the next meeting can run to 5,000 characters (a drafted email fits), with a count under the box. Longer text is refused with a message; before, anything over 600 or 1,000 characters was cut off without a word.
 - **Business comments in the minutes:** at the meeting, the leader can put members' comments on a business item into the minutes, and record what's said about it there, as the speaker's comment on the item; both show under the item in the minutes.
 - **Leader console:** each section's hint stands out in a box under its heading, every section has a box ready to type in, and New Business keeps its items and motions in two cards.
-- **Fixed:** on iPhones, an empty Due or Hold date box on the Business page shrank to almost nothing; it keeps its size now, with a line under it saying what it's for.
+- **Fixed:** on iPhones, an empty Due or Hold date box on the Business page shrank to almost nothing; it keeps its size now, with a line under it saying what it's for; on a phone, the top bar ran off the screen while a meeting's minutes were still open.
 - **For server admins:** Security → Server is now **Uploads**, with just the largest upload; what else it showed is on the About page (the version), Signed-in devices and the Email log (whether email is in test mode).
 - **Security:** a hardening of uploads.
 

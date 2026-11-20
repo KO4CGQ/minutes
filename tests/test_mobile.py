@@ -128,8 +128,9 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     monkeypatch.setattr(authmod, "send_email", lambda to, subject, body, **kw: sent.append(body))
     m = Meeting(date=_d.date(2026, 10, 15), status="published", leader="n0admn", in_person=["n0admn"],
                 sections={"Old Business": [Item("Ordered patches")]})
-    monkeypatch.setattr(web.archive, "meetings", [m])
-    monkeypatch.setattr(web.archive, "by_slug", {m.slug: m})
+    open_ = Meeting(date=_d.date(2026, 10, 1), status="draft", leader="n0admn")  # its "Continue minutes" button in every top bar
+    monkeypatch.setattr(web.archive, "meetings", [m, open_])
+    monkeypatch.setattr(web.archive, "by_slug", {m.slug: m, open_.slug: open_})
     assert a.start_email_change("n0admn", "new@example.org", base_url="http://testserver") is None
     token = sent[-1].split("/email/confirm?t=")[1].split()[0]
     extra_pages = [f"/meetings/{m.slug}/correct", f"/email/confirm?t={token}"]
