@@ -184,3 +184,70 @@ def test_the_cap_is_set_on_site_features(env, monkeypatch):
     assert "error=" in r.headers["location"] and pictures.per_day(c) == pictures.PER_DAY
     as_("pres").post("/admin/site/features", data={"pictures_per_day": "7"}, follow_redirects=False)
     assert pictures.per_day(c) == 7
+
+
+def test_pictures_on_a_new_item_a_note_and_a_motion_reach_the_minutes(env):
+    """Jim, 2026-11-20: Add an item, a note for the next meeting and a motion take pictures; a business item's pictures
+    and formatting go in the minutes (the owner and due date end its first line, not a list it holds)."""
+    import datetime as dt
+
+    from club_minutes import console
+    _c, as_ = env
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    pres = as_("pres")
+    pres.post("/business/add", data={"text": "Fix the **tower** light\n- bulb\n- ladder", "owner": "John Doe"}, files=f)
+    x = business.load()["items"][-1]
+    assert len(x["pictures"]) == 1 and x["text"].startswith("Fix the **tower**")
+    assert pres.post("/business/add", data={"text": "x"}, files=f * 5, follow_redirects=False).headers["location"].startswith("/business?tab=add&error=")
+    meeting = web.upcoming_meetings()[0].isoformat()
+    as_("w0demo").post("/business/notes", data={"text": "Away; *new* mast up", "meeting": meeting}, files=f)
+    assert len(business.load()["notes"][-1]["pictures"]) == 1
+    assert "<em>new</em>" in as_("pres").get("/business?tab=notes").text
+    # a motion at a live meeting, with a picture uploaded in the console first
+    day = dt.date.fromisoformat(meeting)
+    s = business.load()
+    business.get(s, x["id"])["opened"] = "2026-01-01"  # raised before that meeting: its Old Business
+    business.save(s)
+    console.start(web.archive, day, "pres")
+    pid = pres.post("/api/pictures", files={"file": ("a.jpg", photo(), "image/jpeg")}).json()["id"]
+    pres.post("/business/motion", data={"mover": "John Doe", "seconder": "Sam Roe", "what": "buy a *ladder*", "result": "Passed",
+                                         "meeting": meeting, "pics": [pid, "nope"]}, headers={"Accept": "application/json"})
+    assert business.motions(business.load())[-1]["pictures"] == [pid]
+    m = web.archive.by_slug[meeting]
+    old = next(i for i in m.items("Old Business") if i.text.startswith("Fix the"))
+    assert old.text == "Fix the **tower** light (John)\n- bulb\n- ladder" and old.pictures == x["pictures"]
+    new = next(i for i in m.items("New Business") if "ladder" in i.text)
+    assert new.pictures == [pid] and "*ladder*" in new.text
+
+
+def test_new_pictures_are_tidied_up(env):
+    """The security review of 2026-11-20: a refused item or note stores no picture; a withdrawn or skipped note's
+    pictures are deleted (a note read out keeps them); a picture taken off an item leaves minutes being written too."""
+    import datetime as dt
+
+    from club_minutes import console
+    _c, as_ = env
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    pres, member = as_("pres"), as_("w0demo")
+    files = lambda: {p.name for p in pictures._dir().iterdir()} if pictures._dir().exists() else set()
+    before = files()
+    pres.post("/business/add", data={"text": "x", "owner": "Nobody Here"}, files=f)
+    pres.post("/business/add", data={"text": "  "}, files=f)
+    meeting = web.upcoming_meetings()[0].isoformat()
+    member.post("/business/notes", data={"text": " ", "meeting": meeting}, files=f)
+    assert files() == before
+    for status in ("withdrawn", "dismissed"):
+        member.post("/business/notes", data={"text": "Away", "meeting": meeting}, files=f)
+        n = business.load()["notes"][-1]
+        (member if status == "withdrawn" else pres).post(f"/business/notes/{n['id']}/{status}")
+        assert not pictures.exists(n["pictures"][0])
+    pres.post("/business/add", data={"text": "Tower light"}, files=f)
+    s = business.load()
+    x = s["items"][-1]
+    x["opened"] = "2026-01-01"
+    business.save(s)
+    console.start(web.archive, dt.date.fromisoformat(meeting), "pres")
+    m = lambda: next(i for i in web.archive.by_slug[meeting].items("Old Business") if i.text.startswith("Tower light"))
+    assert m().pictures == x["pictures"]
+    pres.post(f"/business/{x['id']}/pictures/{x['pictures'][0]}/remove")
+    assert m().pictures == [] and not pictures.exists(x["pictures"][0])

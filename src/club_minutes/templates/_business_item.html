@@ -40,8 +40,8 @@
         <span class="hint">Minutes already submitted keep the wording they had; the change shows from the next meeting on.</span></label>
       <div class="formrow">
       {% if leader %}<label>Owner<input name="owner" data-combo="roster-names" placeholder="Type a name…" value="{{ club.name(x.owner) if x.owner else '' }}"></label>{% endif %}
-      <label>Due<input type="date" name="due" value="{{ x.due or '' }}"></label>
-      {% if leader %}<label>Hold for the meeting on<input type="date" name="agenda" value="{{ x.agenda or '' }}"></label>{% endif %}
+      <label>Due<input type="date" class="datebox" name="due" value="{{ x.due or '' }}" aria-describedby="due-{{ x.id }}"><small id="due-{{ x.id }}" class="datehint">Optional. Tap to pick a date.</small></label>
+      {% if leader %}<label>Hold for the meeting on<input type="date" class="datebox" name="agenda" value="{{ x.agenda or '' }}" aria-describedby="hold-{{ x.id }}"><small id="hold-{{ x.id }}" class="datehint">Optional: empty brings it up at the next meeting.</small></label>{% endif %}
       </div>
       {% if leader %}<p class="hint">Hold keeps it out of Old Business until that night (e.g. the President's State of the Club).</p>{% endif %}
       <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-toggle="e{{ x.id }}">Cancel</button></div></form></div>{% endif %}

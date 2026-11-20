@@ -489,6 +489,11 @@ def test_quote_and_code_buttons(engine):
         assert page.locator(".fmtcount").inner_text() == "0 / 5,000 characters"
         box, quote = page.get_by_label("Report"), page.get_by_role("button", name="Quote")
         box.click()
+        page.get_by_role("button", name="Bold").click()  # nothing selected: the caret between the marks, no placeholder word
+        box.type("2 m")
+        assert box.input_value() == "**2 m**"
+        box.fill("")
+        box.click()
         quote.click()  # an empty box: "> ", ready to type
         box.type("Dear park,")
         box.press("Enter")
@@ -509,6 +514,28 @@ def test_quote_and_code_buttons(engine):
         quote.click()  # all its lines quoted: Quote takes it off
         assert box.input_value().startswith("Dear park,\n> Thanks")
         assert page.locator(".fmtcount").inner_text() == f"{len(box.input_value())} / 5,000 characters"  # it follows the toolbar too
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_a_toolbar_button_works_once_in_a_labelled_box(engine):
+    """format.js: the Business page's boxes sit in a <label>; with the toolbar inside it too, one tap on B ran twice
+    ("****tower****", found on stage 2026-11-20). The toolbar goes before the label."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    root = Path(__file__).parents[1] / "src/club_minutes/static"
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_context(viewport={"width": 390, "height": 600}).new_page()
+        page.set_content(f'<style>{(root / "style.css").read_text()}</style><form><label>Item<textarea data-format name="text"></textarea></label></form>')
+        page.add_script_tag(content=(root / "format.js").read_text())
+        box = page.get_by_label("Item")
+        box.click()
+        page.get_by_role("button", name="Bold").click()
+        box.type("tower")
+        assert box.input_value() == "**tower**"
         browser.close()
 
 
@@ -538,7 +565,6 @@ def test_a_quote_goes_on_over_several_lines(engine):
         assert box.input_value() == "> one\n> two\n> three\n> "
         page.keyboard.press("Enter")
         assert box.input_value() == "> one\n> two\n> three\n"
-        browser.close()
         browser.close()
 
 

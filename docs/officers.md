@@ -58,7 +58,7 @@ What a member may do comes from their **roles**. A role is given by the offices 
 ## 🎙️ At the meeting
 If the club has a quorum rule (an admin sets it on Site → Agenda), the console's Attendance step shows whether there is a quorum as you mark people present. Only Active members count, never guests. Without a quorum, the step where you add a motion warns you not to bring motions up yet; once enough members are present, it shows how many votes a motion needs to pass (a majority of the members present). The minutes and their PDF record the result under Attendance; minutes from before the rule, or from a club without one, show nothing.
 
-Each step of the leader console has a box ready to type in. **New Business** has two cards, **Items** and **Motions** (tap a card's title to fold it away): a motion records who moved it, what, who seconded it and the result.
+Each step of the leader console has a box ready to type in. **New Business** has two cards, **Items** and **Motions** (tap a card's title to fold it away): a motion records who moved it, what, who seconded it and the result, with pictures if wanted (the Picture button above "moved to"). A business item's formatting and pictures go in the minutes with it.
 
 Under each business item, the console shows the comments members wrote since the last meeting: **Add to the minutes** puts one in tonight's minutes, under the item (tap again to take it out); nothing goes in unless you pick it. **Record what's said** adds what someone says about the item at the meeting: pick who said it (a member, or type a guest's name) and type it. It becomes their comment on the item, marked as said at the meeting and recorded by you, and goes in the minutes under the item. ✖ deletes one recorded by mistake.
 

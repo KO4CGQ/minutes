@@ -119,7 +119,7 @@ def business_state(archive: Archive) -> dict:
 
 def business_sections(archive: Archive, slug: str, s: dict | None = None) -> dict[str, list[Item]]:
     s = s or business_state(archive)
-    return {k: [Item(t) for t in v] for k, v in business.sections(s, archive.club, slug, _since(archive, slug)).items()}
+    return {k: [Item(t, pictures=p) for t, p in v] for k, v in business.sections(s, archive.club, slug, _since(archive, slug)).items()}
 
 
 def _since(archive: Archive, slug: str) -> str | None:

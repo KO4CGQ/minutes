@@ -276,13 +276,13 @@ def delete_comment(s: dict, iid: str, cid: str, by: str, leader: bool) -> None:
 
 # ---------------- notes for an upcoming meeting ----------------
 
-def add_note(s: dict, by: str, text: str, meeting: str) -> dict:
+def add_note(s: dict, by: str, text: str, meeting: str, pics: list[str] | None = None) -> dict:
     """A member's note for a meeting: e.g. they can't make it, and here's their news."""
     text = _fit(text.replace("\r\n", "\n").strip(), "note")
     if not text:
         raise ValueError("The note is empty.")
     n = {"id": secrets.token_hex(4), "at": int(time.time()), "by": by, "text": text,
-         "meeting": _date(meeting), "status": "pending"}
+         "meeting": _date(meeting), "status": "pending"} | ({"pictures": pics} if pics else {})
     s["notes"].append(n)
     return n
 
@@ -404,13 +404,16 @@ def for_meeting(s: dict, date: str, since: str | None = None) -> tuple[list[dict
 
 
 def line(club: Club, x: dict, date: str) -> str:
-    """One bullet for the minutes: the text, who has it and by when, and Done if closed tonight."""
+    """One bullet for the minutes: the text with its formatting (Jim, 2026-11-20), who has it and by when, and Done if
+    closed tonight; those end its first line, not a list the text may hold."""
     meta = [club.shown_name(x["owner"]) if x["owner"] else None,
             f"due {show_date(x['due'], 'short')}" if x["due"] else None]
     meta = [m for m in meta if m]
-    out = plain(x["text"]) + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
+    first, nl, rest = x["text"].partition("\n")
+    out = first + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
     if x["closed"] and x["closed"] <= date:
         out += " Done."
+    out += nl + rest
     for c in x.get("comments", []):  # picked for these minutes, or said at this meeting: indented under the item
         if date in (c.get("minutes"), c.get("meeting")):
             who = f"{c['guest']}:" if c.get("guest") else f"@[{club.shown_name(c['by'])}]({c['by']})"
@@ -423,9 +426,10 @@ def line(club: Club, x: dict, date: str) -> str:
     return out
 
 
-def sections(s: dict, club: Club, date: str, since: str | None = None) -> dict[str, list[str]]:
+def sections(s: dict, club: Club, date: str, since: str | None = None) -> dict[str, list[tuple[str, list[str]]]]:
+    """Old and New Business for the minutes: each item's line and its pictures."""
     old, new = for_meeting(s, date, since)
-    return {"Old Business": [line(club, x, date) for x in old], "New Business": [line(club, x, date) for x in new]}
+    return {k: [(line(club, x, date), x.get("pictures") or []) for x in v] for k, v in (("Old Business", old), ("New Business", new))}
 
 
 def view(club: Club, x: dict, today: str, since: str | None = None) -> dict:

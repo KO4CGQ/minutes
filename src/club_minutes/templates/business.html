@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}{% block title %}Business{% endblock %}{% block body %}
+{% extends "base.html" %}{% from "_icons.html" import icon, emoji %}{% from "_pictures.html" import pics %}{% from "_avatar.html" import avatar %}{% block title %}Business{% endblock %}{% block body %}
 <h1>Business items</h1>
 <p class="muted">Club business from the meetings: each item comes up in Old Business every week until it's marked done.</p>
 <nav class="tabs">{% for t, label in tabs %}<a href="/business?tab={{ t }}" class="{{ 'on' if tab == t }}">{{ label }}</a>{% endfor %}</nav>
@@ -19,14 +19,15 @@
 {% else %}<p class="muted">Nothing open.</p>{% endfor %}</div>
 
 {% elif tab == 'add' %}
-<form method="post" action="/business/add" class="modern card">
-  <label>Item<textarea data-format name="text" rows="3" required maxlength="5000" data-count placeholder="e.g. Ask the park about using the pavilion for Field Day"></textarea></label>
+<form method="post" action="/business/add" class="modern card" enctype="multipart/form-data">
+  <label>Item<textarea data-format data-pic="new" name="text" rows="3" required maxlength="5000" data-count placeholder="e.g. Ask the park about using the pavilion for Field Day"></textarea></label>
   <div class="formrow">
     <label>Owner<input name="owner" data-combo="roster-names" placeholder="Type a name…"></label>
-    <label>Due<input type="date" name="due"></label>
-    <label>Hold for the meeting on<input type="date" name="agenda"></label>
+    <label>Due<input type="date" class="datebox" name="due" aria-describedby="due-hint"><small id="due-hint" class="datehint">Optional: when it should be done. Tap to pick a date.</small></label>
+    <label>Hold for the meeting on<input type="date" class="datebox" name="agenda" aria-describedby="hold-hint"><small id="hold-hint" class="datehint">Optional: empty brings it up at the next meeting.</small></label>
   </div>
-  <p class="hint">Leave "hold" empty to bring it up at the next meeting. Items raised during a meeting go in from the console's New Business step instead.</p>
+  <label class="small picfield">Pictures (optional) <input type="file" data-picker="new" name="files" accept="image/jpeg,image/png,image/webp" multiple></label>
+  <p class="hint">Items raised during a meeting go in from the console's New Business step instead.</p>
   <div class="formrow"><button class="btn small">Add</button></div>
 </form>
 
@@ -34,15 +35,17 @@
 <p class="hint">Can't make it, or have news for the club? Leave a note: the leader sees it during Community Reports and reads it out.</p>
 <div class="cards">{% for n in my_notes %}<article class="card"><div class="muted small">Your note for {{ fmt(n.meeting) }}
   <form method="post" action="/business/notes/{{ n.id }}/withdrawn" class="inline" data-confirm="Withdraw this note?"><button class="linkbtn">Withdraw</button></form></div>
-  <div class="card-text">{{ n.text }}</div></article>{% endfor %}</div>
-<form method="post" action="/business/notes" class="modern card">
+  <div class="ctext">{{ n.text|rich }}</div>{{ pics(n.pictures, label="Picture with your note") }}</article>{% endfor %}</div>
+<form method="post" action="/business/notes" class="modern card" enctype="multipart/form-data">
   <label>For the meeting on<select name="meeting">{% for d in next_meetings %}<option value="{{ d.isoformat() }}">{{ d|date('weekday') }}</option>{% endfor %}</select></label>
-  <label>Note<textarea name="text" rows="4" required maxlength="5000" data-count placeholder="e.g. I'll be away for this one. Since last time I finished my 40 m dipole and made a few contacts with it."></textarea></label>
+  <label>Note<textarea data-format data-pic="note" name="text" rows="4" required maxlength="5000" data-count placeholder="e.g. I'll be away for this one. Since last time I finished my 40 m dipole and made a few contacts with it."></textarea></label>
+  <label class="small picfield">Pictures (optional) <input type="file" data-picker="note" name="files" accept="image/jpeg,image/png,image/webp" multiple></label>
+  <p class="hint">Read out at the meeting, your note goes in the minutes with its pictures (emailed to members).</p>
   <div class="formrow"><button class="btn small">Send note</button></div>
 </form>
 {% if all_notes %}<h2>Waiting to be read <span class="muted small">(leaders)</span></h2>
 <div class="cards">{% for n in all_notes %}<article class="card"><div class="muted small"><b>{{ club.name(n.by) }}</b> · for {{ fmt(n.meeting) }}</div>
-  <div class="card-text">{{ n.text }}</div></article>{% endfor %}</div>{% endif %}
+  <div class="ctext">{{ n.text|rich }}</div>{{ pics(n.pictures, label="Picture with " ~ club.name(n.by) ~ "'s note") }}</article>{% endfor %}</div>{% endif %}
 
 {% elif tab == 'done' %}
 <div class="cards">{% for x in done %}

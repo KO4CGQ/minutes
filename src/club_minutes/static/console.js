@@ -63,9 +63,10 @@
     S.reports = {};
     for (const it of M.sections["Community Reports"] || []) {
       if (it.member) { S.reports[it.member] = it.text; if (!S.done.includes(it.member)) S.done.push(it.member); }
-      else S.others.push(it.text);
+      else { S.others.push(it.text); (S.otherPics ||= [])[S.others.length - 1] = it.pictures || []; }
     }
   }
+  S.otherPics ||= [];  // Other reports' pictures, by row (a note read out keeps its pictures)
   if (!S.pics) { // pictures with each member's report (pictures.py ids), rebuilt from the saved minutes
     S.pics = {};
     for (const it of M.sections["Community Reports"] || []) if (it.member && it.pictures?.length) S.pics[it.member] = it.pictures;
@@ -84,7 +85,7 @@
   function syncReports() {
     M.sections["Community Reports"] = [
       ...S.done.map((k) => ({ text: reportText(k), member: k.startsWith("g:") ? null : k, pictures: S.pics[k] || [] })).filter((i) => i.text),
-      ...S.others.filter((t) => t.trim()).map((t) => ({ text: t, member: null })),
+      ...S.others.map((t, i) => ({ text: t, member: null, pictures: S.otherPics[i] || [] })).filter((i) => i.text.trim()),
     ];
   }
 
@@ -358,13 +359,15 @@
     const noteCard = (n) => h("div", { class: "notecard" },
       h("div", {}, h("b", {}, n.name), here(n.by) ? h("span", { class: "badge" }, "here tonight") : null),
       h("div", { class: "notetext" }, n.text),
+      (n.pictures || []).length ? h("div", { class: "pics" }, n.pictures.map((p, i) => h("img", { src: `/pictures/${p}-s.jpg`, alt: `Picture ${i + 1} with ${n.name}'s note` }))) : null,
       h("div", { class: "notebtns" },
         here(n.by)
           ? h("button", { class: "btn small", onclick: async () => {
               S.reports[n.by] = [S.reports[n.by], n.text].filter(Boolean).join(" ");
+              S.pics[n.by] = [...(S.pics[n.by] || []), ...(n.pictures || [])].slice(0, 4);
               await noteStatus(n, "read"); } }, "Use it in their report")
           : h("button", { class: "btn small", onclick: async () => {
-              S.others.push(`${n.name} sent a note: ${n.text}`);
+              S.others.push(`${n.name} sent a note: ${n.text}`); S.otherPics[S.others.length - 1] = n.pictures || [];
               await noteStatus(n, "read"); } }, "Read it out, add it to the minutes"),
         h("button", { class: "btn small ghost", onclick: () => noteStatus(n, "dismissed") }, "Skip")));
     const notes = (D.business.notes || []).length ? h("div", { class: "notesbox" },
@@ -374,18 +377,20 @@
       D.business.notes.map(noteCard)) : null;
     const others = h("div", {}, h("h3", { style: "margin-top:1.2rem" }, "Other reports"),
       h("p", { class: "hint" }, "For news passed along by someone who isn't present, e.g. “Jeremy sent a message recommending…”."),
-      itemRows(S.others, (arr) => { S.others = arr; }));
+      itemRows(S.others, (arr) => { S.others = arr; syncReports(); }, S.otherPics));
     return h("div", {}, h("h2", {}, "Community Reports"), notes, h("div", { class: "cols2" }, queue, h("div", {}, floor, others)));
   }
 
   // ---------- plain list sections ----------
-  function itemRows(arr, setArr) {
+  function itemRows(arr, setArr, pics) {  // pics: a list kept in step with arr (Other reports' pictures), shown as a count
     const wrap = h("div", {});
     const draw = () => wrap.replaceChildren(
       ...(arr.length ? arr : arr.concat("")).map((t, i) => {  // an empty section: one box ready to type in (a blank is never saved)
         const ta = h("textarea", { rows: 1, "data-format": true, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
         ta.value = t;
-        return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
+        const n = pics?.[i]?.length;
+        return h("div", { class: "row" }, ta, n ? h("span", { class: "hint" }, `${n} picture${n === 1 ? "" : "s"}`) : null,
+          h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); pics?.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
       }),
       h("button", { class: "btn small ghost", onclick: () => { arr.push(""); setArr(arr); draw(); wrap.querySelectorAll("textarea")[arr.length - 1].focus(); } }, "+ Add item"));
     draw();
@@ -503,7 +508,7 @@
     const box = h("div", {});
     const send = async (url, data) => {
       const r = await fetch(url, { method: "POST", headers: { Accept: "application/json" },
-        body: new URLSearchParams({ meeting: M.slug, ...data }) });
+        body: new URLSearchParams([["meeting", M.slug], ...Object.entries(data).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => [k, x]) : [[k, v]]))]) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return false; }
       D.business = j; saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved"; draw();
@@ -572,19 +577,28 @@
       const person = (label, exclude) => makeCombo(h("input", { placeholder: label, "aria-label": label, class: "ownerbox" }),
         D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), { empty: "(nobody)", exclude });
       const mover = person("Moved by", () => val(second)), second = person("Seconded by", () => val(mover));
-      const what = h("textarea", { rows: 1, placeholder: "buy a new antenna for the repeater", "aria-label": "Moved to", oninput: (e) => grow(e.target) });
+      const what = h("textarea", { rows: 1, "data-format": true, "data-pic": "motion", placeholder: "buy a new antenna for the repeater", "aria-label": "Moved to", oninput: (e) => grow(e.target) });
+      const mpics = [], thumbs = h("div", { class: "pics" });  // uploaded at once (/api/pictures), sent with the motion
+      const picker = h("input", { type: "file", "data-picker": "motion", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: async (e) => {
+        const f = e.target.files[0]; e.target.value = "";
+        if (!f || mpics.length >= 4) return;
+        const fd = new FormData(); fd.append("file", f);
+        const r = await fetch("/api/pictures", { method: "POST", body: fd }), j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.id) { alert(j.error || "Couldn't add that picture."); return; }
+        mpics.push(j.id); thumbs.append(h("img", { src: `/pictures/${j.id}-s.jpg`, alt: `Picture ${mpics.length} with the motion` }));
+      } });
       const result = h("select", { "aria-label": "Result" }, ["", "Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second"]
         .map((v) => h("option", { value: v }, v || "Result…")));
       const val = (w) => w.querySelector("input").value.trim();
       const go = async () => {
         if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
-        if (await send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value })) { mform = motionForm(); draw(); }
+        if (await send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value, pics: mpics })) { mform = motionForm(); draw(); }
       };
       const q = quorum();
       return h("div", { class: "bizitem motion" },
         q && !q.ok ? h("p", { class: "msg warn", role: "status" }, "No quorum yet: motions shouldn't be brought up until there is one.") :
           q ? h("p", { class: "hint", role: "status" }, `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`) : null,
-        h("div", { class: "row" }, mover, h("span", {}, "moved to")), what,
+        h("div", { class: "row" }, mover, h("span", {}, "moved to")), what, picker, thumbs,
         h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
     };
     // New Business: two cards, Items and Motions, both open, each with its box ready (Jim, 2026-11-20)

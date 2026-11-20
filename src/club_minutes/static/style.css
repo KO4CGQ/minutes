@@ -701,6 +701,10 @@ input:is([type=date], [type=time]) { min-height: 2.4rem; min-width: 8.5rem; }
   input:is([type=date], [type=time]) { -webkit-appearance: none; appearance: none; min-width: 0; }
   input:is([type=date], [type=time])::-webkit-date-and-time-value { text-align: left; }
 }
+/* The Business forms' date boxes (Due, Hold): a real width on iPhones too, where the rule above lets an empty one
+   shrink to a sliver (Jim, 2026-11-20); and a line under it, since Safari's date box shows no mm/dd/yyyy hint */
+input[type=date].datebox { width: 100%; max-width: 14rem; min-width: 10rem; box-sizing: border-box; }
+.datehint { font-weight: normal; font-size: .8rem; color: var(--muted); }
 /* Lead a meeting → Start a new meeting: each label above its box, the button after with room to breathe; on a phone the
    date and the leader side by side, the button on its own line, full width */
 .startform { display: flex; flex-wrap: wrap; gap: .9rem 1rem; align-items: flex-end; margin: .4rem 0 1.2rem; }

@@ -28,8 +28,8 @@
   // Each returns [from, to, replacement, caret in it (default: its end)] for the box's text v and selection s..e, or null to do nothing. Links always
   // show their full address (a printed copy keeps it): Link puts an address in; QR adds " [QR]" after one (or takes it off).
   const act = {
-    b: (v, s, e) => [s, e, `**${v.slice(s, e) || "bold"}**`],
-    i: (v, s, e) => [s, e, `*${v.slice(s, e) || "italic"}*`],
+    b: (v, s, e) => [s, e, `**${v.slice(s, e)}**`, s === e ? 2 : undefined],  // nothing selected: the caret between the marks, ready to type
+    i: (v, s, e) => [s, e, `*${v.slice(s, e)}*`, s === e ? 1 : undefined],
     ul: (v, s, e) => listAt(v, s, e, false),
     ol: (v, s, e) => listAt(v, s, e, true),
     q: (v, s, e) => {  // "> " on each line (not on one that has it: no quote in a quote), or off if they all have it
@@ -91,7 +91,7 @@
   };
   document.addEventListener("focusin", (e) => {
     if (!e.target.matches?.("textarea[data-format]")) return;
-    box = e.target; box.before(bar); note.textContent = "";
+    box = e.target; (box.closest("label") || box).before(bar); note.textContent = "";  // never inside a <label>: it would pass each click on (B ran twice)
     bar.querySelector(".fmt-pic").hidden = !picker();
   });
   bar.addEventListener("mousedown", (e) => e.preventDefault());  // keep the box's selection
@@ -182,6 +182,6 @@
     const f = e.target;
     if (!f.matches?.("input[data-picker]") || !f.files.length) return;
     if (f.dataset.picker === "edit") f.form.requestSubmit();  // an item's pictures: added at once
-    else if (f.dataset.picker === "comment") note.textContent = [...f.files].map((x) => x.name).join(", ");
+    else note.textContent = [...f.files].map((x) => x.name).join(", ");  // a comment's, a new item's, a note's: sent with the form
   });
 })();

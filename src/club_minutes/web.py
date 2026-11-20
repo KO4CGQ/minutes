@@ -728,24 +728,42 @@ def suggestion_dismiss(request: Request, sid: str, mid: str = Depends(moderator)
 
 
 @app.post("/business/add")
-def business_add(request: Request, text: str = Form(...), owner: str = Form(""), due: str = Form(""),
-                 agenda: str = Form(""), meeting: str = Form(""), mid: str = Depends(me)):
+async def business_add(request: Request, text: str = Form(...), owner: str = Form(""), due: str = Form(""),
+                       agenda: str = Form(""), meeting: str = Form(""),
+                       files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
     if not manages_business(request, meeting):
         raise HTTPException(403, "Only officers, or the meeting's leader in the console, can add business items.")
-    return business_change(request, lambda s: business.add(s, text, mid, owner_id(owner), due, agenda,
-                                                           opened=meeting or None), meeting,
-                           back="/business?note=Added." if not meeting else "/business")
+    back = "/business?note=Added." if not meeting else "/business"
+    try:
+        owner_id(owner)  # a mistake here is refused before any picture is stored
+        if not business.tidy(text):
+            raise ValueError("The item needs some text.")
+        pics = await _uploads(mid, files)  # pictures with a new item (Jim, 2026-11-20): checked above, before storing
+    except ValueError as e:
+        return business_change(request, _refuse(e), meeting, back="/business?tab=add")
+
+    def run(s):
+        x = business.add(s, text, mid, owner_id(owner), due, agenda, opened=meeting or None)
+        if pics:
+            business.add_pictures(s, x["id"], pics)
+    return business_change(request, run, meeting, back=back)
 
 
 @app.post("/business/motion")
 def business_motion(request: Request, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
-                    result: str = Form(""), meeting: str = Form(""), date: str = Form(""), mid: str = Depends(me)):
-    """A motion from the console (meeting set), or a past one an officer records from old minutes (date set)."""
+                    result: str = Form(""), meeting: str = Form(""), date: str = Form(""),
+                    pics: Annotated[list[str] | None, Form()] = None, mid: str = Depends(me)):
+    """A motion from the console (meeting set; with pictures uploaded there, /api/pictures), or a past one an officer
+    records from old minutes (date set)."""
     if not manages_business(request, meeting):
         raise HTTPException(403, "Only officers, or the meeting's leader in the console, can record motions.")
-    return business_change(request, lambda s: business.add_motion(
-        s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result, opened=meeting or date or None,
-        past=not meeting), meeting, back="/business?tab=motions&note=Recorded." if not meeting else "/business")
+
+    def run(s):
+        x = business.add_motion(s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result,
+                                opened=meeting or date or None, past=not meeting)
+        if pictures.ids(pics):
+            business.add_pictures(s, x["id"], pictures.ids(pics))
+    return business_change(request, run, meeting, back="/business?tab=motions&note=Recorded." if not meeting else "/business")
 
 
 @app.post("/business/{iid}/motion")
@@ -839,6 +857,10 @@ def business_picture_remove(request: Request, iid: str, pid: str, back: str = Fo
         _may_edit_item(request, s, iid)
         business.remove_picture(s, iid, pid)
     r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
+    with business.locked():  # minutes being written show the item's pictures: take it out of them too (published ones: a correction)
+        s = console.business_state(archive)
+        for m in [m for m in archive.meetings if m.status == "draft"]:
+            console.sync_business(archive, m.slug, s)
     _prune_pictures([pid])
     return r
 
@@ -953,18 +975,32 @@ def upcoming_meetings(n: int = 4) -> list[dt.date]:
 
 
 @app.post("/business/notes")
-def business_note_add(request: Request, text: str = Form(...), meeting: str = Form(...), mid: str = Depends(me)):
+async def business_note_add(request: Request, text: str = Form(...), meeting: str = Form(...),
+                            files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
     if meeting not in {d.isoformat() for d in upcoming_meetings()}:
         raise HTTPException(400, "Pick one of the next meetings.")
-    return business_change(request, lambda s: business.add_note(s, mid, text, meeting), back="/business?tab=notes")
+    try:
+        if not text.strip():
+            raise ValueError("The note is empty.")  # before any picture is stored
+        pics = await _uploads(mid, files)  # a note's pictures (Jim, 2026-11-20): they go in the minutes with it
+    except ValueError as e:
+        return business_change(request, _refuse(e), back="/business?tab=notes")
+    return business_change(request, lambda s: business.add_note(s, mid, text, meeting, pics), back="/business?tab=notes")
 
 
 @app.post("/business/notes/{nid}/{status}")
 def business_note_status(request: Request, nid: str, status: str, meeting: str = Form(""), mid: str = Depends(me)):
     if status not in ("read", "dismissed", "withdrawn"):
         raise HTTPException(404)
-    return business_change(request, lambda s: business.note_status(s, nid, status, mid, can_lead_now(request)),
-                           meeting, back="/business?tab=notes")
+    gone = []
+
+    def run(s):
+        n = business.note_status(s, nid, status, mid, can_lead_now(request))
+        if status != "read":  # withdrawn or skipped: its pictures go (a note read out keeps them, in the minutes)
+            gone.extend(n.pop("pictures", None) or [])
+    r = business_change(request, run, meeting, back="/business?tab=notes")
+    _prune_pictures(gone)  # unless something saved still names them
+    return r
 
 
 @app.post("/business/{iid}/done")

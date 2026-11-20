@@ -37,7 +37,7 @@ Published minutes don't change when the club's settings or roster change (member
 **Chow** shows the schedule and your nights, 16 to a page. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
 
 ## 📌 Business
-**Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. An item, a comment or a note takes up to 5,000 characters; the count is under the box. Add up to four pictures to an item of yours, or to a comment (the **Picture** button above the box): a quote, a photo of the tower. Tap a picture to see it full size. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting) and the leader reads it out.
+**Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. An item, a comment or a note takes up to 5,000 characters; the count is under the box. Add up to four pictures to an item of yours, or to a comment (the **Picture** button above the box): a quote, a photo of the tower. Tap a picture to see it full size. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting), with pictures if you like, and the leader reads it out; it goes in the minutes with its pictures.
 
 ![Business: the club's open items](screenshots/business.png)
 
