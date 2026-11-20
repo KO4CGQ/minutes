@@ -4,17 +4,18 @@ location), with an 800 px copy for thumbnails and the PDF. Stored once under a r
 lists the ids it shows (at most 4), so corrected minutes' old versions and business items carried week to week share
 the files. Served to signed-in members only (/pictures/<id>.jpg), never public.
 
-shortcut: a picture uploaded in the console but never saved with a report stays on disk; prune unreferenced files if
-the folder ever grows (they're in the backups meanwhile). A picture removed from an item or comment is deleted at once
-(web.py), unless something else still names it.
+A picture removed from an item or comment is deleted at once (web.py), unless something else still names it; the
+daily job deletes the ones nothing names (uploaded in the console, never saved) once they're a day old.
 """
 from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 import re
 import secrets
 import threading
+import time
 
 from . import limits
 from .club import DATA, inside
@@ -74,6 +75,38 @@ def take(mid: str, n: int, club) -> None:
 def delete(pid: str) -> None:
     for small in (False, True):
         path(pid, small).unlink(missing_ok=True)
+
+
+def unused(archive, pids) -> list[str]:
+    """Those of these ids that nothing saved names: the business state, minutes, earlier versions, console drafts."""
+    from . import console
+    used = json.dumps(console.business_state(archive)) + "".join(
+        p.read_text(errors="replace") for p in archive.root.rglob("*") if p.suffix in (".md", ".json") and p.is_file())
+    return [p for p in pids if p not in used]
+
+
+def prune_unused(archive) -> int:
+    """The daily job: delete pictures nothing names and stray or crashed-save files, all over a day old (a new upload
+    may be a console draft not saved yet). Returns how many pictures went."""
+    if not archive.root.is_dir():  # no minutes folder to check against: delete nothing rather than everything
+        return 0
+    old, fresh = {}, set()
+    for f in _dir().iterdir():
+        if not f.is_file():
+            continue
+        m = re.fullmatch(r"([0-9a-f]{16})(-s)?\.jpg", f.name)
+        young = time.time() - f.stat().st_mtime < 86400
+        if not m:
+            if not young:
+                f.unlink(missing_ok=True)  # .tmp from a crash, or anything else that isn't a picture
+        elif young:
+            fresh.add(m.group(1))
+        else:
+            old[m.group(1)] = 1
+    gone = unused(archive, [p for p in old if p not in fresh])
+    for p in gone:
+        delete(p)
+    return len(gone)
 
 
 def save(data: bytes) -> str:
