@@ -175,7 +175,14 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
         seen.append("/recover")
         inspect("/recover (under way)")
         page.goto(f"http://testserver/meetings/{m.slug}/correct")
+        # a guest row just added: its Remove takes it away at once, focus back on + Add; a saved item's is still Keep it
+        page.locator("summary:has-text('Guests')").click()
+        page.get_by_role("button", name="+ Add a guest").click()
+        added = page.locator("fieldset.guest").count()
+        page.get_by_role("button", name="Remove A guest left out").click()
+        dropped = (added, page.locator("fieldset.guest").count(), page.evaluate("document.activeElement.textContent"))
         page.locator("summary:has-text('Old Business')").click()
+        dropped += (page.locator(".item label.rm input[type=checkbox]").count(),)
         page.locator("textarea").first.fill("Ordered the patches")
         page.locator("input[name=reason]").fill("A typing mistake")
         path = "the correction preview"
@@ -228,6 +235,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     assert tried != was and cancelled == (True, True, theme.DEFAULT) and colours == ("#4f6f2a", True, True), (cancelled, colours)
     assert not dim, f"dark mode: text too faint for its background: {dim}"
     assert details == (True, True, True, True), details
+    assert dropped == (1, 0, "+ Add a guest", 1), dropped  # added, removed at once, focus on + Add; the saved item keeps Keep it
     assert lists == [["(nobody)", "Jane Doe"]] * 2, lists  # Amy is left out of the other box, whichever she is in
     assert not audit, f"labels, touch targets, repeated button names, form grids: {audit}"
     assert not too_wide, f"pages wider than a 375px phone: {too_wide}"

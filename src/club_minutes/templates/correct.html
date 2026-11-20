@@ -2,22 +2,23 @@
 <h1>Correct the minutes of {{ m.date|longdate }}</h1>
 <p class="muted">Open a part, change it, then preview. Saving makes version {{ m.version + 1 }}; version {{ m.version }} is kept.</p>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}
-{# Remove is a checkbox that strikes a row out (style.css, :has), so it can be undone; + Add copies the list's <template> #}
+{# Remove is a checkbox that strikes a row out (style.css, :has), so it can be undone; + Add copies the list's <template>,
+   and a row added that way (new) has a Remove that takes it away at once #}
 {% macro v(name, saved) %}{{ posted[name] if posted is not none and name in posted else saved }}{% endmacro %}
 {% macro on(name, saved) %}{{ 'checked' if (name in posted if posted is not none else saved) }}{% endmacro %}
-{% macro remove(name, what) %}<label class="btn small ghost rm"><input type="checkbox" name="{{ name }}-rm" value="1" {{ on(name ~ '-rm', false) }}><span class="off">Remove</span><span class="on">Keep it</span><span class="sr"> {{ what }}</span></label>{% endmacro %}
-{% macro guest(i, g, label) %}<fieldset class="guest"><legend>{{ label }}</legend>
+{% macro remove(name, what, new=false) %}{% if new %}<button type="button" class="btn small ghost rm" data-drop>Remove<span class="sr"> {{ what }}</span></button>{% else %}<label class="btn small ghost rm"><input type="checkbox" name="{{ name }}-rm" value="1" {{ on(name ~ '-rm', false) }}><span class="off">Remove</span><span class="on">Keep it</span><span class="sr"> {{ what }}</span></label>{% endif %}{% endmacro %}
+{% macro guest(i, g, label, new=false) %}<fieldset class="guest"><legend>{{ label }}</legend>
   <div class="formrow">
     <label>Name <input name="g{{ i }}-name" value="{{ v('g' ~ i ~ '-name', g.name or '') }}" maxlength="120"></label>
     <label>Callsign <input name="g{{ i }}-callsign" value="{{ v('g' ~ i ~ '-callsign', g.callsign or '') }}" class="cs" size="8" maxlength="12"></label>
     <label class="check"><input type="checkbox" name="g{{ i }}-online" value="1" {{ on('g' ~ i ~ '-online', g.online) }}> Online</label>
   </div>
   <label>Notes <input name="g{{ i }}-notes" value="{{ v('g' ~ i ~ '-notes', g.notes or '') }}" maxlength="200"></label>
-  {{ remove('g' ~ i, label) }}
+  {{ remove('g' ~ i, label, new) }}
 </fieldset>{% endmacro %}
 {% macro item(n, j, sec, text='', hint='', new=false, pictures=[]) %}<div class="item">{% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
   <textarea data-format name="s{{ n }}-{{ j }}" rows="1" aria-label="{{ sec }}, {{ 'a new item' if new else 'item ' ~ (j + 1) }}"{% if new %} placeholder="The item left out"{% endif %}>{{ v('s' ~ n ~ '-' ~ j, text) }}</textarea>
-  {{ remove('s' ~ n ~ '-' ~ j, sec ~ ', ' ~ ('the new item' if new else 'item ' ~ (j + 1))) }}
+  {{ remove('s' ~ n ~ '-' ~ j, sec ~ ', ' ~ ('the new item' if new else 'item ' ~ (j + 1)), new) }}
   {% if pictures %}<div class="pics">{% for p in pictures %}<label class="pic check"><img src="{{ picture_src(p) }}" alt="Picture {{ loop.index }}"><input type="checkbox" name="s{{ n }}-{{ j }}-pic-{{ p }}-rm" value="1" {{ on('s' ~ n ~ '-' ~ j ~ '-pic-' ~ p ~ '-rm', false) }}> Remove picture {{ loop.index }}</label>{% endfor %}</div>{% endif %}</div>{% endmacro %}
 <form method="post" action="/meetings/{{ m.slug }}/correct/preview" class="modern correct">
   <input type="hidden" name="version" value="{{ m.version }}">
@@ -31,8 +32,8 @@
 
   <details class="card sec"><summary>Guests <span class="muted">{{ m.guests|length + m.visitors }}</span></summary>
     {% for g in m.guests %}{{ guest(loop.index0, g, 'Guest ' ~ loop.index) }}{% endfor %}
-    {% for i in extra.g or [] %}{{ guest(i, {}, 'A guest left out') }}{% endfor %}
-    <template id="t-guest">{{ guest('__i__', {}, 'A guest left out') }}</template>
+    {% for i in extra.g or [] %}{{ guest(i, {}, 'A guest left out', new=true) }}{% endfor %}
+    <template id="t-guest">{{ guest('__i__', {}, 'A guest left out', new=true) }}</template>
     <button type="button" class="btn small" data-add="t-guest" data-next="{{ ((extra.g or [])|max + 1) if extra.g else m.guests|length }}">+ Add a guest</button>
     <label>Visitors not named <input type="number" name="visitors" value="{{ v('visitors', m.visitors) }}" min="0" max="999" style="width:6rem"></label>
   </details>
@@ -58,6 +59,8 @@
 <script nonce="{{ csp_nonce }}">
 // + Add: a new row from the list's <template>, numbered after the others (the server reads whichever rows are sent)
 document.querySelector("form.correct").addEventListener("click", e => {
+  const drop = e.target.closest("[data-drop]");  // a row added here: gone at once, and focus back on its + Add
+  if (drop) { const row = drop.closest("fieldset.guest, .item"); row.parentElement.querySelector("[data-add]").focus(); row.remove(); return; }
   const add = e.target.closest("[data-add]");
   if (!add) return;
   const i = +add.dataset.next; add.dataset.next = i + 1;
