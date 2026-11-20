@@ -238,6 +238,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "past_guests": sorted(past, key=lambda g: (g["last"], g["visits"]), reverse=True),
         "sections": m.section_order(club.sections()),  # the console's steps, between Attendance and Review
         "hints": club.section_hints(),  # for the club's own sections
+        "quorum": quorum_rule(club),
         "invite_after": int(club.info.get("invite_after_visits", 3)),
         "events_public": "events" in (club.info.get("public_calendars") or []),  # Club events shown to anyone
         "email": {"roster": len(recipients(archive)), "only_to": club.email.get("only_to")},
@@ -248,6 +249,15 @@ def context(archive: Archive, m: Meeting) -> dict:
         "paid_since": paid_since(archive, m.date),
         **calendar_ahead(archive, m.date),
     }
+
+
+def quorum_rule(club) -> dict | None:
+    """What the console needs to count a quorum as people are ticked (the browser counts): the rule, the members needed
+    and who counts. None when the club has no rule."""
+    if not club.quorum:
+        return None
+    active, officers = club.quorum_ids()
+    return {**club.quorum, "needed": club.quorum_needed(), "active": active, "officer_ids": officers}
 
 
 def paid_since(archive: Archive, date: dt.date) -> list[str]:
@@ -369,6 +379,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
         raise Unreadable from None
     m.leader = leader or m.leader
     m.in_person, m.remote, m.visitors = in_person, remote, max(0, visitors)
+    m.quorum = club.quorum_record(in_person + remote)  # kept as it was that night, whatever the roster does later
     m.guests = [g for g in guests if not club.is_redacted(g["name"])]
     m.sections = sections
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser

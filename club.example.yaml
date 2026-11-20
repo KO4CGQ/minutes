@@ -61,6 +61,9 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 # chow module) and Upcoming Events (the calendars). Any other name is the club's own free-text section, with an
 # optional hint for the console. Left out: the built-ins except Upcoming Chow (added with the chow module).
 # meeting:
+#   quorum:                # off unless set: the console shows whether there is one, and the minutes record it
+#     percent: 30          # at least this % of the Active members present (rounded up); leave out to not use
+#     officers: 2          # at least this many officers present; leave out to not use
 #   sections:
 #     - Bills and Communications
 #     - Financial Report

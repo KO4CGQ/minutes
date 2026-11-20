@@ -116,6 +116,7 @@ class Meeting:
     remote: list[str] = field(default_factory=list)
     guests: list[dict] = field(default_factory=list)  # {name, callsign}
     visitors: int = 0  # guests counted but not named (e.g. family, minors)
+    quorum: dict | None = None  # Club.quorum_record() as saved from the console: what was true that night (none: no rule)
     sections: dict[str, list[Item]] = field(default_factory=dict)
     # Each correction, oldest first: {version (the one it made), at (unix time), by (roster id), reason, notice (bool)}.
     # The versions before it are kept beside minutes.md as minutes.v1.md, minutes.v2.md… (corrections.py).
@@ -134,6 +135,17 @@ class Meeting:
     @property
     def attendance(self) -> int:
         return len(self.in_person) + len(self.remote)
+
+    @property
+    def quorum_text(self) -> str:
+        """The minutes' line under Attendance: "Quorum present: 14 of 41 members; 13 needed" or "No quorum: …"."""
+        q = self.quorum
+        if not q:
+            return ""
+        parts = [f"{q['present']} of {q['members']} members; {q['needed']} needed"] if "needed" in q else []
+        if "officers_needed" in q:
+            parts.append(f"{q['officers']} officer{'' if q['officers'] == 1 else 's'} present; {q['officers_needed']} needed")
+        return ("Quorum present: " if q.get("met") else "No quorum: ") + "; ".join(parts)
 
     def section_order(self, agenda: list[str]) -> list[str]:
         """The club's agenda, then any other section these minutes have (one later dropped from the agenda still shows)."""
@@ -155,6 +167,7 @@ class Meeting:
             "attendance": {"in_person": self.in_person, "remote": self.remote},
             "guests": self.guests,
             "visitors": self.visitors,
+            "quorum": self.quorum,
             "corrections": self.corrections,
             "reviewed": self.reviewed,
         }
@@ -186,6 +199,7 @@ class Meeting:
             remote=att.get("remote") or [],
             guests=fm.get("guests") or [],
             visitors=fm.get("visitors", 0),
+            quorum=fm.get("quorum") or None,
             corrections=fm.get("corrections") or [],
             reviewed=fm.get("reviewed"),
         )

@@ -62,9 +62,17 @@
 </div>
 <p class="hint">The leader console reminds the leader when a guest reaches that many visits; item owners get an email that many days before the due date (and once if it's overdue).</p>
 </div>
+<div class="card sitesec"><h2>Quorum</h2>
+{% set q = club.quorum or {} %}
+<div class="fmtgrid">
+<label for="a-qp">Members present</label><span><input id="a-qp" type="number" name="quorum_percent" min="1" max="100" value="{{ q.get('percent') or '' }}"> % of the Active members or more</span>{{ origin('meeting.quorum') }}
+<label for="a-qo">Officers present</label><span><input id="a-qo" type="number" name="quorum_officers" min="1" max="50" value="{{ q.get('officers') or '' }}"> or more</span><span></span>
+</div>
+<p class="hint">Fill in either or both; leave both empty to turn the quorum check off. Only Active members count, never guests. The leader console shows whether there is a quorum as people are marked present, warns before a motion without one, and the minutes record it.</p>
+</div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
-{% if here_keys|select('in', ['meeting.sections', 'club.invite_after_visits', 'club.remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda and reminders?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['meeting.quorum', 'meeting.sections', 'club.invite_after_visits', 'club.remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda, reminders and quorum?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'roles' %}
 <p class="muted">A role is a set of things a member may do. Officers get theirs from their office.</p>
 <details class="muted"><summary>More about roles</summary>

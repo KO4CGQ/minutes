@@ -3114,7 +3114,7 @@ async def site_agenda(request: Request):
     """Agenda tab: the sections in order (tick to use, a number for the place) with their console hints, and the two
     reminders. Only what differs from club.yaml is kept."""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
-    keys = (("meeting", "sections"), ("club", "invite_after_visits"), ("club", "remind_days_before"))
+    keys = (("meeting", "sections"), ("club", "invite_after_visits"), ("club", "remind_days_before"), ("meeting", "quorum"))
     try:
         if form.get("back"):
             values = dict.fromkeys(keys)
@@ -3137,11 +3137,19 @@ async def site_agenda(request: Request):
                 if v is None or not lo <= v <= hi:
                     raise ValueError(f"{'Invite a guest after' if k == 'invite_after_visits' else 'Remind owners'}: a whole number from {lo} to {hi}.")
                 numbers[k] = v
+            quorum = {}
+            for k, hi in (("percent", 100), ("officers", 50)):
+                raw = (form.get("quorum_" + k) or "").strip()
+                if raw and not (raw.isascii() and raw.isdigit() and 1 <= int(raw) <= hi):
+                    raise ValueError(f"Quorum, {'percent of the members' if k == 'percent' else 'officers present'}: a whole number from 1 to {hi}, or empty.")
+                if raw:
+                    quorum[k] = int(raw)
             yc, ym = club.yaml.get("club") or {}, club.yaml.get("meeting") or {}
             yaml_sections = _agenda(ym.get("sections")) or _default_agenda()
             values = {("meeting", "sections"): None if sections == yaml_sections else sections,
                       **{("club", k): None if v == int(yc.get(k) or {"invite_after_visits": 3, "remind_days_before": 3}[k]) else v
-                         for k, v in numbers.items()}}
+                         for k, v in numbers.items()},
+                      ("meeting", "quorum"): None if quorum == {k: v for k, v in (ym.get("quorum") or {}).items() if v} else quorum}
         club.save_site_settings(values)
     except ValueError as e:
         msg = str(e).replace("club.yaml meeting: sections: ", "Section ")

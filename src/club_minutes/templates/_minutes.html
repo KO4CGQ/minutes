@@ -19,6 +19,7 @@
     {% if m.guests or m.visitors %}<dt>Guests ({{ m.guests|length + m.visitors }})</dt>
     <dd>{% for g in m.guests %}{{ g.name }}{% if g.callsign %} <span class="cs">{{ g.callsign }}</span>{% endif %}{% if g.online %} (online){% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if m.visitors %}{{ ', ' if m.guests }}{{ m.visitors }} visitor{{ 's' if m.visitors > 1 }}{% endif %}</dd>{% endif %}
   </dl>
+  {% if m.quorum %}<p class="quorum"><b>{{ m.quorum_text }}</b></p>{% endif %}
 
   {% for sec in m.section_order(club.sections()) %}{% set items = m.items(sec) %}
     {% if items or (sec == 'Upcoming Chow' and module('chow')) %}

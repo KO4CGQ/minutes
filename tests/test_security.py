@@ -435,6 +435,18 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
     page_ = admin.get("/admin/site/agenda").text
     assert page_.count("Changed here") == 1 and "Back to club.yaml" in page_
     admin.post("/admin/site/agenda", data={"back": "1"})
+    # quorum: a percent and/or officers (empty: off); bad values refused; only a change from club.yaml is kept
+    assert c.quorum is None
+    admin.post("/admin/site/agenda", data=form(quorum_percent="30", quorum_officers="2"))
+    assert c.site_settings == {"meeting": {"quorum": {"percent": 30, "officers": 2}}} and c.quorum == {"percent": 30, "officers": 2}
+    assert 'name="quorum_percent" min="1" max="100" value="30"' in admin.get("/admin/site/agenda").text
+    for bad in ("0", "101", "x", "-1", "3.5"):
+        assert "msg err" in admin.post("/admin/site/agenda", data=form(quorum_percent=bad)).text
+    assert c.quorum == {"percent": 30, "officers": 2}
+    admin.post("/admin/site/agenda", data=form(quorum_officers="2"))
+    assert c.quorum == {"percent": None, "officers": 2}
+    admin.post("/admin/site/agenda", data=form())
+    assert c.site_settings == {} and c.quorum is None
     with _pytest.raises(ValueError, match="invite_after_visits"):
         c._configure({"club": {"invite_after_visits": "three"}})  # club.yaml's too: stops the app at start
     c._configure(c.yaml)

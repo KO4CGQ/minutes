@@ -223,11 +223,27 @@ def office_list(raw: list) -> list[dict]:
         out.append({"title": str(o["title"]), "officer": bool(o.get("officer", True)), "seats": int(o.get("seats", 1))})
     return out
 
+def _quorum(raw) -> dict | None:
+    """club.yaml `meeting: quorum: {percent: 30, officers: 2}` as {percent, officers} (each a whole number or None), or None
+    when neither is set. Raises ValueError for a wrong one."""
+    if raw in (None, {}):
+        return None
+    if not isinstance(raw, dict) or set(raw) - {"percent", "officers"}:
+        raise ValueError("club.yaml meeting: quorum: needs percent and/or officers")
+    out = {}
+    for k, hi in (("percent", 100), ("officers", 50)):
+        v = raw.get(k)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= hi):
+            raise ValueError(f"club.yaml meeting: quorum: {k}: {v!r} isn't a whole number from 1 to {hi}")
+        out[k] = v
+    return out if any(v is not None for v in out.values()) else None
+
+
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                     "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day", "names")} | {
-    ("meeting", "sections"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
+    ("meeting", "sections"), ("meeting", "quorum"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
     ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc"), ("modules", "jitsi"),
     ("jitsi", "domain"), ("jitsi", "app_id")}  # "": a top-level club.yaml setting
@@ -337,6 +353,7 @@ class Club:
                             "short": " ".join(str(cert.get("short") or "certificate").split())[:30],
                             "note": " ".join(str(cert.get("note") or "").split())} if cert.get("name") else None
         self.bylaws = cfg.get("bylaws") or {}
+        self.quorum = _quorum((cfg.get("meeting") or {}).get("quorum"))  # None: no quorum rule, the feature is off
         self._sections = _agenda((cfg.get("meeting") or {}).get("sections"))  # refs: the sections the app cites; arrears_note: added to the arrears email
         self.calendar = cfg.get("calendar") or {}  # holidays / elections: region codes (regions/), none by default
         for k in ("holidays", "elections"):
@@ -674,6 +691,29 @@ class Club:
     def short(self, mid: str) -> str:
         m = self.members.get(self.canonical(mid))
         return (m.short or m.first or m.last) if m else mid.title()
+
+    def quorum_ids(self) -> tuple[list[str], list[str]]:
+        """Who counts toward a quorum: the Active members, and those of them who are officers (guests never count)."""
+        active = [m for m in self.members.values() if m.status.lower() == "active"]
+        return [m.id for m in active], [m.id for m in active if m.officer]
+
+    def quorum_needed(self) -> int | None:
+        """Members needed: the percent of the Active members, rounded up (30% of 41 is 13); None if no percent is set."""
+        pct = (self.quorum or {}).get("percent")
+        return None if pct is None else -(-pct * len(self.quorum_ids()[0]) // 100)
+
+    def quorum_record(self, present: list[str]) -> dict | None:
+        """What the minutes keep about a quorum for these present members: {members, present, needed, officers,
+        officers_needed, met} (a number only for a part of the rule that's set), or None when the club has no rule."""
+        if not self.quorum:
+            return None
+        active, officers = self.quorum_ids()
+        here = [x for x in dict.fromkeys(present) if x in active]
+        need, off = self.quorum_needed(), self.quorum["officers"]
+        rec = {"members": len(active), "present": len(here), "needed": need,
+               "officers": sum(x in officers for x in here), "officers_needed": off}
+        rec["met"] = (need is None or rec["present"] >= need) and (off is None or rec["officers"] >= off)
+        return {k: v for k, v in rec.items() if v is not None}
 
     def shown_name(self, mid: str) -> str:
         """A member's name wherever the app shows one in brief (report tags, comments, chow, search, Old Business):

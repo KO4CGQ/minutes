@@ -204,6 +204,20 @@
     panel.querySelectorAll("textarea").forEach(grow);
   }
 
+  // ---------- quorum (the club's rule, if any; guests never count) ----------
+  function quorum() {
+    const q = D.quorum;
+    if (!q) return null;
+    const here = [...M.in_person, ...M.remote], count = here.filter((x) => q.active.includes(x)).length;
+    const off = here.filter((x) => q.officer_ids.includes(x)).length;
+    const short = [];
+    if (q.needed != null && count < q.needed) short.push(`${q.needed - count} short`);
+    if (q.officers != null && off < q.officers) short.push(`${q.officers - off} more officer${q.officers - off === 1 ? "" : "s"} needed`);
+    const have = [q.needed != null ? `${count} present, ${q.needed} needed` : null,
+      q.officers != null ? `${off} officer${off === 1 ? "" : "s"} present, ${q.officers} needed` : null].filter(Boolean).join("; ");
+    return { ok: !short.length, text: short.length ? short.join(", ") : have + " ✓", majority: Math.floor(count / 2) + 1 };
+  }
+
   // ---------- attendance ----------
   function attendance() {
     const where = (id) => M.in_person.includes(id) ? "inperson" : M.remote.includes(id) ? "online" : "";
@@ -249,6 +263,7 @@
     const n = (w) => w === "inperson" ? M.in_person.length : M.remote.length;
     return h("div", {},
       D.celebrations.length ? h("p", { class: "msg ok" }, emo("🎉", "star"), " ", D.celebrations.join(" · ")) : null,
+      (() => { const q = quorum(); return q ? h("p", { class: "msg " + (q.ok ? "ok" : "warn"), role: "status" }, "Quorum: " + q.text) : null; })(),
       h("h2", {}, `Attendance: ${M.in_person.length} in person, ${M.remote.length} online, ${M.guests.length + M.visitors} guest${M.guests.length + M.visitors === 1 ? "" : "s"}`),
       h("p", { class: "legend" }, "Tap a name to cycle: ", h("span", { class: "mbtn" }, "absent"), "→",
         h("span", { class: "mbtn inperson" }, `in person (${n("inperson")})`), "→", h("span", { class: "mbtn online" }, `online (${n("online")})`)),
@@ -537,7 +552,10 @@
         if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
         send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value });
       };
+      const q = quorum();
       return h("div", { class: "bizitem motion" }, h("b", {}, "Motion"),
+        q && !q.ok ? h("p", { class: "msg warn", role: "status" }, "No quorum yet: motions shouldn't be brought up until there is one.") :
+          q ? h("p", { class: "hint", role: "status" }, `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`) : null,
         h("div", { class: "row" }, mover, h("span", {}, "moved to")), what,
         h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
     };
