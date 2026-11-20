@@ -185,6 +185,13 @@ def main() -> None:
                     print(f"dropped the settings and sign-ins of {n} member(s) now Inactive, a Silent Key or off the roster")
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't drop the settings of members who left: {e}")
+            try:
+                from . import pictures
+                from .store import Archive
+                if n := pictures.prune_unused(Archive(club=club)):
+                    print(f"deleted {n} picture(s) nothing uses any more")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't prune the pictures: {e}")
             try:  # minutes and corrected-minutes emails that failed or never went (a restart mid-send)
                 from . import console, corrections, pdf
                 from .store import Archive

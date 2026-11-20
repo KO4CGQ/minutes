@@ -806,11 +806,8 @@ def _prune_pictures(pids) -> None:
     comment, minutes or an earlier version, a console draft): a removed picture stops opening at once."""
     if not pids:
         return
-    used = json.dumps(console.business_state(archive)) + "".join(
-        p.read_text(errors="replace") for p in archive.root.rglob("*") if p.suffix in (".md", ".json") and p.is_file())
-    for p in pids:
-        if p not in used:
-            pictures.delete(p)
+    for p in pictures.unused(archive, pids):
+        pictures.delete(p)
 
 
 def _refuse(e: ValueError):

@@ -1,5 +1,6 @@
 """Pictures on reports, business items and comments (pictures.py): checked like profile pictures,
 shrunk, no EXIF (no phone location), members only, at most 4 each; carried through the console and corrections."""
+import json
 from pathlib import Path
 
 import pytest
@@ -251,3 +252,43 @@ def test_new_pictures_are_tidied_up(env):
     assert m().pictures == x["pictures"]
     pres.post(f"/business/{x['id']}/pictures/{x['pictures'][0]}/remove")
     assert m().pictures == [] and not pictures.exists(x["pictures"][0])
+
+def test_nightly_prune_deletes_only_old_unused_pictures(env):
+    import os
+    import time
+    old_t = time.time() - 2 * 86400
+
+    def make(age=0):
+        pid = pictures.save(photo())
+        for small in (False, True):
+            os.utime(pictures.path(pid, small), (old_t, old_t) if age else None)
+        return pid
+    unused, fresh, on_item, on_comment, in_minutes, in_version, in_draft = (
+        make(1), make(), make(1), make(1), make(1), make(1), make(1))
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    x["pictures"] = [on_item]
+    x["comments"] = [{"id": "c1", "by": "pres", "text": "Done", "pictures": [on_comment]}]
+    business.save(s)
+    root = web.archive.root
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "minutes.md").write_text(f"pictures: {in_minutes}")
+    (root / "minutes.v1.md").write_text(f"pictures: {in_version}")
+    (root / "console-draft.json").write_text(json.dumps({"pictures": [in_draft]}))
+    stray = pictures.path(unused).with_suffix(".tmp")
+    stray.write_bytes(b"x")
+    os.utime(stray, (old_t, old_t))
+    assert pictures.prune_unused(web.archive) == 1
+    assert not pictures.exists(unused) and not pictures.path(unused, True).exists() and not stray.exists()
+    assert all(pictures.exists(p) for p in (fresh, on_item, on_comment, in_minutes, in_version, in_draft))
+
+
+def test_prune_deletes_nothing_without_a_minutes_folder(env, tmp_path):
+    import os
+    import time
+    pid = pictures.save(photo())
+    old_t = time.time() - 2 * 86400
+    for small in (False, True):
+        os.utime(pictures.path(pid, small), (old_t, old_t))
+    lost = type("A", (), {"root": tmp_path / "no-such-folder"})()
+    assert pictures.prune_unused(lost) == 0 and pictures.exists(pid)
