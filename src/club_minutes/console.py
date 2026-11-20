@@ -284,7 +284,8 @@ READ_OUT = ("events", "community", "planning", "holiday", "birthday")  # chow ha
 def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
     """What's on the calendar from the meeting's day on, for the leader to read out under Upcoming Events: club and
     community events, Planning, holidays and birthdays shared with everyone. Left out: events ticked to leave out (the
-    weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events. next_meeting: the meeting
+    weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events.
+    series: a repeating event's id (its dates share it), else None. next_meeting: the meeting
     event's next date, else a week on."""
     from . import calview
     from . import events as store
@@ -292,6 +293,7 @@ def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
     quiet = {e["id"] for e in evs if store.quiet(e)}
     items, _ = calview.entries(archive.club, archive, "", date, date + dt.timedelta(days=days))  # "": no private birthdays
     out = [{"start": e.start.isoformat(), "end": e.end.isoformat(), "time": e.time, "title": e.title, "where": e.where,
+            "series": e.id if e.repeats else None,  # a repeating event's dates share it: the console can show the next only
             "kind": calview.KINDS[e.kind], "cal": e.kind if e.kind in store.CALS else "events",
             # for "Add to the minutes": the same form as an Upcoming Event's when/until
             "when": f"{e.starts:%Y-%m-%dT%H:%M}" if e.starts else e.start.isoformat(),

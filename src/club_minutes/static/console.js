@@ -463,7 +463,7 @@
   const same = (e, c) => e.text.trim().toLowerCase().startsWith(c.title.toLowerCase());  // added from the list: one event
 
   // What's on the calendar (console.calendar_ahead), to read out; added to the minutes only on a tap.
-  let ahead = "next";
+  let ahead = "next", once = true;  // once: a repeating event (a weekly net) shows only its next date
   function calendarCard(evs, redraw) {
     const card = h("div", { class: "card" });
     const day = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
@@ -472,12 +472,16 @@
     const pick = h("select", { "aria-label": "How far ahead", onchange: (e) => { ahead = e.target.value; fill(); } },
       [["next", "until the next meeting"], ["14", "the next 2 weeks"], ["31", "the next month"], ["92", "the next 3 months"]]
         .map(([v, t]) => h("option", { value: v, selected: v === ahead }, t)));
+    const onceBox = h("label", { class: "check small" }, h("input", { type: "checkbox", checked: once, onchange: (e) => { once = e.target.checked; fill(); } }),
+      " Repeating events: the next date only");
     const fill = () => {
       // already in the minutes: same day, and the text starts with its title ("Fox hunt, the park")
       const have = (c) => evs.some((e) => (e.when || "").slice(0, 10) === c.start && same(e, c));
       const alike = (c) => evs.find((e) => (e.when || "").slice(0, 10) === c.start && e.text.trim() && similar(c.title, e.text));
-      const list = (D.calendar || []).filter((c) => c.start <= ends[ahead] && !have(c));
-      card.replaceChildren(h("p", { class: "row" }, h("strong", {}, "From the calendar"), pick),
+      const seen = new Set();  // the list is in date order: a series' first entry is its next date
+      const list = (D.calendar || []).filter((c) => c.start <= ends[ahead] && !have(c)
+        && !(once && c.series && (seen.has(c.series) || !seen.add(c.series))));
+      card.replaceChildren(h("p", { class: "row calhead" }, h("strong", {}, "From the calendar"), pick, onceBox),
         list.length ? h("ul", {}, list.map((c) => [c, alike(c)]).map(([c, dup]) => h("li", { class: dup ? "dup" : null },
           h("strong", {}, day(c.start), c.time ? " " + c.time : "", c.end !== c.start ? " – " + day(c.end) : ""), " ",
           c.title, c.where ? ` (${c.where})` : "", " ", h("span", { class: "muted small" }, c.kind), " ",

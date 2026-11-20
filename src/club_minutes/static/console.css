@@ -59,3 +59,4 @@ textarea { resize: vertical; min-height: 2.4rem; }
   .bizitem .when .evlabel { grid-column: 1 / -1; margin-top: .2rem; font-weight: 600; } .bizitem .when .hint { display: none; }
 }
 .bizitem label.due .clearwrap > input[type=date] { min-width: 11.5rem; }  /* a business item's Due: room for the date beside the ✕ */
+.calhead { align-items: center; }  /* Upcoming Events: "From the calendar", how far ahead and the repeating-events tick, on one line */

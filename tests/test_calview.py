@@ -539,7 +539,9 @@ def test_console_reads_out_the_calendar_until_the_next_meeting(tmp_path):
         evs = events.load()
         events.change(evs, meet["id"], None, "events", events.from_form({**events.form_values(meet, None), "quiet": ""}))
         events.save(evs)
-    assert "W0TEST meeting" in [x["title"] for x in console.calendar_ahead(Archive(tmp_path, c), dt.date(2026, 11, 12))["calendar"]]
+    weekly = [x for x in console.calendar_ahead(Archive(tmp_path, c), dt.date(2026, 11, 12))["calendar"] if x["title"] == "W0TEST meeting"]
+    assert len(weekly) > 1 and {x["series"] for x in weekly} == {meet["id"]}  # one series: the console can show its next date only
+    assert fox["series"] is None  # a one-off event
 
 
 def test_upcoming_events_go_on_their_calendar_once(tmp_path):
