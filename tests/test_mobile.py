@@ -207,6 +207,14 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
         tried = light.get_attribute("style")
         form.locator("[data-cancel]").click()
         cancelled = (form.locator(".unsaved").is_hidden(), light.get_attribute("style") == was, form.locator("input[name=main]").input_value())
+        # the hex box: a typed code (short, no #) sets the picker and the preview; a wrong one is marked, the picker kept
+        form.locator("[data-hex=main]").fill("4F6")
+        form.locator(".unsaved").wait_for(state="visible")
+        hexed = [form.locator("input[name=main]").input_value()]
+        form.locator("[data-hex=main]").fill("#zz")
+        hexed += [form.locator("[data-hex=main]").get_attribute("aria-invalid"), form.locator("input[name=main]").input_value()]
+        form.locator("[data-cancel]").click()
+        hexed += [form.locator("[data-hex=main]").input_value() == form.locator("input[name=main]").input_value()]
         form.locator("input[name=main]").fill("#4f6f2a")
         form.locator(".unsaved").wait_for(state="visible")
         with page.expect_navigation():
@@ -235,6 +243,7 @@ def test_every_page_fits_a_phone(tmp_path, monkeypatch, engine):
     assert tried != was and cancelled == (True, True, theme.DEFAULT) and colours == ("#4f6f2a", True, True), (cancelled, colours)
     assert not dim, f"dark mode: text too faint for its background: {dim}"
     assert details == (True, True, True, True), details
+    assert hexed == ["#44ff66", "true", "#44ff66", True], hexed  # the box follows Cancel too
     assert dropped == (1, 0, "+ Add a guest", 1), dropped  # added, removed at once, focus on + Add; the saved item keeps Keep it
     assert lists == [["(nobody)", "Jane Doe"]] * 2, lists  # Amy is left out of the other box, whichever she is in
     assert not audit, f"labels, touch targets, repeated button names, form grids: {audit}"

@@ -12,6 +12,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Published minutes stay as they were:** later changes to the roster, how names show, the agenda, the club's name or its links no longer change minutes already published (or their PDF); a correction makes a new version as before. Minutes from before this update keep what they show on the day it's installed. For server admins: this upgrades the data, so going back to 1.1.x means restoring a backup made before updating (a failed update goes back by itself).
 - **Leader console, Upcoming Events:** a repeating event (a weekly net) shows once in From the calendar, at its next date, so one-off events aren't pushed down the list; a tick shows them all.
 - **Correct these minutes:** Remove on a guest or item you just added takes it away at once (rows already in the minutes still strike out, with Keep it to undo).
+- **Site → Colours:** a box beside each colour picker to type or paste a colour's code (`#4f6f2a`), which phones' pickers can't take.
 
 ## 1.1.0 (2026-11-19)
 - **Custom roles:** a club decides what each role may do and who has it (by office, or member by member), and can add roles of its own. Leading meetings (Meeting leader) and fixing published minutes (Minutes editor) are now separate roles, and a Secretary role gets the roster emails.

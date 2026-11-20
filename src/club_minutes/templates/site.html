@@ -333,9 +333,11 @@
 <p class="muted small">One main colour sets the buttons, links, top bar and the minutes' section headings, in light and dark mode. Each shade is checked so text stays readable. Now: {{ "the club's own" if colours_own else "the app's own blue" }}.</p>
 <form method="post" action="/admin/site/colours" class="colours" data-colours>
   <div class="row"><label>Main colour <input type="color" name="main" value="{{ colours.main }}"></label>
+    <input class="hex" data-hex="main" value="{{ colours.main }}" size="8" maxlength="7" spellcheck="false" autocapitalize="off" aria-label="Main colour, as a hex code like #4f6f2a">
     {% if swatches %}<span class="small swatches">From the logo: {% for c in swatches %}<button type="button" class="swatch" data-colour="{{ c }}" style="background: {{ c }}" title="{{ c }}" aria-label="Use {{ c }}"></button>{% endfor %}</span>{% endif %}</div>
   <div class="row"><label class="check"><input type="checkbox" name="own_bar" value="1" {{ 'checked' if colours.bar }}> A different top bar colour</label>
-    <input type="color" name="bar" value="{{ colours.bar or palette[0]['--nav-bg'] }}" aria-label="Top bar colour" {{ '' if colours.bar else 'disabled' }}></div>
+    <input type="color" name="bar" value="{{ colours.bar or palette[0]['--nav-bg'] }}" aria-label="Top bar colour" {{ '' if colours.bar else 'disabled' }}>
+    <input class="hex" data-hex="bar" value="{{ colours.bar or palette[0]['--nav-bg'] }}" size="8" maxlength="7" spellcheck="false" autocapitalize="off" aria-label="Top bar colour, as a hex code like #4f6f2a" {{ '' if colours.bar else 'disabled' }}></div>
   <div class="themeprev">{% for mode, p in (("Light", palette[0]), ("Dark", palette[1])) %}
     <div class="tp" data-mode="{{ mode|lower }}" style="{{ vars(p) }}" aria-label="{{ mode }} mode, as it would look"><div class="tp-bar">{{ app_name() }}</div>
       <div class="tp-body"><span class="tp-link">A link</span> <span class="tp-btn">Button</span><div class="tp-h">Old Business</div><span class="tp-muted">{{ mode }} mode</span></div></div>{% endfor %}</div>
@@ -352,8 +354,18 @@
   const previews = [...f.querySelectorAll(".tp")], notes = f.querySelector("[data-notes]"), unsaved = f.querySelector(".unsaved");
   const was = { main: main.value, bar: bar.value, own: own.checked, styles: previews.map((p) => p.getAttribute("style")), notes: notes.textContent };
   let timer;
+  // the hex boxes (no name: never sent): typed or pasted, #4f6f2a, 4f6f2a or #4f6, they set their picker; else marked wrong
+  const hexes = [...f.querySelectorAll("[data-hex]")];
+  const sync = () => hexes.forEach((x) => { x.value = f.elements[x.dataset.hex].value; x.disabled = f.elements[x.dataset.hex].disabled; x.removeAttribute("aria-invalid"); });
+  hexes.forEach((x) => x.addEventListener("input", () => {
+    const m = x.value.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!m) { x.setAttribute("aria-invalid", "true"); return; }
+    x.removeAttribute("aria-invalid");
+    f.elements[x.dataset.hex].value = "#" + (m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1]).toLowerCase();
+  }));
+  ["input", "change"].forEach((t) => f.addEventListener(t, (e) => { if (!e.target.dataset.hex) sync(); }));  // a picker or the tick: the boxes follow
   const show = async () => {
-    bar.disabled = !own.checked;
+    bar.disabled = !own.checked; hexes.forEach((x) => { if (x.dataset.hex === "bar") x.disabled = bar.disabled; });
     const q = new URLSearchParams({ main: main.value, bar: own.checked ? bar.value : "" });
     const r = await fetch("/admin/site/colours/preview?" + q, { headers: { Accept: "application/json" } });
     if (!r.ok) return;
@@ -363,10 +375,10 @@
     unsaved.hidden = false;
   };
   f.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(show, 150); });
-  f.querySelectorAll(".swatch").forEach((b) => b.addEventListener("click", () => { main.value = b.dataset.colour; show(); }));
+  f.querySelectorAll(".swatch").forEach((b) => b.addEventListener("click", () => { main.value = b.dataset.colour; sync(); show(); }));
   f.querySelector("[data-cancel]").addEventListener("click", () => {
     main.value = was.main; bar.value = was.bar; own.checked = was.own; bar.disabled = !own.checked;
-    previews.forEach((p, i) => p.setAttribute("style", was.styles[i])); notes.textContent = was.notes; unsaved.hidden = true;
+    previews.forEach((p, i) => p.setAttribute("style", was.styles[i])); notes.textContent = was.notes; unsaved.hidden = true; sync();
   });
 })();
 </script>
