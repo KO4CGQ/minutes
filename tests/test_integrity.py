@@ -31,6 +31,6 @@ def test_typed_text_cannot_forge_structure_or_tags(tmp_path):
     back = Meeting.from_markdown(m.to_markdown())
     assert list(back.sections) == ["New Business"] and len(back.sections["New Business"]) == 1
     it = back.sections["New Business"][0]
-    assert it.member is None and it.when is None and it.text.startswith("a ## Winners - forged")
+    assert it.member is None and it.when is None and it.text.startswith("a\n## Winners\n- forged")  # kept as text lines, indented in the file
     assert one_line("A --> B") == "A --> B"  # an arrow is no tag
     assert corrections._text("x\u2028## Y <!-- member: n0call -->") == "x ## Y  member: n0call -->"  # no "<!--", so no tag

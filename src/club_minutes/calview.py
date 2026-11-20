@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from . import business, chow, regions
 from . import events as store
 from .club import DATA, Club, show_date
+from .richtext import plain, title
 
 KINDS = {"events": "Club events", "chow": "Chow", "planning": "Planning", "community": "Community", "birthday": "Birthdays",
          "holiday": "Holidays"}
@@ -114,7 +115,7 @@ def due_dates(club: Club, lo: dt.date, hi: dt.date) -> list[Entry]:
         if x["status"] == "open" and x.get("due") and lo.isoformat() <= x["due"] <= hi.isoformat():
             d = dt.date.fromisoformat(x["due"])
             who = f", looked after by {club.name(x['owner'])}" if x.get("owner") else ""
-            out.append(Entry(d, d, f"Due: {x['text'][:80]}{'…' if len(x['text']) > 80 else ''}", "planning", id=f"due-{x['id']}",
+            out.append(Entry(d, d, f"Due: {plain(x['text'])[:80]}{'…' if len(plain(x['text'])) > 80 else ''}", "planning", id=f"due-{x['id']}",
                              notes=f"An open business item{who}. It's on the Business page."))
     return out
 
@@ -151,7 +152,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     for i in (archive.meetings[0].items("Upcoming Events") if archive.meetings else []):  # the newest list (a draft counts)
         if i.when and (i.cal or "events") in kinds:
             _s, f, all_day = i.span()
-            o = {"title": i.text, "start": i.when, "end": i.until or (None if all_day else f.strftime("%Y-%m-%dT%H:%M"))}
+            o = {"title": title(i.text), "start": i.when, "end": i.until or (None if all_day else f.strftime("%Y-%m-%dT%H:%M"))}
             x = _entry(o, i.cal or "events", from_minutes=True)
             if x.end >= lo and x.start <= hi:
                 minutes.append(x)

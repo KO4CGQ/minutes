@@ -9,7 +9,7 @@
 {# Each item is a small card; clicking it opens a dialog with everything else (#i<id> in the address opens it too). #}
 {% macro card(x, extra='') %}
 <article class="card bcard{{ ' overdue' if x.overdue }}{{ ' done' if x.status == 'done' }}" id="i{{ x.id }}" data-open="d{{ x.id }}">
-  <button type="button" class="cardopen" aria-haspopup="dialog"><span class="card-text">{% if x.status == 'done' %}{{ emoji('✅', 'check') }} {% endif %}{{ x.text }}</span></button>
+  <button type="button" class="cardopen" aria-haspopup="dialog"><span class="card-text">{% if x.status == 'done' %}{{ emoji('✅', 'check') }} {% endif %}{{ x.text|firstline }}</span></button>
   <div class="card-meta">{{ caller() }}{% if (x.comments or [])|length %}<span class="chip">{{ emoji('💬', 'chat') }} {{ x.comments|length }}</span>{% endif %}</div>
 </article>{% endmacro %}
 {% if tab == 'open' %}
@@ -20,7 +20,7 @@
 
 {% elif tab == 'add' %}
 <form method="post" action="/business/add" class="modern card">
-  <label>Item<textarea name="text" rows="3" required placeholder="e.g. Ask the park about using the pavilion for Field Day"></textarea></label>
+  <label>Item<textarea data-format name="text" rows="3" required placeholder="e.g. Ask the park about using the pavilion for Field Day"></textarea></label>
   <div class="formrow">
     <label>Owner<input name="owner" data-combo="roster-names" placeholder="Type a name…"></label>
     <label>Due<input type="date" name="due"></label>
@@ -93,7 +93,7 @@
 <div class="cards">{% for g in suggestions %}{% set it = by_id.get(g.item) %}<article class="card sugg">
   <span class="badge ai">AI</span>
   <form method="post" action="/business/suggestions/{{ g.id }}/accept" class="modern">
-    {% if g.kind == 'update' and it %}<div class="card-text"><b>For:</b> {{ it.text }}</div><input type="hidden" name="text" value="">
+    {% if g.kind == 'update' and it %}<div class="card-text"><b>For:</b> {{ it.text|firstline }}</div><input type="hidden" name="text" value="">
     {% else %}<label>Item<textarea name="text" rows="2">{{ g.text }}</textarea></label>{% endif %}
     <div class="formrow">
       <label>Owner<input name="owner" data-combo="roster-names" placeholder="Type a name…" value="{{ club.name(g.owner) if g.owner else '' }}"></label>

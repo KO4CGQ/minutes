@@ -15,7 +15,7 @@ import time
 
 from . import ai, auth, business, chow, pictures, prefs
 from .club import DATA, show_date
-from .meeting import Item, Meeting, one_line
+from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
 
 log = logging.getLogger("club_minutes.console")
@@ -345,10 +345,10 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     def members(v) -> list[str]:  # roster ids only, any status; an old callsign becomes the current one
         return [x for x in dict.fromkeys(club.canonical(x) for x in v if isinstance(x, str)) if x in club.members]
 
-    def text(v) -> str:
+    def text(v, lines=False) -> str:
         if not isinstance(v, str):
             raise TypeError
-        return one_line(v)
+        return item_text(v) if lines else one_line(v)
     try:  # everything read first: a save of the wrong shape changes nothing
         leader = d.get("leader")
         if leader is not None and not isinstance(leader, str):
@@ -361,9 +361,9 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
         if not isinstance(visitors, int):
             raise TypeError
         sec = d.get("sections") or {}
-        sections = {s: [Item(text(i["text"]), i.get("member") if isinstance(i.get("member"), str) and i.get("member") else None, *_span(i.get("when"), i.get("until")),
+        sections = {s: [Item(text(i["text"], True), i.get("member") if isinstance(i.get("member"), str) and i.get("member") else None, *_span(i.get("when"), i.get("until")),
                              i.get("cal") if i.get("cal") in ("community", "planning") else None, pictures.ids(i.get("pictures")))
-                        for i in sec.get(s) or [] if text(i.get("text", ""))]
+                        for i in sec.get(s) or [] if text(i.get("text", ""), True)]
                     for s in m.section_order(club.sections())}  # only sections these minutes have: no others from the browser
     except (TypeError, AttributeError, KeyError):
         raise Unreadable from None

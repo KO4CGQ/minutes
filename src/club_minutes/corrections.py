@@ -19,7 +19,7 @@ from markupsafe import Markup, escape
 
 from .club import show_date
 from .console import email_status, reply_address, send_to_members
-from .meeting import Item, Meeting, one_line
+from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
 
 REASON_MAX = 300
@@ -275,7 +275,7 @@ def from_form(archive: Archive, m: Meeting, form) -> Meeting:
         old = m.items(sec)
         items = []
         for j in _posted(form, rf"s{n}-(\d+)"):
-            if not (text := _text(form.get(f"s{n}-{j}"))) or form.get(f"s{n}-{j}-rm"):
+            if not (text := item_text(str(form.get(f"s{n}-{j}") or ""))) or form.get(f"s{n}-{j}-rm"):
                 continue
             if j < len(old):
                 o = old[j]

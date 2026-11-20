@@ -27,3 +27,9 @@ body.pdf .minutes h2 { break-after: avoid; }
 .pics { display: flex; flex-wrap: wrap; gap: .5rem; margin: .4rem 0; }
 .pics img { width: 8rem; height: 6rem; object-fit: cover; border-radius: 4px; }
 body.pdf .pics { gap: .3cm; } body.pdf .pics img { width: 8.2cm; height: auto; max-height: 9cm; object-fit: contain; border-radius: 0; }  /* half the page, two side by side */
+
+/* A link marked "qr" (richtext.py): its code in a row after the text (the address is in the text); ~1.8 cm on paper */
+.qrs { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .3rem 0 .2rem; }
+.qrcode { display: inline-flex; text-decoration: none; }
+svg.qr { flex: none; width: 4.2rem; height: auto; background: #fff; }
+body.pdf svg.qr { width: 1.8cm; }

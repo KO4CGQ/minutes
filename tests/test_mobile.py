@@ -418,6 +418,43 @@ def test_optional_date_and_time_boxes_can_be_cleared(engine):
 
 
 @pytest.mark.parametrize("engine", ENGINES)
+def test_the_formatting_toolbar_on_a_phone(engine):
+    """format.js: a web address typed without https:// works (it failed silently); a list starts on its own line with
+    no placeholder word; Enter continues a list and Enter on an empty item ends it; the buttons are finger-sized."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    js = (Path(__file__).parents[1] / "src/club_minutes/static/format.js").read_text()
+    css = (Path(__file__).parents[1] / "src/club_minutes/static/style.css").read_text()
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_context(viewport={"width": 390, "height": 600}, has_touch=True, is_mobile=engine != "firefox").new_page()
+        page.set_content(f'<style>{css}</style><textarea data-format aria-label="Report"></textarea>')
+        page.add_script_tag(content=js)
+        box = page.get_by_label("Report")
+        box.click()
+        btn = page.get_by_role("button", name="Bulleted list").bounding_box()
+        assert btn["width"] >= 44 and btn["height"] >= 44, btn
+        answers = iter(["example.org", "not an address"])
+        page.on("dialog", lambda d: d.accept(next(answers)) if d.type == "prompt" else d.accept())
+        box.type("See")
+        page.get_by_role("button", name="Web address", exact=True).click()
+        assert box.input_value() == "See https://example.org"
+        page.get_by_role("button", name="Web address", exact=True).click()  # refused, with a message: nothing changes
+        assert box.input_value() == "See https://example.org"
+        page.get_by_role("button", name="Numbered list").click()
+        box.type("mast")
+        box.press("Enter")
+        box.type("coax")
+        box.press("Enter")
+        box.press("Enter")  # an empty item: the list ends
+        box.type("Done")
+        assert box.input_value() == "See https://example.org\n1. mast\n2. coax\nDone"
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
 def test_a_tap_on_a_home_items_box_opens_the_item(engine):
     """Home's business items: the box drawn beside each is part of its link (a tap on the box on an iPhone did
     nothing, and the stuck "hover" left the faint tick showing as if it were done)."""
