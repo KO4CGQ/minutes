@@ -520,7 +520,7 @@ def test_quote_and_code_buttons(engine):
 @pytest.mark.parametrize("engine", ENGINES)
 def test_a_toolbar_button_works_once_in_a_labelled_box(engine):
     """format.js: the Business page's boxes sit in a <label>; with the toolbar inside it too, one tap on B ran twice
-    ("****tower****", found on stage 2026-11-20). The toolbar goes before the label."""
+    ("****tower****", found on stage 2026-11-20). The toolbar goes before the label, and before a console row (not beside its box)."""
     sync_api = pytest.importorskip("playwright.sync_api")
     root = Path(__file__).parents[1] / "src/club_minutes/static"
     with sync_api.sync_playwright() as p:
@@ -529,13 +529,16 @@ def test_a_toolbar_button_works_once_in_a_labelled_box(engine):
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_context(viewport={"width": 390, "height": 600}).new_page()
-        page.set_content(f'<style>{(root / "style.css").read_text()}</style><form><label>Item<textarea data-format name="text"></textarea></label></form>')
+        page.set_content(f'<style>{(root / "style.css").read_text()}</style><form><label>Item<textarea data-format name="text"></textarea></label></form>'
+                         '<div class="row"><textarea data-format aria-label="Bills"></textarea><button>Remove</button></div>')
         page.add_script_tag(content=(root / "format.js").read_text())
         box = page.get_by_label("Item")
         box.click()
         page.get_by_role("button", name="Bold").click()
         box.type("tower")
         assert box.input_value() == "**tower**"
+        page.get_by_label("Bills").click()  # in a row with its buttons (the console): the toolbar goes above the row, full width
+        assert page.evaluate("document.querySelector('.fmtbar').nextElementSibling.className") == "row"
         browser.close()
 
 

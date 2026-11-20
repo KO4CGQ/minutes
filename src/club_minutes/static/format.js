@@ -91,7 +91,10 @@
   };
   document.addEventListener("focusin", (e) => {
     if (!e.target.matches?.("textarea[data-format]")) return;
-    box = e.target; (box.closest("label") || box).before(bar); note.textContent = "";  // never inside a <label>: it would pass each click on (B ran twice)
+    box = e.target; note.textContent = "";
+    // Above the box: never inside a <label> (it would pass each click on: B ran twice), nor beside it in a row with
+    // its buttons (the console's items: the bar took half the width, Jim 2026-11-20)
+    (box.closest("label") || (box.parentElement.matches(".row") ? box.parentElement : box)).before(bar);
     bar.querySelector(".fmt-pic").hidden = !picker();
   });
   bar.addEventListener("mousedown", (e) => e.preventDefault());  // keep the box's selection

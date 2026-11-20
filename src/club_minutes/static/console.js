@@ -198,6 +198,7 @@
   function render() {
     const nav = document.getElementById("steps");
     nav.replaceChildren(...STEPS.map((s, i) => h("button", { class: i === S.step ? "on" : "", onclick: () => go(i) }, `${i + 1}. ${STEP_LABEL[s] || s}`)));
+    document.getElementById("next").hidden = S.step === STEPS.length - 1;  // Review, the last step: nothing after it
     const step = STEPS[S.step];
     panel.replaceChildren(
       step === "Attendance" ? attendance() :
@@ -460,7 +461,7 @@
       cals.replaceChildren(calendarCard(evs, draw));
     };
     draw();
-    return h("div", {}, h("h2", {}, sec), shint(HINTS[sec]), wrap, cals);
+    return h("div", {}, h("h2", {}, sec), shint(HINTS[sec]), cals, wrap);  // what's on the calendar first, to read out (Jim, 2026-11-20)
   }
 
   // Two titles that look like the same event: half the shorter one's words in the other (calview.similar)
@@ -668,12 +669,16 @@
       h("h2", {}, "Review"),
       invites.length ? h("div", { class: "invitebox" }, `Before closing: invite ${invites.map((g) => `${g.name} (${ordinal(visitNo(g))} visit)`).join(", ")} to apply for membership.`) : null,
       missing.length ? h("p", { class: "hint" }, `No report recorded for: ${missing.map(label).join(", ")}.`) : null,
-      h("p", {}, h("button", { class: "btn warn", onclick: async () => {
-        const E = D.email, who = E.only_to ? `TEST MODE: only to ${E.only_to.join(", ")}` : `all ${E.roster} members on the roster`;
-        if (!confirm(`Submit these minutes? They will be published to the archive and emailed (${who}).`)) return;
-        await save(true); document.getElementById("submitform").submit();
-      } }, "Submit minutes")),
-      box);
+      submit(),
+      box,
+      submit());  // at the end too, where Next is on the other steps (Jim, 2026-11-21)
+  }
+  function submit() {
+    return h("p", {}, h("button", { class: "btn warn", onclick: async () => {
+      const E = D.email, who = E.only_to ? `TEST MODE: only to ${E.only_to.join(", ")}` : `all ${E.roster} members on the roster`;
+      if (!confirm(`Submit these minutes? They will be published to the archive and emailed (${who}).`)) return;
+      await save(true); document.getElementById("submitform").submit();
+    } }, "Submit minutes"));
   }
 
   render();
