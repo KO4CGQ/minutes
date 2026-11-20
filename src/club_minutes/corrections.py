@@ -109,7 +109,8 @@ def _parts(m: Meeting, club) -> dict[str, list[str]]:
                                              f"– {g['notes']}" if g.get("notes") else ""]))
     return {"In person": sorted(club.name(x) for x in m.in_person), "Online": sorted(club.name(x) for x in m.remote),
             "Guests": sorted(guest(g) for g in m.guests), "Visitors": [str(m.visitors)] if m.visitors else [],
-            **{sec: [i.shown for i in items] for sec, items in m.sections.items()}}
+            **{sec: [i.shown + (f" [{len(i.pictures)} picture{'s' if len(i.pictures) > 1 else ''}]" if i.pictures else "")
+                     for i in items] for sec, items in m.sections.items()}}
 
 
 def diff(old: Meeting, new: Meeting, club) -> list[tuple[str, list[tuple[str, str | None, str | None]]]]:
@@ -278,7 +279,7 @@ def from_form(archive: Archive, m: Meeting, form) -> Meeting:
                 continue
             if j < len(old):
                 o = old[j]
-                items.append(Item(text, o.member, o.when, o.until, o.cal))
+                items.append(Item(text, o.member, o.when, o.until, o.cal, [p for p in o.pictures if not form.get(f"s{n}-{j}-pic-{p}-rm")]))
             else:
                 items.append(Item(text, club.speaker_of(text, new.in_person + new.remote) if sec == "Community Reports" else None))
         if items or sec in m.sections:

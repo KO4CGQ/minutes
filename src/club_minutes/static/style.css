@@ -737,3 +737,8 @@ form.correct .rm:has(:focus-visible) { outline: 2px solid var(--focus); outline-
 form.correct .rm .on, form.correct .rm:has(:checked) .off { display: none; } form.correct .rm:has(:checked) .on { display: inline; }
 form.correct :is(.item, .guest):has(> .rm :checked) :is(textarea, input:not([type=checkbox])) { text-decoration: line-through; opacity: .5; }
 form.correct .rm { width: fit-content; }
+/* Pictures on reports, business items and comments (pictures.py) */
+.pics { display: flex; flex-wrap: wrap; gap: .5rem; margin: .4rem 0; }
+.pics .pic { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
+.pics img { width: 8rem; height: 6rem; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); display: block; }
+.picadd input[type=file] { max-width: 100%; }

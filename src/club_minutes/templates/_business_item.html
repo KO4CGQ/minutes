@@ -1,5 +1,5 @@
 {# A business item's dialog and its pieces: shared by the Business page and Home. Import with context. #}
-{% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}
+{% from "_icons.html" import icon, emoji %}{% from "_avatar.html" import avatar %}{% from "_pictures.html" import pics, add_form %}
 {# after a member's link in an item: back to this item, on Home or Business (Done tab for a done one) #}
 {% macro from_item(x) %}?from={{ 'home' if request.url.path == '/' else 'business' }}&amp;item={{ x.id }}{% if x.status == 'done' %}&amp;tab=done{% endif %}{% endmacro %}
 {% macro timeline(x, comments=True) %}{# changes (and comments) together, newest first #}
@@ -30,6 +30,8 @@
 {% macro open_item(x, leader, back="") %}{% set mine = leader or x.owner == me.id %}{% set cs = x.comments or [] %}
 {% call shell(x) %}
   <div class="card-meta">{{ chips(x, True) }}</div>
+  {{ pics(x.pictures, label="Picture with this item", remove="/business/" ~ x.id ~ "/pictures" if mine else "", back=back) }}
+  {% if mine %}{{ add_form("/business/" ~ x.id ~ "/pictures", back, 4 - (x.pictures or [])|length) }}{% endif %}
   {% if mine %}<div class="dacts"><button type="button" class="act" data-toggle="e{{ x.id }}">{{ emoji('✏️', 'pencil') }} Edit</button>
     <form method="post" action="/business/{{ x.id }}/done" class="inline" data-confirm="Mark this item done? It shows as done in the next minutes, then drops off.">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<button class="act">{{ emoji('✅', 'check') }} Mark done</button></form></div>
   <div class="panel" id="e{{ x.id }}" hidden>
@@ -47,8 +49,9 @@
   <div class="comments">{% for c in cs %}<div class="comment">
       <span class="chip">{{ avatar(c.by, 'xs') }}<a href="/members/{{ c.by }}{{ from_item(x) }}">{{ club.short(c.by) }}</a></span> <span class="muted small">{{ c.at|tsfull }}</span>
       {% if leader or c.by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
-      <div class="ctext">{{ c.text }}</div></div>{% else %}<p class="muted small">No comments yet.</p>{% endfor %}</div>
-  <form method="post" action="/business/{{ x.id }}/comment" class="modern">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<textarea name="text" rows="3" required placeholder="Write an update, a question, or an offer to help…" aria-label="Comment"></textarea>
+      <div class="ctext">{{ c.text }}</div>{{ pics(c.pictures, label="Picture with " ~ club.short(c.by) ~ "'s comment", remove="/business/" ~ x.id ~ "/comments/" ~ c.id ~ "/pictures" if leader else "", back=back) }}</div>{% else %}<p class="muted small">No comments yet.</p>{% endfor %}</div>
+  <form method="post" action="/business/{{ x.id }}/comment" class="modern" enctype="multipart/form-data">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<textarea name="text" rows="3" required placeholder="Write an update, a question, or an offer to help…" aria-label="Comment"></textarea>
+    <label class="small">Pictures (optional) <input type="file" name="files" accept="image/jpeg,image/png,image/webp" multiple></label>
     <div class="formrow"><button class="btn small">Add comment</button></div></form>
   {{ history(x, False) }}
 {% endcall %}{% endmacro %}

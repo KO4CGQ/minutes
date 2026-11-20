@@ -39,6 +39,7 @@ MEMBER_TAG = re.compile(r"\s*<!--\s*member:\s*([\w-]+)\s*-->")
 WHEN_TAG = re.compile(r"\s*<!--\s*when:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
 UNTIL_TAG = re.compile(r"\s*<!--\s*until:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
 CAL_TAG = re.compile(r"\s*<!--\s*cal:\s*(community|planning)\s*-->")
+PICS_TAG = re.compile(r"\s*<!--\s*pictures:\s*([0-9a-f]{16}(?: [0-9a-f]{16}){0,3})\s*-->")  # pictures.py ids
 EVENT_HOURS = 2  # how long a timed event with no end is taken to last
 
 
@@ -58,6 +59,7 @@ class Item:
     when: str | None = None  # Upcoming Events: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"
     until: str | None = None  # its end: the last day, or the end time (same formats)
     cal: str | None = None  # its calendar: "community" or "planning"; None for Club events
+    pictures: list[str] = field(default_factory=list)  # pictures.py ids, shown under the item
 
     def span(self) -> tuple[dt.datetime, dt.datetime, bool]:
         """(start, end, all_day). All-day: end is the last day (inclusive). Timed: end is the end time; with
@@ -148,7 +150,7 @@ class Meeting:
         for name in self.sections:  # in the order they were made (the club's agenda), so nothing is dropped
             out.append(f"## {name}")
             for it in self.items(name):
-                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "")
+                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "") + (f" <!-- pictures: {' '.join(it.pictures)} -->" if it.pictures else "")
                 out.append(f"- {one_line(it.text)}{tag}")
             out.append("")
         return "\n".join(out)
@@ -182,10 +184,11 @@ class Meeting:
                 text = line[2:]
                 tag = MEMBER_TAG.search(text)
                 member = tag.group(1) if tag else None
-                when, until, cal = WHEN_TAG.search(text), UNTIL_TAG.search(text), CAL_TAG.search(text)
-                text = CAL_TAG.sub("", UNTIL_TAG.sub("", WHEN_TAG.sub("", MEMBER_TAG.sub("", text)))).strip()
+                when, until, cal, pics = WHEN_TAG.search(text), UNTIL_TAG.search(text), CAL_TAG.search(text), PICS_TAG.search(text)
+                text = PICS_TAG.sub("", CAL_TAG.sub("", UNTIL_TAG.sub("", WHEN_TAG.sub("", MEMBER_TAG.sub("", text))))).strip()
                 m.sections[current].append(Item(text, member, when.group(1) if when else None,
-                                                until.group(1) if until and when else None, cal.group(1) if cal and when else None))
+                                                until.group(1) if until and when else None, cal.group(1) if cal and when else None,
+                                                pics.group(1).split() if pics else []))
             elif current and line.strip() and m.sections[current]:
                 # continuation line of the previous bullet
                 m.sections[current][-1].text += " " + line.strip()

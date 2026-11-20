@@ -206,13 +206,28 @@ def edit(s: dict, iid: str, by: str, meeting: str | None = None, **fields) -> di
 MAX_COMMENT = 1000
 
 
-def comment(s: dict, iid: str, by: str, text: str) -> dict:
+def add_pictures(s: dict, iid: str, pics: list[str]) -> None:
+    """Pictures on an item (pictures.py ids): they stay with it week to week."""
+    from .pictures import MAX_EACH
+    x = get(s, iid)
+    have = x.get("pictures") or []
+    if len(have) + len(pics) > MAX_EACH:
+        raise ValueError(f"An item can have {MAX_EACH} pictures at most: remove one first.")
+    x["pictures"] = have + pics
+
+
+def remove_picture(s: dict, iid: str, pid: str) -> None:
+    x = get(s, iid)
+    x["pictures"] = [p for p in x.get("pictures") or [] if p != pid]
+
+
+def comment(s: dict, iid: str, by: str, text: str, pics: list[str] | None = None) -> dict:
     """Any member can add a comment to an open item (an update, a question); it's shown with the item."""
     x = get(s, iid)
     text = text.strip()[:MAX_COMMENT]
     if not text:
         raise ValueError("The comment is empty.")
-    c = {"id": secrets.token_hex(4), "at": int(time.time()), "by": by, "text": text}
+    c = {"id": secrets.token_hex(4), "at": int(time.time()), "by": by, "text": text} | ({"pictures": pics} if pics else {})
     x.setdefault("comments", []).append(c)
     return c
 

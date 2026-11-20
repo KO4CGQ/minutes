@@ -1,0 +1,186 @@
+"""Pictures on reports, business items and comments (pictures.py): checked like profile pictures,
+shrunk, no EXIF (no phone location), members only, at most 4 each; carried through the console and corrections."""
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
+from test_avatars import photo
+
+from club_minutes import business, pictures, web
+from club_minutes import club as clubmod
+from club_minutes.auth import Auth
+from club_minutes.club import Club
+from club_minutes.store import Archive
+
+FIX = Path(__file__).parent / "fixtures"
+PEOPLE = [{"id": "pres", "first": "Jane", "last": "Doe", "role": "President", "email": "jane@example.org"},
+          {"id": "n0call", "first": "John", "last": "Doe", "email": "john@example.org"},
+          {"id": "w0demo", "first": "Sam", "last": "Roe", "email": "sam@example.org"}]
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    for mod in (clubmod, pictures, business):
+        monkeypatch.setattr(mod, "DATA", tmp_path)
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    c = Club(FIX / "test-club.yaml", roster=PEOPLE)
+    a = Auth(c, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web, "archive", Archive(tmp_path / "meetings", c))
+
+    def as_(who):
+        t = TestClient(web.app, client=("203.0.113.6", 5000))
+        if who:
+            t.cookies.set(web.COOKIE, a.new_session(who))
+        return t
+    return c, as_
+
+
+def test_saved_shrunk_without_location(env):
+    pid = pictures.save(photo(4000, 3000))
+    big, small = Image.open(pictures.path(pid)), Image.open(pictures.path(pid, True))
+    assert max(big.size) == 1600 and max(small.size) == 800 and not big.getexif() and not small.getexif()
+    for bad, msg in ((b"", "Pick a picture"), (b"not a picture", "isn't a picture"), (photo(fmt="GIF", exif=False), "JPEG, PNG or WebP")):
+        with pytest.raises(ValueError, match=msg):
+            pictures.save(bad)
+    assert pictures.ids([pid, pid, "nope", "../../etc/passwd", 7]) == [pid]
+
+
+def test_members_only_and_on_items_and_comments(env):
+    _c, as_ = env
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    business.save(s)
+    member, owner = as_("w0demo"), as_("n0call")
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    owner.post(f"/business/{x['id']}/pictures", files=f)
+    pid = business.load()["items"][-1]["pictures"][0]
+    assert as_(None).get(f"/pictures/{pid}.jpg", follow_redirects=False).status_code in (303, 401)  # never public
+    assert member.get(f"/pictures/{pid}-s.jpg").headers["content-type"] == "image/jpeg"
+    assert member.get("/pictures/..%2Fauth.sqlite").status_code == 404
+    owner.post(f"/business/{x['id']}/pictures", files=f * 4)  # 1 + 4 > 4: refused, nothing added
+    assert len(business.load()["items"][-1]["pictures"]) == 1
+    member.post(f"/business/{x['id']}/comment", data={"text": "Here's the bracket"}, files=f)
+    cm = business.load()["items"][-1]["comments"][-1]
+    assert len(cm["pictures"]) == 1 and f'/pictures/{cm["pictures"][0]}-s.jpg' in member.get("/business").text
+    owner.post(f"/business/{x['id']}/pictures/{pid}/remove")
+    assert business.load()["items"][-1]["pictures"] == []
+
+
+def test_who_may_add_and_remove(env):
+    _c, as_ = env
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    business.save(s)
+    pics = lambda: business.load()["items"][-1].get("pictures", [])
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    as_("w0demo").post(f"/business/{x['id']}/pictures", files=f)  # another member's item: refused
+    as_(None).post(f"/business/{x['id']}/pictures", files=f, follow_redirects=False)  # signed out: refused
+    as_("n0call").post(f"/business/{x['id']}/pictures", files=[("files", ("a.txt", b"not a picture", "text/plain"))])  # not an image
+    assert pics() == [] and not list((pictures.DATA / "pictures").glob("*.jpg"))  # refused before anything was stored
+    as_("w0demo").post("/business/nope/comment", data={"text": "Hi"}, files=f)  # no such item: nothing stored either
+    assert not list((pictures.DATA / "pictures").glob("*.jpg"))
+    as_("pres").post(f"/business/{x['id']}/pictures", files=f)  # an officer may
+    pid = pics()[0]
+    as_("w0demo").post(f"/business/{x['id']}/pictures/{pid}/remove")
+    assert pics() == [pid]
+    as_("w0demo").post(f"/business/{x['id']}/comment", data={"text": "Look"}, files=f)
+    c = business.load()["items"][-1]["comments"][-1]
+    url = f"/business/{x['id']}/comments/{c['id']}/pictures/{c['pictures'][0]}/remove"
+    assert as_("w0demo").post(url).status_code == 403 and business.load()["items"][-1]["comments"][-1]["pictures"]  # not even its author
+    as_("pres").post(url)  # a moderator may
+    assert business.load()["items"][-1]["comments"][-1]["pictures"] == []
+    assert as_("w0demo").post("/api/pictures", files={"file": ("a.jpg", photo(), "image/jpeg")}).status_code == 403  # the console: leaders only
+    assert as_("pres").post("/api/pictures", files={"file": ("a.txt", b"nope", "text/plain")}).status_code == 400
+
+
+def test_a_correction_can_remove_a_picture(env):
+    import datetime as dt
+
+    from club_minutes import corrections
+    from club_minutes.meeting import Item, Meeting
+    a, b = pictures.save(photo()), pictures.save(photo())
+    m = Meeting(date=dt.date(2026, 10, 15), status="published", sections={"Community Reports": [Item("New antenna", "n0call", pictures=[a, b])]})
+    n = list(m.section_order(web.archive.club.sections())).index("Community Reports")
+    new = corrections.from_form(web.archive, m, {f"s{n}-0": "New antenna", f"s{n}-0-pic-{a}-rm": "1"})
+    assert new.items("Community Reports")[0].pictures == [b]
+
+
+def test_a_report_keeps_its_pictures_through_the_minutes(env):
+    import datetime as dt
+
+    from club_minutes.meeting import Item, Meeting
+    pid = pictures.save(photo())
+    m = Meeting(date=dt.date(2026, 10, 15), status="published", sections={"Community Reports": [Item("New antenna", "n0call", pictures=[pid])]})
+    back = Meeting.from_markdown(m.to_markdown())
+    assert back.items("Community Reports")[0].pictures == [pid] and back.items("Community Reports")[0].text == "New antenna"
+    _c, as_ = env
+    m.save(web.archive.root)
+    web.archive.reload()
+    assert f'src="/pictures/{pid}-s.jpg"' in as_("n0call").get("/meetings/2026-10-15").text
+    _name, pdf = web.render_pdf(web.archive.by_slug["2026-10-15"])
+    assert pdf.startswith(b"%PDF") and b"/Subtype /Image" in pdf
+
+
+def test_a_typed_pictures_tag_is_only_text():
+    import datetime as dt
+
+    from club_minutes.meeting import Item, Meeting
+    md = Meeting(date=dt.date(2026, 10, 15), sections={"Community Reports": [Item("Hello")]}).to_markdown()
+    it = Meeting.from_markdown(md.replace("- Hello", "- Hello <!-- pictures: ../../x zz -->")).items("Community Reports")[0]
+    assert it.pictures == [] and "pictures:" in it.text
+
+
+def test_a_removed_picture_is_deleted_unless_still_used(env):
+    import datetime as dt
+
+    from club_minutes.meeting import Item, Meeting
+    _c, as_ = env
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    business.save(s)
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    owner = as_("n0call")
+    owner.post(f"/business/{x['id']}/pictures", files=f * 2)
+    a, b = business.load()["items"][-1]["pictures"]
+    Meeting(date=dt.date(2026, 10, 15), status="published",  # b is also in published minutes
+            sections={"Community Reports": [Item("New antenna", "n0call", pictures=[b])]}).save(web.archive.root)
+    for p in (a, b):
+        owner.post(f"/business/{x['id']}/pictures/{p}/remove")
+    assert not pictures.exists(a) and owner.get(f"/pictures/{a}.jpg").status_code == 404 and pictures.exists(b)
+    owner.post(f"/business/{x['id']}/comment", data={"text": "Look"}, files=f)
+    c = business.load()["items"][-1]["comments"][-1]
+    as_("w0demo").post(f"/business/{x['id']}/comments/{c['id']}/delete")  # not theirs: kept, picture too
+    assert pictures.exists(c["pictures"][0])
+    owner.post(f"/business/{x['id']}/comments/{c['id']}/delete")
+    assert not pictures.exists(c["pictures"][0])
+
+
+def test_a_daily_cap_per_member(env, monkeypatch):
+    monkeypatch.setattr(pictures, "_added", {})
+    c, as_ = env
+    assert pictures.per_day(c) == pictures.PER_DAY
+    c.info["pictures_per_day"] = 2
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    business.save(s)
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    owner = as_("n0call")
+    owner.post(f"/business/{x['id']}/pictures", files=f * 2)
+    r = owner.post(f"/business/{x['id']}/comment", data={"text": "One more"}, files=f, follow_redirects=False)
+    assert "pictures+today" in r.headers["location"] or "pictures%20today" in r.headers["location"]
+    assert len(business.load()["items"][-1]["pictures"]) == 2 and not business.load()["items"][-1].get("comments")
+    as_("w0demo").post(f"/business/{x['id']}/comment", data={"text": "Mine"}, files=f)  # another member: their own count
+    assert business.load()["items"][-1]["comments"][-1]["pictures"]
+
+
+def test_the_cap_is_set_on_site_features(env, monkeypatch):
+    c, as_ = env
+    c.admins = {"pres"}
+    monkeypatch.setattr(web, "_site_admin", lambda request: "pres")  # admin mode and step-up: tested in test_security
+    monkeypatch.setattr(c, "save_site_settings", lambda values: c.info.update({k: v for (sec, k), v in values.items() if sec == "club" and k == "pictures_per_day"}))
+    r = as_("pres").post("/admin/site/features", data={"pictures_per_day": "0"}, follow_redirects=False)
+    assert "error=" in r.headers["location"] and pictures.per_day(c) == pictures.PER_DAY
+    as_("pres").post("/admin/site/features", data={"pictures_per_day": "7"}, follow_redirects=False)
+    assert pictures.per_day(c) == 7
