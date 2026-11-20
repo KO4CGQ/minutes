@@ -104,6 +104,8 @@ class Archive:
         m.corrections = [{**x, "by": c(x["by"])} if x.get("by") else x for x in m.corrections]
         if m.reviewed and m.reviewed.get("by"):
             m.reviewed = {**m.reviewed, "by": c(m.reviewed["by"])}
+        if m.shown.get("names"):  # the snapshot's names, under the same ids
+            m.shown["names"] = {c(k): v for k, v in m.shown["names"].items()}
         for items in m.sections.values():
             for it in items:
                 if it.member:

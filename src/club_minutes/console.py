@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 
-from . import ai, auth, business, chow, pictures, prefs
+from . import ai, auth, business, chow, pictures, prefs, snapshot
 from .club import DATA, show_date
 from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
@@ -404,6 +404,7 @@ def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
         m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
     m.sections.update(business_sections(archive, slug))
     m.status = "published"
+    m.shown = snapshot.take(archive.club, m)  # the minutes keep what they show from today (snapshot.py)
     m.save(archive.root)
     _holds.pop(slug, None)  # finished: nobody holds them now
     if by:

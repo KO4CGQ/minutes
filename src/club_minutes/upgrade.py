@@ -41,9 +41,32 @@ def _v3(data: Path) -> None:
     update keep the copy from before, which a failed update puts back, and 1.0 refuses this data instead."""
 
 
+def _v4(data: Path) -> None:
+    """4 (1.2.0): every published or imported meeting, and each earlier version kept beside it (minutes.vN.md), gets the
+    snapshot of what it shows (snapshot.py), made from the club as it stands now: the best there is for minutes made
+    before. A file that has one already is left alone. No PDFs here: each is kept the first time it's downloaded.
+    1.1 ignores the new `shown:` key, but it can't be told to: the version number makes it refuse this data instead."""
+    import yaml
+
+    from . import snapshot
+    from .club import Club
+    from .meeting import Meeting
+    files = sorted((data / "meetings").glob("*/minutes*.md"))
+    club = Club() if files else None
+    for p in files:
+        try:
+            m = Meeting.load(p)
+        except (yaml.YAMLError, ValueError, KeyError, OSError):  # unreadable: the archive skips it too
+            m = None
+        if m and m.status != "draft" and not m.shown:
+            m.shown = snapshot.take(club, m) | {"layout": 1}  # made before 1.2: drawn as 1.1 drew it (snapshot.View.old)
+            m.write(p)
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
     (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
+    (4, "published minutes keep their names, agenda order, heading and links from when they were made (snapshot.py): 1.1 can't tell", _v4),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"

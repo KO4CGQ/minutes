@@ -52,6 +52,16 @@ def show_date(d: dt.date | str, kind: str = "list") -> str:
 
 
 set_dates(None)
+
+
+def unname(text: str, names: set[str]) -> str:
+    """`text` without one of `names` (the longest that fits) at its start, and the dash or comma after it."""
+    for n in sorted(names - {""}, key=len, reverse=True):
+        if re.match(rf"{re.escape(n)}\b", text, re.IGNORECASE):
+            return re.sub(r"^[ \t]*[-–—:,]?[ \t]*", "", text[len(n):]).lstrip("\n")  # not a list's "- " below
+    return text
+
+
 _depth = 0  # nesting of roster_locked calls in this process (changed only while ROSTER_LOCK is held)
 
 
@@ -734,12 +744,7 @@ class Club:
         """A report without the member's name at its start ("Jim F - Built…", "Jim built…"): the minutes show the name
         once, as a pill before the report (Jim, 2026-11-20). The saved text keeps it, so the file and emails still say who."""
         m = self.members.get(self.canonical(mid)) if mid else None
-        if not m:
-            return text
-        for n in sorted({m.name, self.short(mid), m.first} - {""}, key=len, reverse=True):
-            if re.match(rf"{re.escape(n)}\b", text, re.IGNORECASE):
-                return re.sub(r"^[ \t]*[-–—:,]?[ \t]*", "", text[len(n):]).lstrip("\n")  # not a list's "- " below
-        return text
+        return unname(text, {m.name, self.short(mid), m.first}) if m else text
 
     def resolve_surname(self, word: str) -> str | None:
         """Map an attendance-list surname (with spelling drift) to a member id."""

@@ -20,7 +20,7 @@
 <div role="radiogroup" aria-label="Names">
 <label class="check"><input type="radio" name="names" value="short"{{ ' checked' if not full }}> <span>Short names, like "Jane D"</span></label>
 <label class="check"><input type="radio" name="names" value="full"{{ ' checked' if full }}> <span>Full names, like "Jane Doe"</span></label></div>
-<p class="hint">How members' names show in brief across the app: the name leading each community report in the minutes and their PDF (past minutes too), owners in Old and New Business (minutes made from now on), comments, the chow schedule and search.</p>
+<p class="hint">How members' names show in brief across the app: the name leading each community report in the minutes and their PDF (minutes already published keep the names they had), owners in Old and New Business (minutes made from now on), comments, the chow schedule and search.</p>
 </div>
 <div class="card sitesec"><h2>Meetings</h2>
 <div class="fmtgrid">
@@ -39,7 +39,7 @@
 </form>
 {% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, names, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'agenda' %}
-<p class="muted">The meeting's sections, in order, as the leader console and the minutes show them, and two reminders. Each change is in the admin log. Changes here win over club.yaml on the server. Past minutes keep the sections they have.</p>
+<p class="muted">The meeting's sections, in order, as the leader console and the minutes show them, and two reminders. Each change is in the admin log. Changes here win over club.yaml on the server. Published minutes keep the sections and order they had.</p>
 <form method="post" action="/admin/site/agenda" class="profile siteagenda">
 <input type="hidden" name="rows" value="{{ agenda|length }}">
 <div class="card sitesec"><h2>Sections {{ origin('sections') }}</h2>

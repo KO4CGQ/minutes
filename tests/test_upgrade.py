@@ -109,7 +109,7 @@ def test_step_3_marks_1_1_data_so_a_failed_update_puts_the_copy_back(tmp_path):
     (and put back by data-undo), and 1.0 (which knows up to 2) refuses it instead of misreading it."""
     (tmp_path / "data-version").write_text("2\n")
     (tmp_path / "admins.json").write_text('["n0call"]')
-    assert upgrade.run(tmp_path)[-1].startswith("1.1.0's data") and upgrade.version(tmp_path) == 3
+    assert upgrade.run(tmp_path)[0].startswith("1.1.0's data") and upgrade.version(tmp_path) == upgrade.CURRENT
     assert upgrade.version(tmp_path / upgrade.COPY) == 2 and (tmp_path / upgrade.COPY / "admins.json").exists()
     (tmp_path / "admins-suspended.json").write_text('["n0call"]')  # written by 1.1
     assert upgrade.undo(2, tmp_path) and upgrade.version(tmp_path) == 2 and not (tmp_path / "admins-suspended.json").exists()

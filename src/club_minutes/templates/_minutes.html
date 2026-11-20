@@ -1,45 +1,45 @@
-{% from "_pictures.html" import pics %}{# The minutes document itself; shared by the web view and the PDF. #}
-<article class="minutes">
+{% from "_pictures.html" import pics %}{# The minutes document itself; shared by the web view and the PDF. v: what the minutes kept from when they were submitted (snapshot.py). #}
+{% set v = minutes_view(m, club) %}{% if v.colours_css %}<style>{{ v.colours_css }}</style>{% endif %}<article class="minutes">
   <header class="mh">
-    <img src="{{ brand(pdf=pdf) }}" alt="{{ club.label }} logo" class="{{ logo_class() }}">
+    <img src="{{ v.logo(pdf) or brand(pdf=pdf) }}" alt="{{ v.label }} logo" class="{{ 'logo bg-' ~ v.backing if v.backing else logo_class() }}">
     <div>
-      <div class="club">{{ [club.info.callsign, club.info.name]|select|join(' · ') or club.label }}</div>
+      <div class="club">{{ v.heading }}</div>
       <h1>Meeting Minutes</h1>
-      <div class="date">{{ m.date|longdate }}</div>
-      {% if m.leader %}<div class="leader">{% if m.recorder == m.leader %}Led &amp; Recorded by {{ club.name(m.leader) }}{% else %}Led by {{ club.name(m.leader) }}{% if m.recorder %} · Recorded by {{ club.name(m.recorder) }}{% endif %}{% endif %}</div>{% endif %}
+      <div class="date">{{ v.longdate(m.date) }}</div>
+      {% if m.leader %}<div class="leader">{% if m.recorder == m.leader %}Led &amp; Recorded by {{ v.name(m.leader) }}{% else %}Led by {{ v.name(m.leader) }}{% if m.recorder %} · Recorded by {{ v.name(m.recorder) }}{% endif %}{% endif %}</div>{% endif %}
     </div>
   </header>
 
   <h2>Attendance <span class="count">{{ m.attendance }} members{% set ng = m.guests|length + m.visitors %}{% if ng %} + {{ ng }} guest{{ 's' if ng > 1 }}{% endif %}</span></h2>
   <dl class="att">
     <dt>In person ({{ m.in_person|length }})</dt>
-    <dd>{% for mid in m.in_person|by_last_name %}{{ club.name(mid) }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+    <dd>{% for mid in v.by_last(m.in_person) %}{{ v.name(mid) }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
     <dt>Online ({{ m.remote|length }})</dt>
-    <dd>{% for mid in m.remote|by_last_name %}{{ club.name(mid) }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
+    <dd>{% for mid in v.by_last(m.remote) %}{{ v.name(mid) }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</dd>
     {% if m.guests or m.visitors %}<dt>Guests ({{ m.guests|length + m.visitors }})</dt>
     <dd>{% for g in m.guests %}{{ g.name }}{% if g.callsign %} <span class="cs">{{ g.callsign }}</span>{% endif %}{% if g.online %} (online){% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if m.visitors %}{{ ', ' if m.guests }}{{ m.visitors }} visitor{{ 's' if m.visitors > 1 }}{% endif %}</dd>{% endif %}
   </dl>
   {% if m.quorum %}<p class="quorum"><b>{{ m.quorum_text }}</b></p>{% endif %}
 
-  {% for sec in m.section_order(club.sections()) %}{% set items = m.items(sec) %}
-    {% if items or (sec == 'Upcoming Chow' and module('chow')) %}
+  {% for sec in v.sections %}{% set items = m.items(sec) %}
+    {% if items or (sec == 'Upcoming Chow' and v.chow) %}
     <h2>{{ sec }}</h2>
     {% if sec == 'Upcoming Chow' and not items %}<p class="muted">See the attached chow list.</p>{% endif %}
     <ul class="items {{ 'reports' if sec == 'Community Reports' }}">
-      {% for it in items %}<li>{% if it.member %}{% if pdf %}<span class="who">{{ club.shown_name(it.member) }}</span>{% else %}<a class="who" href="/members/{{ it.member }}">{{ club.shown_name(it.member) }}</a>{% endif %} {{ club.unnamed(it.shown, it.member)|rich(pdf) }}{% else %}{{ it.shown|rich(pdf) }}{% endif %}{{ pics(it.pictures, pdf, "Picture with " ~ (club.shown_name(it.member) if it.member else "this item")) }}</li>{% endfor %}
+      {% for it in items %}<li>{% if v.old %}{{ v.shown(it)|linkify }}{% if it.member and not pdf %} <a class="who" href="/members/{{ it.member }}">{{ v.short(it.member) }}</a>{% endif %}{% elif it.member %}{% if pdf %}<span class="who">{{ v.shown_name(it.member) }}</span>{% else %}<a class="who" href="/members/{{ it.member }}">{{ v.shown_name(it.member) }}</a>{% endif %} {{ v.unnamed(v.shown(it), it.member)|rich(pdf) }}{% else %}{{ v.shown(it)|rich(pdf) }}{% endif %}{{ pics(it.pictures, pdf, "Picture with " ~ (v.shown_name(it.member) if it.member else "this item")) }}</li>{% endfor %}
     </ul>
     {% endif %}
   {% endfor %}
 
   <footer class="links">
     <h2>Club Links</h2>
-    <ul>{% for l in club.links if l.minutes != false %}<li>{{ l.label }}: <a href="{{ l.url|abs_url }}">{{ l.url|abs_url }}</a></li>{% endfor %}</ul>
+    <ul>{% for l in v.links %}<li>{{ l.label }}: <a href="{{ l.url|abs_url }}">{{ l.url|abs_url }}</a></li>{% endfor %}</ul>
     {% set cur = current if current is defined and current else m %}{% set c = m.corrected %}
     <p class="ver">Version {{ m.version }}
-      {%- if c %}<br>Corrected {{ c.at|ts }} by {{ club.name(c.by) }}: <em>{{ c.reason }}</em>{% if not c.notice %} · no notice sent{% endif %}
+      {%- if c %}<br>Corrected {{ v.ts(c.at) }} by {{ v.name(c.by) }}: <em>{{ c.reason }}</em>{% if not c.notice %} · no notice sent{% endif %}
         {%- if not pdf and not prev_hidden %} · <a href="/meetings/{{ m.slug }}?v={{ m.version - 1 }}">See version {{ m.version - 1 }}</a>{% endif %}{% endif %}
-      {%- if m.version < cur.version %}{% set nxt = cur.corrections|selectattr('version', 'equalto', m.version + 1)|first %}<br>Replaced by version {{ m.version + 1 }}{% if nxt %} on {{ nxt.at|ts }}{% endif %}{% endif %}
-      {%- if m.status == 'imported' %}<br>Imported from {{ m.source }}{% if cur.reviewed %}, reviewed by {{ club.name(cur.reviewed.by) }} {{ cur.reviewed.at|ts }}{% else %}, not yet reviewed{% endif %}{% endif %}
+      {%- if m.version < cur.version %}{% set nxt = cur.corrections|selectattr('version', 'equalto', m.version + 1)|first %}<br>Replaced by version {{ m.version + 1 }}{% if nxt %} on {{ v.ts(nxt.at) }}{% endif %}{% endif %}
+      {%- if m.status == 'imported' %}<br>Imported from {{ m.source }}{% if cur.reviewed %}, reviewed by {{ v.name(cur.reviewed.by) }} {{ v.ts(cur.reviewed.at) }}{% else %}, not yet reviewed{% endif %}{% endif %}
       {%- if m.note and not pdf %}<br>{{ m.note }}{% endif %}</p>
   </footer>
 </article>

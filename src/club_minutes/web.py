@@ -66,6 +66,7 @@ from . import (
     recovery,
     regions,
     richtext,
+    snapshot,
     theme,
     treasurer,
     updates,
@@ -131,6 +132,7 @@ def by_last_name(ids):
     return sorted(ids, key=lambda i: (c.members[i].last, c.members[i].first) if i in c.members else (i, ""))
 
 
+templates.env.globals["minutes_view"] = snapshot.View  # _minutes.html
 templates.env.filters["linkify"] = linkify
 templates.env.filters["rich"] = lambda text, pdf=False: richtext.render(text, pdf)  # reports, items, comments (richtext.py)
 templates.env.filters["plain"] = richtext.plain
@@ -517,6 +519,14 @@ def brand_theme():
     """The club's colours (Site), as CSS variables over style.css's. Public: the sign-in page uses them too."""
     c = branding.colours()
     return Response(theme.css(c["main"], c["bar"]), media_type="text/css", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/brand/kept/{kid}.png", include_in_schema=False)
+def brand_kept(kid: str):
+    """A logo kept with published minutes (branding.keep_logo). Public, like the logo."""
+    if not re.fullmatch(r"[0-9a-f]{16}", kid) or not (p := branding.kept_logo(kid)).exists():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/brand/{name}", include_in_schema=False)
@@ -2109,6 +2119,7 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
             (archive.root / slug / f"emailed.v{m.version + 1}.json.pending").unlink(missing_ok=True)
         return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
     _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
+    background.add_task(keep_pdf, slug)
     if notice:
         background.add_task(corrections.email_notice, archive, slug, what, lambda: render_pdf(archive.by_slug[slug]),
                             f"{base_url(request)}/meetings/{slug}")
@@ -2138,7 +2149,7 @@ def html_to_pdf(template: str, **ctx) -> bytes:
 def render_pdf(m) -> tuple[str, bytes]:
     """(file name, PDF bytes) for submitted minutes: 15-oct-26-minutes.pdf, or -v2.pdf for a corrected version."""
     try:
-        return pdfmod.render_pdf(archive, m, authn.rp_id)
+        return pdfmod.kept(archive, m, authn.rp_id)
     except OSError as e:  # missing system libraries (pango)
         raise HTTPException(503, f"PDF rendering unavailable on this server: {e}")
 
@@ -3904,6 +3915,15 @@ async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     return {"ok": True}
 
 
+def keep_pdf(slug: str) -> None:
+    """Make and keep the current version's PDF now, so it stays as it was (pdf.kept); first of a submit's or a
+    correction's background tasks, and one that fails (no Pango) mustn't stop the email after it."""
+    try:
+        render_pdf(archive.by_slug[slug])
+    except Exception:
+        logging.getLogger("club_minutes").exception("couldn't keep the PDF of %s", slug)
+
+
 def email_minutes(slug: str, url: str) -> None:
     console.email_minutes(archive, slug, lambda: render_pdf(archive.by_slug[slug]), url)
 
@@ -3923,6 +3943,7 @@ def console_submit(request: Request, background: BackgroundTasks, slug: str, mid
         if isinstance(e, ValueError):  # already in the archive: never rebuilt or emailed again
             raise HTTPException(409, str(e))
         raise
+    background.add_task(keep_pdf, slug)
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)

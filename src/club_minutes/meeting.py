@@ -87,13 +87,16 @@ class Item:
 
     @property
     def shown(self) -> str:
+        return self.show()
+
+    def show(self, day: str | None = None) -> str:
         """The text as readers see it, dates first: "Sat Nov 21, 10:00 AM – 1:00 PM: VE testing",
-        "Sat Jun 27 – Sun Jun 28: Field Day" (dates in the club's format)."""
+        "Sat Jun 27 – Sun Jun 28: Field Day" (dates in the club's format, or in `day`'s strftime format)."""
         from .club import DATES  # club.py imports this module"
         if not self.when:
             return self.text
         start, end, all_day = self.span()
-        day, clock = DATES["day"], "%-I:%M %p"
+        day, clock = day or DATES["day"], "%-I:%M %p"
         if all_day:
             when = start.strftime(day) + (end.strftime(" – " + day) if end.date() != start.date() else "")
         else:
@@ -122,6 +125,9 @@ class Meeting:
     # The versions before it are kept beside minutes.md as minutes.v1.md, minutes.v2.md… (corrections.py).
     corrections: list[dict] = field(default_factory=list)
     reviewed: dict | None = None  # imported minutes someone looked over: {by, at}
+    # What these minutes show that depends on the club's settings and roster, as it was when they were submitted
+    # (snapshot.py); empty for a draft, which follows today's.
+    shown: dict = field(default_factory=dict)
 
     @property
     def slug(self) -> str:
@@ -170,6 +176,7 @@ class Meeting:
             "quorum": self.quorum,
             "corrections": self.corrections,
             "reviewed": self.reviewed,
+            "shown": self.shown,
         }
         fm = {k: v for k, v in fm.items() if v not in (None, [], {}, 0)}
         out = ["---", yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip(), "---", ""]
@@ -202,6 +209,7 @@ class Meeting:
             quorum=fm.get("quorum") or None,
             corrections=fm.get("corrections") or [],
             reviewed=fm.get("reviewed"),
+            shown=fm.get("shown") or {},
         )
         current = None
         for line in body.splitlines():
@@ -227,11 +235,13 @@ class Meeting:
     def save(self, root: Path) -> Path:
         d = root / self.slug
         d.mkdir(parents=True, exist_ok=True)
-        p = d / "minutes.md"
-        tmp = d / "minutes.md.tmp"
+        self.write(d / "minutes.md")
+        return d / "minutes.md"
+
+    def write(self, p: Path) -> None:
+        tmp = p.with_name(p.name + ".tmp")
         tmp.write_text(self.to_markdown())
         tmp.replace(p)  # a crash mid-write leaves the old minutes, never half of them
-        return p
 
     @classmethod
     def load(cls, path: Path) -> Meeting:

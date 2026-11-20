@@ -191,7 +191,7 @@ def main() -> None:
                 archive = Archive(club=club)
                 for note in console.drop_old_pending(archive):
                     print(f"dropped the unsent-email note {note} (over {console.PENDING_DAYS} days old)")
-                if n := corrections.retry_pending(archive, lambda m: pdf.render_pdf(archive, m, club.auth.get("rp_id"))):
+                if n := corrections.retry_pending(archive, lambda m: pdf.kept(archive, m, club.auth.get("rp_id"))):
                     print(f"sent {n} minutes email(s) again")
             except Exception as e:  # the reminders below still go  # noqa: BLE001
                 print(f"couldn't retry the minutes emails: {e}")

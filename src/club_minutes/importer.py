@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pypdf
 
+from . import snapshot
 from .club import MEETINGS, Club
 from .meeting import Item, Meeting
 
@@ -146,6 +147,7 @@ def import_archive(src: Path, club: Club | None = None, dest: Path = MEETINGS) -
         m = parse(text, club)
         m.source = f.name
         _fix_date(m, f.name)
+        m.shown = snapshot.take(club, m)
         m.save(dest)
         if not club.is_redacted(text):  # never serve an original that contains a never-record name
             shutil.copy2(f, dest / m.slug / "original.pdf")
@@ -156,6 +158,7 @@ def import_archive(src: Path, club: Club | None = None, dest: Path = MEETINGS) -
         m.source = f.name
         _fix_date(m, f.name)
         m.note = "Corrected version (from the Corrected minutes email); images not included."
+        m.shown = snapshot.take(club, m)
         m.save(dest)
     return done
 
@@ -182,6 +185,7 @@ def import_correction(archive, day: dt.date, pdf: Path, by: str, reason: str, on
     m.in_person, m.remote, m.guests, m.visitors, m.sections = v1.in_person, v1.remote, v1.guests, v1.visitors, v1.sections
     m.note = None  # it said "Corrected version…", which version 1 no longer is
     m.source = pdf_name(m)  # was the corrected .txt; version 1 is the original PDF again
+    m.shown = snapshot.take(archive.club, m)
     m.save(archive.root)
     archive.reload()
     try:  # correct() copies minutes.md as version 1, so it must hold v1 first; if it refuses or fails, put it back

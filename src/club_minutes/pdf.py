@@ -1,13 +1,15 @@
 """The minutes as a PDF, for the web app and the daily job alike. Importing web would start the whole app, so this has
 its own small template environment: only the filters and globals minutes_doc.html uses."""
 import datetime as dt
+import os
 import re
+import threading
 from pathlib import Path
 
 import jinja2
 from markupsafe import Markup, escape
 
-from . import branding, corrections, pictures, richtext, theme
+from . import branding, corrections, pictures, richtext, snapshot, theme
 from .club import DATES, show_date
 
 HERE = Path(__file__).parent
@@ -30,9 +32,28 @@ def render_pdf(archive, m, rp_id: str | None) -> tuple[str, bytes]:
         abs_url=lambda u: f"https://{rp_id}{u}" if u.startswith("/") and rp_id else u,
         by_last_name=lambda ids: sorted(ids, key=lambda i: (club.members[i].last, club.members[i].first) if i in club.members else (i, "")))
     env.globals.update(
-        club=club, pdf=True, module=club.has, app_name=lambda: branding.name(club),
+        club=club, pdf=True, module=club.has, minutes_view=snapshot.View, app_name=lambda: branding.name(club),
         theme_light=lambda: "; ".join(f"{k}: {v}" for k, v in theme.palette(**branding.colours())[0].items()),
         brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else f"/brand/{branding.FILES[kind]}?v={branding.stamp()}",
         logo_class=lambda: f"logo bg-{branding.backing()}", picture_src=pictures.src)
     html = env.get_template("minutes_doc.html").render(m=m, current=archive.by_slug.get(m.slug, m))
     return corrections.pdf_name(m), HTML(string=html, base_url=str(HERE)).write_pdf()
+
+
+def kept(archive, m, rp_id: str | None) -> tuple[str, bytes]:
+    """render_pdf, kept: the first time a published version's PDF is made it is saved beside its minutes
+    (minutes.v2.pdf for version 2), and that file is what's served from then on, so the PDF stays as it was that night.
+    Each writer uses its own temporary file, so two processes making it at once is fine: one rename wins. Never
+    served by path: callers have already checked who may see this version. Minutes without a snapshot aren't kept."""
+    p = archive.root / m.slug / f"minutes.v{m.version}.pdf"
+    if m.status != "draft" and m.shown:
+        try:
+            return corrections.pdf_name(m), p.read_bytes()
+        except FileNotFoundError:
+            pass
+    name, data = render_pdf(archive, m, rp_id)
+    if m.status != "draft" and m.shown:
+        tmp = p.with_name(f"{p.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        tmp.write_bytes(data)
+        tmp.replace(p)
+    return name, data
