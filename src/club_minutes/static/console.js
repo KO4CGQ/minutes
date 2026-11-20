@@ -53,8 +53,8 @@
       have.map((p, i) => h("span", { class: "pic" },
         h("img", { src: `/pictures/${p}-s.jpg`, alt: `Picture ${i + 1} with the report` }),
         h("button", { class: "btn small ghost", onclick: () => { S.pics[k] = have.filter((x) => x !== p); syncReports(); save(); render(); } }, "Remove"))),
-      have.length < 4 ? h("label", { class: "btn small ghost" }, "+ Picture",
-        h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: (e) => e.target.files[0] && addPicture(k, e.target.files[0]) })) : null);
+      have.length < 4 ? h("label", { class: "btn small ghost picfield" }, "+ Picture",
+        h("input", { type: "file", "data-picker": "report", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: (e) => e.target.files[0] && addPicture(k, e.target.files[0]) })) : null);
   }
 
   // ---------- reports model ----------
@@ -77,7 +77,7 @@
     if (!t) return "";
     const first = k.startsWith("g:") ? k.slice(2).split(" ")[0] : people[k]?.name.split(" ")[0];
     const lead = t.toLowerCase();
-    if (first && !lead.startsWith(first.toLowerCase()) && !lead.startsWith(label(k).toLowerCase())) t = `${label(k)} ${t}`;
+    if (first && !lead.startsWith(first.toLowerCase()) && !lead.startsWith(label(k).toLowerCase())) t = `${label(k)}${/^(?:[-*+]|\d+\.)\s/.test(t) ? "\n" : " "}${t}`;  // a list starts under the name
     return t;
   }
   function syncReports() {
@@ -318,7 +318,7 @@
     if (S.current) {
       const k = S.current;
       const past = k.startsWith("g:") ? [] : (D.history[k] || []);
-      const ta = h("textarea", { rows: 4, placeholder: "What are they working on? (their name is added automatically)", oninput: (e) => { S.reports[k] = e.target.value; grow(e.target); save(); } });
+      const ta = h("textarea", { rows: 4, "data-format": true, "data-pic": "report", placeholder: "What are they working on? (their name is added automatically)", oninput: (e) => { S.reports[k] = e.target.value; grow(e.target); save(); } });
       ta.value = S.reports[k] || "";
       floor = h("div", { class: "floor" },
         h("h3", {}, `${fullName(k)} has the floor`),
@@ -367,7 +367,7 @@
     const wrap = h("div", {});
     const draw = () => wrap.replaceChildren(
       ...arr.map((t, i) => {
-        const ta = h("textarea", { rows: 1, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
+        const ta = h("textarea", { rows: 1, "data-format": true, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
         ta.value = t;
         return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
       }),
@@ -490,7 +490,7 @@
     const fmtDate = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const row = (x) => {
       const done = x.status === "done";
-      const ta = h("textarea", { rows: 1, oninput: (e) => grow(e.target),
+      const ta = h("textarea", { rows: 1, "data-format": true, oninput: (e) => grow(e.target),
         onchange: (e) => send(`/business/${x.id}/edit`, { text: e.target.value }) });
       ta.value = x.text;
       // Type a name (the list filters as you type); the server matches it to a member.
@@ -519,7 +519,7 @@
           h("b", {}, ": "), c.text)));
     };
     const add = () => {
-      const ta = h("textarea", { rows: 1, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });
+      const ta = h("textarea", { rows: 1, "data-format": true, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });
       const go = () => { if (ta.value.trim()) send("/business/add", { text: ta.value }); };
       return h("div", {}, h("div", { class: "row" }, ta, h("button", { class: "btn small", onclick: go }, "+ Add item")),
         h("button", { class: "btn small ghost", onclick: (e) => e.target.replaceWith(motionForm()) }, "+ Motion"));

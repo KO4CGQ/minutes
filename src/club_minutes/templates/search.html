@@ -10,7 +10,7 @@
 {% if k == 'members' %}<li><a href="/members/{{ r.id }}?from=search&amp;q={{ q|urlencode }}">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}{% if r.status != 'Active' %} <span class="muted small">{{ r.status }}</span>{% endif %}</li>
 {% elif k == 'guests' %}<li><a href="/guests">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}
 <span class="muted small">{{ r.visits|length }} visit{{ 's' if r.visits|length != 1 }}, last {{ r.visits[-1][0]|listdate }}</span></li>
-{% elif k == 'items' %}<li><a href="/business{{ '?tab=done' if r.status == 'done' }}#i{{ r.id }}">{{ r.text }}</a>
+{% elif k == 'items' %}<li><a href="/business{{ '?tab=done' if r.status == 'done' }}#i{{ r.id }}">{{ r.text|firstline }}</a>
 <div class="muted small">{{ 'Open' if r.status == 'open' else 'Done' }}{% if r.owner_name %} · {{ r.owner_name }}{% endif %}{% if r.due and r.status == 'open' %} · due {{ r.due }}{% endif %}</div></li>
 {% elif k == 'nights' %}<li><a href="/chow">{{ r[0]|date('day_year') }}</a> {{ r[1] }}</li>
 {% elif k == 'calendar' %}<li><a href="/calendar?start={{ r.date }}">{{ r.date|date('day_year') }}</a> <span class="sec">{{ r.cal }}</span> {{ r.title }}

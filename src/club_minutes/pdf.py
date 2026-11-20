@@ -7,7 +7,7 @@ from pathlib import Path
 import jinja2
 from markupsafe import Markup, escape
 
-from . import branding, corrections, pictures, theme
+from . import branding, corrections, pictures, richtext, theme
 from .club import DATES, show_date
 
 HERE = Path(__file__).parent
@@ -25,7 +25,7 @@ def render_pdf(archive, m, rp_id: str | None) -> tuple[str, bytes]:
     club = archive.club
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(HERE / "templates"), autoescape=True)
     env.filters.update(
-        linkify=linkify, longdate=lambda d: show_date(d, "document"),
+        linkify=linkify, rich=lambda t, pdf=False: richtext.render(t, pdf), plain=richtext.plain, longdate=lambda d: show_date(d, "document"),
         ts=lambda t: dt.datetime.fromtimestamp(t).strftime(DATES["list"]) if t else "never",
         abs_url=lambda u: f"https://{rp_id}{u}" if u.startswith("/") and rp_id else u,
         by_last_name=lambda ids: sorted(ids, key=lambda i: (club.members[i].last, club.members[i].first) if i in club.members else (i, "")))

@@ -64,7 +64,7 @@ def test_doc_links_lead_somewhere():
 # Public repo: examples are fictional (docs/developers.md). Allowed: the copyright holder's callsign, the app's earlier
 # name, callsigns with a four-letter suffix (never issued, like N0CALL), reserved addresses (RFC 2606) and 555-01xx.
 CALLSIGN = re.compile(r"(?<!-)\b[AKNW][A-Z]?[0-9][A-Z]{1,3}\b(?!-)", re.IGNORECASE)  # either case (ids are lowercase); not a piece of a uuid
-OK_CALLS = {"KO4CGQ", "W8LBZ", "W3PD"}  # W3PD: a group in an example backup passphrase
+OK_CALLS = {"KO4CGQ", "W8LBZ", "W3PD", "NL2BR"}  # W3PD: a group in an example backup passphrase; NL2BR: Markdown's nl2br extension
 EMAIL = re.compile(r"[\w.%+-]+@([\w-]+(?:\.[\w-]+)+)")
 OK_DOMAINS = re.compile(r"(?:.*\.)?(example(\.(org|com|net))?|test|invalid|localhost)$|google\.com$", re.IGNORECASE)  # google.com: calendar ids in .ics tests
 PHONE = re.compile(r"(?:\(\d{3}\) ?|\b\d{3}[-.])(\d{3})[-.](\d{4})\b")

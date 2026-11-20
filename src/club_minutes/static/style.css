@@ -176,8 +176,9 @@ nav.tabs a { padding: .4rem .9rem; border-radius: .5rem; text-decoration: none; 
 nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
 
 /* search results, lists of links */
-.results { list-style: none; padding: 0; } .results li { padding: .8rem 1rem; margin: .5rem 0; background: var(--surface);
+.results { list-style: none; padding: 0; } .results > li { padding: .8rem 1rem; margin: .5rem 0; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.results > li p { margin: .25rem 0; } .results > li ul, .results > li ol { margin: .2rem 0; padding-left: 1.3rem; }  /* a report's own paragraphs and lists (a member's page), not cards */
 .pagesearch { display: none; } .pagesearch input { width: 100%; border-radius: 2rem; }  /* phones: the bar's search is behind ☰ */
 .results .sec { font-size: .8rem; color: var(--muted); margin: 0 .4rem; }
 .linkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 1rem; margin: 1rem 0; }
@@ -256,13 +257,13 @@ form.card.room { max-width: none; }
 .card.room .btn { min-height: 44px; display: inline-flex; align-items: center; }  /* an easy tap on a phone */
 .card.overdue { border-left: 4px solid var(--danger); } .card.done { background: var(--surface-2); } .card.done .card-text { color: var(--muted); }
 .card-head { display: flex; gap: .8rem; align-items: flex-start; justify-content: space-between; }
-.card-text { font-size: 1.04rem; white-space: pre-wrap; line-height: 1.45; }
+.card-text { font-size: 1.04rem; white-space: pre-wrap; line-height: 1.45; } .cardopen .card-text { white-space: normal; }
 .card-meta { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-top: .5rem; }
 .card .badge.ai { float: right; }
 .topacts { display: flex; gap: .35rem; flex-shrink: 0; } .topacts form { margin: 0; display: inline; } .topacts button.act { font-size: .82rem; padding: .2rem .65rem; }
 @media (max-width: 560px) { .card-head { flex-direction: column; } }
 .comments { margin-top: .6rem; } .comment { background: var(--surface-2); border-radius: .6rem; padding: .5rem .75rem; margin: .35rem 0; }
-.comment .ctext { white-space: pre-wrap; margin-top: .15rem; }
+.comment .ctext { margin-top: .15rem; }  /* formatted (richtext.py): its paragraphs and lists make the line breaks */
 
 .panel { margin-top: .7rem; padding: .7rem 0 .5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .timeline { list-style: none; padding: 0; margin: 0; max-height: 22rem; overflow-y: auto; }
@@ -742,3 +743,16 @@ form.correct .rm { width: fit-content; }
 .pics .pic { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
 .pics img { width: 8rem; height: 6rem; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); display: block; }
 .picadd input[type=file] { max-width: 100%; }
+
+/* Formatted text in reports, business items and comments (richtext.py) */
+.itemtext { margin: .2rem 0 .6rem; } .itemtext p, .ctext p { margin: .25rem 0; } .itemtext ul, .itemtext ol, .ctext ul, .ctext ol { margin: .2rem 0; padding-left: 1.3rem; }
+/* The formatting toolbar (format.js), above the text box you're typing in; it wraps on a phone. With the script on, the
+   pictures' own file boxes give way to its Picture button. */
+.fmtbar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; margin: 0 0 .2rem; }
+.fmtbar .fmt { min-width: 2.2rem; min-height: 2rem; padding: .1rem .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.fmtbar .fmt-b { font-weight: 700; } .fmtbar .fmt-i { font-style: italic; }
+.fmtbar .fmt:hover, .fmtbar .fmt:focus-visible { background: var(--surface-2); }
+.fmtbar .fmt[hidden] { display: none; } .fmtnote { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.fmtbar .fmt .ico { width: 1.2rem; height: 1.2rem; display: block; margin: auto; }  /* the toolbar's line icons (format.js) */
+@media (pointer: coarse) { .fmtbar { gap: .4rem; } .fmtbar .fmt { min-width: 44px; min-height: 44px; font-size: 1.15rem; } .fmtbar .fmt .ico { width: 1.5rem; height: 1.5rem; } }  /* a finger-sized tap */
+.js-fmt .picfield { display: none; }
