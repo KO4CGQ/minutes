@@ -29,6 +29,8 @@ Your name menu → **Your profile**:
 
 Minutes can be corrected after the meeting. A corrected meeting's footer says which version it is, who corrected it, when and why, with a link to the version before; you get an email listing what changed, the same way you get the minutes. Imported minutes (from before the app) say whether someone has reviewed them.
 
+**Names:** the app shows members by a short name: the first name alone ("Jill"), or, when another member has the same first name, with as much of the last name as tells them apart ("Jill S", or "Jill Do" and "Jill Du" when both start with D). Only current members count for this, so a member who left doesn't change anyone's name; a former member's own name gets the letters it needs, so their old reports still point to them. A club can show full names everywhere instead (an admin's choice, on Admin → Site → Club).
+
 ![A meeting's minutes](screenshots/minutes.png)
 
 ## 🍲 Chow

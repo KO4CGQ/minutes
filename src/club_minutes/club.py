@@ -475,14 +475,23 @@ class Club:
         return self.former_ids.get(mid, mid)
 
     def _auto_short_names(self) -> None:
-        """'Jane D' / 'Jane S' style names when a first name is shared."""
+        """A member's short name is their first name, plus as much of their last name as tells them apart from others
+        with that first name: "Jane D" and "Jane S"; "Jane Do" and "Jane Du" when both start with D. Active members are
+        told apart only from Active members (one who left doesn't make today's Jane "Jane D"); a member who's no longer
+        Active, from everyone, so their name in old minutes still points to them. A short name set in the roster wins."""
         by_first: dict[str, list[Member]] = {}
         for m in self.members.values():
             by_first.setdefault(m.first.lower(), []).append(m)
         for group in by_first.values():
             for m in group:
-                if not m.short and len(group) > 1 and m.last:
-                    m.short = f"{m.first} {m.last[0]}"
+                active = m.status.lower() == "active"
+                others = [o.last.lower() for o in group if o is not m and (o.status.lower() == "active" or not active)]
+                if m.short or not m.last or not others:
+                    continue
+                n = 1
+                while n < len(m.last) and any(o.startswith(m.last[:n].lower()) for o in others):
+                    n += 1
+                m.short = f"{m.first} {m.last[:n]}"
 
     def email_only_to(self) -> set[str] | None:
         """Test mode: if club.yaml has email.only_to (callsigns or addresses), mail goes only to them."""

@@ -462,3 +462,14 @@ def test_a_reports_name_shows_once_as_its_pill():
     assert club.unnamed("Rick Roe 50/50 drawing", "roe") == "50/50 drawing"
     assert club.unnamed("Janet built a mast", "doe") == "Janet built a mast"  # a whole name only
     assert club.unnamed("Jane D", "doe") == "" and club.unnamed("Sam built", None) == "Sam built"
+
+
+def test_short_names_tell_members_apart_and_former_members_dont_rename_anyone():
+    """club._auto_short_names: first name alone; plus the last name's first letter(s) when another member shares it
+    (enough letters to differ); only Active members count for an Active member; a former member is told apart from all."""
+    c = Club(FIX / "test-club.yaml", roster=[
+        {"id": "a", "first": "Jill", "last": "Doe"}, {"id": "b", "first": "Jill", "last": "Dunn"},
+        {"id": "c", "first": "Jill", "last": "Smith"}, {"id": "d", "first": "Sam", "last": "Kim"},
+        {"id": "e", "first": "Sam", "last": "Lee", "status": "Inactive"}, {"id": "f", "first": "Ray", "last": "Roe", "short": "Ray"},
+        {"id": "g", "first": "Ray", "last": "Rowe"}])
+    assert [c.short(i) for i in "abcdefg"] == ["Jill Do", "Jill Du", "Jill S", "Sam", "Sam L", "Ray", "Ray Row"]
