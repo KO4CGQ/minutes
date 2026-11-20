@@ -121,6 +121,8 @@ The app blocks web visitors itself after repeated failed sign-ins (Admin → Sec
 
 **Upload limit:** Security → **Server** → **Largest upload** (1–100 MB, 10 by default), for profile pictures, calendar imports and pictures on reports, business items and comments (each shrunk to 1600 px when saved). A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
 
+**Unused pictures:** a picture uploaded in the console but never saved with a report is deleted by the daily job once it is a day old (along with leftover `.tmp` files in `pictures/`), unless a report, item, comment or draft names it; the job prints how many it deleted.
+
 **Hardening the server** (recommended). First, fail2ban for SSH: `apt install fail2ban python3-systemd`, then create `/etc/fail2ban/jail.d/sshd.local` (list your own LAN and tailnet under `ignoreip`, so you can't lock yourself out):
 
 ```ini
