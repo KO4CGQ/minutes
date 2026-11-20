@@ -242,9 +242,9 @@ def test_security_page_tabs(tmp_path, monkeypatch):
     c = TestClient(web.app)
     c.cookies.set(web.COOKIE, tok)
     assert "Chrome on Windows" in c.get("/admin/security").text
-    for t in ("devices", "failed", "bans", "admin", "server"):
+    for t in ("devices", "failed", "bans", "admin", "uploads"):
         assert c.get(f"/admin/security/{t}").status_code == 200
-    assert "9.9.9.9" in c.get("/admin/security/bans").text and "9.9.9.9" not in c.get("/admin/security/server").text
+    assert "9.9.9.9" in c.get("/admin/security/bans").text and "9.9.9.9" not in c.get("/admin/security/uploads").text
     assert c.get("/admin/security/nope").status_code == 404
     r = c.post("/admin/security/unban", data={"ip": "9.9.9.9"}, follow_redirects=False)
     assert r.headers["location"] == "/admin/security/bans" and not a.banned("9.9.9.9")

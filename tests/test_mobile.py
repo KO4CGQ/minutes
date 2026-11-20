@@ -17,7 +17,7 @@ from club_minutes.web import SITE_TABS
 
 FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
-EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "server")] + ["/help/officers", "/help/server-admin", "/help/jitsi"]
+EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "uploads")] + ["/help/officers", "/help/server-admin", "/help/jitsi"]
 EXTRA += [f"/admin/site/{t[0]}" for t in SITE_TABS if t[0] != "look"]  # every Site tab
 IPV6 = "2001:db8:85a3:1234:5678:8a2e:370:7334"  # real addresses can be this long
 ENGINES = ["chromium", "firefox", "webkit"]  # Chrome/Edge, Firefox, and Safari's engine (close to Safari, not the same)

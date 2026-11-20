@@ -18,6 +18,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Business comments in the minutes:** at the meeting, the leader can put members' comments on a business item into the minutes, and record what's said about it there, as the speaker's comment on the item; both show under the item in the minutes.
 - **Leader console:** each section's hint stands out in a box under its heading, every section has a box ready to type in, and New Business keeps its items and motions in two cards.
 - **Fixed:** on iPhones, an empty Due or Hold date box on the Business page shrank to almost nothing; it keeps its size now, with a line under it saying what it's for.
+- **For server admins:** Security → Server is now **Uploads**, with just the largest upload; what else it showed is on the About page (the version), Signed-in devices and the Email log (whether email is in test mode).
 
 ## 1.1.0 (2026-11-19)
 - **Custom roles:** a club decides what each role may do and who has it (by office, or member by member), and can add roles of its own. Leading meetings (Meeting leader) and fixing published minutes (Minutes editor) are now separate roles, and a Secretary role gets the roster emails.

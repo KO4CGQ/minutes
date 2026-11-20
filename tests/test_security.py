@@ -166,7 +166,7 @@ def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
     a.set_admin(tok, 60)
     r = t.post("/admin/security/limits", data={"upload_mb": "25"})
     assert r.status_code == 200 and "Uploads up to 25 MB." in r.text and limits.upload_mb() == 25
-    assert 'value="25"' in t.get("/admin/security/server").text
+    assert 'value="25"' in t.get("/admin/security/uploads").text
 
 
 def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, monkeypatch):
