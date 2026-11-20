@@ -450,3 +450,15 @@ def test_front_matter_value_with_dashes_round_trips(m):
                             reviewed={"by": "n0call", "at": "2026-01-01"})
     back = Meeting.from_markdown(c.to_markdown())
     assert back.corrections == c.corrections and back.reviewed == c.reviewed
+
+
+def test_a_reports_name_shows_once_as_its_pill():
+    """club.unnamed: the minutes show the member's name as a pill before the report, so the name typed at its start
+    goes (any of full, short or first name, then " - " or ":"); a list under the name keeps its marks."""
+    assert club.unnamed("Jane D - built a dipole", "doe") == "built a dipole"
+    assert club.unnamed("Jane Doe: field day", "doe") == "field day"
+    assert club.unnamed("jane went to Dayton", "doe") == "went to Dayton"
+    assert club.unnamed("Jane D\n- mast\n- coax", "doe") == "- mast\n- coax"
+    assert club.unnamed("Rick Roe 50/50 drawing", "roe") == "50/50 drawing"
+    assert club.unnamed("Janet built a mast", "doe") == "Janet built a mast"  # a whole name only
+    assert club.unnamed("Jane D", "doe") == "" and club.unnamed("Sam built", None) == "Sam built"

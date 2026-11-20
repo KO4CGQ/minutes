@@ -11,6 +11,7 @@
 .minutes .att dt { font-weight: bold; } .minutes .att dd { margin: 0; }
 .minutes ul.items { margin: 0; padding-left: 1.2rem; } .minutes ul.items li { margin: .3rem 0; }
 .minutes ul.items p { margin: .25rem 0; } .minutes ul.items li > p:first-child { margin-top: 0; } .minutes ul.items ul, .minutes ul.items ol { margin: .2rem 0; } .minutes ul.items li li { margin: .1rem 0; }  /* a report's own paragraphs and lists (richtext.py): close together */
+.minutes .who + p { display: inline; }  /* a report's first paragraph runs on from its name (the pill before it) */
 .minutes .who { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }
 .minutes .cs { font-family: monospace; }
 .minutes .links ul { padding-left: 1.2rem; font-size: .9rem; } .minutes .ver { font-size: .8rem; color: var(--muted, #667); }
