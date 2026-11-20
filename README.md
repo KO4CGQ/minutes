@@ -16,7 +16,7 @@ The screenshots are of a made-up club (`demo/`); `uv run python demo/screenshots
 Every change is listed in [CHANGELOG.md](CHANGELOG.md).
 - **Archive:** each meeting is a Markdown file at `data/meetings/YYYY-MM-DD/minutes.md`, next to the original PDF. An optional importer converts a club's old minutes (PDFs, and `*CORRECTED*.txt`) with a plain parser, no AI; it was written for one club's layout, so another club's old minutes may need its patterns adjusted (`importer.py`); imported meetings are marked "imported, unreviewed".
 - **Home:** what's next for you: the next meeting, your chow night and swap requests, your business items, the latest minutes and upcoming events.
-- **Minutes:** the archive (`/minutes`) in the modernized layout with PDF download (View original instead for imported minutes), one search box for the minutes (full text), members, guests, business items, chow nights and calendar events, per-member history, attendance stats with a chart, and guest tracking.
+- **Minutes:** the archive (`/minutes`) in the modernized layout with PDF download (the original instead for imported minutes), one search box for the minutes (full text), members, guests, business items, chow nights and calendar events, per-member history, attendance stats with a chart, and guest tracking.
 - **Leader console:** take the minutes live on meeting night while members follow along, then submit to publish and email them.
 - **Members:** sign-in with passkeys or an emailed link, the roster, member profiles, and admin mode (with a Security page: sign-ins, devices, failed attempts and bans).
 - **Business items:** Old and New Business tracked from week to week, with owners, due dates and reminders. Motions keep their mover, seconder and result (Business → Motions).

@@ -2,8 +2,8 @@
 {% set old = m.version < current.version %}
 {% if old %}<p class="msg warn">This is version {{ m.version }}{% set nxt = current.corrections|selectattr('version', 'equalto', m.version + 1)|first %}{% if nxt %}, replaced on {{ nxt.at|ts }}{% endif %}. <a href="/meetings/{{ m.slug }}">See the current version ›</a></p>{% endif %}
 {% if has_original or m.status != 'draft' %}<div class="actions">
-  {% if has_original %}<a class="btn ghost" href="/meetings/{{ m.slug }}/original.pdf">View original</a>{% endif %}
-  {% if m.status != 'draft' and (not has_original or m.version > 1) %}<a class="btn" href="/meetings/{{ m.slug }}/minutes.pdf{% if old %}?v={{ m.version }}{% endif %}">Download PDF</a>{% endif %}
+  {% if has_original %}<a class="btn ghost" href="/meetings/{{ m.slug }}/original.pdf" download>Download original</a>{% endif %}
+  {% if m.status != 'draft' and (not has_original or m.version > 1) %}<a class="btn" href="/meetings/{{ m.slug }}/minutes.pdf{% if old %}?v={{ m.version }}{% endif %}" download>Download PDF</a>{% endif %}
   {% if can_correct and not old %}<a class="btn ghost" href="/meetings/{{ m.slug }}/correct">Correct these minutes</a>
   {% if m.status == 'imported' and not m.reviewed %}<form method="post" action="/meetings/{{ m.slug }}/reviewed" class="inline" data-confirm="Mark these imported minutes as reviewed? Do this when you've read them against the original and nothing needs fixing.">
     <button class="btn ghost">Mark as reviewed</button></form>{% endif %}{% endif %}

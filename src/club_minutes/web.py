@@ -2309,7 +2309,8 @@ def original(request: Request, slug: str):
     p = archive.root / slug / "original.pdf"
     if not p.exists() or _original_hidden(request, m):
         raise HTTPException(404)
-    return FileResponse(p, media_type="application/pdf")
+    name = f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes-original.pdf".lower()  # beside corrections.pdf_name's 12-mar-26-minutes.pdf
+    return FileResponse(p, media_type="application/pdf", filename=name, content_disposition_type="inline")
 
 
 @app.get("/search", response_class=HTMLResponse)

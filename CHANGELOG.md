@@ -15,7 +15,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Smaller changes:**
     - Business items, comments and notes for the next meeting can run to 5,000 characters (a drafted email fits), with a count under the box; longer text is refused with a message, where before anything over 600 or 1,000 characters was cut off without a word.
     - In the leader console, each section's hint stands out in a box, every section has a box ready to type in, and New Business keeps its items and motions in two cards.
-    - Upcoming Events in the leader console shows a repeating event (a weekly net) once, at its next date, so one-off events aren't pushed down the list.
+    - **Download PDF** on a minutes page saves the file, and the minutes page stays open (before, the PDF replaced it); imported minutes' **Download original** does the same.
 - **Fixed:** on iPhones, an empty Due or Hold date box on the Business page shrank to almost nothing; on a phone, the top bar ran off the screen while a meeting's minutes were still open; keyboard focus was hard to see; a name the club never records could still reach the minutes through a business item, a note or a motion.
 - **Security:** a hardening of uploads and of how the server updates itself. Update soon.
 - **For server admins:**
