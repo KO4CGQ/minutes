@@ -5,6 +5,7 @@ What changed in each version of Club Minutes. Ideas and requests: the repository
 Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
+- **Pictures:** up to four pictures on a community report (added in the leader console), a business item (by its owner or an officer) or a comment. Members see them, never the public; in the minutes' PDF they print half the page wide. Pictures are shrunk and saved without their hidden details, such as where a phone took them; a removed picture is deleted. Admins set how many pictures a member can add in a day (20 unless changed, on Site → Features).
 
 ## 1.1.0 (2026-11-19)
 - **Custom roles:** a club decides what each role may do and who has it (by office, or member by member), and can add roles of its own. Leading meetings (Meeting leader) and fixing published minutes (Minutes editor) are now separate roles, and a Secretary role gets the roster emails.

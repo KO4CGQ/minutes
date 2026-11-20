@@ -7,7 +7,7 @@ from pathlib import Path
 import jinja2
 from markupsafe import Markup, escape
 
-from . import branding, corrections, theme
+from . import branding, corrections, pictures, theme
 from .club import DATES, show_date
 
 HERE = Path(__file__).parent
@@ -33,6 +33,6 @@ def render_pdf(archive, m, rp_id: str | None) -> tuple[str, bytes]:
         club=club, pdf=True, module=club.has, app_name=lambda: branding.name(club),
         theme_light=lambda: "; ".join(f"{k}: {v}" for k, v in theme.palette(**branding.colours())[0].items()),
         brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else f"/brand/{branding.FILES[kind]}?v={branding.stamp()}",
-        logo_class=lambda: f"logo bg-{branding.backing()}")
+        logo_class=lambda: f"logo bg-{branding.backing()}", picture_src=pictures.src)
     html = env.get_template("minutes_doc.html").render(m=m, current=archive.by_slug.get(m.slug, m))
     return corrections.pdf_name(m), HTML(string=html, base_url=str(HERE)).write_pdf()

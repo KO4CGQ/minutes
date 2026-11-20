@@ -24,3 +24,6 @@ body.pdf .minutes h2 { break-after: avoid; }
 .chowlist { border-collapse: collapse; width: 100%; } .chowlist td { padding: .25rem 1.2rem .25rem 0; border-bottom: 1px solid #dde; }
 .chowlist td:nth-child(-n+2) { width: 1%; white-space: nowrap; }  /* day and date tight; the name gets the rest */
 .chowlist tr.none td { color: var(--muted, #667); } .chowlist tr { break-inside: avoid; }
+.pics { display: flex; flex-wrap: wrap; gap: .5rem; margin: .4rem 0; }
+.pics img { width: 8rem; height: 6rem; object-fit: cover; border-radius: 4px; }
+body.pdf .pics { gap: .3cm; } body.pdf .pics img { width: 8.2cm; height: auto; max-height: 9cm; object-fit: contain; border-radius: 0; }  /* half the page, two side by side */

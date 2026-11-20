@@ -15,16 +15,19 @@ import threading
 import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import quote, urlsplit
 
 from fastapi import (
     BackgroundTasks,
     Depends,
     FastAPI,
+    File,
     Form,
     HTTPException,
     Query,
     Request,
+    UploadFile,
 )
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import (
@@ -57,6 +60,7 @@ from . import (
     meet,
     membership,
     offices,
+    pictures,
     prefs,
     profile,
     recovery,
@@ -196,7 +200,8 @@ templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"),
                              # the logo: for a page, its address (new after each upload); for a PDF, the file itself
                              brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
                              f"/brand/{branding.FILES[kind]}?v={branding.stamp()}",
-                             logo_class=lambda: f"logo bg-{branding.backing()}")  # what's behind it (Site)
+                             logo_class=lambda: f"logo bg-{branding.backing()}",  # what's behind it (Site)
+                             picture_src=pictures.src, pictures_per_day=lambda: pictures.per_day(archive.club))
 
 
 _THEME_CODE = (HERE / "theme.py").read_bytes()  # how the colours are made: a change there (an update) is a new file too
@@ -752,16 +757,120 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
                                    _back(str(form.get("back", "")), iid, "/business"))
 
 
+async def _uploads(mid: str, files: list[UploadFile] | None) -> list[str]:
+    """Pictures from a form's file box, checked and stored (pictures.py): their ids. ValueError with a message."""
+    files = [f for f in files or [] if f.filename]
+    if len(files) > pictures.MAX_EACH:
+        raise ValueError(f"{pictures.MAX_EACH} pictures at most.")
+    pictures.take(mid, len(files), archive.club)
+    out = []
+    for f in files:
+        out.append(await run_in_threadpool(pictures.save, await f.read(limits.max_upload() + 1)))
+    return out
+
+
+def _prune_pictures(pids) -> None:
+    """Delete pictures just taken off an item or comment, unless something saved still names them (another item or
+    comment, minutes or an earlier version, a console draft): a removed picture stops opening at once."""
+    if not pids:
+        return
+    used = json.dumps(console.business_state(archive)) + "".join(
+        p.read_text(errors="replace") for p in archive.root.rglob("*") if p.suffix in (".md", ".json") and p.is_file())
+    for p in pids:
+        if p not in used:
+            pictures.delete(p)
+
+
+def _refuse(e: ValueError):
+    def fn(_s):
+        raise e
+    return fn
+
+
 @app.post("/business/{iid}/comment")
-def business_comment(request: Request, iid: str, text: str = Form(...), back: str = Form(""), mid: str = Depends(me)):
-    """Any member can comment on an item: an update, a question, "I can help with this"."""
-    return business_change(request, lambda s: business.comment(s, iid, mid, text), back=_back(back, iid, f"/business#i{iid}"))
+async def business_comment(request: Request, iid: str, text: str = Form(...), back: str = Form(""),
+                           files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
+    """Any member can comment on an item: an update, a question, "I can help with this", with pictures if they like."""
+    back = _back(back, iid, f"/business#i{iid}")
+    try:
+        business.get(console.business_state(archive), iid)  # checked before storing anything
+        if not text.strip():
+            raise ValueError("The comment is empty.")
+        pics = await _uploads(mid, files)
+    except ValueError as e:
+        return business_change(request, _refuse(e), back=back)
+    return business_change(request, lambda s: business.comment(s, iid, mid, text, pics), back=back)
+
+
+@app.post("/business/{iid}/pictures")
+async def business_pictures(request: Request, iid: str, back: str = Form(""),
+                            files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
+    """Pictures on an item: its owner, or whoever may change any item."""
+    back = _back(back, iid, f"/business#i{iid}")
+
+    def add(s, pics):
+        _may_edit_item(request, s, iid)
+        business.add_pictures(s, iid, pics)
+    try:
+        _may_edit_item(request, console.business_state(archive), iid)  # before storing anything; again under the lock
+        pics = await _uploads(mid, files)
+    except ValueError as e:
+        return business_change(request, _refuse(e), back=back)
+    return business_change(request, lambda s: add(s, pics), back=back)
+
+
+@app.post("/business/{iid}/pictures/{pid}/remove")
+def business_picture_remove(request: Request, iid: str, pid: str, back: str = Form(""), mid: str = Depends(me)):
+    def rm(s):
+        _may_edit_item(request, s, iid)
+        business.remove_picture(s, iid, pid)
+    r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
+    _prune_pictures([pid])
+    return r
+
+
+@app.post("/business/{iid}/comments/{cid}/pictures/{pid}/remove")
+def business_comment_picture_remove(request: Request, iid: str, cid: str, pid: str, back: str = Form(""),
+                                    mid: str = Depends(moderator)):
+    def rm(s):
+        c = next((c for c in business.get(s, iid).get("comments", []) if c["id"] == cid), None)
+        if c:
+            c["pictures"] = [p for p in c.get("pictures") or [] if p != pid]
+    r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
+    _prune_pictures([pid])
+    return r
+
+
+@app.get("/pictures/{name}")
+def picture(name: str, mid: str = Depends(me)):
+    """A picture from a report, item or comment: signed-in members only (the minutes aren't public)."""
+    m = re.fullmatch(r"([0-9a-f]{16})(-s)?\.jpg", name)
+    if not m or not pictures.exists(m.group(1)):
+        raise HTTPException(404)
+    return FileResponse(pictures.path(m.group(1), bool(m.group(2))), media_type="image/jpeg",
+                        headers={"Cache-Control": "private, no-cache"})  # checked each time: a removed picture stops showing
+
+
+@app.post("/api/pictures")
+async def picture_upload(request: Request, file: Annotated[UploadFile, File()], mid: str = Depends(leader)):
+    """The console: a picture for a community report, stored now; it shows once the report is saved with it."""
+    try:
+        pictures.take(mid, 1, archive.club)
+        return {"id": await run_in_threadpool(pictures.save, await file.read(limits.max_upload() + 1))}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 
 @app.post("/business/{iid}/comments/{cid}/delete")
 def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), mid: str = Depends(me)):
-    return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, moderates(request)),
-                           back=_back(back, iid, f"/business#i{iid}"))
+    gone = []
+
+    def rm(s):
+        gone.extend(next((c.get("pictures") or [] for c in business.get(s, iid).get("comments", []) if c["id"] == cid), []))
+        business.delete_comment(s, iid, cid, mid, moderates(request))
+    r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
+    _prune_pictures(gone)  # only if the comment really went: still named in the saved state otherwise
+    return r
 
 
 def upcoming_meetings(n: int = 4) -> list[dt.date]:
@@ -2743,7 +2852,8 @@ PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
 FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
-                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"))
+                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"),
+                ("club", "pictures_per_day"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
@@ -2806,7 +2916,8 @@ async def site_dates(request: Request):
 
 
 OFF = {("modules", "jitsi"): False, ("jitsi", "domain"): "", ("jitsi", "app_id"): "", ("modules", "chow"): False, ("club", "public_calendars"): [], ("club", "supports_app"): False, ("calendar", "holidays"): "",
-       ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
+       ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {},
+       ("club", "pictures_per_day"): pictures.PER_DAY}
 
 
 def _keep_changes(club, values: dict) -> dict:
@@ -2866,7 +2977,10 @@ async def site_features(request: Request):
                 raise ValueError("Video meetings: give the Jitsi server's address and the app ID, or untick it.")
             if domain and not meet.DOMAIN.match(domain) or app_id and not meet.APP_ID.match(app_id):
                 raise ValueError("Video meetings: the address is the Jitsi server's name (meet.example.org), the app ID letters, numbers, dots, - and _.")
-            values = _keep_changes(club, {("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
+            per_day = num(form.get("pictures_per_day")) if form.get("pictures_per_day") else pictures.per_day(club)
+            if per_day is None or not 1 <= per_day <= pictures.MAX_PER_DAY:
+                raise ValueError(f"Pictures: a member can add 1 to {pictures.MAX_PER_DAY} a day.")
+            values = _keep_changes(club, {("club", "pictures_per_day"): per_day, ("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
                                           ("modules", "chow"): bool(form.get("chow")), ("club", "supports_app"): bool(form.get("supports_app")),
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,

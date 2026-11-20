@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 
-from . import ai, auth, business, chow, prefs
+from . import ai, auth, business, chow, pictures, prefs
 from .club import DATA, show_date
 from .meeting import Item, Meeting, one_line
 from .store import Archive
@@ -227,7 +227,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
             "in_person": m.in_person, "remote": m.remote, "guests": m.guests, "visitors": m.visitors,
-            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until, "cal": i.cal} for i in m.items(s)]
+            "sections": {s: [{"text": i.text, "member": i.member, "when": i.when, "until": i.until, "cal": i.cal, "pictures": i.pictures} for i in m.items(s)]
                          for s in m.section_order(club.sections())},
         },
         "state": load_state(archive, m.slug),
@@ -362,7 +362,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
             raise TypeError
         sec = d.get("sections") or {}
         sections = {s: [Item(text(i["text"]), i.get("member") if isinstance(i.get("member"), str) and i.get("member") else None, *_span(i.get("when"), i.get("until")),
-                             i.get("cal") if i.get("cal") in ("community", "planning") else None)
+                             i.get("cal") if i.get("cal") in ("community", "planning") else None, pictures.ids(i.get("pictures")))
                         for i in sec.get(s) or [] if text(i.get("text", ""))]
                     for s in m.section_order(club.sections())}  # only sections these minutes have: no others from the browser
     except (TypeError, AttributeError, KeyError):

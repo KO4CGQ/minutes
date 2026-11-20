@@ -32,6 +32,7 @@
    "templates/_avatar.html",
    "templates/_business_item.html",
    "templates/_icons.html",
+   "templates/_pictures.html",
    "templates/base.html",
    "templates/business.html"
   ],
@@ -68,6 +69,7 @@
    "templates/_avatar.html",
    "templates/_business_item.html",
    "templates/_icons.html",
+   "templates/_pictures.html",
    "templates/base.html",
    "templates/home.html"
   ],
@@ -80,6 +82,7 @@
    "templates/_avatar.html",
    "templates/_business_item.html",
    "templates/_icons.html",
+   "templates/_pictures.html",
    "templates/base.html",
    "templates/home.html"
   ],
@@ -92,6 +95,7 @@
    "templates/_avatar.html",
    "templates/_business_item.html",
    "templates/_icons.html",
+   "templates/_pictures.html",
    "templates/base.html",
    "templates/home.html"
   ],
@@ -104,6 +108,7 @@
    "templates/_avatar.html",
    "templates/_icons.html",
    "templates/_minutes.html",
+   "templates/_pictures.html",
    "templates/base.html",
    "templates/meeting.html"
   ],
@@ -116,6 +121,7 @@
    "templates/_avatar.html",
    "templates/_icons.html",
    "templates/_minutes.html",
+   "templates/_pictures.html",
    "templates/base.html",
    "templates/meeting.html"
   ],
@@ -219,15 +225,16 @@
   "static/auth.js": "05924870c23a3f339334b7d78034b20eeb79359e11c5dc482f551eb43361426b",
   "static/combo.js": "b54d38f7384e4ca8bfe8ece7bcdd6340f18bd8b66af03061e763d644b331b865",
   "static/fields.js": "f9992447cb7eb6c045dd07da0d62ba56c05a84dd692aa8f37f31911b3744601c",
-  "static/minutes.css": "a50b373c8c8152d22b4588421a2255bbcd9b618ff7ab5169a28e7f8fbf02b442",
+  "static/minutes.css": "aa2a5ff4c7ad12936836fad13d6b926b7e5bda99b6cabd326bf6721b93ce9026",
   "static/sort.js": "b7a9af370a7fee958f5ab413ae4d0045f4e1828a0fb082646d1e857131668f39",
-  "static/style.css": "b7b8147274ac996a4101d17c949fb497be6eeaa8937a25db77a0575a33e23128",
+  "static/style.css": "3dc2f4a7f80558f30fe7f9eee2569b5dd1e4217f32d4b177eda540e62faf3697",
   "templates/_avatar.html": "6706c6fa69201c1a1d29914618a54e5da08322a68108e51c2e0cbb040d7e4feb",
-  "templates/_business_item.html": "53ec9525fc666d247b46ec35d6f970c54dbc2aaba2e4f092dfe2595651e9acba",
+  "templates/_business_item.html": "fbf4a99419efbe954e95baa7d213a9ea14bd8f9eb6e952bbea10bfa077a98055",
   "templates/_icons.html": "d7909338dc8d708dd8f49e8a15337a8af23a6d24b45f9d0ece1212f682d25c26",
-  "templates/_minutes.html": "abafff8033e4019c50ea2dee75e829edf6e6e023830c1d73a29c11bb3b4e67d9",
+  "templates/_minutes.html": "4776193d92a61a124c87ad0b306ea9b5f750636c4f879dc0640d6d5d5c887177",
   "templates/_multi.html": "7ae8197e904664c3ab5539dcdaea28c8010c992083d4b037949b5f9b71bee0a9",
   "templates/_pager.html": "fbeb9da88534d54fc07b8ce94c3bd17cd9f5af058f0abc232ea837687da3a723",
+  "templates/_pictures.html": "a7265d9b98d7e7b5b6257d90ac8f2badc6687c216670edade0594e9ede2f61e8",
   "templates/admin.html": "0c1a6efb472f31ef6feecddaba69b9b4cfa742570b8692557b82f5545d00e5e1",
   "templates/base.html": "4caf04d84227d1f0c53ed1b44de94ab80c561eddab385cf25d0ab622c0a8549a",
   "templates/business.html": "faff0c7efe5194eb7e43c0ae8f373ce3369db148fb863928459a0428670fe6bc",
@@ -237,8 +244,8 @@
   "templates/meeting.html": "7fc65e6d6b2ab5d715f92111a551687e0038f3b7f1f2905948878f4b30cc2a5f",
   "templates/member_edit.html": "933e7aa753c4ddf7024567ddc0dea64d28f5f30d5616c82a95619edd3fc355f4",
   "templates/offices.html": "55f94a999da798d60e7586e87c6be06f60550892a5d11068822ef28dccf01ffe",
-  "templates/security.html": "55a6489487a2383d130190fc849b62a8a95d213782034f4f6a7a26fb3c95f87b",
-  "templates/site.html": "b99fd6e48d1a79ff605ee4d2d2fa35cb6254c0be1668d2c62486050635018942",
+  "templates/security.html": "d813e12db4081cf4b13b760c07ecc0f10c8a097183bceed6bbcf2e0d9a9e7fea",
+  "templates/site.html": "09c2aefb08f3a638bd00f1e06af43a6083a9ea6d6fca4ecd7b4f82a53557cd00",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "74200ac3bf6cff29497e97c6ebdd98e367b70cb029d2f819c166dec9359dd1e1"
  }

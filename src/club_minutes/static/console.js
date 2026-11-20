@@ -39,6 +39,24 @@
   const fullName = (k) => k.startsWith("g:") ? k.slice(2) + " (guest)" : (people[k]?.name || k);
   const grow = (ta) => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + 2 + "px"; };
 
+  // ---------- pictures with a report: uploaded at once (/api/pictures), kept with the report when it's saved ----------
+  async function addPicture(k, file) {
+    const fd = new FormData(); fd.append("file", file);
+    const r = await fetch("/api/pictures", { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.id) { alert(j.error || "Couldn't add that picture."); return; }
+    (S.pics[k] ||= []).push(j.id); syncReports(); save(); render();
+  }
+  function picRow(k) {
+    const have = S.pics[k] || [];
+    return h("div", { class: "pics" },
+      have.map((p, i) => h("span", { class: "pic" },
+        h("img", { src: `/pictures/${p}-s.jpg`, alt: `Picture ${i + 1} with the report` }),
+        h("button", { class: "btn small ghost", onclick: () => { S.pics[k] = have.filter((x) => x !== p); syncReports(); save(); render(); } }, "Remove"))),
+      have.length < 4 ? h("label", { class: "btn small ghost" }, "+ Picture",
+        h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: (e) => e.target.files[0] && addPicture(k, e.target.files[0]) })) : null);
+  }
+
   // ---------- reports model ----------
   if (!S.reports) { // first load of this draft (or reopened): rebuild from saved minutes
     S.reports = {};
@@ -46,6 +64,10 @@
       if (it.member) { S.reports[it.member] = it.text; if (!S.done.includes(it.member)) S.done.push(it.member); }
       else S.others.push(it.text);
     }
+  }
+  if (!S.pics) { // pictures with each member's report (pictures.py ids), rebuilt from the saved minutes
+    S.pics = {};
+    for (const it of M.sections["Community Reports"] || []) if (it.member && it.pictures?.length) S.pics[it.member] = it.pictures;
   }
   const present = () => [...M.remote, ...M.in_person, ...M.guests.map((g) => "g:" + g.name)];
   const remaining = () => present().filter((k) => !S.done.includes(k) && !S.skipped.includes(k) && k !== S.current);
@@ -60,7 +82,7 @@
   }
   function syncReports() {
     M.sections["Community Reports"] = [
-      ...S.done.map((k) => ({ text: reportText(k), member: k.startsWith("g:") ? null : k })).filter((i) => i.text),
+      ...S.done.map((k) => ({ text: reportText(k), member: k.startsWith("g:") ? null : k, pictures: S.pics[k] || [] })).filter((i) => i.text),
       ...S.others.filter((t) => t.trim()).map((t) => ({ text: t, member: null })),
     ];
   }
@@ -305,6 +327,7 @@
         (D.business.notes || []).filter((n) => n.by === k).map((n) => h("div", { class: "bizcomment" }, h("b", {}, "They sent a note: "), n.text)),
         followUp(k, past),
         ta,
+        picRow(k),
         h("div", { class: "row" },
           h("button", { class: "btn", onclick: () => finish(false) }, "Done"),
           h("button", { class: "btn ghost", onclick: () => finish(true) }, "Nothing new"),

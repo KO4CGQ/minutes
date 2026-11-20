@@ -15,9 +15,10 @@
   <label>Notes <input name="g{{ i }}-notes" value="{{ v('g' ~ i ~ '-notes', g.notes or '') }}" maxlength="200"></label>
   {{ remove('g' ~ i, label) }}
 </fieldset>{% endmacro %}
-{% macro item(n, j, sec, text='', hint='', new=false) %}<div class="item">{% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+{% macro item(n, j, sec, text='', hint='', new=false, pictures=[]) %}<div class="item">{% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
   <textarea name="s{{ n }}-{{ j }}" rows="1" aria-label="{{ sec }}, {{ 'a new item' if new else 'item ' ~ (j + 1) }}"{% if new %} placeholder="The item left out"{% endif %}>{{ v('s' ~ n ~ '-' ~ j, text) }}</textarea>
-  {{ remove('s' ~ n ~ '-' ~ j, sec ~ ', ' ~ ('the new item' if new else 'item ' ~ (j + 1))) }}</div>{% endmacro %}
+  {{ remove('s' ~ n ~ '-' ~ j, sec ~ ', ' ~ ('the new item' if new else 'item ' ~ (j + 1))) }}
+  {% if pictures %}<div class="pics">{% for p in pictures %}<label class="pic check"><img src="{{ picture_src(p) }}" alt="Picture {{ loop.index }}"><input type="checkbox" name="s{{ n }}-{{ j }}-pic-{{ p }}-rm" value="1" {{ on('s' ~ n ~ '-' ~ j ~ '-pic-' ~ p ~ '-rm', false) }}> Remove picture {{ loop.index }}</label>{% endfor %}</div>{% endif %}</div>{% endmacro %}
 <form method="post" action="/meetings/{{ m.slug }}/correct/preview" class="modern correct">
   <input type="hidden" name="version" value="{{ m.version }}">
 
@@ -39,7 +40,7 @@
   {% for sec in sections %}{% set n = loop.index0 %}{% set items = m.items(sec) %}
   <details class="card sec"><summary>{{ sec }} <span class="muted">{{ items|length }}</span></summary>
     {% if sec in ('Old Business', 'Upcoming Chow') %}<p class="hint">The text read that night: changing it here doesn't change the {{ 'tracked business items' if sec == 'Old Business' else 'chow schedule' }}.</p>{% endif %}
-    {% for it in items %}{{ item(n, loop.index0, sec, it.text, club.name(it.member) if it.member else it.shown[:it.shown|length - it.text|length - 2] if it.when else '') }}{% endfor %}
+    {% for it in items %}{{ item(n, loop.index0, sec, it.text, club.name(it.member) if it.member else it.shown[:it.shown|length - it.text|length - 2] if it.when else '', pictures=it.pictures) }}{% endfor %}
     {% set more = extra['s' ~ n] or [] %}{% for j in more %}{{ item(n, j, sec, new=true) }}{% endfor %}
     <template id="t-s{{ n }}">{{ item(n, '__i__', sec, new=true) }}</template>
     <button type="button" class="btn small" data-add="t-s{{ n }}" data-next="{{ (more|max + 1) if more else items|length }}" aria-label="Add an item to {{ sec }}">+ Add an item</button>
