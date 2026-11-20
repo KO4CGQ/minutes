@@ -302,3 +302,67 @@ def test_long_text_is_refused_never_cut():
         with pytest.raises(ValueError, match="5,001 characters long: 5,000 at most"):
             f("x" * 5001)
     assert len(x["comments"]) == 1 and x["text"] == "Field Day" and not s["notes"]
+
+
+def test_comments_in_the_minutes(env, monkeypatch):
+    """Jim, 2026-11-20: at a meeting the leader picks members' written comments for the minutes, and records what's said
+    (a member's comment, or a guest's by name); both show indented under the item, kept in the minutes file."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    _club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    who = {"id": "amy"}
+    monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
+    c, js = TestClient(web.app), {"Accept": "application/json"}
+    s = business.load()
+    x = business.add(s, "Field Day site", "sec", opened="2026-10-29")
+    k = business.comment(s, x["id"], "amy", "The park quoted:\n- $50 a day")
+    business.save(s)
+    said = {"meeting": "2026-11-05", "who": "Bob Bloggs", "text": "The park said yes."}
+    assert c.post(f"/business/{x['id']}/said", data=said).status_code == 403  # a member, not leading
+    who["id"] = "sec"
+    assert c.post(f"/business/{x['id']}/said", data=said).status_code == 403  # no meeting being written that day
+    console.start(a, dt.date(2026, 11, 5), "sec")
+    assert c.post(f"/business/{x['id']}/comments/{k['id']}/minutes", data={"meeting": "2026-11-05"}, headers=js).status_code == 200
+    j = c.post(f"/business/{x['id']}/said", data=said, headers=js).json()
+    c.post(f"/business/{x['id']}/said", data={**said, "who": "Dana Visitor", "text": "I can bring a tent."}, headers=js)
+    assert c.post(f"/business/{x['id']}/said", data={**said, "text": " "}, headers=js).status_code == 409
+    monkeypatch.setattr(a.club, "redact", ["mysteryguest"])  # never_record, as Club keeps it (letters only)
+    assert c.post(f"/business/{x['id']}/said", data={**said, "who": "Mystery Guest"}, headers=js).status_code == 409
+    assert c.post(f"/business/{x['id']}/said", data={**said, "text": "Ask the Mystery Guest"}, headers=js).status_code == 409  # in the words too
+    c.post(f"/business/{x['id']}/said", data={**said, "who": "x @[Amy Appleseed](amy) **Z**", "text": "Hi."}, headers=js)  # a guest's name: plain words
+    assert business.get(business.load(), x["id"])["comments"][-1]["guest"] == "x Amy Appleseedamy Z"
+    got = business.get(business.load(), x["id"])["comments"]
+    assert [(m["by"], m.get("guest"), m.get("meeting"), m.get("recorded_by")) for m in got[1:3]] == [
+        ("bob", None, "2026-11-05", "sec"), ("sec", "Dana Visitor", "2026-11-05", "sec")]
+    text = next(i.text for i in a.by_slug["2026-11-05"].items("Old Business") if i.text.startswith("Field Day site"))  # in the draft, under the item
+    assert text.startswith("Field Day site\n- @[Amy](amy) The park quoted: (comment,") and "\n    - $50 a day" in text
+    assert "\n- @[Bob](bob) The park said yes. (at the meeting)" in text and "\n- Dana Visitor: I can bring a tent. (at the meeting)" in text
+    html = str(web.richtext.render(text, names=a.club))
+    assert html.count('class="who"') == 2 and "<li>$50 a day</li>" in html  # the comment's own list, nested
+    assert next(i for i in j["old"] if i["id"] == x["id"])["new_comments"][1]["name"] == "Bob"
+    # taken out again; a mistyped one deleted by whoever recorded it (not an officer here: the leader)
+    assert c.post(f"/business/{x['id']}/comments/{k['id']}/minutes", data={"meeting": "2026-11-05", "on": 0}, headers=js).status_code == 200
+    bob = got[1]["id"]
+    who["id"] = "amy"
+    assert c.post(f"/business/{x['id']}/comments/{bob}/delete", data={"meeting": "2026-11-05"}, headers=js).status_code == 409
+    mine = business.comment(s2 := business.load(), x["id"], "amy", "mine")["id"]
+    business.save(s2)  # a member deleting their own comment, naming the draft: no leader's view of it comes back
+    assert c.post(f"/business/{x['id']}/comments/{mine}/delete", data={"meeting": "2026-11-05"}, headers=js).json() == {"ok": True}
+    who["id"] = "sec"
+    c.post(f"/business/{x['id']}/comments/{bob}/delete", data={"meeting": "2026-11-05"}, headers=js)
+    text = next(i.text for i in a.by_slug["2026-11-05"].items("Old Business") if i.text.startswith("Field Day site"))
+    assert "The park quoted" not in text and "park said yes" not in text and "Dana Visitor" in text
+
+
+def test_a_comments_quote_and_code_keep_their_formatting_in_the_minutes(env):
+    """Jim, 2026-11-21: a comment's lines sit indented under its bullet; its quote and code block still show as such."""
+    from club_minutes import richtext
+    club, _a = env
+    x = {"text": "Field Day at the park", "owner": None, "due": None, "status": "open", "closed": None, "comments": [
+        {"by": "sec", "at": 0, "minutes": "2026-11-12", "text": "Draft:\r\n\r\n> Hi Jane,\r\n> \r\n> It was **good**.\r\n\r\nThanks"},
+        {"by": "sec", "at": 0, "minutes": "2026-11-12", "text": "> Quoted first\n```\na < b\n```"}]}
+    out = richtext.render(business.line(club, x, "2026-11-12"))
+    assert out.count('<blockquote class="rquote">') == 2 and "&gt;" not in out.replace("a &lt; b", "")
+    assert "<strong>good</strong>" in out and '<pre class="rcode"><code>a &lt; b</code></pre>' in out

@@ -243,10 +243,33 @@ def comment(s: dict, iid: str, by: str, text: str, pics: list[str] | None = None
     return c
 
 
+def said(s: dict, iid: str, recorder: str, meeting: str, text: str, speaker: str | None = None, guest: str | None = None) -> dict:
+    """Something said about the item at a meeting, typed by whoever takes the minutes (Jim, 2026-11-20): a comment by the
+    speaker (a member, or a guest by name: then it's the recorder's, with the guest's name), and in that meeting's minutes."""
+    text = _fit(text.replace("\r\n", "\n").strip(), "comment")
+    if not text:
+        raise ValueError("Type what was said.")
+    c = {"id": secrets.token_hex(4), "at": int(time.time()), "by": speaker or recorder, "text": text,
+         "meeting": _date(meeting), "recorded_by": recorder} | ({"guest": guest} if guest and not speaker else {})
+    get(s, iid).setdefault("comments", []).append(c)
+    return c
+
+
+def pick_comment(s: dict, iid: str, cid: str, meeting: str, on: bool) -> None:
+    """A member's written comment into that meeting's minutes (the leader picks), or out again."""
+    c = next((c for c in get(s, iid).get("comments", []) if c["id"] == cid), None)
+    if not c or c.get("meeting"):
+        raise ValueError("No such comment.")  # one said at the meeting is in its minutes already
+    if on:
+        c["minutes"] = _date(meeting)
+    elif c.get("minutes") == _date(meeting):
+        del c["minutes"]
+
+
 def delete_comment(s: dict, iid: str, cid: str, by: str, leader: bool) -> None:
     x = get(s, iid)
     c = next((c for c in x.get("comments", []) if c["id"] == cid), None)
-    if not c or not (leader or c["by"] == by):
+    if not c or not (leader or c["by"] == by or c.get("recorded_by") == by):  # the recorder can take back a mistyped one
         raise ValueError("You can only delete your own comments.")
     x["comments"].remove(c)
 
@@ -388,6 +411,15 @@ def line(club: Club, x: dict, date: str) -> str:
     out = plain(x["text"]) + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
     if x["closed"] and x["closed"] <= date:
         out += " Done."
+    for c in x.get("comments", []):  # picked for these minutes, or said at this meeting: indented under the item
+        if date in (c.get("minutes"), c.get("meeting")):
+            who = f"{c['guest']}:" if c.get("guest") else f"@[{club.shown_name(c['by'])}]({c['by']})"
+            when = "at the meeting" if c.get("meeting") else f"comment, {show_date(dt.date.fromtimestamp(c['at']).isoformat(), 'short')}"
+            text = c["text"].replace("\r\n", "\n")  # a form posts \r\n
+            first, _, rest = text.partition("\n")  # the note ends its first line, not a list it may hold
+            if re.match(r"\s*(>|```|[-*+]\s|\d+\.\s)", first):  # starts with a quote, code or a list: all of it under the name
+                first, rest = "", text
+            out += f"\n- {who} {first}{' ' if first else ''}({when})" + "".join(f"\n    {r}" for r in rest.split("\n") if rest)
     return out
 
 
@@ -399,7 +431,7 @@ def sections(s: dict, club: Club, date: str, since: str | None = None) -> dict[s
 def view(club: Club, x: dict, today: str, since: str | None = None) -> dict:
     """An item for the console and the Business page. `since`: the previous meeting, for "new comments"."""
     cutoff = dt.datetime.fromisoformat(since).timestamp() if since else 0  # from that meeting's day on
-    return {**x, "new_comments": [{**c, "name": club.shown_name(c["by"])} for c in x.get("comments", []) if c["at"] >= cutoff],
+    return {**x, "new_comments": [{**c, "name": c.get("guest") or club.shown_name(c["by"])} for c in x.get("comments", []) if c["at"] >= cutoff],
             "owner_name": club.name(x["owner"]) if x["owner"] else None,
             "overdue": bool(x["status"] == "open" and x["due"] and x["due"] < today), "quiet": quiet(x, today)}
 

@@ -535,10 +535,32 @@
         h("div", { class: "row meta" }, owner, due,
           x.overdue ? h("span", { class: "badge warn" }, `overdue since ${fmtDate(x.due)}`) : null,
           !isNew ? h("span", { class: "hint" }, `first mentioned ${fmtDate(x.opened)}`) : null),
-        // comments since the last meeting, each with when it was written ("Tue 7:41 PM")
-        (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, c.name), " ",
-          h("span", { class: "hint" }, new Date(c.at * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })),
-          h("b", {}, ": "), c.text)));
+        // comments since the last meeting, each with when it was written ("Tue 7:41 PM"); the leader picks which go in
+        // the minutes. Said at this meeting: in them already (✖ takes back a mistyped one).
+        (x.new_comments || []).map((c) => {
+          const said = c.meeting === M.slug, picked = said || c.minutes === M.slug;
+          return h("div", { class: "bizcomment" + (picked ? " inmin" : "") }, h("b", {}, c.name), " ",
+            h("span", { class: "hint" }, said ? "at the meeting" : new Date(c.at * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })),
+            h("b", {}, ": "), c.text, " ",
+            said ? h("button", { class: "btn small ghost", title: "Delete (recorded by mistake)",
+              onclick: () => { if (confirm("Delete what was recorded?")) send(`/business/${x.id}/comments/${c.id}/delete`, {}); } }, emo("✖️", "x"))
+              : h("button", { class: "btn small" + (picked ? "" : " ghost"), title: picked ? "Take it out of the minutes" : "Put it in tonight's minutes, under this item",
+                onclick: () => send(`/business/${x.id}/comments/${c.id}/minutes`, { on: picked ? 0 : 1 }) }, picked ? [emo("✅", "check"), " In the minutes"] : "Add to the minutes"));
+        }),
+        saidForm(x));
+    };
+    // What someone says about an item at the meeting: their comment on it, and in the minutes under it
+    const saidForm = (x) => {
+      const who = makeCombo(h("input", { placeholder: "Who said it", "aria-label": "Who said it", class: "ownerbox" }),
+        [...D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), ...M.guests.map((g) => ({ value: g.name, note: "guest" }))], { empty: "(or type a name)" });
+      const ta = h("textarea", { rows: 1, "data-format": true, maxlength: 5000, placeholder: "What they said", "aria-label": "What they said", oninput: (e) => grow(e.target) });
+      const go = () => {
+        const name = who.querySelector("input").value.trim();
+        if (!name || !ta.value.trim()) { alert("Pick who said it and type what they said."); return; }
+        send(`/business/${x.id}/said`, { who: name, text: ta.value });
+      };
+      return h("details", { class: "said" }, h("summary", {}, "Record what's said"), h("div", { class: "row" }, who), ta,
+        h("button", { class: "btn small", onclick: go }, "Add to the item and the minutes"));
     };
     const add = () => {
       const ta = h("textarea", { rows: 1, "data-format": true, placeholder: "New item…", "aria-label": "New item", oninput: (e) => grow(e.target) });

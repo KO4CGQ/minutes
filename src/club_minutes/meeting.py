@@ -52,7 +52,7 @@ def one_line(text: str) -> str:
     return text.strip()
 
 
-ITEM_MAX = 2000  # characters in one item: formatting long, odd text takes time on every view (richtext.py)
+ITEM_MAX = 10000  # characters in one item: a business item (5,000) with comments under it; richtext.py keeps odd text quick
 
 
 def item_text(text: str) -> str:

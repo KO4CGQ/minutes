@@ -23,10 +23,12 @@ MENTION = re.compile(r"(?<!\w)@\[([^\[\]\n]{1,60})\]\(([a-z0-9-]{1,40})\)")
 SAFE_HREF = re.compile(r"^(https?://|mailto:)", re.IGNORECASE)
 # Code is shown exactly as typed: no links, mentions, marks or lists inside. A block is ``` on a line of its own (a word
 # after it is ignored, as on GitHub) to the next ``` line; one not closed stays text.
-CODE_BLOCK = re.compile(r"^```[^`\n]*\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
+# Indented too: a comment's own block under its bullet in the minutes (business.line), the indent taken off its lines.
+CODE_BLOCK = re.compile(r"^([ \t]*)```[^`\n]*\n(.*?)^\1```[ \t]*$", re.MULTILINE | re.DOTALL)
 CODE = re.compile(r"`([^`\n]+)`")
-QUOTE = re.compile(r"^[ \t]{0,3}(?:&gt;[ \t]?)+", re.MULTILINE)  # "> " after escaping: the one < or > Markdown may read
-QUOTE_MARK = re.compile(r"^(?:[ \t]{0,3}>[ \t]?)*")
+QUOTE = re.compile(r"^[ \t]*(?:&gt;[ \t]?)+", re.MULTILINE)  # "> " after escaping (the one < or > Markdown may read); indented: in a list item
+NOT_LINK = re.compile(r"\[(?![^\[\]\n]*\]\([^\n]*\))")  # a "[" no link starts at: "[text](…)" on one line, no other bracket
+QUOTE_MARK = re.compile(r"^(?:[ \t]*>[ \t]?)*")
 
 
 def qr_svg(url: str) -> Markup:
@@ -37,9 +39,10 @@ def qr_svg(url: str) -> Markup:
 
 class _Only(Extension):
     """Only what the toolbar makes (paragraphs, lists, bold, italic, links, quotes; code is done before Markdown): an
-    indented old line or one starting with "#" stays text, never a code block or a heading."""
+    indented old line or one starting with "#" stays text, never a code block or a heading (indented under a list item:
+    a list inside it)."""
     def extendMarkdown(self, md):
-        for name in ("code", "hashheader", "setextheader", "hr", "indent", "fenced_code_block", "html_block", "reference"):
+        for name in ("code", "hashheader", "setextheader", "hr", "fenced_code_block", "html_block", "reference"):
             if name in md.parser.blockprocessors:
                 md.parser.blockprocessors.deregister(name)
         for name in ("backtick", "image_link", "image_reference", "reference", "short_reference", "autolink", "automail", "html", "entity"):
@@ -55,14 +58,14 @@ def _lists_apart(text: str) -> str:
     """A blank line where typed text meets a list (Markdown starts a list only after one; members type it right under
     a line), so "Built a mast\n- one\n- two\nDone" is a line, a list and a line. A list item with nothing in it
     (Enter after the last one, "4.") is dropped: it would show as a stray "4." under the list. A line without "> " right
-    after a quote is the text after it, not more of the quote."""
+    after a quote is the text after it, not more of the quote. The same for a list inside a list item (indented: a comment's own list, business.line)."""
     out = []
     body = lambda line: line[QUOTE_MARK.match(line).end():]  # inside a quote: the line after its "> " marks
     for line in text.split("\n"):
         if EMPTY_ITEM.match(body(line)):
             continue
-        if out and body(out[-1]).strip() and bool(LIST_LINE.match(body(line))) != bool(LIST_LINE.match(body(out[-1]))):
-            out.append(QUOTE_MARK.match(line).group().rstrip())
+        if out and body(out[-1]).strip() and bool(LIST_LINE.match(body(line).lstrip())) != bool(LIST_LINE.match(body(out[-1]).lstrip())):
+            out.append(QUOTE_MARK.match(line).group().rstrip() if QUOTE_MARK.match(out[-1]).group() else "")  # inside a quote: an empty quote line
         elif out and QUOTE_MARK.match(out[-1]).group() and not QUOTE_MARK.match(line).group() and line.strip():
             out.append("")  # a line without "> " ends the quote (Markdown would carry it on inside)
         out.append(line)
@@ -80,11 +83,11 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
     report's; an id that is no member's shows the typed name as plain text."""
     pills, code = [], []
 
-    def keep(html_: str, block: bool) -> str:  # code, kept out of everything below (a private-use token), put back at the end
+    def keep(html_: str, block: bool, indent: str = "") -> str:  # code, kept out of everything below (a private-use token), put back at the end
         code.append(html_)
-        return f"\n\n\ue002{len(code) - 1}\ue003\n\n" if block else f"\ue002{len(code) - 1}\ue003"
-    text = re.sub("[\ue000-\ue003]", "", (text or "").replace("\r\n", "\n"))  # a form posts \r\n
-    text = CODE_BLOCK.sub(lambda m: keep(f'<pre class="rcode"><code>{html.escape(m.group(1).rstrip(chr(10)))}</code></pre>', True), text)
+        return f"\n\n{indent}\ue002{len(code) - 1}\ue003\n\n" if block else f"\ue002{len(code) - 1}\ue003"
+    text = re.sub("[\ue000-\ue004]", "", (text or "").replace("\r\n", "\n"))  # a form posts \r\n
+    text = CODE_BLOCK.sub(lambda m: keep(f'<pre class="rcode"><code>{html.escape(re.sub(f"^{m.group(1)}", "", m.group(2), flags=re.MULTILINE).rstrip(chr(10)))}</code></pre>', True, m.group(1)), text)
     text = CODE.sub(lambda m: keep(f'<code class="rcode">{html.escape(m.group(1))}</code>', False), text)
 
     def pill(m: re.Match) -> str:  # a private-use token Markdown leaves alone, swapped for the pill after it
@@ -95,7 +98,11 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
     text = MENTION.sub(pill, text)
     text = URL.sub(lambda m: f"[{m.group(1)}]({m.group(1)}{' \"qr\"' if m.group(2) else ''})", text or "")  # "[QR]" after one: a code
     text = QUOTE.sub(lambda m: m.group().replace("&gt;", ">"), html.escape(_lists_apart(text), quote=False))
-    out = markdown.markdown(text, extensions=["sane_lists", "nl2br", _Only()], output_format="html")
+    text = NOT_LINK.sub("\ue004", text)  # put back after: Markdown's link pattern rescans the text for each "[" (5,000 took 1.3 s)
+    try:
+        out = markdown.markdown(text, extensions=["sane_lists", "nl2br", _Only()], output_format="html")
+    except RecursionError:  # "- - - - …" nests a list per mark: hundreds of them, too deep for Markdown. Plain text, never a broken page
+        out = text.replace("\ue004", "[").replace("\n", "<br>\n")
 
     codes = []  # the item's QR codes, in a row after its text: inline, they break the sentence apart
 
@@ -114,7 +121,7 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
         a = h if pdf else f'<a href="{h}" rel="noopener nofollow" target="_blank">{h}</a>'  # always the address itself
         return a if html.unescape(label) == href else f"{label} ({a})"
     out = LINK.sub(link, out)
-    out = re.sub("\ue000(\\d+)\ue001", lambda m: pills[int(m.group(1))], out)
+    out = re.sub("\ue000(\\d+)\ue001", lambda m: pills[int(m.group(1))], out).replace("\ue004", "[")
     out = re.sub("<p>\ue002(\\d+)\ue003</p>", lambda m: code[int(m.group(1))], out)  # a block: its own paragraph
     out = re.sub("\ue002(\\d+)\ue003", lambda m: code[int(m.group(1))], out).replace("<blockquote>", '<blockquote class="rquote">')
     if out.startswith("<p>") and out.endswith("</p>") and out.count("<p>") == 1:

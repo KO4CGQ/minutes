@@ -121,3 +121,15 @@ def test_quotes_and_code():
     assert '<pre class="rcode"><code>a\nb</code></pre>' in str(richtext.render("x\r\n```\r\na\r\nb\r\n```\r\ny"))  # as a form posts it
     assert "<pre" not in str(richtext.render("```\nnever closed")) and str(richtext.render("5 > 3")) == "5 &gt; 3"
     assert richtext.plain("> Dear `x`\n```\ncode\n```").strip() == "Dear x\ncode"
+
+
+def test_odd_text_stays_quick_and_never_breaks_the_page():
+    """5,000 characters of what members could type (business text's limit): "[" made Markdown rescan the text for each
+    one (1.3 s), and "- - - …" nested a list per mark until Python's recursion limit (an error page)."""
+    import time
+    for t in ("[" * 5000, "[a](" * 1250, "@[" * 2500, "- " * 2500, "1. " * 1666, "> " * 2500):
+        start = time.monotonic()
+        out = str(richtext.render(t))
+        assert time.monotonic() - start < 0.5, t[:8]
+        assert "<script" not in out
+    assert "[x] [1]" in str(richtext.render("[x] [1]")) and '<a href="https://example.org/f"' in str(richtext.render("[f](https://example.org/f)"))

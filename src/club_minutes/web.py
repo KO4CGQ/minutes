@@ -98,7 +98,7 @@ from .roster import COLUMNS, SHAREABLE, SheetError
 
 # Not birthday and share (the member's own choice), nor the role ticks (Admin → Site → Roles, roles.json)
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share", "minutes_editor", "calendar_editor"))
-from .meeting import SECTIONS
+from .meeting import ITEM_MAX, SECTIONS
 from .pdf import linkify
 from .store import SEARCH_WORDS, Archive, spellings
 
@@ -875,14 +875,74 @@ async def picture_upload(request: Request, file: Annotated[UploadFile, File()], 
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
+def _draft_meeting(meeting: str) -> str:
+    m = archive.by_slug.get(meeting)
+    if not m or m.status != "draft":
+        raise HTTPException(403, "Only while that meeting's minutes are being written.")
+    return meeting
+
+
+@app.post("/business/{iid}/said")
+def business_said(request: Request, iid: str, meeting: str = Form(...), who: str = Form(""), text: str = Form(""),
+                  mid: str = Depends(leader)):
+    """At the meeting (the console): what someone said about the item, as their comment and in the minutes. `who` is a
+    member (as the owner box takes them) or else a guest's name."""
+    meeting = _draft_meeting(meeting)
+
+    def run(s):
+        name = " ".join(who.split())[:60]
+        try:
+            speaker, guest = owner_id(name), None
+        except ValueError:  # no member of that name: a guest's (two members of it: say so)
+            low = name.lower()
+            if any(low in (m.name.lower(), (m.callsign or "").lower(), archive.club.short(m.id).lower()) for m in archive.club.members.values()):
+                raise
+            speaker, guest = None, re.sub(r"[^\w .'’-]|_", "", name).strip()  # plain words only: no marks or mentions in the minutes
+        if not speaker and not guest:
+            raise ValueError("Who said it?")
+        if guest and archive.club.is_redacted(guest):  # a name the club never records (as guests at the meeting)
+            raise ValueError("That name isn't recorded in the minutes: leave it out.")
+        _unrecorded(text)
+        business.said(s, iid, mid, meeting, text, speaker, guest)
+        _fits_minutes(s, iid, meeting)
+    return business_change(request, run, meeting)
+
+
+def _unrecorded(text: str) -> None:
+    if archive.club.is_redacted(text):  # never_record: the minutes are emailed to every member
+        raise ValueError("That names someone the club never records in the minutes: leave the name out.")
+
+
+def _fits_minutes(s: dict, iid: str, meeting: str) -> None:
+    """The item with its comments must fit one item of the minutes (meeting.ITEM_MAX), never cut there."""
+    if len(business.line(archive.club, business.get(s, iid), meeting)) > ITEM_MAX:
+        raise ValueError(f"The item and its comments would be longer than the minutes take ({ITEM_MAX:,} characters): shorten it.")
+
+
+@app.post("/business/{iid}/comments/{cid}/minutes")
+def business_comment_minutes(request: Request, iid: str, cid: str, meeting: str = Form(...), on: int = Form(1),
+                             mid: str = Depends(leader)):
+    """The leader puts a member's written comment into tonight's minutes, or takes it out again."""
+    meeting = _draft_meeting(meeting)
+
+    def run(s):
+        if on:
+            _unrecorded(next((c["text"] for c in business.get(s, iid).get("comments", []) if c["id"] == cid), ""))
+        business.pick_comment(s, iid, cid, meeting, bool(on))
+        _fits_minutes(s, iid, meeting)
+    return business_change(request, run, meeting)
+
+
 @app.post("/business/{iid}/comments/{cid}/delete")
-def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), mid: str = Depends(me)):
+def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), meeting: str = Form(""),
+                            mid: str = Depends(me)):
     gone = []
 
     def rm(s):
         gone.extend(next((c.get("pictures") or [] for c in business.get(s, iid).get("comments", []) if c["id"] == cid), []))
         business.delete_comment(s, iid, cid, mid, moderates(request))
-    r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
+    meeting = _draft_meeting(meeting) if meeting and can_lead_now(request) else ""  # from the console: its draft's items back
+    r = business_change(request, rm, meeting, back=_back(back, iid, f"/business#i{iid}"))
     _prune_pictures(gone)  # only if the comment really went: still named in the saved state otherwise
     return r
 
