@@ -167,6 +167,17 @@
     else if (m[0].startsWith(">")) put(t, `\n${m[1].replace(/[ \t]*$/, " ")}`, at, at);
     else put(t, `\n${m[1]}${m[3] ? `${+m[3] + 1}.` : m[2]} `, at, at);
   });
+  // A box marked data-count shows how much of its maxlength is used, after its label (Jim, 2026-11-20: business text,
+  // comments and notes; it was cut off silently).
+  const counts = new WeakMap();
+  const count = (t) => { counts.get(t).textContent = `${t.value.length.toLocaleString()} / ${t.maxLength.toLocaleString()} characters`; };
+  document.querySelectorAll("textarea[data-count]").forEach((t, i) => {
+    const c = document.createElement("small");
+    Object.assign(c, { className: "fmtcount", id: `count-${i}` });
+    (t.closest("label") || t).after(c); counts.set(t, c); count(t);
+    t.setAttribute("aria-describedby", `${t.getAttribute("aria-describedby") || ""} count-${i}`.trim());
+  });
+  document.addEventListener("input", (e) => counts.has(e.target) && count(e.target));
   document.addEventListener("change", (e) => {
     const f = e.target;
     if (!f.matches?.("input[data-picker]") || !f.files.length) return;

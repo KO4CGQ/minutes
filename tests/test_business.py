@@ -288,3 +288,17 @@ def test_an_item_added_between_meetings_links_no_missing_meeting(monkeypatch):
     html = t.get("/business").text
     assert 'href="/meetings/2026-11-10' not in html and "added" in html
     assert 'href="/meetings/2026-11-05?from=business' in html
+
+
+def test_long_text_is_refused_never_cut():
+    """Jim, 2026-11-20: a drafted email in a comment was cut at 1,000 characters without a word. Up to 5,000 now (a
+    form's \r\n counts as one), and more is refused with a message, for an item, a comment and a note."""
+    s = {"items": [], "notes": []}
+    x = business.add(s, "Field Day", "amy")
+    ok = "\r\n".join(["abcd"] * 1000) + "x"  # 5,999 as posted, 5,000 once the line ends are \n
+    assert len(business.comment(s, x["id"], "amy", ok)["text"]) == 5000
+    for f in (lambda t: business.comment(s, x["id"], "amy", t), lambda t: business.add_note(s, "amy", t, "2026-12-03"),
+              lambda t: business.add(s, t, "amy"), lambda t: business.edit(s, x["id"], "amy", text=t)):
+        with pytest.raises(ValueError, match="5,001 characters long: 5,000 at most"):
+            f("x" * 5001)
+    assert len(x["comments"]) == 1 and x["text"] == "Field Day" and not s["notes"]

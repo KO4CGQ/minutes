@@ -36,7 +36,7 @@
     <form method="post" action="/business/{{ x.id }}/done" class="inline" data-confirm="Mark this item done? It shows as done in the next minutes, then drops off.">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<button class="act">{{ emoji('✅', 'check') }} Mark done</button></form></div>
   <div class="panel" id="e{{ x.id }}" hidden>
     <form method="post" action="/business/{{ x.id }}/edit" class="modern">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
-      <label>Item<textarea data-format data-pic="edit" name="text" rows="3" required>{{ x.text }}</textarea>
+      <label>Item<textarea data-format data-pic="edit" name="text" rows="3" required maxlength="5000" data-count>{{ x.text }}</textarea>
         <span class="hint">Minutes already submitted keep the wording they had; the change shows from the next meeting on.</span></label>
       <div class="formrow">
       {% if leader %}<label>Owner<input name="owner" data-combo="roster-names" placeholder="Type a name…" value="{{ club.name(x.owner) if x.owner else '' }}"></label>{% endif %}
@@ -50,7 +50,7 @@
       <span class="chip">{{ avatar(c.by, 'xs') }}<a href="/members/{{ c.by }}{{ from_item(x) }}">{{ club.shown_name(c.by) }}</a></span> <span class="muted small">{{ c.at|tsfull }}</span>
       {% if leader or c.by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
       <div class="ctext">{{ c.text|rich }}</div>{{ pics(c.pictures, label="Picture with " ~ club.shown_name(c.by) ~ "'s comment", remove="/business/" ~ x.id ~ "/comments/" ~ c.id ~ "/pictures" if leader else "", back=back) }}</div>{% else %}<p class="muted small">No comments yet.</p>{% endfor %}</div>
-  <form method="post" action="/business/{{ x.id }}/comment" class="modern" enctype="multipart/form-data">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<textarea data-format data-pic="comment" name="text" rows="3" required placeholder="Write an update, a question, or an offer to help…" aria-label="Comment"></textarea>
+  <form method="post" action="/business/{{ x.id }}/comment" class="modern" enctype="multipart/form-data">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<textarea data-format data-pic="comment" name="text" rows="3" required maxlength="5000" data-count placeholder="Write an update, a question, or an offer to help…" aria-label="Comment"></textarea>
     <label class="small picfield">Pictures (optional) <input type="file" data-picker="comment" name="files" accept="image/jpeg,image/png,image/webp" multiple></label>
     <div class="formrow"><button class="btn small">Add comment</button></div></form>
   {{ history(x, False) }}

@@ -14,6 +14,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - **Correct these minutes:** Remove on a guest or item you just added takes it away at once (rows already in the minutes still strike out, with Keep it to undo).
 - **Site → Colours:** a box beside each colour picker to type or paste a colour's code (`#4f6f2a`), which phones' pickers can't take.
 - **@ mentions:** type @ in a report, a business item or comment, or any part of the minutes, and pick a member from the list; the mention shows as their name tag, linked to their page (their plain name in the PDF and emails). Every part of the minutes in the leader console now has the formatting toolbar.
+- **Longer business text:** a business item, a comment or a note for the next meeting can run to 5,000 characters (a drafted email fits), with a count under the box. Longer text is refused with a message; before, anything over 600 or 1,000 characters was cut off without a word.
 
 ## 1.1.0 (2026-11-19)
 - **Custom roles:** a club decides what each role may do and who has it (by office, or member by member), and can add roles of its own. Leading meetings (Meeting leader) and fixing published minutes (Minutes editor) are now separate roles, and a Secretary role gets the roster emails.

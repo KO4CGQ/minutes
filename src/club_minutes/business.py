@@ -26,7 +26,13 @@ from . import branding
 from .club import DATA, Club, show_date
 from .richtext import plain
 
-MAX_TEXT = 600
+MAX_TEXT = 5000  # an item's text, a comment or a note (Jim, 2026-11-20: a drafted email fits); longer is refused, never cut
+
+
+def _fit(text: str, what: str) -> str:
+    if len(text) > MAX_TEXT:
+        raise ValueError(f"The {what} is {len(text):,} characters long: {MAX_TEXT:,} at most. Shorten it and try again.")
+    return text
 
 
 def _path():
@@ -86,7 +92,7 @@ def seed(s: dict, meetings: list, by: str | None = None) -> int:
             if norm(i.text) not in business_lines(m):
                 break
             opened = m.slug
-        add(s, i.text, by, opened=opened, note="carried over from the minutes")
+        add(s, tidy(i.text)[:MAX_TEXT], by, opened=opened, note="carried over from the minutes")  # the minutes keep it whole
     return len(s["items"])
 
 
@@ -118,7 +124,7 @@ def tidy(text: str | None) -> str:
 
 def add(s: dict, text: str, by: str | None, owner: str | None = None, due: str | None = None,
         agenda: str | None = None, opened: str | None = None, note: str = "added") -> dict:
-    text = tidy(text)[:MAX_TEXT]
+    text = _fit(tidy(text), "item")
     if not text:
         raise ValueError("The item needs some text.")
     x = {"id": secrets.token_hex(5), "text": text, "owner": owner or None, "due": _date(due),
@@ -194,7 +200,7 @@ def edit(s: dict, iid: str, by: str, meeting: str | None = None, **fields) -> di
     changes = {}
     for k, v in fields.items():
         if k == "text":
-            v = tidy(v)[:MAX_TEXT]
+            v = _fit(tidy(v), "item")
             if not v:
                 raise ValueError("The item needs some text.")
         elif k in ("due", "agenda"):
@@ -209,9 +215,6 @@ def edit(s: dict, iid: str, by: str, meeting: str | None = None, **fields) -> di
     if changes:
         _note(x, by, "changed " + ", ".join(changes), changes=changes, **({"meeting": meeting} if meeting else {}))
     return x
-
-
-MAX_COMMENT = 1000
 
 
 def add_pictures(s: dict, iid: str, pics: list[str]) -> None:
@@ -232,7 +235,7 @@ def remove_picture(s: dict, iid: str, pid: str) -> None:
 def comment(s: dict, iid: str, by: str, text: str, pics: list[str] | None = None) -> dict:
     """Any member can add a comment to an open item (an update, a question); it's shown with the item."""
     x = get(s, iid)
-    text = text.strip()[:MAX_COMMENT]
+    text = _fit(text.replace("\r\n", "\n").strip(), "comment")
     if not text:
         raise ValueError("The comment is empty.")
     c = {"id": secrets.token_hex(4), "at": int(time.time()), "by": by, "text": text} | ({"pictures": pics} if pics else {})
@@ -252,7 +255,7 @@ def delete_comment(s: dict, iid: str, cid: str, by: str, leader: bool) -> None:
 
 def add_note(s: dict, by: str, text: str, meeting: str) -> dict:
     """A member's note for a meeting: e.g. they can't make it, and here's their news."""
-    text = text.strip()[:MAX_COMMENT]
+    text = _fit(text.replace("\r\n", "\n").strip(), "note")
     if not text:
         raise ValueError("The note is empty.")
     n = {"id": secrets.token_hex(4), "at": int(time.time()), "by": by, "text": text,

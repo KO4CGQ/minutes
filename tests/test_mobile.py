@@ -474,7 +474,8 @@ def test_the_formatting_toolbar_on_a_phone(engine):
 @pytest.mark.parametrize("engine", ENGINES)
 def test_quote_and_code_buttons(engine):
     """format.js: Quote marks the caret's lines (and takes it off again); Enter continues a quote, Enter on an empty quote
-    line ends it; Code wraps a word in backticks, and on an empty line starts a block with the caret inside it."""
+    line ends it; Code wraps a word in backticks, and on an empty line starts a block with the caret inside it; a box with
+    data-count shows its length."""
     sync_api = pytest.importorskip("playwright.sync_api")
     root = Path(__file__).parents[1] / "src/club_minutes/static"
     with sync_api.sync_playwright() as p:
@@ -483,8 +484,9 @@ def test_quote_and_code_buttons(engine):
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_context(viewport={"width": 390, "height": 600}).new_page()
-        page.set_content(f'<style>{(root / "style.css").read_text()}</style><textarea data-format aria-label="Report"></textarea>')
+        page.set_content(f'<style>{(root / "style.css").read_text()}</style><textarea data-format aria-label="Report" maxlength="5000" data-count></textarea>')
         page.add_script_tag(content=(root / "format.js").read_text())
+        assert page.locator(".fmtcount").inner_text() == "0 / 5,000 characters"
         box, quote = page.get_by_label("Report"), page.get_by_role("button", name="Quote")
         box.click()
         quote.click()  # an empty box: "> ", ready to type
@@ -506,6 +508,8 @@ def test_quote_and_code_buttons(engine):
         box.press("Control+Home")
         quote.click()  # all its lines quoted: Quote takes it off
         assert box.input_value().startswith("Dear park,\n> Thanks")
+        assert page.locator(".fmtcount").inner_text() == f"{len(box.input_value())} / 5,000 characters"  # it follows the toolbar too
+        browser.close()
 
 
 @pytest.mark.parametrize("engine", ENGINES)

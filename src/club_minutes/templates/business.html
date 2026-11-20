@@ -20,7 +20,7 @@
 
 {% elif tab == 'add' %}
 <form method="post" action="/business/add" class="modern card">
-  <label>Item<textarea data-format name="text" rows="3" required placeholder="e.g. Ask the park about using the pavilion for Field Day"></textarea></label>
+  <label>Item<textarea data-format name="text" rows="3" required maxlength="5000" data-count placeholder="e.g. Ask the park about using the pavilion for Field Day"></textarea></label>
   <div class="formrow">
     <label>Owner<input name="owner" data-combo="roster-names" placeholder="Type a name…"></label>
     <label>Due<input type="date" name="due"></label>
@@ -37,7 +37,7 @@
   <div class="card-text">{{ n.text }}</div></article>{% endfor %}</div>
 <form method="post" action="/business/notes" class="modern card">
   <label>For the meeting on<select name="meeting">{% for d in next_meetings %}<option value="{{ d.isoformat() }}">{{ d|date('weekday') }}</option>{% endfor %}</select></label>
-  <label>Note<textarea name="text" rows="4" required placeholder="e.g. I'll be away for this one. Since last time I finished my 40 m dipole and made a few contacts with it."></textarea></label>
+  <label>Note<textarea name="text" rows="4" required maxlength="5000" data-count placeholder="e.g. I'll be away for this one. Since last time I finished my 40 m dipole and made a few contacts with it."></textarea></label>
   <div class="formrow"><button class="btn small">Send note</button></div>
 </form>
 {% if all_notes %}<h2>Waiting to be read <span class="muted small">(leaders)</span></h2>
