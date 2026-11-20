@@ -143,6 +143,11 @@ def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_pat
     big = b"x" * (limits.max_upload() + limits.FORM_ROOM + 1)
     r = amy.post("/profile/photo", files={"photo": ("p.jpg", big, "image/jpeg")})
     assert r.status_code == 413 and "1 MB at most" in r.text  # turned away before it's read
+    def chunks():  # no size given: counted as it arrives
+        for _ in range(3):
+            yield b"x" * (limits.max_upload() + limits.FORM_ROOM)
+    r = amy.post("/profile/photo", content=chunks(), headers={"content-type": "multipart/form-data; boundary=b"})
+    assert r.status_code == 413 and "1 MB at most" in r.text
     with pytest.raises(ValueError, match="1 MB at most"):
         avatars.save("n0aaaa", b"x" * (limits.max_upload() + 1))
     assert amy.post("/admin/security/limits", data={"upload_mb": "50"}).status_code == 404  # admins only

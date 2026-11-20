@@ -238,6 +238,31 @@ def _security_event(request: Request, kind: str) -> None:
                 agent=request.headers.get("user-agent", ""))
 
 
+class CountUpload:
+    """The same limit on what actually arrives: a hand-made request can leave out its size (chunked) and would
+    otherwise be spooled to disk whole before any check. Added before the other middleware, so it sits innermost:
+    the route's own reads raise the 413 (raised under a BaseHTTPMiddleware's receive task, it would crash)."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        seen, most = 0, limits.max_upload() + limits.FORM_ROOM
+
+        async def counted():
+            nonlocal seen
+            msg = await receive()
+            seen += len(msg.get("body", b""))
+            if seen > most:
+                raise HTTPException(413, f"That's too big to upload: {limits.upload_mb()} MB at most.")
+            return msg
+        await self.app(scope, counted, send)
+
+
+app.add_middleware(CountUpload)
+
+
 @app.middleware("http")
 async def require_login(request: Request, call_next):
     archive.club.refresh()  # pick up a roster sync without a restart
