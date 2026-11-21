@@ -8,7 +8,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ### Added
 - **Pictures** on community reports, business items, motions, comments and notes for the next meeting, up to four each. Members only, never public, and saved without the hidden details a phone adds (such as where it was taken).
-- **Formatting** in reports, business items, comments and the leader console: bold, italic, lists, quotes, code and web addresses (with words to show, if you like), with a numbered QR code for an address if you want one, from a toolbar above the box. **Preview** shows how it will look.
+- **Formatting** in reports, business items, comments and the leader console: bold, italic, lists, quotes, code and links (with words to show and a numbered QR code, if you like), from a toolbar above the box. **Preview** shows how it will look.
 - **@ mentions:** a member mentioned shows as their name tag, linked to their page.
 - **Business comments in the minutes:** the leader can add members' comments on a business item, and what's said about it at the meeting, under the item.
 - **Quorum check** (optional): the leader console shows whether there's a quorum and the votes a motion needs, and the minutes record it.
