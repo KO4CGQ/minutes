@@ -346,3 +346,14 @@ def test_only_a_private_correction_deletes_the_pictures_it_removed(env):
                       data={f"s{n}-0": "New antenna", f"s{n}-0-pic-{a}-rm": "1", "reason": "Oops", "version": "1", **({"private": "1"} if private else {})})
         assert r.status_code == 303 and "error" not in r.headers["location"], r.headers["location"]
         assert pictures.exists(b) and pictures.exists(a) is (not private)
+
+
+def test_preview_renders_like_the_page_for_signed_in_members_only(env):
+    _c, as_ = env
+    member = as_("w0demo")
+    r = member.post("/api/preview", data={"text": "> **hi** @[Jane](pres)\n> there <b>x</b>"})
+    assert r.status_code == 200 and '<blockquote class="rquote">' in r.text and "<strong>hi</strong>" in r.text
+    assert 'class="who" href="/members/pres">' in r.text and "<b>" not in r.text  # a mention is a pill; typed HTML stays text
+    assert member.post("/api/preview", data={"text": "x" * 5001}).status_code == 400
+    assert as_(None).post("/api/preview", data={"text": "x"}, follow_redirects=False).status_code in (303, 401)
+    assert member.post("/api/preview", data={"text": "x"}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403

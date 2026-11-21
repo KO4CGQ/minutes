@@ -767,6 +767,8 @@ form.correct .rm { width: fit-content; }
 .fmtbar .fmt-b { font-weight: 700; } .fmtbar .fmt-i { font-style: italic; }
 .fmtbar .fmt:hover, .fmtbar .fmt:focus-visible { background: var(--surface-2); }
 .fmtbar .fmt[hidden] { display: none; } .fmtnote { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.fmt:disabled { opacity: .45; cursor: default; }
+.fmtpreview { background: var(--surface-2); border: 1px solid var(--border); border-radius: .5rem; padding: .4rem .7rem; margin: .2rem 0; min-height: 3rem; overflow-wrap: anywhere; }
 .fmtcount { display: block; text-align: right; font-size: .8rem; color: var(--muted); margin-top: .1rem; }
 .fmtbar .fmt .ico { width: 1.2rem; height: 1.2rem; display: inline-block; vertical-align: middle; }  /* the toolbar's line icons (format.js) */
 @media (pointer: coarse) { .fmtbar { gap: .4rem; } .fmtbar .fmt { min-width: 44px; min-height: 44px; font-size: 1.15rem; } .fmtbar .fmt .ico { width: 1.5rem; height: 1.5rem; } }  /* a finger-sized tap */

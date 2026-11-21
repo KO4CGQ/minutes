@@ -67,7 +67,7 @@
   const bar = document.createElement("div");
   bar.className = "fmtbar"; bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Formatting");
   for (const [k, label, title] of [["b", "B", "Bold"], ["i", "I", "Italic"], ["ul", "", "Bulleted list"], ["ol", "", "Numbered list"],
-      ["q", "", "Quote"], ["code", "", "Code (on lines of its own: a code block)"], ["a", "", "Web address"], ["qr", "", "QR code for a web address (in the PDF and on screen)"], ["pic", "", "Add pictures"]]) {
+      ["q", "", "Quote"], ["code", "", "Code (on lines of its own: a code block)"], ["a", "", "Web address"], ["qr", "", "QR code for a web address (in the PDF and on screen)"], ["pic", "", "Add pictures"], ["prev", "Preview", "Preview: the text as it will appear"]]) {
     const btn = document.createElement("button");
     Object.assign(btn, { type: "button", className: `fmt fmt-${k}`, title });
     if (ICON[k]) btn.innerHTML = ICON[k]; else btn.textContent = label;  // our own fixed markup, never typed text
@@ -77,7 +77,34 @@
   const note = document.createElement("span");  // the picture files chosen for a comment
   note.className = "fmtnote"; note.setAttribute("aria-live", "polite");
   bar.append(note);
-  let box = null;
+  let box = null, pv = null;
+  // Preview swaps the box for the text as the server shows it (richtext.py, never a second renderer here); the box keeps its text.
+  const stopPreview = () => {
+    if (!pv) return;
+    pv.remove(); pv = null; box.hidden = false;
+    for (const b of bar.querySelectorAll(".fmt")) { b.disabled = false; }
+    const b = bar.querySelector(".fmt-prev"); b.textContent = "Preview"; b.setAttribute("aria-label", b.title);
+  };
+  const preview = async () => {
+    if (pv) { stopPreview(); box.focus(); return; }
+    const t = box, b = bar.querySelector(".fmt-prev");
+    pv = document.createElement("div");
+    Object.assign(pv, { className: "fmtpreview", tabIndex: -1 });
+    pv.setAttribute("role", "region"); pv.setAttribute("aria-label", "Preview");
+    pv.textContent = "Loading…";
+    (t.closest("label") || t).after(pv); t.hidden = true;  // not inside the label: a click there would go to the hidden box
+    for (const x of bar.querySelectorAll(".fmt")) x.disabled = x !== b;
+    b.textContent = "Back to editing"; b.setAttribute("aria-label", "Back to editing");
+    b.scrollIntoView({ block: "nearest", inline: "nearest" });  // the end of the phone's one-row toolbar: in view
+    pv.focus();
+    const mine = pv;
+    try {
+      const r = await fetch("/api/preview", { method: "POST", body: new URLSearchParams({ text: t.value }) });
+      if (pv !== mine) return;
+      if (r.ok) mine.innerHTML = await r.text();  // the server's own markup, as everywhere the text is shown
+      else mine.textContent = (await r.json().catch(() => ({}))).error || "The preview didn't load. Back to editing, and try again.";
+    } catch { if (pv === mine) mine.textContent = "The preview didn't load. Back to editing, and try again."; }
+  };
   const put = (t, text, from, to) => {  // change the box's text as typing would: its input and change events fire
     t.setRangeText(text, from, to, "end");
     t.dispatchEvent(new Event("input", { bubbles: true }));
@@ -91,7 +118,7 @@
   };
   document.addEventListener("focusin", (e) => {
     if (!e.target.matches?.("textarea[data-format]")) return;
-    box = e.target; note.textContent = "";
+    stopPreview(); box = e.target; note.textContent = "";
     // Above the box: never inside a <label> (it would pass each click on: B ran twice), nor beside it in a row with
     // its buttons (the console's items: the bar took half the width, Jim 2026-11-20)
     (box.closest("label") || (box.parentElement.matches(".row") ? box.parentElement : box)).before(bar);
@@ -102,6 +129,7 @@
     const k = e.target.closest("[data-fmt]")?.dataset.fmt;
     if (!k || !box) return;
     if (k === "pic") { picker()?.click(); return; }
+    if (k === "prev") { closeMenu(); preview(); return; }
     const out = act[k](box.value, box.selectionStart, box.selectionEnd);
     if (!out) return;
     put(box, out[2], out[0], out[1]);

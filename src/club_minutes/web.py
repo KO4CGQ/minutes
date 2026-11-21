@@ -933,6 +933,15 @@ async def picture_upload(request: Request, file: Annotated[UploadFile, File()], 
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
+@app.post("/api/preview")
+def preview(text: Annotated[str, Form()] = "", mid: str = Depends(me)):
+    """The formatting toolbar's Preview: the text as the page will show it (richtext.py), as an HTML fragment. Pictures
+    aren't text, so they aren't shown."""
+    if len(text) > 5000:  # the longest any box takes
+        return JSONResponse({"error": "That is longer than a box takes (5,000 characters)."}, status_code=400)
+    return HTMLResponse(str(richtext.render(text, names=archive.club)))
+
+
 def _draft_meeting(meeting: str) -> str:
     m = archive.by_slug.get(meeting)
     if not m or m.status != "draft":

@@ -573,6 +573,38 @@ def test_a_quote_goes_on_over_several_lines(engine):
 
 
 @pytest.mark.parametrize("engine", ENGINES)
+def test_preview_shows_the_text_as_the_server_renders_it_and_goes_back(engine):
+    """format.js: Preview swaps the box for the server's rendering (stubbed here with the same renderer), focus on it;
+    Back to editing brings the box back with its text, focus in it."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from club_minutes import richtext
+    root = Path(__file__).parents[1] / "src/club_minutes/static"
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        from urllib.parse import parse_qs
+        page.route("http://testserver/**", lambda route: route.fulfill(
+            body=str(richtext.render(parse_qs(route.request.post_data)["text"][0])) if route.request.method == "POST"
+            else '<form><label>Item<textarea data-format></textarea></label></form>', content_type="text/html"))
+        page.goto("http://testserver/")
+        page.add_script_tag(content=(root / "format.js").read_text())
+        box = page.get_by_label("Item")
+        box.fill("> quoted")
+        page.get_by_role("button", name="Preview").click()
+        region = page.get_by_role("region", name="Preview")
+        region.locator("blockquote.rquote").wait_for()
+        assert not box.is_visible() and page.get_by_role("button", name="Bold").is_disabled()
+        assert page.evaluate("document.activeElement.className") == "fmtpreview"
+        page.get_by_role("button", name="Back to editing").click()
+        assert box.is_visible() and box.input_value() == "> quoted" and region.count() == 0
+        assert page.evaluate("document.activeElement.tagName") == "TEXTAREA"
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
 def test_the_toolbar_scrolls_instead_of_widening_the_console(engine):
     """The console's columns (.cols2) grew to the one-row toolbar's width on a phone, so the whole page scrolled
     sideways (found on stage 2026-11-21): the toolbar scrolls on its own row instead."""
