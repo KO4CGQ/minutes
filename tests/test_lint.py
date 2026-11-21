@@ -37,3 +37,11 @@ def test_shellcheck_passes():
 def test_zizmor_passes():
     r = run("zizmor", "--offline", "--no-progress", ".github/workflows")  # offline: no GitHub token needed
     assert r.returncode == 0, (r.stdout + r.stderr)[-4000:]
+
+
+def test_jobs_run_as_app_user_are_sandboxed():
+    """Anything that runs as the app's user (not root) gets the web app's sandbox, or it could write more than its data."""
+    for p in (ROOT / "deploy").glob("club-minutes*.service"):
+        text = p.read_text()
+        if "User=minutes" in text:
+            assert "ProtectSystem=strict" in text and "ReadWritePaths=/var/lib/club-minutes" in text, p.name
