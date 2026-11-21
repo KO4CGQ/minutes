@@ -7,14 +7,57 @@
   document.documentElement.classList.add("js-fmt");
   const WEB = /^https?:\/\/\S+\.\S+$/;
   const ADDR = /https?:\/\/[^\s<>"')\]]+/g;  // an address in the text, as richtext.py finds them
-  const ask = () => {  // "example.org" gets https:// in front; anything else that isn't an address says so
-    let u = (prompt("The web address, like example.org or https://example.org/page") || "").trim();
-    if (!u) return null;
-    if (!/^[a-z][\w+.-]*:/i.test(u)) u = `https://${u}`;
-    if (WEB.test(u)) return u;
-    alert(`"${u}" doesn't look like a web address. Try one like example.org or https://example.org/page.`);
+  // Link: one form for the address, its words (optional) and a QR code. With the caret on a link already in the text, the
+  // form opens with it to change; otherwise it adds one (the selected words, or address, filled in). Shown as "words (address)".
+  const LINKED = /\[([^[\]\n]+)\]\((https?:\/\/[^\s()]+)\)([ \t]*\[QR\])?/gi;  // "[words](address)", maybe "[QR]" after it
+  const linkAt = (v, s) => {  // [from, to, address, words, qr] of the link the caret is on, or null
+    for (const m of v.matchAll(LINKED)) if (s >= m.index && s <= m.index + m[0].length) return [m.index, m.index + m[0].length, m[2], m[1], !!m[3]];
+    for (const m of v.matchAll(ADDR)) {
+      if (v[m.index - 1] === "(") continue;  // the address of a "[words](address)"
+      const qr = v.slice(m.index + m[0].length).match(/^[ \t]*\[QR\]/i), end = m.index + m[0].length + (qr ? qr[0].length : 0);
+      if (s >= m.index && s <= end) return [m.index, end, m[0], "", !!qr];
+    }
     return null;
   };
+  const form = document.createElement("dialog");
+  form.className = "modal fmtlink"; form.setAttribute("aria-labelledby", "fmtlink-h");
+  form.innerHTML = `<form method="dialog" class="body modern"><h2 id="fmtlink-h">Add a link</h2>
+    <label>Web address <input name="u" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="example.org/page" required></label>
+    <label><span>Words to show <span class="hint">(optional)</span></span> <input name="w" type="text" autocomplete="off" maxlength="120"></label>
+    <label class="check"><input name="qr" type="checkbox"> <span>Add a QR code <span class="hint">(numbered, in the PDF and on screen)</span></span></label>
+    <p class="err" role="alert"></p>
+    <div class="dacts"><button class="btn" value="ok">Add</button><button class="btn ghost" value="" formnovalidate>Cancel</button></div></form>`;
+  const openLink = (t) => {
+    const v = t.value, s = t.selectionStart, e = t.selectionEnd, f = form.querySelector("form"), at = linkAt(v, s);
+    let [from, to, u, w, qr] = at || [s, e, "", "", false];
+    const sel = at ? "" : v.slice(s, e).trim();
+    if (sel && !sel.includes("\n")) { if (/^(https?:\/\/)?[^\s/]+\.[^\s]+$/i.test(sel)) u = sel; else w = sel; }
+    f.u.value = u; f.w.value = w; f.qr.checked = qr; f.querySelector(".err").textContent = "";
+    form.querySelector("h2").textContent = at ? "Change the link" : "Add a link";
+    form.querySelector("[value=ok]").textContent = at ? "Save" : "Add";
+    if (!form.isConnected) document.body.append(form);
+    form.onclose = () => t.focus();  // Cancel or Escape: back to the box as it was
+    done = (link) => {  // closed here, not by the form, so the box has its caret back before the next key
+      const x = at ? link : spaced(v, from, link);
+      form.close(); put(t, x, from, to); t.focus(); t.setSelectionRange(from + x.length, from + x.length);
+    };
+    form.showModal();
+  };
+  let done = null;
+  form.addEventListener("submit", (ev) => {  // "example.org" gets https:// in front; anything else that isn't an address says so
+    const f = ev.target;
+    if (ev.submitter?.value !== "ok") return;
+    let link = f.u.value.trim();
+    if (!/^[a-z][\w+.-]*:/i.test(link)) link = `https://${link}`;
+    if (!WEB.test(link)) {
+      ev.preventDefault();
+      f.querySelector(".err").textContent = `"${f.u.value.trim()}" doesn't look like a web address. Try one like example.org or https://example.org/page.`;
+      return f.u.focus();
+    }
+    const words = f.w.value.replace(/[[\]\s]+/g, " ").trim();
+    if (words) link = `[${words}](${link.replace(/\(/g, "%28").replace(/\)/g, "%29")})`;
+    ev.preventDefault(); done(f.qr.checked ? `${link} [QR]` : link);
+  });
   const LI = /^(\s*)(?:([-*])|(\d+)\.)\s+/;  // a list line's mark: "- ", "* " or "3. "
   const list = (t, num) => t.split("\n").map((l, n) => `${num ? `${n + 1}.` : "-"} ${l.replace(LI, "")}`).join("\n");
   // With nothing selected, a list starts on its own line with the caret after the mark, ready to type.
@@ -26,7 +69,7 @@
   const QM = /^((?:>[ \t]?)+)/;  // a quote line's marks
   const spaced = (v, at, t) => (at && !/\s/.test(v[at - 1]) ? " " : "") + t;  // a space before it, unless there is one
   // Each returns [from, to, replacement, caret in it (default: its end)] for the box's text v and selection s..e, or null to do nothing. Links always
-  // show their full address (a printed copy keeps it): Link puts an address in; QR adds " [QR]" after one (or takes it off).
+  // show their full address (a printed copy keeps it): see Link above.
   const act = {
     b: (v, s, e) => [s, e, `**${v.slice(s, e)}**`, s === e ? 2 : undefined],  // nothing selected: the caret between the marks, ready to type
     i: (v, s, e) => [s, e, `*${v.slice(s, e)}*`, s === e ? 1 : undefined],
@@ -42,16 +85,6 @@
       const pre = s && v[s - 1] !== "\n" ? "\n" : "", post = e < v.length && v[e] !== "\n" ? "\n" : "";
       return [s, e, `${pre}\`\`\`\n${sel.replace(/\n$/, "")}\n\`\`\`${post}`, sel ? undefined : pre.length + 4];
     },
-    a: (v, s, e) => { const u = ask(); return u && [e, e, spaced(v, e, u)]; },
-    qr: (v, s, e) => {
-      for (const m of v.matchAll(ADDR)) {  // the caret on (or just after) an address: toggle its [QR]
-        const end = m.index + m[0].length, mark = v.slice(end).match(/^[ \t]*\[QR\]/i);
-        if (s >= m.index && s <= end + (mark ? mark[0].length : 0))
-          return mark ? [end, end + mark[0].length, ""] : [end, end, " [QR]"];
-      }
-      const u = ask();
-      return u && [e, e, spaced(v, e, `${u} [QR]`)];
-    },
   };
   // Line icons like the app's own (_icons.html): 24x24, stroke = currentColor; B and I stay letters.
   const svg = (d) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -59,7 +92,6 @@
     ul: svg('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
     ol: svg('<path d="M10 6h10M10 12h10M10 18h10M4 4.5h1.5V9M4 9h3M4 14.5c.4-.6 2.7-.8 2.7.6 0 1.1-2.7 2-2.7 3.4h3"/>'),
     a: svg('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'),
-    qr: svg('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20.5h.01M17.5 20.5H21V17"/>'),
     q: svg('<path d="M10 7H6a1 1 0 0 0-1 1v4h5V7zM10 12c0 3-1.5 4.5-4 5M19 7h-4a1 1 0 0 0-1 1v4h5V7zM19 12c0 3-1.5 4.5-4 5"/>'),
     code: svg('<path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/>'),
     pic: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m21 16-4.5-4.5L7 20"/>'),
@@ -67,7 +99,7 @@
   const bar = document.createElement("div");
   bar.className = "fmtbar"; bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Formatting");
   for (const [k, label, title] of [["b", "B", "Bold"], ["i", "I", "Italic"], ["ul", "", "Bulleted list"], ["ol", "", "Numbered list"],
-      ["q", "", "Quote"], ["code", "", "Code (on lines of its own: a code block)"], ["a", "", "Web address"], ["qr", "", "QR code for a web address (in the PDF and on screen)"], ["pic", "", "Add pictures"], ["prev", "Preview", "Preview: the text as it will appear"]]) {
+      ["q", "", "Quote"], ["code", "", "Code (on lines of its own: a code block)"], ["a", "", "Link: a web address, with words or a QR code if you like"], ["pic", "", "Add pictures"], ["prev", "Preview", "Preview: the text as it will appear"]]) {
     const btn = document.createElement("button");
     Object.assign(btn, { type: "button", className: `fmt fmt-${k}`, title });
     if (ICON[k]) btn.innerHTML = ICON[k]; else btn.textContent = label;  // our own fixed markup, never typed text
@@ -130,6 +162,7 @@
     if (!k || !box) return;
     if (k === "pic") { picker()?.click(); return; }
     if (k === "prev") { closeMenu(); preview(); return; }
+    if (k === "a") { closeMenu(); openLink(box); return; }
     const out = act[k](box.value, box.selectionStart, box.selectionEnd);
     if (!out) return;
     put(box, out[2], out[0], out[1]);

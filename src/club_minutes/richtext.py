@@ -27,6 +27,7 @@ SAFE_HREF = re.compile(r"^(https?://|mailto:)", re.IGNORECASE)
 CODE_BLOCK = re.compile(r"^([ \t]*)```[^`\n]*\n(.*?)^\1```[ \t]*$", re.MULTILINE | re.DOTALL)
 CODE = re.compile(r"`([^`\n]+)`")
 QUOTE = re.compile(r"^[ \t]*(?:&gt;[ \t]?)+", re.MULTILINE)  # "> " after escaping (the one < or > Markdown may read); indented: in a list item
+TITLED_QR = re.compile(r"(\[[^\[\]\n]+\]\(https?://[^\s()]+)\)[ \t]*\[QR\]", re.IGNORECASE)
 NOT_LINK = re.compile(r"\[(?![^\[\]\n]*\]\([^\n]*\))")  # a "[" no link starts at: "[text](…)" on one line, no other bracket
 QUOTE_MARK = re.compile(r"^(?:[ \t]*>[ \t]?)*")
 
@@ -97,6 +98,7 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
         return f"\ue000{len(pills) - 1}\ue001"
     text = MENTION.sub(pill, text)
     text = URL.sub(lambda m: f"[{m.group(1)}]({m.group(1)}{' \"qr\"' if m.group(2) else ''})", text or "")  # "[QR]" after one: a code
+    text = TITLED_QR.sub(r'\1 "qr")', text)  # "[words](address) [QR]": a code too
     text = QUOTE.sub(lambda m: m.group().replace("&gt;", ">"), html.escape(_lists_apart(text), quote=False))
     text = NOT_LINK.sub("\ue004", text)  # put back after: Markdown's link pattern rescans the text for each "[" (5,000 took 1.3 s)
     try:
@@ -117,11 +119,19 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
             svg = qr_svg(href) if m.group(2) == "qr" and href.lower().startswith("http") and len(href) <= 1000 and len(codes) < 6 else None
         except Exception:  # noqa: BLE001 - segno's DataOverflowError and the like: never take the page down
             svg = None
-        if svg:
-            codes.append(f'<span class="qrcode">{svg}</span>' if pdf else  # the address shows once, in the text
-                         f'<a class="qrcode" href="{h}" rel="noopener nofollow" target="_blank" aria-label="QR code for {h}">{svg}</a>')
+        n = ""
+        if svg:  # numbered, in the text and under its code, with a caption: its words, or the short address (Jim, 2026-11-21)
+            n = len(codes) + 1
+            cap = html.unescape(re.sub("<[^>]*>", "", label))  # its words without their marks; a mention in them: the address
+            if cap == href or re.search("[\ue000-\ue004]", cap):
+                cap = re.sub(r"^https?://(www\.)?", "", href, flags=re.IGNORECASE).rstrip("/")
+            cap = html.escape(cap if len(cap) <= 40 else cap[:39] + "…").replace("/", "/<wbr>")  # breaks after a "/"
+            fig = f'{svg}<span class="qrcap"><b>{n}</b> {cap}</span>'
+            codes.append(f'<span class="qrcode">{fig}</span>' if pdf else  # the address shows once, in the text
+                         f'<a class="qrcode" href="{h}" rel="noopener nofollow" target="_blank" aria-label="QR code {n}: {h}">{fig}</a>')
+            n = f'<sup class="qrn">{n}</sup>'
         a = h if pdf else f'<a href="{h}" rel="noopener nofollow" target="_blank">{h}</a>'  # always the address itself
-        return a if html.unescape(label) == href else f"{label} ({a})"
+        return (a if html.unescape(label) == href else f"{label} ({a})") + n
     out = LINK.sub(link, out)
     out = re.sub("\ue000(\\d+)\ue001", lambda m: pills[int(m.group(1))], out).replace("\ue004", "[")
     out = re.sub("<p>\ue002(\\d+)\ue003</p>", lambda m: code[int(m.group(1))], out)  # a block: its own paragraph

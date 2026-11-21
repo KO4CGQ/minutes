@@ -454,13 +454,17 @@ def test_the_formatting_toolbar_on_a_phone(engine):
         box.click()
         btn = page.get_by_role("button", name="Bulleted list").bounding_box()
         assert btn["width"] >= 44 and btn["height"] >= 44, btn
-        answers = iter(["example.org", "not an address"])
-        page.on("dialog", lambda d: d.accept(next(answers)) if d.type == "prompt" else d.accept())
+        dlg, link = page.locator("dialog.fmtlink"), page.get_by_role("button", name="Link", exact=False)
         box.type("See")
-        page.get_by_role("button", name="Web address", exact=True).click()
-        assert box.input_value() == "See https://example.org"
-        page.get_by_role("button", name="Web address", exact=True).click()  # refused, with a message: nothing changes
-        assert box.input_value() == "See https://example.org"
+        link.click()  # one form: the address, its words and a QR code
+        dlg.get_by_label("Web address").fill("not an address")
+        dlg.get_by_role("button", name="Add").click()  # refused, with a message: the form stays, nothing changes
+        assert dlg.get_by_role("alert").inner_text().startswith('"not an address" doesn') and box.input_value() == "See"
+        dlg.get_by_label("Web address").fill("example.org")
+        dlg.get_by_role("button", name="Add").click()
+        box.type(" ok")  # straight away: the box has its caret back
+        assert not dlg.is_visible() and box.input_value() == "See https://example.org ok"
+        box.press("Backspace"); box.press("Backspace"); box.press("Backspace")
         page.get_by_role("button", name="Numbered list").click()
         box.type("mast")
         box.press("Enter")
@@ -469,6 +473,23 @@ def test_the_formatting_toolbar_on_a_phone(engine):
         box.press("Enter")  # an empty item: the list ends
         box.type("Done")
         assert box.input_value() == "See https://example.org\n1. mast\n2. coax\nDone"
+        box.fill("")
+        link.click()
+        dlg.get_by_label("Web address").fill("example.org/fd")
+        dlg.get_by_label("Words to show").fill(" Field [Day] ")
+        dlg.get_by_label("Add a QR code").check()
+        dlg.get_by_role("button", name="Add").click()  # its words without brackets; the QR mark after it
+        assert box.input_value() == "[Field Day](https://example.org/fd) [QR]"
+        box.press("End"); box.type(" ok")
+        box.evaluate("t => t.setSelectionRange(3, 3)")  # the caret on the link: the form opens with it, to change
+        link.click()
+        assert dlg.get_by_label("Web address").input_value() == "https://example.org/fd" and dlg.get_by_label("Add a QR code").is_checked()
+        assert dlg.get_by_role("button", name="Save").is_visible()
+        dlg.get_by_label("Add a QR code").uncheck()
+        dlg.get_by_role("button", name="Save").click()
+        assert box.input_value() == "[Field Day](https://example.org/fd) ok"
+        link.click(); dlg.get_by_role("button", name="Cancel").click()  # Cancel changes nothing
+        assert box.input_value() == "[Field Day](https://example.org/fd) ok"
         browser.close()
 
 

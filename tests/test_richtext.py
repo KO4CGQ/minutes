@@ -33,7 +33,18 @@ def test_only_an_address_marked_qr_gets_a_code_and_addresses_always_show():
 def test_the_pdf_shows_the_address_and_its_qr():
     pdf = str(richtext.render("Plans: https://example.org/jpole [QR], [the form](https://example.org/form)", pdf=True))
     assert "Plans: https://example.org/jpole" in pdf and "the form (https://example.org/form)" in pdf
-    assert pdf.count("<svg") == 1 and "<a " not in pdf and pdf.count("https://example.org/jpole<") == 1
+    assert pdf.count("<svg") == 1 and "<a " not in pdf and pdf.count("https://example.org/jpole<") == 2  # the text and the code's title
+
+
+def test_each_qr_code_is_numbered_like_its_link_with_a_caption():
+    out = str(richtext.render("[Field **Day**](https://example.org/fd) [QR] and https://www.example.org/map/park/ [QR] and https://example.org/x", pdf=True))
+    assert out.count("<svg") == 2 and "[QR]" not in out  # "[words](address) [QR]" gets a code too
+    assert 'Field <strong>Day</strong> (https://example.org/fd)<sup class="qrn">1</sup>' in out
+    assert 'https://www.example.org/map/park/<sup class="qrn">2</sup>' in out and "x<sup" not in out  # no code, no number
+    assert '<b>1</b> Field Day</span>' in out  # its words, without their marks
+    assert '<b>2</b> example.org/<wbr>map/<wbr>park</span>' in out  # else the short address, breaking after a "/"
+    long = str(richtext.render(f"https://example.org/{'a' * 60} [QR]"))
+    assert "a…</span>" in long and 'aria-label="QR code 1: https://example.org/' in long
 
 
 def test_unsafe_links_become_plain_words():
