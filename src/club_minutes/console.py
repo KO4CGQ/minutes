@@ -344,6 +344,10 @@ def _span(when, until) -> tuple[str | None, str | None]:
     return when, until if until > when else None
 
 
+class Unrecorded(ValueError):
+    """Text naming someone the club never records (never_record): the leader is told, nothing is saved."""
+
+
 class Unreadable(Exception):
     """A console save that isn't the shape the console sends (a 400)."""
 
@@ -379,6 +383,9 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
                     for s in m.section_order(club.sections())}  # only sections these minutes have: no others from the browser
     except (TypeError, AttributeError, KeyError):
         raise Unreadable from None
+    for items in sections.values():
+        if any(club.is_redacted(i.text) for i in items):  # never_record, as in web._unrecorded
+            raise Unrecorded("That names someone the club never records in the minutes: leave the name out.")
     m.leader = leader or m.leader
     m.in_person, m.remote, m.visitors = in_person, remote, max(0, visitors)
     m.quorum = club.quorum_record(in_person + remote)  # kept as it was that night, whatever the roster does later

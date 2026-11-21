@@ -179,7 +179,7 @@
           body: JSON.stringify({ meeting: M, state: S, tab: TAB }),
         });
         if (r.status === 409 || r.status === 404) { await checkIn(); if (readOnly) return; }  // taken over, or discarded elsewhere
-        if (!r.ok) throw new Error(await r.text());
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
         saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved";
       } catch (e) { saved.textContent = "Not saved: " + e.message; saved.className = "saved err"; }
       waiters.splice(0).forEach((r) => r());

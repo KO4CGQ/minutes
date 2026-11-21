@@ -340,6 +340,10 @@ def test_console_saves_of_the_wrong_shape_or_size_are_refused_and_attendance_is_
         r = t.put(url, json={"meeting": bad, "tab": "j"})
         assert r.status_code == 400 and r.json()["detail"] == "That request wasn't readable.", bad
     assert t.put(url, json={"meeting": {}, "state": {"x": "y" * 300_000}, "tab": "j"}).status_code == 413
+    monkeypatch.setattr(a.club, "redact", ["mysteryguest"])  # never_record: refused with its own status (409 means taken over)
+    r = t.put(url, json={"meeting": {"sections": {"Community Reports": [{"text": "Mystery Guest spoke"}]}}, "tab": "j"})
+    assert r.status_code == 422 and "never records" in r.json()["detail"]
+    monkeypatch.setattr(a.club, "redact", [])
     ok = {"meeting": {"in_person": ["doe", "<script>x</script>", "n0olde", "roe"], "remote": ["nobody", 7],
                       "guests": [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}], "visitors": 2},
           "state": {}, "tab": "j"}

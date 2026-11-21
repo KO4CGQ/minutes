@@ -92,7 +92,7 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
 
     def pill(m: re.Match) -> str:  # a private-use token Markdown leaves alone, swapped for the pill after it
         name = names.known_name(m.group(2)) if names else None
-        pills.append(html.escape(m.group(1)) if name is None else (f'<span class="who">{html.escape(name)}</span>' if pdf else
+        pills.append(html.escape(m.group(1)) if name is None else "a member" if name == "" else (f'<span class="who">{html.escape(name)}</span>' if pdf else
                      f'<a class="who" href="/members/{m.group(2)}">{html.escape(name)}</a>'))
         return f"\ue000{len(pills) - 1}\ue001"
     text = MENTION.sub(pill, text)
@@ -110,6 +110,8 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
         href, label = html.unescape(m.group(1)), m.group(3)
         if not SAFE_HREF.match(href):
             return label  # javascript: and the like: just the words
+        if re.search("[\ue000-\ue004]", href):
+            return label  # a mention or code inside the address: its HTML would break the tag; just the words
         h = html.escape(href)
         try:  # a QR only for an address a code can hold (a very long one stays a plain link)
             svg = qr_svg(href) if m.group(2) == "qr" and href.lower().startswith("http") and len(href) <= 1000 and len(codes) < 6 else None

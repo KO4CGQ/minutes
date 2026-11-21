@@ -741,13 +741,16 @@ class Club:
         return self.name(mid) if self.info.get("names") == "full" else self.short(mid)
 
     def known_name(self, mid: str) -> str | None:
-        """The shown name of a member, or None when the id is no member's (a mention in text)."""
-        return self.shown_name(mid) if self.canonical(mid) in self.members else None
+        """The shown name of a member, or None when the id is no member's (a mention in text). "" for one the club never
+        records (never_record): a mention shows neutral text, never the name."""
+        if self.canonical(mid) not in self.members:
+            return None
+        return "" if self.is_redacted(self.shown_name(mid)) or self.is_redacted(self.name(mid)) else self.shown_name(mid)
 
     def mentionable(self) -> list[dict]:
         """Who the @ picker offers: the Active members, as the page's JSON (static/format.js)."""
         return [{"id": m.id, "name": m.name, "short": self.shown_name(m.id), "callsign": m.callsign}
-                for m in self.members.values() if m.status.lower() == "active"]
+                for m in self.members.values() if m.status.lower() == "active" and self.known_name(m.id)]
 
     def unnamed(self, text: str, mid: str | None) -> str:
         """A report without the member's name at its start ("Jim F - Built…", "Jim built…"): the minutes show the name

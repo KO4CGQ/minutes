@@ -149,6 +149,16 @@ def test_a_mentioned_members_name_is_kept_with_the_minutes(tmp_path):
     assert 'class="who"' in str(richtext.render(m.sections["Old Business"][0].text, names=v)) and "Gone" in str(richtext.render("@[Gone](nobody)", names=v))
 
 
+def test_a_never_record_mention_is_not_frozen_or_shown(tmp_path):
+    a = archive(tmp_path)
+    m = a.by_slug[SLUG]
+    m.sections.setdefault("Old Business", []).append(__import__("club_minutes.meeting").meeting.Item("Thanks @[Kim](kim)"))
+    m.shown = snapshot.take(a.club, m)  # frozen with Kim's name, before the club made it never-record
+    a.club.redact = [clubmod._n(a.club.shown_name("kim"))]
+    assert not any(x["id"] == "kim" for x in a.club.mentionable())
+    assert str(richtext.render("@[Kim](kim)", names=snapshot.View(m, a.club))) == "a member"
+
+
 def test_minutes_from_before_1_2_keep_1_1s_report_layout(tmp_path, monkeypatch):
     """Found on stage 2026-11-21: 1.2's name pill and formatting changed minutes published under 1.1. The upgrade marks
     them; they show each report as typed, with the short name after it (on screen only). A correction is made today: the new layout

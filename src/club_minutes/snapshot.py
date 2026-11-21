@@ -27,7 +27,7 @@ def take(club, m) -> dict:
     """The snapshot of `m` as the club stands now."""
     ids = {*m.in_person, *m.remote, m.leader, m.recorder, (m.reviewed or {}).get("by"),
            *(c.get("by") for c in m.corrections), *(it.member for items in m.sections.values() for it in items),
-           *(i for items in m.sections.values() for it in items for i in mentions(it.text) if i in club.members)} - {None, ""}
+           *(i for items in m.sections.values() for it in items for i in mentions(it.text) if club.known_name(i))} - {None, ""}
     return {"names": names(club, ids), "sections": m.section_order(club.sections()), "chow": club.has("chow"),
             "heading": heading(club),
             "label": club.label,
@@ -62,7 +62,8 @@ class View:
         return n["name"] if (n := self._n(mid)) else self.club.name(mid)
 
     def known_name(self, mid):  # for a mention in text (richtext.py)
-        return n["shown"] if (n := self._n(mid)) else self.club.known_name(mid)
+        live = self.club.known_name(mid)  # never_record is checked now: a snapshot from before it never shows the name
+        return n["shown"] if (n := self._n(mid)) and live != "" else live
 
     def logo(self, pdf):
         """The logo kept with these minutes (a file for the PDF), or None: today's (drafts, minutes from before 1.2's

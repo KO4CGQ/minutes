@@ -2,6 +2,7 @@
 text; links only to http(s) and mailto, always showing their address; a QR code only for an address marked [QR]; old
 plain text reads the same."""
 import datetime as dt
+import re
 
 from club_minutes import richtext
 from club_minutes.meeting import Item, Meeting
@@ -133,3 +134,15 @@ def test_odd_text_stays_quick_and_never_breaks_the_page():
         assert time.monotonic() - start < 0.5, t[:8]
         assert "<script" not in out
     assert "[x] [1]" in str(richtext.render("[x] [1]")) and '<a href="https://example.org/f"' in str(richtext.render("[f](https://example.org/f)"))
+
+
+def test_a_never_record_mention_and_a_mention_or_code_in_an_address():
+    class Hidden:
+        def known_name(self, mid):
+            return ""  # club.known_name for a member the club never records
+    out = str(richtext.render("Thanks @[Jane Doe](n0call)!", names=Hidden()))
+    assert out == "Thanks a member!" and "Jane" not in out and "n0call" not in out
+    for t in ("[a](https://example.org/@[Jane](n0call))", "[a](https://example.org/`x`)", "[a](https://example.org/```\nx\n```)"):
+        out = str(richtext.render(t, names=Names()))
+        assert not [h for h in re.findall(r'href="([^"]*)"', out) if "<" in h or "" in h or "" in h], out
+        assert "<a" not in out.replace('<a class="who"', ""), out

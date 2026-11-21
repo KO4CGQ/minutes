@@ -763,6 +763,7 @@ async def business_add(request: Request, text: str = Form(...), owner: str = For
         owner_id(owner)  # a mistake here is refused before any picture is stored
         if not business.tidy(text):
             raise ValueError("The item needs some text.")
+        _unrecorded(text)  # before any picture is stored
         pics = await _uploads(mid, files)  # pictures with a new item (Jim, 2026-11-20): checked above, before storing
     except ValueError as e:
         return business_change(request, _refuse(e), meeting, back="/business?tab=add")
@@ -784,6 +785,7 @@ def business_motion(request: Request, mover: str = Form(""), seconder: str = For
         raise HTTPException(403, "Only officers, or the meeting's leader in the console, can record motions.")
 
     def run(s):
+        _unrecorded(what)
         x = business.add_motion(s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result,
                                 opened=meeting or date or None, past=not meeting)
         if pictures.ids(pics):
@@ -794,9 +796,10 @@ def business_motion(request: Request, mover: str = Form(""), seconder: str = For
 @app.post("/business/{iid}/motion")
 def business_motion_edit(request: Request, iid: str, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
                          result: str = Form(""), mid: str = Depends(moderator)):
-    return business_change(request, lambda s: business.set_motion(s, archive.club, iid, mid, owner_id(mover),
-                                                                  owner_id(seconder), what, result),
-                           back=f"/business?tab=motions#i{iid}")
+    def run(s):
+        _unrecorded(what)
+        business.set_motion(s, archive.club, iid, mid, owner_id(mover), owner_id(seconder), what, result)
+    return business_change(request, run, back=f"/business?tab=motions#i{iid}")
 
 
 @app.post("/business/{iid}/edit")
@@ -807,6 +810,7 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
     fields = {k: form.get(k) for k in allowed if k in form}
     def run(s):
         _may_edit_item(request, s, iid, meeting)
+        _unrecorded(str(fields.get("text") or ""))
         if "owner" in fields:
             fields["owner"] = owner_id(fields["owner"])
         business.edit(s, iid, mid, meeting=form.get("meeting") or None, **fields)
@@ -1013,10 +1017,13 @@ async def business_note_add(request: Request, text: str = Form(...), meeting: st
     try:
         if not text.strip():
             raise ValueError("The note is empty.")  # before any picture is stored
+        _unrecorded(text)
         pics = await _uploads(mid, files)  # a note's pictures (Jim, 2026-11-20): they go in the minutes with it
     except ValueError as e:
         return business_change(request, _refuse(e), back="/business?tab=notes")
-    return business_change(request, lambda s: business.add_note(s, mid, text, meeting, pics), back="/business?tab=notes")
+    def run(s):
+        business.add_note(s, mid, text, meeting, pics)
+    return business_change(request, run, back="/business?tab=notes")
 
 
 @app.post("/business/notes/{nid}/{status}")
@@ -4039,6 +4046,8 @@ async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
         console.apply(archive, slug, data)
     except console.Unreadable:
         raise HTTPException(400, "That request wasn't readable.") from None
+    except console.Unrecorded as e:  # not 409: the console reads that as someone else taking over
+        raise HTTPException(422, str(e))
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}

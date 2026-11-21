@@ -356,6 +356,27 @@ def test_comments_in_the_minutes(env, monkeypatch):
     assert "The park quoted" not in text and "park said yes" not in text and "Dana Visitor" in text
 
 
+def test_never_record_names_are_refused_in_items_notes_and_motions(env, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    _club, a = env
+    monkeypatch.setattr(web, "archive", a)
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "sec")
+    monkeypatch.setattr(a.club, "redact", ["mysteryguest"])
+    c, js = TestClient(web.app), {"Accept": "application/json"}
+    x = business.add(s := business.load(), "Field Day site", "amy")
+    business.save(s)
+    msg = "That names someone the club never records in the minutes"
+    monkeypatch.setattr(web, "manages_business", lambda *a: True)
+    for url, data in (("/business/add", {"text": "Ask the Mystery Guest"}), (f"/business/{x['id']}/edit", {"text": "Ask Mystery Guest"}),
+                      ("/business/motion", {"what": "Thank Mystery Guest", "date": "2026-10-01"}),
+                      ("/business/notes", {"text": "Mystery Guest", "meeting": "2026-12-03"})):
+        r = c.post(url, data=data, headers=js)
+        assert r.status_code in (409, 400) and (r.status_code == 400 or msg in r.json()["error"]), url
+    assert not any("Mystery" in i["text"] for i in business.load()["items"]) and not business.load()["notes"]
+
+
 def test_a_comments_quote_and_code_keep_their_formatting_in_the_minutes(env):
     """Jim, 2026-11-21: a comment's lines sit indented under its bullet; its quote and code block still show as such."""
     from club_minutes import richtext
