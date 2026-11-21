@@ -53,7 +53,9 @@
     return h("div", { class: "pics" },
       have.map((p, i) => h("span", { class: "pic" },
         h("img", { src: `/pictures/${p}-s.jpg`, alt: `Picture ${i + 1} with the report` }),
-        h("button", { class: "btn small ghost", onclick: () => { S.pics[k] = have.filter((x) => x !== p); syncReports(); save(); render(); } }, "Remove"))),
+        h("button", { type: "button", class: "picx", title: "Remove this picture", "aria-label": `Remove picture ${i + 1}`, onclick: () => {
+          if (!confirm("Remove this picture?")) return;
+          S.pics[k] = have.filter((x) => x !== p); syncReports(); save(); render(); } }, "×"))),
       have.length < 4 ? h("label", { class: "btn small ghost picfield" }, "+ Picture",
         h("input", { type: "file", "data-picker": "report", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: (e) => e.target.files[0] && addPicture(k, e.target.files[0]) })) : null);
   }

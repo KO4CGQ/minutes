@@ -91,6 +91,7 @@ textarea { resize: vertical; line-height: 1.45; }
 button.btn { cursor: pointer; font: inherit; font-weight: 500; } .btn.small { padding: .25rem .65rem; font-size: .86rem; }
 .btn.big { display: flex; justify-content: center; width: 100%; padding: .8rem; font-size: 1.05rem; cursor: pointer; }
 .btn.warn { background: #8a3b12; color: #fff; }
+.btn.ghost.danger { color: var(--danger-text); border-color: var(--danger); } .btn.ghost.danger:hover { background: var(--danger-soft); }  /* can't be undone: Discard draft */
 button.act { font: inherit; font-size: .86rem; padding: .25rem .8rem; border: 1px solid var(--border-strong); border-radius: 1rem;
   background: var(--surface); color: var(--text); cursor: pointer; transition: background .15s; }
 button.act:hover { background: var(--accent-soft); } button.act.on { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); }
@@ -747,7 +748,13 @@ form.correct :is(.item, .guest):has(> .rm :checked) :is(textarea, input:not([typ
 form.correct .rm { width: fit-content; }
 /* Pictures on reports, business items and comments (pictures.py) */
 .pics { display: flex; flex-wrap: wrap; gap: .5rem; margin: .4rem 0; }
-.pics .pic { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
+.pics .pic { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; position: relative; }
+/* Remove: a round × on the picture's corner (Jim, 2026-11-21); 44px to tap on a touch screen */
+.picx { position: absolute; top: .25rem; right: .25rem; width: 1.9rem; height: 1.9rem; padding: 0; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--danger-text);
+  font: inherit; font-size: 1.25rem; line-height: 1; cursor: pointer; box-shadow: 0 1px 3px rgb(0 0 0 / .35); }
+.picx:hover { background: var(--danger-soft); }
+@media (pointer: coarse) { .picx { top: 0; right: 0; width: 2.75rem; height: 2.75rem; } }
 .pics img { width: 8rem; height: 6rem; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); display: block; }
 .picadd input[type=file] { max-width: 100%; }
 
