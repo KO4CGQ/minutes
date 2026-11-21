@@ -46,7 +46,7 @@ def test_release_section():
     new, text = bot.release(before, "1.0.1", "pypdf", "GHSA-xxxx-yyyy-zzzz", dt.date(2026, 11, 20))
     assert new == "1.0.2"
     assert text == ("# Changelog\n\nIntro.\n\n## Unreleased\n\n## 1.0.2 (2026-11-20)\n"
-                    "- **Security:** pypdf updated (GHSA-xxxx-yyyy-zzzz). Update soon.\n- Development only: a check.\n"
+                    "- Development only: a check.\n### Security\n- pypdf updated (GHSA-xxxx-yyyy-zzzz). Update soon.\n"
                     "\n## 1.0.1 (2026-11-15)\n- **Security:** old.\n")
     assert bot.release("# C\n\n## Unreleased\n\n## 1.0.1 (x)\n- y\n", "1.0.1", "a", "G", dt.date(2026, 1, 2))[1] == \
-        "# C\n\n## Unreleased\n\n## 1.0.2 (2026-01-02)\n- **Security:** a updated (G). Update soon.\n\n## 1.0.1 (x)\n- y\n"
+        "# C\n\n## Unreleased\n\n## 1.0.2 (2026-01-02)\n### Security\n- a updated (G). Update soon.\n\n## 1.0.1 (x)\n- y\n"

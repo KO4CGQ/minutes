@@ -26,6 +26,8 @@ To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwi
 5. **Backups** (Admin → Backups), before anything is entered for real.
 
 > [!TIP]
+> **Existing servers:** root owns `/opt/club-minutes` from this version on (the app's user can read and run the code but not change it). The first update to this version only installs it; the next update, by hand or from the app, makes root the owner and rebuilds the app's Python environment (one line in its output says so). To do it at once, run `sudo /opt/club-minutes/deploy/update.sh` again right after updating, with the same `TAG=` if you gave one (safe to run twice).
+
 > To update by hand: `/opt/club-minutes/deploy/update.sh` installs the latest main (`TAG=v1.0.0` before it for a release). Admin → **Updates** installs new releases from the app, or nightly. A high or critical security fix in one of the app's packages comes out as a patch release by itself, two days after the fix is published, so with automatic updates on a server gets it that night.
 
 Good to know: the app runs as the `minutes` user on port 8000, with its settings in `/etc/club-minutes/` and its data in `/var/lib/club-minutes/`. `google-service-account.json` goes in `/etc/club-minutes/` too, only for backups to Google Drive.
@@ -49,9 +51,9 @@ Admin → **Site** changes most of the club's settings in the app, checked as yo
 
 | Tab | What's there |
 | --- | --- |
-| **Look** | The logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon, each with **Upload…** and **Reset** (the icons are made from the logo until one has its own). **Behind it**, so a dark logo on a see-through background still shows in dark mode. **Colours:** one main colour sets buttons, links, the top bar and the minutes' headings; the app makes light and dark palettes from it, checks every text colour is readable, and previews both before Save. |
-| **Club** | The app's name, the club's name and callsign, meeting day and time, time zone, and the weekly meeting's place and online link. A new day, time, place or link changes the calendar's meeting from the **Starting date** you pick. |
-| **Agenda** | The meeting's sections in order (built-in and the club's own), when a guest is invited to join, how many days before a reminder goes out. |
+| **Look** | The logo (pages, minutes, PDFs), the browser tab icon and the phone home-screen icon, each with **Upload…** and **Reset** (the icons are made from the logo until one has its own). **Behind it**, so a dark logo on a see-through background still shows in dark mode. **Colours:** one main colour sets buttons, links, the top bar and the minutes' headings (pick it, or type or paste its code, like `#4f6f2a`, in the box beside it); the app makes light and dark palettes from it, checks every text colour is readable, and previews both before Save. |
+| **Club** | The app's name, the club's name and callsign, meeting day and time, time zone, short or full names ("Jane D" or "Jane Doe", wherever the app shows a member's name in brief; published minutes keep the names they had), and the weekly meeting's place and online link. A new day, time, place or link changes the calendar's meeting from the **Starting date** you pick. |
+| **Agenda** | The meeting's sections in order (built-in and the club's own), for minutes made from then on (published minutes keep theirs), when a guest is invited to join, how many days before a reminder goes out, and the quorum rule (a percent of the members and/or a number of officers; empty, the default, turns the quorum check off). |
 | **Roles** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats. Who holds each office is on Roster → Offices. Then the roles, one card each: what it allows, the offices that give it (whole titles only), the members picked for it, and who has it now. Rename any role, add the club's own (**Add a role**), remove one of the club's own, or put a built-in **Back to the built-in**. A save that would leave a permission with no role is refused; recording money always comes with the Treasurer pages. Admin isn't a role and no role edit can give it. |
 | **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own), election days, video meetings, how many pictures a member can add a day (20 by default), and **The club supports Club Minutes** (it takes the menu's Support link away for everyone and the About page thanks the club). |
 | **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
@@ -114,12 +116,14 @@ systemctl stop club-minutes
 rsync -a /tmp/restored/ /var/lib/club-minutes/ && chown -R minutes:minutes /var/lib/club-minutes
 systemctl start club-minutes
 ```
-`restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same.
+`restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same. Backing up and restoring stream through temporary files (in `backups/`, and in the restore folder), so memory stays small but the disk needs room for the data about twice over.
 
 ## 🔒 Security
 The app blocks web visitors itself after repeated failed sign-ins (Admin → Security): 10 in an hour from one internet address bans it from signing in for 24 hours (LAN and tailnet addresses never are). Members already signed in from it keep working, and the public calendar stays open, since a clubhouse or a phone carrier puts many people behind one address. An old or used sign-in link doesn't count, only one the app never sent. An IPv6 ban covers the address's whole /64 block (shown as, say, `2001:db8:1:2::/64`), since a home gets billions of addresses. The same tab lists other hostile requests: **scanner probes** (addresses only attack tools ask for, like `.env` or `wp-login.php` files), which count toward a ban; and, listed but never counted, requests sent from another site's page (the address is the victim's, so they have no Ban button), actions a member's role doesn't allow, and uploads over the size limit. On **Failed attempts**, **Details** shows each attempt's device and browser, and a banned address links to its ban.
 
-**Upload limit:** Security → **Server** → **Largest upload** (1–100 MB, 10 by default), for profile pictures, calendar imports and pictures on reports, business items and comments (each shrunk to 1600 px when saved). A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
+**Upload limit:** Security → **Uploads** → **Largest upload** (1–100 MB, 10 by default), for profile pictures, calendar imports and pictures on reports, business items and comments (each shrunk to 1600 px when saved). A proxy in front of the app (Caddy, nginx, Traefik) has its own limit, which must be at least as big.
+
+**Unused pictures:** a picture uploaded in the console but never saved with a report is deleted by the daily job once it is a day old (along with leftover `.tmp` files in `pictures/`), unless a report, item, comment or draft names it; the job prints how many it deleted.
 
 **Hardening the server** (recommended). First, fail2ban for SSH: `apt install fail2ban python3-systemd`, then create `/etc/fail2ban/jail.d/sshd.local` (list your own LAN and tailnet under `ignoreip`, so you can't lock yourself out):
 

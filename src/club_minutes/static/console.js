@@ -13,6 +13,7 @@
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
   Object.assign(HINTS, D.hints);  // the club's own sections' hints
+  const shint = (...t) => (t[0] ? h("p", { class: "hint shint" }, ...t) : null);  // a section's hint, in its box under the heading
   if (D.events_public) HINTS["Upcoming Events"] += " Dated events also go on the public calendar, which anyone can see, signed in or not: keep anything members-only out of them.";
   const RECENT_GUESTS = 8; // quick-pick buttons; older guests are in the name field's autocomplete
   // A guest on their Nth visit or later gets a reminder to invite them to apply for membership.
@@ -52,9 +53,11 @@
     return h("div", { class: "pics" },
       have.map((p, i) => h("span", { class: "pic" },
         h("img", { src: `/pictures/${p}-s.jpg`, alt: `Picture ${i + 1} with the report` }),
-        h("button", { class: "btn small ghost", onclick: () => { S.pics[k] = have.filter((x) => x !== p); syncReports(); save(); render(); } }, "Remove"))),
-      have.length < 4 ? h("label", { class: "btn small ghost" }, "+ Picture",
-        h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: (e) => e.target.files[0] && addPicture(k, e.target.files[0]) })) : null);
+        h("button", { type: "button", class: "picx", title: "Remove this picture", "aria-label": `Remove picture ${i + 1}`, onclick: () => {
+          if (!confirm("Remove this picture?")) return;
+          S.pics[k] = have.filter((x) => x !== p); syncReports(); save(); render(); } }, "×"))),
+      have.length < 4 ? h("label", { class: "btn small ghost picfield" }, "+ Picture",
+        h("input", { type: "file", "data-picker": "report", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: (e) => e.target.files[0] && addPicture(k, e.target.files[0]) })) : null);
   }
 
   // ---------- reports model ----------
@@ -62,9 +65,10 @@
     S.reports = {};
     for (const it of M.sections["Community Reports"] || []) {
       if (it.member) { S.reports[it.member] = it.text; if (!S.done.includes(it.member)) S.done.push(it.member); }
-      else S.others.push(it.text);
+      else { S.others.push(it.text); (S.otherPics ||= [])[S.others.length - 1] = it.pictures || []; }
     }
   }
+  S.otherPics ||= [];  // Other reports' pictures, by row (a note read out keeps its pictures)
   if (!S.pics) { // pictures with each member's report (pictures.py ids), rebuilt from the saved minutes
     S.pics = {};
     for (const it of M.sections["Community Reports"] || []) if (it.member && it.pictures?.length) S.pics[it.member] = it.pictures;
@@ -77,13 +81,13 @@
     if (!t) return "";
     const first = k.startsWith("g:") ? k.slice(2).split(" ")[0] : people[k]?.name.split(" ")[0];
     const lead = t.toLowerCase();
-    if (first && !lead.startsWith(first.toLowerCase()) && !lead.startsWith(label(k).toLowerCase())) t = `${label(k)} ${t}`;
+    if (first && !lead.startsWith(first.toLowerCase()) && !lead.startsWith(label(k).toLowerCase())) t = `${label(k)}${/^(?:[-*+]|\d+\.)\s/.test(t) ? "\n" : " "}${t}`;  // a list starts under the name
     return t;
   }
   function syncReports() {
     M.sections["Community Reports"] = [
       ...S.done.map((k) => ({ text: reportText(k), member: k.startsWith("g:") ? null : k, pictures: S.pics[k] || [] })).filter((i) => i.text),
-      ...S.others.filter((t) => t.trim()).map((t) => ({ text: t, member: null })),
+      ...S.others.map((t, i) => ({ text: t, member: null, pictures: S.otherPics[i] || [] })).filter((i) => i.text.trim()),
     ];
   }
 
@@ -177,7 +181,7 @@
           body: JSON.stringify({ meeting: M, state: S, tab: TAB }),
         });
         if (r.status === 409 || r.status === 404) { await checkIn(); if (readOnly) return; }  // taken over, or discarded elsewhere
-        if (!r.ok) throw new Error(await r.text());
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
         saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved";
       } catch (e) { saved.textContent = "Not saved: " + e.message; saved.className = "saved err"; }
       waiters.splice(0).forEach((r) => r());
@@ -196,12 +200,27 @@
   function render() {
     const nav = document.getElementById("steps");
     nav.replaceChildren(...STEPS.map((s, i) => h("button", { class: i === S.step ? "on" : "", onclick: () => go(i) }, `${i + 1}. ${STEP_LABEL[s] || s}`)));
+    document.getElementById("next").hidden = S.step === STEPS.length - 1;  // Review, the last step: nothing after it
     const step = STEPS[S.step];
     panel.replaceChildren(
       step === "Attendance" ? attendance() :
       step === "Community Reports" ? reports() :
       step === "Review" ? review() : listSection(step));
     panel.querySelectorAll("textarea").forEach(grow);
+  }
+
+  // ---------- quorum (the club's rule, if any; guests never count) ----------
+  function quorum() {
+    const q = D.quorum;
+    if (!q) return null;
+    const here = [...M.in_person, ...M.remote], count = here.filter((x) => q.active.includes(x)).length;
+    const off = here.filter((x) => q.officer_ids.includes(x)).length;
+    const short = [];
+    if (q.needed != null && count < q.needed) short.push(`${q.needed - count} short`);
+    if (q.officers != null && off < q.officers) short.push(`${q.officers - off} more officer${q.officers - off === 1 ? "" : "s"} needed`);
+    const have = [q.needed != null ? `${count} present, ${q.needed} needed` : null,
+      q.officers != null ? `${off} officer${off === 1 ? "" : "s"} present, ${q.officers} needed` : null].filter(Boolean).join("; ");
+    return { ok: !short.length, text: short.length ? short.join(", ") : have + " ✓", majority: Math.floor(count / 2) + 1 };
   }
 
   // ---------- attendance ----------
@@ -249,6 +268,7 @@
     const n = (w) => w === "inperson" ? M.in_person.length : M.remote.length;
     return h("div", {},
       D.celebrations.length ? h("p", { class: "msg ok" }, emo("🎉", "star"), " ", D.celebrations.join(" · ")) : null,
+      (() => { const q = quorum(); return q ? h("p", { class: "msg " + (q.ok ? "ok" : "warn"), role: "status" }, "Quorum: " + q.text) : null; })(),
       h("h2", {}, `Attendance: ${M.in_person.length} in person, ${M.remote.length} online, ${M.guests.length + M.visitors} guest${M.guests.length + M.visitors === 1 ? "" : "s"}`),
       h("p", { class: "legend" }, "Tap a name to cycle: ", h("span", { class: "mbtn" }, "absent"), "→",
         h("span", { class: "mbtn inperson" }, `in person (${n("inperson")})`), "→", h("span", { class: "mbtn online" }, `online (${n("online")})`)),
@@ -318,7 +338,7 @@
     if (S.current) {
       const k = S.current;
       const past = k.startsWith("g:") ? [] : (D.history[k] || []);
-      const ta = h("textarea", { rows: 4, placeholder: "What are they working on? (their name is added automatically)", oninput: (e) => { S.reports[k] = e.target.value; grow(e.target); save(); } });
+      const ta = h("textarea", { rows: 4, "data-format": true, "data-pic": "report", placeholder: "What are they working on? (their name is added automatically)", oninput: (e) => { S.reports[k] = e.target.value; grow(e.target); save(); } });
       ta.value = S.reports[k] || "";
       floor = h("div", { class: "floor" },
         h("h3", {}, `${fullName(k)} has the floor`),
@@ -334,21 +354,23 @@
           h("button", { class: "btn ghost", onclick: () => { S.skipped.push(k); S.current = null; render(); save(); } }, "Come back later")));
       setTimeout(() => ta.focus(), 0);
     } else {
-      floor = h("div", { class: "floor" }, h("h3", {}, rem.length ? "Who's next?" : "Everyone has reported"),
-        h("p", { class: "hint" }, rem.length ? "Press “Suggest next” or call on someone." : "Use “Edit” to change a report, or move on to Old Business."));
+      floor = h("div", { class: "floor" }, h("h3", {}, rem.length ? "Who's next?" : present().length ? "Everyone has reported" : "Who's next?"),
+        h("p", { class: "hint" }, rem.length || !present().length ? "Press “Suggest next” or call on someone." : "Use “Edit” to change a report, or move on to Old Business."));
     }
     // Notes members sent in for tonight (Business page). Someone who's here anyway gives their own report.
     const here = (id) => M.in_person.includes(id) || M.remote.includes(id);
     const noteCard = (n) => h("div", { class: "notecard" },
       h("div", {}, h("b", {}, n.name), here(n.by) ? h("span", { class: "badge" }, "here tonight") : null),
       h("div", { class: "notetext" }, n.text),
+      (n.pictures || []).length ? h("div", { class: "pics" }, n.pictures.map((p, i) => h("img", { src: `/pictures/${p}-s.jpg`, alt: `Picture ${i + 1} with ${n.name}'s note` }))) : null,
       h("div", { class: "notebtns" },
         here(n.by)
           ? h("button", { class: "btn small", onclick: async () => {
               S.reports[n.by] = [S.reports[n.by], n.text].filter(Boolean).join(" ");
+              S.pics[n.by] = [...(S.pics[n.by] || []), ...(n.pictures || [])].slice(0, 4);
               await noteStatus(n, "read"); } }, "Use it in their report")
           : h("button", { class: "btn small", onclick: async () => {
-              S.others.push(`${n.name} sent a note: ${n.text}`);
+              S.others.push(`${n.name} sent a note: ${n.text}`); S.otherPics[S.others.length - 1] = n.pictures || [];
               await noteStatus(n, "read"); } }, "Read it out, add it to the minutes"),
         h("button", { class: "btn small ghost", onclick: () => noteStatus(n, "dismissed") }, "Skip")));
     const notes = (D.business.notes || []).length ? h("div", { class: "notesbox" },
@@ -358,18 +380,20 @@
       D.business.notes.map(noteCard)) : null;
     const others = h("div", {}, h("h3", { style: "margin-top:1.2rem" }, "Other reports"),
       h("p", { class: "hint" }, "For news passed along by someone who isn't present, e.g. “Jeremy sent a message recommending…”."),
-      itemRows(S.others, (arr) => { S.others = arr; }));
+      itemRows(S.others, (arr) => { S.others = arr; syncReports(); }, S.otherPics));
     return h("div", {}, h("h2", {}, "Community Reports"), notes, h("div", { class: "cols2" }, queue, h("div", {}, floor, others)));
   }
 
   // ---------- plain list sections ----------
-  function itemRows(arr, setArr) {
+  function itemRows(arr, setArr, pics) {  // pics: a list kept in step with arr (Other reports' pictures), shown as a count
     const wrap = h("div", {});
     const draw = () => wrap.replaceChildren(
-      ...arr.map((t, i) => {
-        const ta = h("textarea", { rows: 1, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
+      ...(arr.length ? arr : arr.concat("")).map((t, i) => {  // an empty section: one box ready to type in (a blank is never saved)
+        const ta = h("textarea", { rows: 1, "data-format": true, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
         ta.value = t;
-        return h("div", { class: "row" }, ta, h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
+        const n = pics?.[i]?.length;
+        return h("div", { class: "row" }, ta, n ? h("span", { class: "hint" }, `${n} picture${n === 1 ? "" : "s"}`) : null,
+          h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); pics?.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
       }),
       h("button", { class: "btn small ghost", onclick: () => { arr.push(""); setArr(arr); draw(); wrap.querySelectorAll("textarea")[arr.length - 1].focus(); } }, "+ Add item"));
     draw();
@@ -389,7 +413,7 @@
     const treasurer = paid.length ? h("div", { class: "card" }, h("p", { class: "hint" }, "The Treasurer recorded these as paid since the last meeting:"),
       h("ul", {}, paid.map((t) => h("li", {}, t))),
       h("button", { class: "btn small ghost", onclick: () => { set(arr.concat(paid)); render(); save(); } }, "Add to tonight's bills")) : null;
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, hint), treasurer, rows);
+    return h("div", {}, h("h2", {}, sec), shint(hint), treasurer, rows);
   }
 
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
@@ -399,6 +423,7 @@
     const wrap = h("div", {});
     const cals = h("div", {});  // the calendar list below, refreshed with the events (one removed shows there again)
     const draw = () => {
+      if (!evs.length) evs.push({ text: "", member: null, when: null });  // one box ready to type in (a blank is never saved)
       wrap.replaceChildren(...evs.map((e, i) => {
         const [d, t] = (e.when || "").split("T"), [ed, et] = (e.until || "").split("T");
         const date = h("input", { type: "date", value: d || "", "aria-label": "Starts" });
@@ -419,7 +444,7 @@
         nodate.hidden = !!e.when;
         const cal = h("select", { "aria-label": "Calendar", title: "Which calendar it goes on", onchange: (ev) => { e.cal = ev.target.value === "events" ? null : ev.target.value; save(); } },
           [["events", "Club events"], ["community", "Community"], ["planning", "Planning"]].map(([v, t]) => h("option", { value: v, selected: v === (e.cal || "events") }, t)));
-        const ta = h("textarea", { rows: 1, placeholder: "What, and where", "aria-label": "Event",
+        const ta = h("textarea", { rows: 1, "data-format": true, placeholder: "What, and where", "aria-label": "Event",
           oninput: (ev) => { e.text = ev.target.value; grow(ev.target); save(); } });
         ta.value = e.text;
         return h("div", { class: "bizitem event" }, h("div", { class: "row" }, ta,
@@ -438,7 +463,7 @@
       cals.replaceChildren(calendarCard(evs, draw));
     };
     draw();
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), wrap, cals);
+    return h("div", {}, h("h2", {}, sec), shint(HINTS[sec]), cals, wrap);  // what's on the calendar first, to read out (Jim, 2026-11-20)
   }
 
   // Two titles that look like the same event: half the shorter one's words in the other (calview.similar)
@@ -448,7 +473,7 @@
   const same = (e, c) => e.text.trim().toLowerCase().startsWith(c.title.toLowerCase());  // added from the list: one event
 
   // What's on the calendar (console.calendar_ahead), to read out; added to the minutes only on a tap.
-  let ahead = "next";
+  let ahead = "next", once = true;  // once: a repeating event (a weekly net) shows only its next date
   function calendarCard(evs, redraw) {
     const card = h("div", { class: "card" });
     const day = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
@@ -457,12 +482,16 @@
     const pick = h("select", { "aria-label": "How far ahead", onchange: (e) => { ahead = e.target.value; fill(); } },
       [["next", "until the next meeting"], ["14", "the next 2 weeks"], ["31", "the next month"], ["92", "the next 3 months"]]
         .map(([v, t]) => h("option", { value: v, selected: v === ahead }, t)));
+    const onceBox = h("label", { class: "check small" }, h("input", { type: "checkbox", checked: once, onchange: (e) => { once = e.target.checked; fill(); } }),
+      " Repeating events: the next date only");
     const fill = () => {
       // already in the minutes: same day, and the text starts with its title ("Fox hunt, the park")
       const have = (c) => evs.some((e) => (e.when || "").slice(0, 10) === c.start && same(e, c));
       const alike = (c) => evs.find((e) => (e.when || "").slice(0, 10) === c.start && e.text.trim() && similar(c.title, e.text));
-      const list = (D.calendar || []).filter((c) => c.start <= ends[ahead] && !have(c));
-      card.replaceChildren(h("p", { class: "row" }, h("strong", {}, "From the calendar"), pick),
+      const seen = new Set();  // the list is in date order: a series' first entry is its next date
+      const list = (D.calendar || []).filter((c) => c.start <= ends[ahead] && !have(c)
+        && !(once && c.series && (seen.has(c.series) || !seen.add(c.series))));
+      card.replaceChildren(h("p", { class: "row calhead" }, h("strong", {}, "From the calendar"), pick, onceBox),
         list.length ? h("ul", {}, list.map((c) => [c, alike(c)]).map(([c, dup]) => h("li", { class: dup ? "dup" : null },
           h("strong", {}, day(c.start), c.time ? " " + c.time : "", c.end !== c.start ? " – " + day(c.end) : ""), " ",
           c.title, c.where ? ` (${c.where})` : "", " ", h("span", { class: "muted small" }, c.kind), " ",
@@ -482,15 +511,16 @@
     const box = h("div", {});
     const send = async (url, data) => {
       const r = await fetch(url, { method: "POST", headers: { Accept: "application/json" },
-        body: new URLSearchParams({ meeting: M.slug, ...data }) });
+        body: new URLSearchParams([["meeting", M.slug], ...Object.entries(data).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => [k, x]) : [[k, v]]))]) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return; }
+      if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return false; }
       D.business = j; saved.replaceChildren("Saved ", emo("✅", "check")); saved.className = "saved"; draw();
+      return true;
     };
     const fmtDate = (d) => new Date(d + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const row = (x) => {
       const done = x.status === "done";
-      const ta = h("textarea", { rows: 1, oninput: (e) => grow(e.target),
+      const ta = h("textarea", { rows: 1, "data-format": true, oninput: (e) => grow(e.target),
         onchange: (e) => send(`/business/${x.id}/edit`, { text: e.target.value }) });
       ta.value = x.text;
       // Type a name (the list filters as you type); the server matches it to a member.
@@ -513,43 +543,81 @@
         h("div", { class: "row meta" }, owner, due,
           x.overdue ? h("span", { class: "badge warn" }, `overdue since ${fmtDate(x.due)}`) : null,
           !isNew ? h("span", { class: "hint" }, `first mentioned ${fmtDate(x.opened)}`) : null),
-        // comments since the last meeting, each with when it was written ("Tue 7:41 PM")
-        (x.new_comments || []).map((c) => h("div", { class: "bizcomment" }, h("b", {}, c.name), " ",
-          h("span", { class: "hint" }, new Date(c.at * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })),
-          h("b", {}, ": "), c.text)));
+        // comments since the last meeting, each with when it was written ("Tue 7:41 PM"); the leader picks which go in
+        // the minutes. Said at this meeting: in them already (✖ takes back a mistyped one).
+        (x.new_comments || []).map((c) => {
+          const said = c.meeting === M.slug, picked = said || c.minutes === M.slug;
+          return h("div", { class: "bizcomment" + (picked ? " inmin" : "") }, h("b", {}, c.name), " ",
+            h("span", { class: "hint" }, said ? "at the meeting" : new Date(c.at * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })),
+            h("b", {}, ": "), c.text, " ",
+            said ? h("button", { class: "btn small ghost", title: "Delete (recorded by mistake)",
+              onclick: () => { if (confirm("Delete what was recorded?")) send(`/business/${x.id}/comments/${c.id}/delete`, {}); } }, emo("✖️", "x"))
+              : h("button", { class: "btn small" + (picked ? "" : " ghost"), title: picked ? "Take it out of the minutes" : "Put it in tonight's minutes, under this item",
+                onclick: () => send(`/business/${x.id}/comments/${c.id}/minutes`, { on: picked ? 0 : 1 }) }, picked ? [emo("✅", "check"), " In the minutes"] : "Add to the minutes"));
+        }),
+        saidForm(x));
+    };
+    // What someone says about an item at the meeting: their comment on it, and in the minutes under it
+    const saidForm = (x) => {
+      const who = makeCombo(h("input", { placeholder: "Who said it", "aria-label": "Who said it", class: "ownerbox" }),
+        [...D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), ...M.guests.map((g) => ({ value: g.name, note: "guest" }))], { empty: "(or type a name)" });
+      const ta = h("textarea", { rows: 1, "data-format": true, maxlength: 5000, placeholder: "What they said", "aria-label": "What they said", oninput: (e) => grow(e.target) });
+      const go = () => {
+        const name = who.querySelector("input").value.trim();
+        if (!name || !ta.value.trim()) { alert("Pick who said it and type what they said."); return; }
+        send(`/business/${x.id}/said`, { who: name, text: ta.value });
+      };
+      return h("details", { class: "said" }, h("summary", {}, "Record what's said"), h("div", { class: "row" }, who), ta,
+        h("button", { class: "btn small", onclick: go }, "Add to the item and the minutes"));
     };
     const add = () => {
-      const ta = h("textarea", { rows: 1, placeholder: isNew ? "New item…" : "", oninput: (e) => grow(e.target) });
-      const go = () => { if (ta.value.trim()) send("/business/add", { text: ta.value }); };
-      return h("div", {}, h("div", { class: "row" }, ta, h("button", { class: "btn small", onclick: go }, "+ Add item")),
-        h("button", { class: "btn small ghost", onclick: (e) => e.target.replaceWith(motionForm()) }, "+ Motion"));
+      const ta = h("textarea", { rows: 1, "data-format": true, placeholder: "New item…", "aria-label": "New item", oninput: (e) => grow(e.target) });
+      const go = async () => { if (ta.value.trim() && await send("/business/add", { text: ta.value })) { ta.value = ""; grow(ta); } };
+      return h("div", { class: "row" }, ta, h("button", { class: "btn small", onclick: go }, "+ Add item"));
     };
     // A motion: who moved it, what, who seconded, and how it went (no default: the leader picks the result).
     const motionForm = () => {
       const person = (label, exclude) => makeCombo(h("input", { placeholder: label, "aria-label": label, class: "ownerbox" }),
         D.members.map((m) => ({ value: m.name, note: m.callsign || "" })), { empty: "(nobody)", exclude });
       const mover = person("Moved by", () => val(second)), second = person("Seconded by", () => val(mover));
-      const what = h("textarea", { rows: 1, placeholder: "buy a new antenna for the repeater", "aria-label": "Moved to", oninput: (e) => grow(e.target) });
+      const what = h("textarea", { rows: 1, "data-format": true, "data-pic": "motion", placeholder: "buy a new antenna for the repeater", "aria-label": "Moved to", oninput: (e) => grow(e.target) });
+      const mpics = [], thumbs = h("div", { class: "pics" });  // uploaded at once (/api/pictures), sent with the motion
+      const picker = h("input", { type: "file", "data-picker": "motion", accept: "image/jpeg,image/png,image/webp", class: "sr", onchange: async (e) => {
+        const f = e.target.files[0]; e.target.value = "";
+        if (!f || mpics.length >= 4) return;
+        const fd = new FormData(); fd.append("file", f);
+        const r = await fetch("/api/pictures", { method: "POST", body: fd }), j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.id) { alert(j.error || "Couldn't add that picture."); return; }
+        mpics.push(j.id); thumbs.append(h("img", { src: `/pictures/${j.id}-s.jpg`, alt: `Picture ${mpics.length} with the motion` }));
+      } });
       const result = h("select", { "aria-label": "Result" }, ["", "Passed", "Failed", "Tabled", "Withdrawn", "Died for lack of a second"]
         .map((v) => h("option", { value: v }, v || "Result…")));
       const val = (w) => w.querySelector("input").value.trim();
-      const go = () => {
+      const go = async () => {
         if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
-        send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value });
+        if (await send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value, pics: mpics })) { mform = motionForm(); draw(); }
       };
-      return h("div", { class: "bizitem motion" }, h("b", {}, "Motion"),
-        h("div", { class: "row" }, mover, h("span", {}, "moved to")), what,
+      const q = quorum();
+      return h("div", { class: "bizitem motion" },
+        q && !q.ok ? h("p", { class: "msg warn", role: "status" }, "No quorum yet: motions shouldn't be brought up until there is one.") :
+          q ? h("p", { class: "hint", role: "status" }, `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`) : null,
+        h("div", { class: "row" }, mover, h("span", {}, "moved to")), what, picker, thumbs,
         h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
     };
+    // New Business: two cards, Items and Motions, both open, each with its box ready (Jim, 2026-11-20)
+    const card = (title, rows, form) => h("details", { class: "card bizcard", open: true }, h("summary", {}, h("h3", {}, title)), ...rows, form);
+    let addBox, mform;  // kept across redraws (any save redraws), so a half-typed item or motion isn't lost
     const draw = () => {
       const items = isNew ? D.business.new : D.business.old;
-      box.replaceChildren(
-        ...(items.length ? items.map(row) : [h("p", { class: "muted" }, isNew ? "Nothing new yet." : "No open items.")]),
-        isNew ? add() : h("p", { class: "hint" }, "New items go in New Business. ", h("a", { href: "/business", target: "_blank", rel: "noopener" }, "All business items")));
+      if (isNew) { addBox ??= add(); mform ??= motionForm(); }
+      box.replaceChildren(...(isNew ? [card("Items", items.filter((x) => !x.motion).map(row), addBox),
+        card("Motions", items.filter((x) => x.motion).map(row), mform)]
+        : [...(items.length ? items.map(row) : [h("p", { class: "muted" }, "No open items.")]),
+          h("p", { class: "hint" }, "New items go in New Business. ", h("a", { href: "/business", target: "_blank", rel: "noopener" }, "All business items"))]));
       setTimeout(() => box.querySelectorAll("textarea").forEach(grow), 0);
     };
     draw();
-    return h("div", {}, h("h2", {}, sec), h("p", { class: "hint" }, HINTS[sec]), box);
+    return h("div", {}, h("h2", {}, sec), shint(HINTS[sec]), box);
   }
 
   // ---------- chow: did tonight's member bring it? The rest is read-only, from the chow schedule. ----------
@@ -587,7 +655,7 @@
     };
     draw(); showList();
     return h("div", {}, h("h2", {}, "Chow"), box,
-      h("p", { class: "hint" }, HINTS["Upcoming Chow"], " ", h("a", { href: "/chow", target: "_blank", rel: "noopener" }, "Open the Chow page")),
+      shint(HINTS["Upcoming Chow"], " ", h("a", { href: "/chow", target: "_blank", rel: "noopener" }, "Open the Chow page")),
       h("h3", {}, "In the minutes (Upcoming Chow)"), list);
   }
 
@@ -603,12 +671,16 @@
       h("h2", {}, "Review"),
       invites.length ? h("div", { class: "invitebox" }, `Before closing: invite ${invites.map((g) => `${g.name} (${ordinal(visitNo(g))} visit)`).join(", ")} to apply for membership.`) : null,
       missing.length ? h("p", { class: "hint" }, `No report recorded for: ${missing.map(label).join(", ")}.`) : null,
-      h("p", {}, h("button", { class: "btn warn", onclick: async () => {
-        const E = D.email, who = E.only_to ? `TEST MODE: only to ${E.only_to.join(", ")}` : `all ${E.roster} members on the roster`;
-        if (!confirm(`Submit these minutes? They will be published to the archive and emailed (${who}).`)) return;
-        await save(true); document.getElementById("submitform").submit();
-      } }, "Submit minutes")),
-      box);
+      submit(),
+      box,
+      submit());  // at the end too, where Next is on the other steps (Jim, 2026-11-21)
+  }
+  function submit() {
+    return h("p", {}, h("button", { class: "btn warn", onclick: async () => {
+      const E = D.email, who = E.only_to ? `TEST MODE: only to ${E.only_to.join(", ")}` : `all ${E.roster} members on the roster`;
+      if (!confirm(`Submit these minutes? They will be published to the archive and emailed (${who}).`)) return;
+      await save(true); document.getElementById("submitform").submit();
+    } }, "Submit minutes"));
   }
 
   render();

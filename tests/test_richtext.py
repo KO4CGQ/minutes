@@ -1,0 +1,159 @@
+"""Formatting in reports, business items and comments (richtext.py): only bold, italic, lists, links, quotes and code; typed HTML stays
+text; links only to http(s) and mailto, always showing their address; a QR code only for an address marked [QR]; old
+plain text reads the same."""
+import datetime as dt
+import re
+
+from club_minutes import richtext
+from club_minutes.meeting import Item, Meeting
+
+
+def test_formatting_and_nothing_else():
+    assert str(richtext.render("**2 m** and *new*")) == "<strong>2 m</strong> and <em>new</em>"
+    assert "<ul>" in richtext.render("- one\n- two") and "<ol>" in richtext.render("1. first\n2. second")
+    for t in ("<script>alert(1)</script>", '<img src=x onerror="alert(1)">', "    indented old line", "# not a heading",
+              "![x](https://example.org/x.png)"):
+        out = str(richtext.render(t))
+        assert "<script" not in out and "<img" not in out and "<h1" not in out and "<code" not in out and "<pre" not in out, t
+    assert str(richtext.render("<b>hi</b>")) == "&lt;b&gt;hi&lt;/b&gt;"  # HTML typed in shows as text
+    assert str(richtext.render("Tom & Jerry 5 > 3")) == "Tom &amp; Jerry 5 &gt; 3"
+    assert str(richtext.render("50/50 drawing - Rich $7.50")) == "50/50 drawing - Rich $7.50"  # old text unchanged
+
+
+def test_only_an_address_marked_qr_gets_a_code_and_addresses_always_show():
+    web = str(richtext.render("Plans: https://example.org/jpole [QR], [the form](https://example.org/form), see https://example.org/photos."))
+    assert web.count("<svg") == 1 and 'class="qrcode" href="https://example.org/jpole"' in web and "[QR]" not in web
+    assert web.count("https://example.org/jpole</a>") == 1  # the address shows once, in the text, not again by its code
+    assert 'the form (<a href="https://example.org/form" rel="noopener nofollow" target="_blank">https://example.org/form</a>)' in web  # a word never hides an address
+    assert "photos</a>." in web  # the full stop outside the link
+    assert richtext.render("https://example.org/a [qr]").count("<svg") == 1  # any case
+    assert richtext.render('[old](https://example.org/a "qr")').count("<svg") == 1  # the first version's mark still works
+
+
+def test_the_pdf_shows_the_address_and_its_qr():
+    pdf = str(richtext.render("Plans: https://example.org/jpole [QR], [the form](https://example.org/form)", pdf=True))
+    assert "Plans: https://example.org/jpole" in pdf and "the form (https://example.org/form)" in pdf
+    assert pdf.count("<svg") == 1 and "<a " not in pdf and pdf.count("https://example.org/jpole<") == 2  # the text and the code's title
+
+
+def test_each_qr_code_is_numbered_like_its_link_with_a_caption():
+    out = str(richtext.render("[Field **Day**](https://example.org/fd) [QR] and https://www.example.org/map/park/ [QR] and https://example.org/x", pdf=True))
+    assert out.count("<svg") == 2 and "[QR]" not in out  # "[words](address) [QR]" gets a code too
+    assert 'Field <strong>Day</strong> (https://example.org/fd)<sup class="qrn">1</sup>' in out
+    assert 'https://www.example.org/map/park/<sup class="qrn">2</sup>' in out and "x<sup" not in out  # no code, no number
+    assert '<b>1</b> Field Day</span>' in out  # its words, without their marks
+    assert '<b>2</b> example.org/<wbr>map/<wbr>park</span>' in out  # else the short address, breaking after a "/"
+    long = str(richtext.render(f"https://example.org/{'a' * 60} [QR]"))
+    assert "a…</span>" in long and 'aria-label="QR code 1: https://example.org/' in long
+
+
+def test_unsafe_links_become_plain_words():
+    bad = str(richtext.render('[click](javascript:alert(1) "qr") [mail](mailto:jane@example.org "qr")'))
+    assert "javascript" not in bad and 'href="mailto:jane@example.org"' in bad and "<svg" not in bad  # no QR for mail
+
+
+def test_plain_drops_the_marks_and_the_qr_mark():
+    assert richtext.plain('**Bold** *it* https://example.org/f [QR] [x](https://example.org/x) snake_case') \
+        == "Bold it https://example.org/f x (https://example.org/x) snake_case"
+    assert richtext.plain('[https://example.org/a](https://example.org/a "qr")') == "https://example.org/a"
+
+
+def test_an_item_with_a_list_in_it_stays_one_item():
+    """An item's other lines are saved indented, so a report with a list reads back as one item; older files'
+    unindented continuation lines still join with a space; typing can't forge a section, item or tag."""
+    m = Meeting(date=dt.date(2026, 10, 15), sections={"New Business": [
+        Item("Ideas:\n\n- a GOTA station\n- a food tent", "n0call"), Item("Next\n## Fake\n- forged <!-- member: x -->")]})
+    back = Meeting.from_markdown(m.to_markdown())
+    assert list(back.sections) == ["New Business"]
+    assert [(i.text, i.member) for i in back.items("New Business")] == [
+        ("Ideas:\n\n- a GOTA station\n- a food tent", "n0call"), ("Next\n## Fake\n- forged  member: x -->", None)]
+    old = Meeting.from_markdown("---\ndate: 2026-10-15\n---\n## New Business\n- first line\nwrapped on\n- second\n")
+    assert [i.text for i in old.items("New Business")] == ["first line wrapped on", "second"]
+
+
+def test_an_items_first_line_is_its_title():
+    from club_minutes.richtext import title
+    assert title("Ask the **park**\n- pavilion\n- [form](https://example.org/f \"qr\")") == "Ask the park"
+    assert title("") == ""
+
+
+
+def test_a_too_long_qr_link_and_odd_text_dont_break_anything():
+    from club_minutes.meeting import ITEM_MAX, item_text
+    from club_minutes.richtext import render
+    long = "https://example.org/" + "a" * 2900
+    out = render(f'[x]({long} "qr")')
+    assert "<svg" not in out and 'href="https://example.org/' in out  # a plain link, not a crash
+    assert len(item_text("x" * 50000)) == ITEM_MAX and item_text("a\x01b\x02") == "ab"
+
+
+
+def test_a_list_typed_right_under_a_line_is_a_list():
+    from club_minutes.richtext import render
+    out = render("Built a **new** antenna\n- mast up\n- feed line next\nPlans next week\nand after")
+    assert "<p>Built a <strong>new</strong> antenna</p>" in out and out.count("<li>") == 2
+    assert "Plans next week<br>" in out  # a single line break stays a break
+    out = render("Fruit:\n1. Apple\n2. kiwi\n3.\n- \nDone")
+    assert out.count("<li>") == 2 and "3." not in out and "<p>Done</p>" in out  # an empty item (Enter after the last) is dropped
+
+
+class Names:  # what a Club or a snapshot View offers a mention
+    def known_name(self, mid):
+        return {"n0call": "Jane D"}.get(mid)
+
+
+def test_a_mention_is_a_name_pill_and_nothing_else_becomes_a_link():
+    n = Names()
+    assert str(richtext.render("Thanks @[Jane Doe](n0call)!", names=n)) == 'Thanks <a class="who" href="/members/n0call">Jane D</a>!'
+    assert str(richtext.render("@[Jane Doe](n0call)", pdf=True, names=n)) == '<span class="who">Jane D</span>'  # the shown name, no @
+    assert str(richtext.render("**@[Jane D](n0call)**", names=n)).startswith("<strong><a class=\"who\"")
+    assert str(richtext.render("@[Old Member](gone)", names=n)) == "Old Member"  # no member: the typed name, no link
+    assert str(richtext.render("@[Jane D](n0call)")) == "Jane D"  # no names to look up
+    for hostile in ("@[<script>](x)", "@[a](javascript:1)", "@[a](../../admin)", "@[a[b]](n0call)", "@[a](n0call/../x)", "@[x](n0call\"onclick=\"1)"):
+        out = str(richtext.render(hostile, names=n))
+        assert "<script" not in out and "javascript" not in out and 'href="/members/n0call/' not in out and "onclick" not in out.replace("&quot;", ""), hostile
+        assert 'href="../' not in out and "<a " not in out.replace('<a class="who" href="/members/n0call">Jane D</a>', ""), hostile
+    assert str(richtext.render("@[<b>](x)", names=n)) == "&lt;b&gt;"
+    assert str(richtext.render("jane@example.org", names=n)) == "jane@example.org"  # an email's @ stays text
+    assert str(richtext.render("0 @[Jane D](n0call)", names=n)).count("Jane D") == 1  # typed tokens can't forge a pill
+    assert richtext.plain("Thanks @[Jane Doe](n0call), see https://example.org") == "Thanks Jane Doe, see https://example.org"
+    assert richtext.mentions("@[A](n0call) @[B](kim) @[C](bad id)") == {"n0call", "kim"}
+
+
+def test_quotes_and_code():
+    """Jim, 2026-11-20 (a drafted email in a business item): "> " lines are a quote, lists and line breaks kept inside;
+    `code` and ``` blocks show exactly as typed (no links, mentions or marks; HTML still text); an unclosed block is text."""
+    q = str(richtext.render("Draft:\n> Dear park,\n> - one\n> - two\n>\n> Thanks,\n> Jim"))
+    assert q.startswith("<p>Draft:</p>") and '<blockquote class="rquote">' in q and "<li>two</li>" in q and "Thanks,<br>" in q
+    assert str(richtext.render("> Hi Jane,\n> See you.\nRun it")).endswith("</blockquote>\n<p>Run it</p>")  # the quote ends
+    assert str(richtext.render("Run `ls *x* <b>`")) == 'Run <code class="rcode">ls *x* &lt;b&gt;</code>'
+    b = str(richtext.render("Set:\n```ini\nurl = https://example.org [QR]\n**not bold** @[Jane D](n0call)\n- not a list\n```\nDone"))
+    assert '<pre class="rcode"><code>url = https://example.org [QR]\n**not bold** @[Jane D](n0call)\n- not a list</code></pre>' in b
+    assert "<a " not in b and "<svg" not in b and b.endswith("<p>Done</p>")
+    assert '<pre class="rcode"><code>a\nb</code></pre>' in str(richtext.render("x\r\n```\r\na\r\nb\r\n```\r\ny"))  # as a form posts it
+    assert "<pre" not in str(richtext.render("```\nnever closed")) and str(richtext.render("5 > 3")) == "5 &gt; 3"
+    assert richtext.plain("> Dear `x`\n```\ncode\n```").strip() == "Dear x\ncode"
+
+
+def test_odd_text_stays_quick_and_never_breaks_the_page():
+    """5,000 characters of what members could type (business text's limit): "[" made Markdown rescan the text for each
+    one (1.3 s), and "- - - …" nested a list per mark until Python's recursion limit (an error page)."""
+    import time
+    for t in ("[" * 5000, "[a](" * 1250, "@[" * 2500, "- " * 2500, "1. " * 1666, "> " * 2500):
+        start = time.monotonic()
+        out = str(richtext.render(t))
+        assert time.monotonic() - start < 0.5, t[:8]
+        assert "<script" not in out
+    assert "[x] [1]" in str(richtext.render("[x] [1]")) and '<a href="https://example.org/f"' in str(richtext.render("[f](https://example.org/f)"))
+
+
+def test_a_never_record_mention_and_a_mention_or_code_in_an_address():
+    class Hidden:
+        def known_name(self, mid):
+            return ""  # club.known_name for a member the club never records
+    out = str(richtext.render("Thanks @[Jane Doe](n0call)!", names=Hidden()))
+    assert out == "Thanks a member!" and "Jane" not in out and "n0call" not in out
+    for t in ("[a](https://example.org/@[Jane](n0call))", "[a](https://example.org/`x`)", "[a](https://example.org/```\nx\n```)"):
+        out = str(richtext.render(t, names=Names()))
+        assert not [h for h in re.findall(r'href="([^"]*)"', out) if "<" in h or "" in h or "" in h], out
+        assert "<a" not in out.replace('<a class="who"', ""), out

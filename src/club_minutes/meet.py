@@ -39,6 +39,7 @@ def settings(club: Club) -> dict | None:
     """{domain, app_id, room} when Jitsi is on and set up (Site → Features or club.yaml's jitsi: block, and the
     secret in the server's env); else None."""
     domain, app_id = (str(_setting(club, k) or "").strip().strip("/") for k in ("domain", "app_id"))
+    domain = domain if DOMAIN.match(domain) else ""  # it goes into the CSP form-action header
     if not club.has("jitsi") or not domain or not app_id or len(secret()) < 32:  # a short secret can be guessed from one token
         return None
     return {"domain": domain, "app_id": app_id, "room": str(_setting(club, "room") or "club")}

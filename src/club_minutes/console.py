@@ -13,9 +13,9 @@ import shutil
 import threading
 import time
 
-from . import ai, auth, business, chow, pictures, prefs
+from . import ai, auth, business, chow, pictures, prefs, snapshot
 from .club import DATA, show_date
-from .meeting import Item, Meeting, one_line
+from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
 
 log = logging.getLogger("club_minutes.console")
@@ -119,7 +119,7 @@ def business_state(archive: Archive) -> dict:
 
 def business_sections(archive: Archive, slug: str, s: dict | None = None) -> dict[str, list[Item]]:
     s = s or business_state(archive)
-    return {k: [Item(t) for t in v] for k, v in business.sections(s, archive.club, slug, _since(archive, slug)).items()}
+    return {k: [Item(t, pictures=p) for t, p in v] for k, v in business.sections(s, archive.club, slug, _since(archive, slug)).items()}
 
 
 def _since(archive: Archive, slug: str) -> str | None:
@@ -231,13 +231,14 @@ def context(archive: Archive, m: Meeting) -> dict:
                          for s in m.section_order(club.sections())},
         },
         "state": load_state(archive, m.slug),
-        "members": [{"id": x.id, "name": x.name, "short": club.short(x.id), "callsign": x.callsign}
+        "members": [{"id": x.id, "name": x.name, "short": club.shown_name(x.id), "callsign": x.callsign}
                     for x in members],
         "history": history,
         "guest_history": guests,
         "past_guests": sorted(past, key=lambda g: (g["last"], g["visits"]), reverse=True),
         "sections": m.section_order(club.sections()),  # the console's steps, between Attendance and Review
         "hints": club.section_hints(),  # for the club's own sections
+        "quorum": quorum_rule(club),
         "invite_after": int(club.info.get("invite_after_visits", 3)),
         "events_public": "events" in (club.info.get("public_calendars") or []),  # Club events shown to anyone
         "email": {"roster": len(recipients(archive)), "only_to": club.email.get("only_to")},
@@ -248,6 +249,15 @@ def context(archive: Archive, m: Meeting) -> dict:
         "paid_since": paid_since(archive, m.date),
         **calendar_ahead(archive, m.date),
     }
+
+
+def quorum_rule(club) -> dict | None:
+    """What the console needs to count a quorum as people are ticked (the browser counts): the rule, the members needed
+    and who counts. None when the club has no rule."""
+    if not club.quorum:
+        return None
+    active, officers = club.quorum_ids()
+    return {**club.quorum, "needed": club.quorum_needed(), "active": active, "officer_ids": officers}
 
 
 def paid_since(archive: Archive, date: dt.date) -> list[str]:
@@ -274,7 +284,8 @@ READ_OUT = ("events", "community", "planning", "holiday", "birthday")  # chow ha
 def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
     """What's on the calendar from the meeting's day on, for the leader to read out under Upcoming Events: club and
     community events, Planning, holidays and birthdays shared with everyone. Left out: events ticked to leave out (the
-    weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events. next_meeting: the meeting
+    weekly meeting by default), business items' due dates (Old Business has them) and the minutes' own Upcoming Events.
+    series: a repeating event's id (its dates share it), else None. next_meeting: the meeting
     event's next date, else a week on."""
     from . import calview
     from . import events as store
@@ -282,6 +293,7 @@ def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
     quiet = {e["id"] for e in evs if store.quiet(e)}
     items, _ = calview.entries(archive.club, archive, "", date, date + dt.timedelta(days=days))  # "": no private birthdays
     out = [{"start": e.start.isoformat(), "end": e.end.isoformat(), "time": e.time, "title": e.title, "where": e.where,
+            "series": e.id if e.repeats else None,  # a repeating event's dates share it: the console can show the next only
             "kind": calview.KINDS[e.kind], "cal": e.kind if e.kind in store.CALS else "events",
             # for "Add to the minutes": the same form as an Upcoming Event's when/until
             "when": f"{e.starts:%Y-%m-%dT%H:%M}" if e.starts else e.start.isoformat(),
@@ -332,6 +344,10 @@ def _span(when, until) -> tuple[str | None, str | None]:
     return when, until if until > when else None
 
 
+class Unrecorded(ValueError):
+    """Text naming someone the club never records (never_record): the leader is told, nothing is saved."""
+
+
 class Unreadable(Exception):
     """A console save that isn't the shape the console sends (a 400)."""
 
@@ -345,10 +361,10 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     def members(v) -> list[str]:  # roster ids only, any status; an old callsign becomes the current one
         return [x for x in dict.fromkeys(club.canonical(x) for x in v if isinstance(x, str)) if x in club.members]
 
-    def text(v) -> str:
+    def text(v, lines=False) -> str:
         if not isinstance(v, str):
             raise TypeError
-        return one_line(v)
+        return item_text(v) if lines else one_line(v)
     try:  # everything read first: a save of the wrong shape changes nothing
         leader = d.get("leader")
         if leader is not None and not isinstance(leader, str):
@@ -361,14 +377,18 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
         if not isinstance(visitors, int):
             raise TypeError
         sec = d.get("sections") or {}
-        sections = {s: [Item(text(i["text"]), i.get("member") if isinstance(i.get("member"), str) and i.get("member") else None, *_span(i.get("when"), i.get("until")),
+        sections = {s: [Item(text(i["text"], True), i.get("member") if isinstance(i.get("member"), str) and i.get("member") else None, *_span(i.get("when"), i.get("until")),
                              i.get("cal") if i.get("cal") in ("community", "planning") else None, pictures.ids(i.get("pictures")))
-                        for i in sec.get(s) or [] if text(i.get("text", ""))]
+                        for i in sec.get(s) or [] if text(i.get("text", ""), True)]
                     for s in m.section_order(club.sections())}  # only sections these minutes have: no others from the browser
     except (TypeError, AttributeError, KeyError):
         raise Unreadable from None
+    for items in sections.values():
+        if any(club.is_redacted(i.text) for i in items):  # never_record, as in web._unrecorded
+            raise Unrecorded("That names someone the club never records in the minutes: leave the name out.")
     m.leader = leader or m.leader
     m.in_person, m.remote, m.visitors = in_person, remote, max(0, visitors)
+    m.quorum = club.quorum_record(in_person + remote)  # kept as it was that night, whatever the roster does later
     m.guests = [g for g in guests if not club.is_redacted(g["name"])]
     m.sections = sections
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser
@@ -393,6 +413,7 @@ def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
         m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
     m.sections.update(business_sections(archive, slug))
     m.status = "published"
+    m.shown = snapshot.take(archive.club, m)  # the minutes keep what they show from today (snapshot.py)
     m.save(archive.root)
     _holds.pop(slug, None)  # finished: nobody holds them now
     if by:

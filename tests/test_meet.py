@@ -300,3 +300,10 @@ def test_menu_marks_video_meeting_only_on_its_own_pages(env, tmp_path, monkeypat
     assert '<a href="/meet" class="on" aria-current="page">' in as_("n0call").get("/meet").text
     page = as_("n0call").get("/meetings/2026-10-15").text
     assert '<a href="/meet" class="">' in page and '<a href="/minutes" class="on">' in page
+
+
+def test_a_bad_domain_in_club_yaml_is_not_set(env):
+    c = web.archive.club
+    assert meet.settings(c)["domain"] == "meet.example.org"
+    c.yaml = {**c.yaml, "jitsi": {**c.yaml["jitsi"], "domain": "x.org; form-action *"}}
+    assert meet.settings(c) is None

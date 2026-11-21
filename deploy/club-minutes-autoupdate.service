@@ -13,3 +13,9 @@ Environment=CLUB_MINUTES_GOOGLE_KEY=/etc/club-minutes/google-service-account.jso
 EnvironmentFile=-/etc/club-minutes/env
 ExecStart=/opt/club-minutes/.venv/bin/club-minutes auto-update
 TimeoutStartSec=30min
+# Hardening, as the web app: the job writes only the data folder (backups are in it).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/club-minutes

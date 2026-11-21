@@ -116,10 +116,12 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
 
     name, blob, _ = backup.make()  # needs the passphrase: no renaming without a way back
     d = DATA / "backups"
-    d.mkdir(mode=0o700, exist_ok=True)
-    keep = inside(d, name.replace(".tar.gz.enc", f"-before-{new}.tar.gz.enc"))
-    keep.write_bytes(blob)
-    keep.chmod(0o600)
+    try:
+        keep = inside(d, name.replace(".tar.gz.enc", f"-before-{new}.tar.gz.enc"))
+        blob.replace(keep)
+    except BaseException:
+        blob.unlink(missing_ok=True)
+        raise
 
     # The roster rows as stored: Club._load moves callsign aliases (earlier calls) out of Member.aliases.
     rows = json.loads(ROSTER_CACHE.read_text()) if ROSTER_CACHE.exists() else [asdict(x) for x in club.members.values()]

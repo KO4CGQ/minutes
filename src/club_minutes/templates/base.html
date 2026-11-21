@@ -36,7 +36,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
   {% if me %}
   <span class="spacer"></span>
   {% if live %}<a class="start live" href="/meetings/{{ live.slug }}">{{ emoji('🔴', 'live') }} Live meeting</a>
-  {% elif can_lead and open_draft %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console/{{ open_draft.slug }}" title="These minutes are still open: continue them, or discard them from Start meeting">Continue minutes ({{ open_draft.date|date('short') }})</a>
+  {% elif can_lead and open_draft %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console/{{ open_draft.slug }}" title="These minutes are still open: continue them, or discard them from Start meeting" aria-label="Continue minutes ({{ open_draft.date|date('short') }})">Continue<span class="word"> minutes</span> ({{ open_draft.date|date('short') }})</a>
   {% elif can_lead %}<a class="start{{ ' on' if here.startswith('/console') }}" href="/console" data-meets="{{ meeting_at }}">Start meeting</a>{% endif %}
   <span class="clock" title="Club time"></span>
   <form action="/search" class="barsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business{{ ', chow' if module('chow') }} and calendar"></form>
@@ -106,6 +106,7 @@ document.addEventListener("submit", (e) => {
 <main>{% block crumb %}{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% else %}{{ back(None, None) }}{% endif %}{% endblock %}{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
 <script src="/static/fields.js?v={{ ASSETS }}"></script>
+<script src="/static/format.js?v={{ ASSETS }}"></script>
 <script nonce="{{ csp_nonce }}">  // what inline on…= handlers did, as data- attributes: the security policy runs no inline handlers
 document.addEventListener("submit", (e) => {
   const msg = e.submitter?.dataset.confirm || e.target.dataset.confirm;  // "Are you sure?"

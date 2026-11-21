@@ -5,7 +5,8 @@
   are left out.
 - Encrypted with a passphrase only the admins hold (CLUB_MINUTES_BACKUP_PASSPHRASE in /etc/club-minutes/env):
   scrypt -> AES-256-GCM. File layout: MAGIC, 16-byte salt, 12-byte nonce, ciphertext (with its tag).
-  Without the passphrase a backup can't be read, by the storage provider or anyone else; lose it and the
+  Everything is streamed through temporary files in 1 MB chunks, so memory stays flat however many pictures
+  there are. Without the passphrase a backup can't be read, by the storage provider or anyone else; lose it and the
   backups are useless.
 - Checked: each backup is decrypted and its file list read back before it's kept or sent.
 - Where: the last KEEP_LOCAL in data/backups/ on the server, and either or both of S3-compatible storage
@@ -142,12 +143,74 @@ def decrypt(blob: bytes, pw: str) -> bytes:
         raise BackupError("Wrong passphrase, or the file is damaged.")
 
 
-def archive(data: Path | None = None) -> bytes:
-    """The data folder as .tar.gz bytes. The sign-in database is copied with SQLite's backup API (consistent
-    even while the app writes to it)."""
+CHUNK = 2 ** 20
+TAG = 16
+
+
+def _check_magic(head: bytes) -> None:
+    if head.startswith(b"W8LBZ-BACKUP-1\n"):  # 0.x, under the app's earlier name: dropped in 1.1.0
+        raise BackupError("That backup was made before 1.0.0: restore it with a 0.x install, then back up again.")
+    if not head.startswith(MAGIC):
+        raise BackupError("That isn't a backup from this app.")
+
+
+def _chunks(f):
+    while chunk := f.read(CHUNK):
+        yield chunk
+
+
+def encrypt_stream(fin, fout, pw: str) -> None:
+    """Same bytes as encrypt(): MAGIC, salt, nonce, ciphertext, tag. AES-GCM's output is the ciphertext then the tag,
+    so streaming it in chunks and appending encryptor.tag is identical to AESGCM's one-shot encrypt."""
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    salt, nonce = os.urandom(16), os.urandom(12)
+    enc = Cipher(algorithms.AES(_key(pw, salt)), modes.GCM(nonce)).encryptor()
+    enc.authenticate_additional_data(MAGIC)
+    fout.write(MAGIC + salt + nonce)
+    for chunk in _chunks(fin):
+        fout.write(enc.update(chunk))
+    fout.write(enc.finalize() + enc.tag)
+
+
+def decrypt_stream(fin, fout, pw: str) -> None:
+    """Decrypt fin (a file or BytesIO) into fout. Nothing is trusted until the end: the tag is checked last, so
+    callers read fout only after this returns."""
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    head = fin.read(len(MAGIC) + 28)
+    _check_magic(head)
+    head = head[len(MAGIC):]
+    fin.seek(0, os.SEEK_END)
+    end = fin.tell()
+    if len(head) < 28 or end < len(MAGIC) + 28 + TAG:
+        raise BackupError("Wrong passphrase, or the file is damaged.")
+    fin.seek(end - TAG)
+    tag = fin.read(TAG)
+    fin.seek(len(MAGIC) + 28)
+    left = end - TAG - fin.tell()
+    dec = Cipher(algorithms.AES(_key(pw, head[:16])), modes.GCM(head[16:28], tag)).decryptor()
+    dec.authenticate_additional_data(MAGIC)
+    try:
+        while left > 0:
+            chunk = fin.read(min(CHUNK, left))
+            left -= len(chunk)
+            fout.write(dec.update(chunk))
+        fout.write(dec.finalize())
+    except InvalidTag:
+        raise BackupError("Wrong passphrase, or the file is damaged.") from None
+
+
+def _backups_dir() -> Path:
+    d = DATA / "backups"  # not /tmp: that can be memory (tmpfs); this is the disk the backups live on
+    d.mkdir(mode=0o700, exist_ok=True)
+    return d
+
+
+def archive_to(out, data: Path | None = None) -> None:
+    """Write the data folder as .tar.gz to the file object `out`. The sign-in database is copied with SQLite's
+    backup API (consistent even while the app writes to it)."""
     data = data or DATA
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar, tempfile.TemporaryDirectory() as tmp:
+    with tarfile.open(fileobj=out, mode="w:gz") as tar, tempfile.TemporaryDirectory() as tmp:
         for p in sorted(data.rglob("*")):
             rel = p.relative_to(data)
             if not p.is_file() or rel.parts[0] in SKIP_DIRS or p.name in SKIP_FILES or p.suffix in SKIP_SUFFIXES or p.name.endswith(("-wal", "-shm")):
@@ -162,31 +225,68 @@ def archive(data: Path | None = None) -> bytes:
                 tar.add(copy, arcname=str(rel))
             else:
                 tar.add(p, arcname=str(rel))
+
+
+def archive(data: Path | None = None) -> bytes:
+    """archive_to() as bytes (in memory: for small data, tests and the old-format fixture)."""
+    buf = io.BytesIO()
+    archive_to(buf, data)
     return buf.getvalue()
 
 
-def members(blob: bytes, pw: str) -> list[str]:
-    """Decrypt and list the files: the check that a backup really opens."""
-    with tarfile.open(fileobj=io.BytesIO(decrypt(blob, pw)), mode="r:gz") as tar:
+def _open(src: bytes | Path):
+    return io.BytesIO(src) if isinstance(src, bytes) else Path(src).open("rb")
+
+
+def _plain(src: bytes | Path, pw: str, tmpdir: Path | None):
+    """The decrypted archive in an anonymous temporary file (gone when closed, on any path), rewound."""
+    out = tempfile.TemporaryFile(dir=tmpdir)  # noqa: SIM115 (closed by the caller, or here on error)
+    try:
+        with _open(src) as f:
+            decrypt_stream(f, out, pw)
+    except BaseException:
+        out.close()
+        raise
+    out.seek(0)
+    return out
+
+
+def members(src: bytes | Path, pw: str, tmpdir: Path | None = None) -> list[str]:
+    """Decrypt and list the files: the check that a backup really opens. `src` is a file (or its bytes)."""
+    with _plain(src, pw, tmpdir) as plain, tarfile.open(fileobj=plain, mode="r:gz") as tar:
         return tar.getnames()
 
 
-def make(pw: str | None = None) -> tuple[str, bytes, int]:
-    """(file name, encrypted bytes, number of files), checked."""
+def make(pw: str | None = None) -> tuple[str, Path, int]:
+    """(file name, encrypted file, number of files), checked. The file is a temporary one in the backups folder:
+    the caller moves it into place or deletes it."""
     pw = pw or passphrase()
-    blob = encrypt(archive(), pw)
-    n = len(members(blob, pw))
-    if not n:
-        raise BackupError("The backup came out empty.")
-    return f"club-minutes-{dt.datetime.now():%Y-%m-%d-%H%M}.tar.gz.enc", blob, n
+    d = _backups_dir()
+    for p in d.glob(".making-*.part"):  # left by a backup that crashed (a day old: never one still being made)
+        if dt.datetime.now().timestamp() - p.stat().st_mtime > 86400:
+            p.unlink(missing_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".making-", suffix=".part")  # 0600; not *.enc, so never listed as a backup
+    out = Path(tmp)
+    try:
+        with os.fdopen(fd, "wb") as enc, tempfile.TemporaryFile(dir=d) as plain:
+            archive_to(plain)
+            plain.seek(0)
+            encrypt_stream(plain, enc, pw)
+        n = len(members(out, pw, d))
+        if not n:
+            raise BackupError("The backup came out empty.")
+    except BaseException:
+        out.unlink(missing_ok=True)
+        raise
+    return f"club-minutes-{dt.datetime.now():%Y-%m-%d-%H%M}.tar.gz.enc", out, n
 
 
-def restore(blob: bytes, pw: str, dest: Path) -> int:
-    """Unpack a backup into an empty folder (never over live data). Returns how many files."""
+def restore(src: bytes | Path, pw: str, dest: Path) -> int:
+    """Unpack a backup (a file) into an empty folder (never over live data). Returns how many files."""
     dest.mkdir(parents=True, exist_ok=True)
     if any(dest.iterdir()):
         raise BackupError(f"{dest} isn't empty; restore into an empty folder, then move it into place.")
-    with tarfile.open(fileobj=io.BytesIO(decrypt(blob, pw)), mode="r:gz") as tar:
+    with _plain(src, pw, dest) as plain, tarfile.open(fileobj=plain, mode="r:gz") as tar:
         tar.extractall(dest, filter="data")  # no absolute paths, links out of dest, or device files
         return len(tar.getnames())
 
@@ -295,14 +395,39 @@ def _sign(k: bytes, msg: str) -> bytes:
     return hmac.new(k, msg.encode(), hashlib.sha256).digest()
 
 
-def s3_request(cfg: dict, method: str, key: str, body: bytes = b"", now: dt.datetime | None = None) -> tuple[str, dict]:
+def _sha256(body: bytes | Path) -> str:
+    if isinstance(body, bytes):
+        return hashlib.sha256(body).hexdigest()
+    with open(body, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+class _FileBody:
+    """A file (between optional head and tail bytes) as an iterable with a length: requests and httpx then stream
+    it with a Content-Length, never holding it in memory."""
+    def __init__(self, path: Path, head: bytes = b"", tail: bytes = b""):
+        self.path, self.head, self.tail = path, head, tail
+
+    def __len__(self) -> int:
+        return len(self.head) + self.path.stat().st_size + len(self.tail)
+
+    def __iter__(self):
+        if self.head:
+            yield self.head
+        with open(self.path, "rb") as f:
+            yield from _chunks(f)
+        if self.tail:
+            yield self.tail
+
+
+def s3_request(cfg: dict, method: str, key: str, body: bytes | Path = b"", now: dt.datetime | None = None) -> tuple[str, dict]:
     """URL and headers for an AWS Signature Version 4 request (path-style), so no SDK is needed."""
     from urllib.parse import quote, urlparse
     now = now or dt.datetime.now(dt.UTC)
     amz, day = now.strftime("%Y%m%dT%H%M%SZ"), now.strftime("%Y%m%d")
     host = urlparse(cfg["endpoint"]).netloc
     path = "/" + quote(f"{cfg['bucket']}/{key}")
-    digest = hashlib.sha256(body).hexdigest()
+    digest = _sha256(body)
     headers = {"host": host, "x-amz-content-sha256": digest, "x-amz-date": amz}
     signed = ";".join(sorted(headers))
     canonical = "\n".join([method, path, "", *(f"{h}:{headers[h]}" for h in sorted(headers)), "", signed, digest])
@@ -314,11 +439,12 @@ def s3_request(cfg: dict, method: str, key: str, body: bytes = b"", now: dt.date
     return cfg["endpoint"] + path, headers
 
 
-def s3_upload(cfg: dict, name: str, blob: bytes) -> str:
+def s3_upload(cfg: dict, name: str, blob: Path) -> str:
     import httpx
     key = f"{cfg['prefix']}{name}"
     url, headers = s3_request(cfg, "PUT", key, blob)
-    r = httpx.put(url, content=blob, headers=headers, timeout=300)
+    body = _FileBody(blob)
+    r = httpx.put(url, content=body, headers={**headers, "content-length": str(len(body))}, timeout=300)  # not signed: fine
     if r.status_code >= 300:
         raise BackupError(f"Upload to {cfg['bucket']} failed: HTTP {r.status_code} {r.text[:200]}")
     return f"{cfg['bucket']}/{key}"
@@ -342,13 +468,13 @@ def _drive_error(r) -> BackupError:
     return BackupError(f"Google Drive: HTTP {r.status_code} {r.text[:200]}")
 
 
-def drive_upload(folder: str, name: str, blob: bytes, keep: int = DRIVE_KEEP, session=None) -> str:
+def drive_upload(folder: str, name: str, blob: Path, keep: int = DRIVE_KEEP, session=None) -> str:
     """Upload into the folder, then delete all but the newest `keep` of the app's backups there."""
     s = session or drive_session()
     boundary = "club-minutes" + os.urandom(8).hex()
     meta = json.dumps({"name": name, "parents": [folder]}).encode()
-    body = (f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".encode() + meta +
-            f"\r\n--{boundary}\r\nContent-Type: application/octet-stream\r\n\r\n".encode() + blob + f"\r\n--{boundary}--".encode())
+    body = _FileBody(blob, f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".encode() + meta +
+                     f"\r\n--{boundary}\r\nContent-Type: application/octet-stream\r\n\r\n".encode(), f"\r\n--{boundary}--".encode())
     r = s.post("https://www.googleapis.com/upload/drive/v3/files", params={"uploadType": "multipart", "supportsAllDrives": "true"},
                data=body, headers={"Content-Type": f"multipart/related; boundary={boundary}"}, timeout=300)
     if r.status_code >= 300:
@@ -384,13 +510,14 @@ def run(club: Club, url: str = "") -> dict:
     st = {"at": int(time.time())}
     try:
         name, blob, n = make()
-        d = DATA / "backups"
-        d.mkdir(mode=0o700, exist_ok=True)
-        (d / name).write_bytes(blob)
-        os.chmod(d / name, 0o600)
+        try:
+            blob = blob.replace(_backups_dir() / name)  # into place (the temporary file is already 0600)
+        except BaseException:
+            blob.unlink(missing_ok=True)
+            raise
         for old in local_copies()[settings()["keep_local"]:]:
             old.unlink()
-        st.update(ok=True, name=name, size=len(blob), files=n, sent_to=[])
+        st.update(ok=True, name=name, size=blob.stat().st_size, files=n, sent_to=[])
         s, errors = settings(), []
         for dest in ("S3", "Google Drive"):
             try:  # one destination failing doesn't stop the other

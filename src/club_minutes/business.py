@@ -18,13 +18,21 @@ import datetime as dt
 import fcntl
 import json
 import os
+import re
 import secrets
 import time
 
 from . import branding
 from .club import DATA, Club, show_date
+from .richtext import plain
 
-MAX_TEXT = 600
+MAX_TEXT = 5000  # an item's text, a comment or a note (Jim, 2026-11-20: a drafted email fits); longer is refused, never cut
+
+
+def _fit(text: str, what: str) -> str:
+    if len(text) > MAX_TEXT:
+        raise ValueError(f"The {what} is {len(text):,} characters long: {MAX_TEXT:,} at most. Shorten it and try again.")
+    return text
 
 
 def _path():
@@ -84,7 +92,7 @@ def seed(s: dict, meetings: list, by: str | None = None) -> int:
             if norm(i.text) not in business_lines(m):
                 break
             opened = m.slug
-        add(s, i.text, by, opened=opened, note="carried over from the minutes")
+        add(s, tidy(i.text)[:MAX_TEXT], by, opened=opened, note="carried over from the minutes")  # the minutes keep it whole
     return len(s["items"])
 
 
@@ -108,9 +116,15 @@ def _note(x: dict, by: str | None, what: str, **detail) -> None:
     x["history"].append({"at": int(time.time()), "by": by, "what": what, **detail})
 
 
+def tidy(text: str | None) -> str:
+    """An item's text: each line's spaces tidied, line breaks kept (it may hold a list), one blank line at most."""
+    lines = [" ".join(x.split()) for x in (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
 def add(s: dict, text: str, by: str | None, owner: str | None = None, due: str | None = None,
         agenda: str | None = None, opened: str | None = None, note: str = "added") -> dict:
-    text = " ".join(text.split())[:MAX_TEXT]
+    text = _fit(tidy(text), "item")
     if not text:
         raise ValueError("The item needs some text.")
     x = {"id": secrets.token_hex(5), "text": text, "owner": owner or None, "due": _date(due),
@@ -186,7 +200,7 @@ def edit(s: dict, iid: str, by: str, meeting: str | None = None, **fields) -> di
     changes = {}
     for k, v in fields.items():
         if k == "text":
-            v = " ".join((v or "").split())[:MAX_TEXT]
+            v = _fit(tidy(v), "item")
             if not v:
                 raise ValueError("The item needs some text.")
         elif k in ("due", "agenda"):
@@ -201,9 +215,6 @@ def edit(s: dict, iid: str, by: str, meeting: str | None = None, **fields) -> di
     if changes:
         _note(x, by, "changed " + ", ".join(changes), changes=changes, **({"meeting": meeting} if meeting else {}))
     return x
-
-
-MAX_COMMENT = 1000
 
 
 def add_pictures(s: dict, iid: str, pics: list[str]) -> None:
@@ -224,7 +235,7 @@ def remove_picture(s: dict, iid: str, pid: str) -> None:
 def comment(s: dict, iid: str, by: str, text: str, pics: list[str] | None = None) -> dict:
     """Any member can add a comment to an open item (an update, a question); it's shown with the item."""
     x = get(s, iid)
-    text = text.strip()[:MAX_COMMENT]
+    text = _fit(text.replace("\r\n", "\n").strip(), "comment")
     if not text:
         raise ValueError("The comment is empty.")
     c = {"id": secrets.token_hex(4), "at": int(time.time()), "by": by, "text": text} | ({"pictures": pics} if pics else {})
@@ -232,23 +243,46 @@ def comment(s: dict, iid: str, by: str, text: str, pics: list[str] | None = None
     return c
 
 
+def said(s: dict, iid: str, recorder: str, meeting: str, text: str, speaker: str | None = None, guest: str | None = None) -> dict:
+    """Something said about the item at a meeting, typed by whoever takes the minutes (Jim, 2026-11-20): a comment by the
+    speaker (a member, or a guest by name: then it's the recorder's, with the guest's name), and in that meeting's minutes."""
+    text = _fit(text.replace("\r\n", "\n").strip(), "comment")
+    if not text:
+        raise ValueError("Type what was said.")
+    c = {"id": secrets.token_hex(4), "at": int(time.time()), "by": speaker or recorder, "text": text,
+         "meeting": _date(meeting), "recorded_by": recorder} | ({"guest": guest} if guest and not speaker else {})
+    get(s, iid).setdefault("comments", []).append(c)
+    return c
+
+
+def pick_comment(s: dict, iid: str, cid: str, meeting: str, on: bool) -> None:
+    """A member's written comment into that meeting's minutes (the leader picks), or out again."""
+    c = next((c for c in get(s, iid).get("comments", []) if c["id"] == cid), None)
+    if not c or c.get("meeting"):
+        raise ValueError("No such comment.")  # one said at the meeting is in its minutes already
+    if on:
+        c["minutes"] = _date(meeting)
+    elif c.get("minutes") == _date(meeting):
+        del c["minutes"]
+
+
 def delete_comment(s: dict, iid: str, cid: str, by: str, leader: bool) -> None:
     x = get(s, iid)
     c = next((c for c in x.get("comments", []) if c["id"] == cid), None)
-    if not c or not (leader or c["by"] == by):
+    if not c or not (leader or c["by"] == by or c.get("recorded_by") == by):  # the recorder can take back a mistyped one
         raise ValueError("You can only delete your own comments.")
     x["comments"].remove(c)
 
 
 # ---------------- notes for an upcoming meeting ----------------
 
-def add_note(s: dict, by: str, text: str, meeting: str) -> dict:
+def add_note(s: dict, by: str, text: str, meeting: str, pics: list[str] | None = None) -> dict:
     """A member's note for a meeting: e.g. they can't make it, and here's their news."""
-    text = text.strip()[:MAX_COMMENT]
+    text = _fit(text.replace("\r\n", "\n").strip(), "note")
     if not text:
         raise ValueError("The note is empty.")
     n = {"id": secrets.token_hex(4), "at": int(time.time()), "by": by, "text": text,
-         "meeting": _date(meeting), "status": "pending"}
+         "meeting": _date(meeting), "status": "pending"} | ({"pictures": pics} if pics else {})
     s["notes"].append(n)
     return n
 
@@ -370,25 +404,38 @@ def for_meeting(s: dict, date: str, since: str | None = None) -> tuple[list[dict
 
 
 def line(club: Club, x: dict, date: str) -> str:
-    """One bullet for the minutes: the text, who has it and by when, and Done if closed tonight."""
-    meta = [club.short(x["owner"]) if x["owner"] else None,
+    """One bullet for the minutes: the text with its formatting (Jim, 2026-11-20), who has it and by when, and Done if
+    closed tonight; those end its first line, not a list the text may hold."""
+    meta = [club.shown_name(x["owner"]) if x["owner"] else None,
             f"due {show_date(x['due'], 'short')}" if x["due"] else None]
     meta = [m for m in meta if m]
-    out = x["text"] + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
+    first, nl, rest = x["text"].partition("\n")
+    out = first + (f" ({', '.join(meta)})" if meta and x["status"] == "open" else "")
     if x["closed"] and x["closed"] <= date:
         out += " Done."
+    out += nl + rest
+    for c in x.get("comments", []):  # picked for these minutes, or said at this meeting: indented under the item
+        if date in (c.get("minutes"), c.get("meeting")):
+            who = f"{c['guest']}:" if c.get("guest") else f"@[{club.shown_name(c['by'])}]({c['by']})"
+            when = "at the meeting" if c.get("meeting") else f"comment, {show_date(dt.date.fromtimestamp(c['at']).isoformat(), 'short')}"
+            text = c["text"].replace("\r\n", "\n")  # a form posts \r\n
+            first, _, rest = text.partition("\n")  # the note ends its first line, not a list it may hold
+            if re.match(r"\s*(>|```|[-*+]\s|\d+\.\s)", first):  # starts with a quote, code or a list: all of it under the name
+                first, rest = "", text
+            out += f"\n- {who} {first}{' ' if first else ''}({when})" + "".join(f"\n    {r}" for r in rest.split("\n") if rest)
     return out
 
 
-def sections(s: dict, club: Club, date: str, since: str | None = None) -> dict[str, list[str]]:
+def sections(s: dict, club: Club, date: str, since: str | None = None) -> dict[str, list[tuple[str, list[str]]]]:
+    """Old and New Business for the minutes: each item's line and its pictures."""
     old, new = for_meeting(s, date, since)
-    return {"Old Business": [line(club, x, date) for x in old], "New Business": [line(club, x, date) for x in new]}
+    return {k: [(line(club, x, date), x.get("pictures") or []) for x in v] for k, v in (("Old Business", old), ("New Business", new))}
 
 
 def view(club: Club, x: dict, today: str, since: str | None = None) -> dict:
     """An item for the console and the Business page. `since`: the previous meeting, for "new comments"."""
     cutoff = dt.datetime.fromisoformat(since).timestamp() if since else 0  # from that meeting's day on
-    return {**x, "new_comments": [{**c, "name": club.short(c["by"])} for c in x.get("comments", []) if c["at"] >= cutoff],
+    return {**x, "new_comments": [{**c, "name": c.get("guest") or club.shown_name(c["by"])} for c in x.get("comments", []) if c["at"] >= cutoff],
             "owner_name": club.name(x["owner"]) if x["owner"] else None,
             "overdue": bool(x["status"] == "open" and x["due"] and x["due"] < today), "quiet": quiet(x, today)}
 
@@ -424,7 +471,7 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
         days = (due - today).days
         return f"due {show_date(due, 'weekday')}" + (" (today)" if days == 0 else " (tomorrow)" if days == 1 else "")
     late = any(k == "overdue" for _, k in items)
-    lines = "\n".join(f"- {x['text']}\n  {when(x, k)}" for x, k in items)
+    lines = "\n".join(f"- {plain(x['text'])}\n  {when(x, k)}" for x, k in items)
     subject = f"{club.label} club business: " + ("past due" if late else "coming due")
     body = (f"Hi {m.first},\n\nA reminder about club business you're looking after:\n\n{lines}\n\n"
             f"If it's finished, mark it done (or change the date) here: {url}/business\n"

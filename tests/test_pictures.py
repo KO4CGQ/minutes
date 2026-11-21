@@ -1,5 +1,7 @@
 """Pictures on reports, business items and comments (pictures.py): checked like profile pictures,
 shrunk, no EXIF (no phone location), members only, at most 4 each; carried through the console and corrections."""
+import io
+import json
 from pathlib import Path
 
 import pytest
@@ -184,3 +186,174 @@ def test_the_cap_is_set_on_site_features(env, monkeypatch):
     assert "error=" in r.headers["location"] and pictures.per_day(c) == pictures.PER_DAY
     as_("pres").post("/admin/site/features", data={"pictures_per_day": "7"}, follow_redirects=False)
     assert pictures.per_day(c) == 7
+
+
+def test_pictures_on_a_new_item_a_note_and_a_motion_reach_the_minutes(env):
+    """Jim, 2026-11-20: Add an item, a note for the next meeting and a motion take pictures; a business item's pictures
+    and formatting go in the minutes (the owner and due date end its first line, not a list it holds)."""
+    import datetime as dt
+
+    from club_minutes import console
+    _c, as_ = env
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    pres = as_("pres")
+    pres.post("/business/add", data={"text": "Fix the **tower** light\n- bulb\n- ladder", "owner": "John Doe"}, files=f)
+    x = business.load()["items"][-1]
+    assert len(x["pictures"]) == 1 and x["text"].startswith("Fix the **tower**")
+    assert pres.post("/business/add", data={"text": "x"}, files=f * 5, follow_redirects=False).headers["location"].startswith("/business?tab=add&error=")
+    meeting = web.upcoming_meetings()[0].isoformat()
+    as_("w0demo").post("/business/notes", data={"text": "Away; *new* mast up", "meeting": meeting}, files=f)
+    assert len(business.load()["notes"][-1]["pictures"]) == 1
+    assert "<em>new</em>" in as_("pres").get("/business?tab=notes").text
+    # a motion at a live meeting, with a picture uploaded in the console first
+    day = dt.date.fromisoformat(meeting)
+    s = business.load()
+    business.get(s, x["id"])["opened"] = "2026-01-01"  # raised before that meeting: its Old Business
+    business.save(s)
+    console.start(web.archive, day, "pres")
+    pid = pres.post("/api/pictures", files={"file": ("a.jpg", photo(), "image/jpeg")}).json()["id"]
+    pres.post("/business/motion", data={"mover": "John Doe", "seconder": "Sam Roe", "what": "buy a *ladder*", "result": "Passed",
+                                         "meeting": meeting, "pics": [pid, "nope"]}, headers={"Accept": "application/json"})
+    assert business.motions(business.load())[-1]["pictures"] == [pid]
+    m = web.archive.by_slug[meeting]
+    old = next(i for i in m.items("Old Business") if i.text.startswith("Fix the"))
+    assert old.text == "Fix the **tower** light (John)\n- bulb\n- ladder" and old.pictures == x["pictures"]
+    new = next(i for i in m.items("New Business") if "ladder" in i.text)
+    assert new.pictures == [pid] and "*ladder*" in new.text
+
+
+def test_new_pictures_are_tidied_up(env):
+    """The security review of 2026-11-20: a refused item or note stores no picture; a withdrawn or skipped note's
+    pictures are deleted (a note read out keeps them); a picture taken off an item leaves minutes being written too."""
+    import datetime as dt
+
+    from club_minutes import console
+    _c, as_ = env
+    f = [("files", ("a.jpg", photo(), "image/jpeg"))]
+    pres, member = as_("pres"), as_("w0demo")
+    files = lambda: {p.name for p in pictures._dir().iterdir()} if pictures._dir().exists() else set()
+    before = files()
+    pres.post("/business/add", data={"text": "x", "owner": "Nobody Here"}, files=f)
+    pres.post("/business/add", data={"text": "  "}, files=f)
+    meeting = web.upcoming_meetings()[0].isoformat()
+    member.post("/business/notes", data={"text": " ", "meeting": meeting}, files=f)
+    assert files() == before
+    for status in ("withdrawn", "dismissed"):
+        member.post("/business/notes", data={"text": "Away", "meeting": meeting}, files=f)
+        n = business.load()["notes"][-1]
+        (member if status == "withdrawn" else pres).post(f"/business/notes/{n['id']}/{status}")
+        assert not pictures.exists(n["pictures"][0])
+    pres.post("/business/add", data={"text": "Tower light"}, files=f)
+    s = business.load()
+    x = s["items"][-1]
+    x["opened"] = "2026-01-01"
+    business.save(s)
+    console.start(web.archive, dt.date.fromisoformat(meeting), "pres")
+    m = lambda: next(i for i in web.archive.by_slug[meeting].items("Old Business") if i.text.startswith("Tower light"))
+    assert m().pictures == x["pictures"]
+    pres.post(f"/business/{x['id']}/pictures/{x['pictures'][0]}/remove")
+    assert m().pictures == [] and not pictures.exists(x["pictures"][0])
+
+def test_nightly_prune_deletes_only_old_unused_pictures(env):
+    import os
+    import time
+    old_t = time.time() - 2 * 86400
+
+    def make(age=0):
+        pid = pictures.save(photo())
+        for small in (False, True):
+            os.utime(pictures.path(pid, small), (old_t, old_t) if age else None)
+        return pid
+    unused, fresh, on_item, on_comment, in_minutes, in_version, in_draft = (
+        make(1), make(), make(1), make(1), make(1), make(1), make(1))
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    x["pictures"] = [on_item]
+    x["comments"] = [{"id": "c1", "by": "pres", "text": "Done", "pictures": [on_comment]}]
+    business.save(s)
+    root = web.archive.root
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "minutes.md").write_text(f"pictures: {in_minutes}")
+    (root / "minutes.v1.md").write_text(f"pictures: {in_version}")
+    (root / "console-draft.json").write_text(json.dumps({"pictures": [in_draft]}))
+    stray = pictures.path(unused).with_suffix(".tmp")
+    stray.write_bytes(b"x")
+    os.utime(stray, (old_t, old_t))
+    assert pictures.prune_unused(web.archive) == 1
+    assert not pictures.exists(unused) and not pictures.path(unused, True).exists() and not stray.exists()
+    assert all(pictures.exists(p) for p in (fresh, on_item, on_comment, in_minutes, in_version, in_draft))
+
+
+def test_prune_deletes_nothing_without_a_minutes_folder(env, tmp_path):
+    import os
+    import time
+    pid = pictures.save(photo())
+    old_t = time.time() - 2 * 86400
+    for small in (False, True):
+        os.utime(pictures.path(pid, small), (old_t, old_t))
+    lost = type("A", (), {"root": tmp_path / "no-such-folder"})()
+    assert pictures.prune_unused(lost) == 0 and pictures.exists(pid)
+
+
+def test_a_refused_remove_deletes_nothing_and_checks_nothing(env, monkeypatch):
+    _c, as_ = env
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    pid = pictures.save(photo())
+    x["pictures"] = [pid]
+    business.save(s)
+    calls = []
+    monkeypatch.setattr(pictures, "unused", lambda *a: calls.append(a) or [])
+    as_("w0demo").post(f"/business/{x['id']}/pictures/{pid}/remove")  # not theirs: refused
+    as_("pres").post(f"/business/{x['id']}/pictures/..%2Fx/remove")  # not a picture id
+    assert not calls and pictures.exists(pid) and business.load()["items"][-1]["pictures"] == [pid]
+
+
+def test_a_huge_transparent_picture_is_refused(env):
+    buf = io.BytesIO()
+    Image.new("RGBA", (6000, 5000)).save(buf, "PNG")  # 30 MP, a few KB
+    with pytest.raises(ValueError, match="too big"):
+        pictures.save(buf.getvalue())
+
+
+def test_prune_deletes_nothing_without_business_json(env):
+    import os
+    import time
+    pid = pictures.save(photo())
+    old_t = time.time() - 2 * 86400
+    for small in (False, True):
+        os.utime(pictures.path(pid, small), (old_t, old_t))
+    web.archive.root.mkdir(parents=True, exist_ok=True)
+    assert not (web.DATA / "business.json").exists()
+    assert pictures.prune_unused(web.archive) == 0 and pictures.exists(pid)
+
+
+def test_only_a_private_correction_deletes_the_pictures_it_removed(env):
+    import datetime as dt
+
+    from club_minutes.meeting import Item, Meeting
+    _c, as_ = env
+    business.save(business.load())
+    pres = as_("pres")
+    for private in (False, True):
+        a, b = pictures.save(photo()), pictures.save(photo())
+        date = dt.date(2026, 10, 15 + private)
+        Meeting(date=date, status="published", sections={"Community Reports": [Item("New antenna", "n0call", pictures=[a, b])]}).save(web.archive.root)
+        web.archive.reload()
+        m = web.archive.by_slug[date.isoformat()]
+        n = list(m.section_order(web.archive.club.sections())).index("Community Reports")
+        r = pres.post(f"/meetings/{m.slug}/correct", follow_redirects=False,
+                      data={f"s{n}-0": "New antenna", f"s{n}-0-pic-{a}-rm": "1", "reason": "Oops", "version": "1", **({"private": "1"} if private else {})})
+        assert r.status_code == 303 and "error" not in r.headers["location"], r.headers["location"]
+        assert pictures.exists(b) and pictures.exists(a) is (not private)
+
+
+def test_preview_renders_like_the_page_for_signed_in_members_only(env):
+    _c, as_ = env
+    member = as_("w0demo")
+    r = member.post("/api/preview", data={"text": "> **hi** @[Jane](pres)\n> there <b>x</b>"})
+    assert r.status_code == 200 and '<blockquote class="rquote">' in r.text and "<strong>hi</strong>" in r.text
+    assert 'class="who" href="/members/pres">' in r.text and "<b>" not in r.text  # a mention is a pill; typed HTML stays text
+    assert member.post("/api/preview", data={"text": "x" * 5001}).status_code == 400
+    assert as_(None).post("/api/preview", data={"text": "x"}, follow_redirects=False).status_code in (303, 401)
+    assert member.post("/api/preview", data={"text": "x"}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403

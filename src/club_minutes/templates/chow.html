@@ -35,8 +35,8 @@
   </div>
   {% if x.member and x.member != me.id and mine and x.status != 'none' %}<div class="panel rot-panel" id="s{{ d }}" hidden>
     <form method="post" action="/chow/request" class="modern"><input type="hidden" name="theirs" value="{{ d }}">
-      <div class="formrow"><label>Give {{ club.short(x.member) }} your night<select name="mine">{% for md in mine %}<option value="{{ md }}">{{ fmt(md) }}</option>{% endfor %}</select></label>
-      <button class="btn small">Ask {{ club.short(x.member) }}</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div>
+      <div class="formrow"><label>Give {{ club.shown_name(x.member) }} your night<select name="mine">{% for md in mine %}<option value="{{ md }}">{{ fmt(md) }}</option>{% endfor %}</select></label>
+      <button class="btn small">Ask {{ club.shown_name(x.member) }}</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div>
       <p class="hint">They approve or decline on this page, and you both get an email.</p></form></div>{% endif %}
   {% if leader %}<div class="panel rot-panel" id="c{{ d }}" hidden>
     <form method="post" action="/chow/assign" class="modern"><input type="hidden" name="date" value="{{ d }}">
@@ -51,7 +51,7 @@
 
 {% if leader %}<h2>Swap two nights</h2>
 <form method="post" action="/chow/swap" class="modern card swapcard">
-  <div class="formrow">{% for f in ('a', 'b') %}<select name="{{ f }}" aria-label="Night" required><option value="" selected disabled>Pick a night…</option>{% for d, x in upcoming if x.member and x.status != 'none' %}<option value="{{ d }}">{{ fmt(d) }}: {{ club.short(x.member) }}</option>{% endfor %}</select>{% if f == 'a' %} <span class="swapicon">{{ emoji('🔁', 'repeat') }}</span> {% endif %}{% endfor %}
+  <div class="formrow">{% for f in ('a', 'b') %}<select name="{{ f }}" aria-label="Night" required><option value="" selected disabled>Pick a night…</option>{% for d, x in upcoming if x.member and x.status != 'none' %}<option value="{{ d }}">{{ fmt(d) }}: {{ club.shown_name(x.member) }}</option>{% endfor %}</select>{% if f == 'a' %} <span class="swapicon">{{ emoji('🔁', 'repeat') }}</span> {% endif %}{% endfor %}
   <button class="btn small">Swap</button></div>
   <p class="hint">Both members and the Secretary are emailed. Changes made on a meeting night go into that meeting's minutes.</p>
 </form>
@@ -113,7 +113,7 @@
   <div class="rot-main">
     {% if x.status == 'none' %}<div class="rot-name muted">No chow</div>{% if x.note %}<div class="rot-note">{{ x.note }}</div>{% endif %}
     {% else %}<div class="rot-name">{{ club.name(x.member) if x.member else '(open)' }}</div>
-    <div class="rot-limits">{% if x.status == 'provided' %}<span class="chip ok">{{ emoji('✅', 'check') }} provided</span>{% elif x.status == 'missed' %}<span class="chip late">{{ emoji('❌', 'xcircle') }} not provided</span>{% elif x.status == 'covered' %}<span class="chip">↪️ brought by {{ club.short(x.covered_by) }}</span>{% else %}<span class="chip muted">not recorded</span>{% endif %}
+    <div class="rot-limits">{% if x.status == 'provided' %}<span class="chip ok">{{ emoji('✅', 'check') }} provided</span>{% elif x.status == 'missed' %}<span class="chip late">{{ emoji('❌', 'xcircle') }} not provided</span>{% elif x.status == 'covered' %}<span class="chip">↪️ brought by {{ club.shown_name(x.covered_by) }}</span>{% else %}<span class="chip muted">not recorded</span>{% endif %}
       {% if x.note and x.status in ('provided', 'covered') %}<div class="rot-note">{{ x.note }}</div>{% endif %}</div>{% endif %}
   </div>
   <div class="rot-ops">{% if x.member and x.status != 'none' %}<button type="button" class="act" data-panel="r{{ d }}">{{ emoji('✏️', 'pencil') }} Record</button>{% endif %}</div>
@@ -129,15 +129,15 @@
 
 <h2>Recent changes</h2>
 <ul class="timeline chowlog">{% for e in log %}<li>
-  <div class="tl-head"><span class="chip">{{ emoji('👤', 'user') }} {{ club.short(e.by) if e.by in club.members else e.by }}</span> <span class="muted small">{{ e.at|tsfull }}</span></div>
-  <div>{% if e.action == 'swap' %}Swapped {{ fmt(e.dates[0]) }} ({{ club.short(e.members[0]) }}) and {{ fmt(e.dates[1]) }} ({{ club.short(e.members[1]) }}){% if e.request %}, by request{% endif %}
-  {% elif e.action == 'assign' %}{{ fmt(e.date) }}: {{ club.short(e.old) if e.old else '(open)' }} → {{ club.short(e.new) if e.new else '(open)' }}
+  <div class="tl-head"><span class="chip">{{ emoji('👤', 'user') }} {{ club.shown_name(e.by) if e.by in club.members else e.by }}</span> <span class="muted small">{{ e.at|tsfull }}</span></div>
+  <div>{% if e.action == 'swap' %}Swapped {{ fmt(e.dates[0]) }} ({{ club.shown_name(e.members[0]) }}) and {{ fmt(e.dates[1]) }} ({{ club.shown_name(e.members[1]) }}){% if e.request %}, by request{% endif %}
+  {% elif e.action == 'assign' %}{{ fmt(e.date) }}: {{ club.shown_name(e.old) if e.old else '(open)' }} → {{ club.shown_name(e.new) if e.new else '(open)' }}
   {% elif e.action == 'no_chow' %}{{ fmt(e.date) }}: no chow{% if e.note %} ({{ e.note }}){% endif %}
-  {% elif e.action == 'record' %}{{ fmt(e.date) }}: {{ {'provided': 'provided', 'missed': 'not provided', 'covered': 'brought by someone else', 'scheduled': 'record cleared'}.get(e.status, e.status) }}{% if e.covered_by %} ({{ club.short(e.covered_by) }}){% endif %}
-  {% elif e.action == 'generate' %}Filled {{ e.dates|length }} nights, {{ fmt(e.dates[0]) }} to {{ fmt(e.dates[-1]) }}{% if e.skipped %} (skipped a turn: {% for m in e.skipped %}{{ club.short(m) }}{{ ', ' if not loop.last }}{% endfor %}){% endif %}
-  {% elif e.action == 'swap_request' %}{{ club.short(e.members[0]) }} asked {{ club.short(e.members[1]) }} to swap {{ fmt(e.dates[0]) }} / {{ fmt(e.dates[1]) }}
+  {% elif e.action == 'record' %}{{ fmt(e.date) }}: {{ {'provided': 'provided', 'missed': 'not provided', 'covered': 'brought by someone else', 'scheduled': 'record cleared'}.get(e.status, e.status) }}{% if e.covered_by %} ({{ club.shown_name(e.covered_by) }}){% endif %}
+  {% elif e.action == 'generate' %}Filled {{ e.dates|length }} nights, {{ fmt(e.dates[0]) }} to {{ fmt(e.dates[-1]) }}{% if e.skipped %} (skipped a turn: {% for m in e.skipped %}{{ club.shown_name(m) }}{{ ', ' if not loop.last }}{% endfor %}){% endif %}
+  {% elif e.action == 'swap_request' %}{{ club.shown_name(e.members[0]) }} asked {{ club.shown_name(e.members[1]) }} to swap {{ fmt(e.dates[0]) }} / {{ fmt(e.dates[1]) }}
   {% elif e.action == 'order' %}Changed the rotation order
-  {% elif e.action == 'constraints' %}Limits for {{ club.short(e.member) }}
+  {% elif e.action == 'constraints' %}Limits for {{ club.shown_name(e.member) }}
   {% else %}{{ e.action|replace('_', ' ')|capitalize }}{% endif %}</div></li>
 {% else %}<li class="muted">No changes yet.</li>{% endfor %}</ul>
 {% endif %}

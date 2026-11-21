@@ -16,6 +16,7 @@ from pathlib import Path
 
 from . import branding, business, calview, chow
 from .club import DATA, Club, num, show_date
+from .richtext import plain, title
 
 log = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
     latest = next((m for m in sorted(archive.meetings, key=lambda m: m.date, reverse=True) if m.status == "published" and m.date < today), None)
     at = dt.datetime.strptime(club.meeting_time, "%H:%M").strftime("%-I:%M %p")
     # undated Upcoming Events in the minutes (all of them before events had dates) still count, as written
-    undated = [i.text for i in latest.items("Upcoming Events") if not i.when] if latest else []
+    undated = [title(i.text) for i in latest.items("Upcoming Events") if not i.when] if latest else []
     out = []
     for m in emailable(club):
         if get(m.id)["digest"] != "on":
@@ -166,7 +167,7 @@ def digest(club: Club, archive, today: dt.date, url: str) -> list[tuple[str, str
         due = sorted((x for x in items if x["status"] == "open" and x["owner"] == m.id), key=lambda x: x["due"] or "9999")
         if due:
             lines.append("Club business you're looking after:\n" + "\n".join(
-                f"  - {x['text']}" + (f" (due {show_date(x['due'], 'short')})" if x["due"] else "") for x in due)
+                f"  - {plain(x['text'])}" + (f" (due {show_date(x['due'], 'short')})" if x["due"] else "") for x in due)
                 + f"\n  Mark them done at {url}/business")
         week, _ = calview.entries(club, archive, m.id, today + dt.timedelta(days=1), today + dt.timedelta(days=6))
         events = [f"{show_date(e.start, 'day')}{f' {e.time}' if e.time else ''}: {e.title}" for e in week if e.kind != "chow"][:10] + undated
@@ -189,7 +190,12 @@ def purge_removed(load_club=Club) -> int:
         if not club.members:  # a roster that didn't load isn't everyone leaving
             return 0
         keep = {mid for mid, m in club.members.items() if m.status.lower() not in ("inactive", "silent key")}
-        gone |= Auth(club).forget_removed(keep)
+        auth = Auth(club)
+        known = auth.known_ids() | set(_read("email-prefs.json")) | set(_read("settings.json"))
+        if known and len(known - keep) * 2 > len(known):  # a truncated roster would erase irreversibly
+            log.error("purge_removed: %d of %d members with saved data aren't on the roster; refusing", len(known - keep), len(known))
+            return 0
+        gone |= auth.forget_removed(keep)
         for name in ("email-prefs.json", "settings.json"):
             d = _read(name)
             if drop := set(d) - keep:

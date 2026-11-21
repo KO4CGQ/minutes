@@ -4,17 +4,18 @@ location), with an 800 px copy for thumbnails and the PDF. Stored once under a r
 lists the ids it shows (at most 4), so corrected minutes' old versions and business items carried week to week share
 the files. Served to signed-in members only (/pictures/<id>.jpg), never public.
 
-shortcut: a picture uploaded in the console but never saved with a report stays on disk; prune unreferenced files if
-the folder ever grows (they're in the backups meanwhile). A picture removed from an item or comment is deleted at once
-(web.py), unless something else still names it.
+A picture removed from an item or comment is deleted at once (web.py), unless something else still names it; the
+daily job deletes the ones nothing names (uploaded in the console, never saved) once they're a day old.
 """
 from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 import re
 import secrets
 import threading
+import time
 
 from . import limits
 from .club import DATA, inside
@@ -76,7 +77,62 @@ def delete(pid: str) -> None:
         path(pid, small).unlink(missing_ok=True)
 
 
+def unused(archive, pids) -> list[str]:
+    """Those of these ids that nothing saved names: the business state, minutes, earlier versions, console drafts.
+    A version hidden by a private correction doesn't count (its pictures may go). Call under business.locked().
+    No business.json: nothing is unused (a partial restore must not delete the items' pictures)."""
+    from . import business, corrections
+    if not (DATA / "business.json").exists():
+        return []
+
+    def counts(f) -> bool:
+        v = re.fullmatch(r"minutes\.v(\d+)\.md", f.name)
+        m = archive.by_slug.get(f.parent.name) if v else None
+        return not (m and corrections.hidden_version(m, int(v.group(1))))
+    used = json.dumps(business.load()) + "".join(
+        f.read_text(errors="replace") for f in archive.root.rglob("*") if f.suffix in (".md", ".json") and f.is_file() and counts(f))
+    return [p for p in pids if p not in used]
+
+
+def prune_unused(archive) -> int:
+    """The daily job: delete pictures nothing names and stray or crashed-save files, all over a day old (a new upload
+    may be a console draft not saved yet). Returns how many pictures went."""
+    from . import business
+    if not archive.root.is_dir():  # no minutes folder to check against: delete nothing rather than everything
+        return 0
+    with business.locked():
+        return _prune(archive)
+
+
+def _prune(archive) -> int:
+    old, fresh = {}, set()
+    for f in _dir().iterdir():
+        if not f.is_file():
+            continue
+        m = re.fullmatch(r"([0-9a-f]{16})(-s)?\.jpg", f.name)
+        young = time.time() - f.stat().st_mtime < 86400
+        if not m:
+            if not young:
+                f.unlink(missing_ok=True)  # .tmp from a crash, or anything else that isn't a picture
+        elif young:
+            fresh.add(m.group(1))
+        else:
+            old[m.group(1)] = 1
+    gone = unused(archive, [p for p in old if p not in fresh])
+    for p in gone:
+        delete(p)
+    return len(gone)
+
+
+_decoding = threading.Semaphore(2)  # a small file can decode to hundreds of MB: two at a time
+
+
 def save(data: bytes) -> str:
+    with _decoding:
+        return _save(data)
+
+
+def _save(data: bytes) -> str:
     """Check, shrink and store a picture; returns its id. Raises ValueError with a message for the member."""
     from PIL import Image, ImageOps, UnidentifiedImageError
     if not data:
@@ -93,7 +149,7 @@ def save(data: bytes) -> str:
         raise unreadable
     if fmt not in FORMATS:
         raise ValueError("Use a JPEG, PNG or WebP picture.")
-    if px > 60_000_000:
+    if px > 25_000_000:
         raise ValueError("That picture is too big.")
     try:  # only our own messages reach the member: anything Pillow raises from here is "can't read"
         if fmt in ("JPEG", "MPO"):
@@ -101,16 +157,16 @@ def save(data: bytes) -> str:
         img.load()  # decode it all now: a damaged or cut-off file fails here
         img = ImageOps.exif_transpose(img)
         if img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info:  # see-through parts (a screenshot): on white
-            bg = Image.new("RGB", img.size, "white")
-            bg.paste(img.convert("RGBA"), mask=img.convert("RGBA").getchannel("A"))
-            img = bg
-        img = img.convert("RGB")
+            rgba = img.convert("RGBA")
+            img = Image.new("RGB", img.size, "white")
+            img.paste(rgba, mask=rgba.getchannel("A"))
+        img = img.convert("RGB")  # a no-op copy for the RGBA path: small next to the decode
     except Image.DecompressionBombError:
         raise ValueError("That picture is too big.")
     except (OSError, ValueError, SyntaxError):
         raise unreadable
     pid = secrets.token_hex(8)
-    for size, small in ((BIG, False), (SMALL, True)):
+    for size, small in ((SMALL, True), (BIG, False)):  # the big one last: exists() says yes only for a whole picture
         copy = img.copy()
         copy.thumbnail((size, size), Image.LANCZOS)
         out = io.BytesIO()

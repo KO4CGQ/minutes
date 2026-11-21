@@ -17,9 +17,10 @@ import time
 
 from markupsafe import Markup, escape
 
+from . import snapshot
 from .club import show_date
 from .console import email_status, reply_address, send_to_members
-from .meeting import Item, Meeting, one_line
+from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
 
 REASON_MAX = 300
@@ -73,6 +74,7 @@ def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new
                          | ({"private": True} if private else {})]
         if m.status == "imported" and not m.reviewed:
             m.reviewed = {"by": by, "at": int(time.time())}
+        m.shown = snapshot.take(archive.club, m)  # this version's own: the one before keeps its own in minutes.vN.md
         try:
             try:
                 Meeting.from_markdown(m.to_markdown())  # it must read back before it replaces the file
@@ -92,6 +94,8 @@ def mark_reviewed(archive: Archive, slug: str, by: str) -> Meeting:
             raise ValueError("Only imported minutes are reviewed.")
         if not m.reviewed:
             m.reviewed = {"by": by, "at": int(time.time())}
+            if m.shown:
+                m.shown.setdefault("names", {}).update(snapshot.names(archive.club, {by}))
             m.save(archive.root)
             archive.reload()
         return archive.by_slug[slug]
@@ -275,7 +279,7 @@ def from_form(archive: Archive, m: Meeting, form) -> Meeting:
         old = m.items(sec)
         items = []
         for j in _posted(form, rf"s{n}-(\d+)"):
-            if not (text := _text(form.get(f"s{n}-{j}"))) or form.get(f"s{n}-{j}-rm"):
+            if not (text := item_text(str(form.get(f"s{n}-{j}") or ""))) or form.get(f"s{n}-{j}-rm"):
                 continue
             if j < len(old):
                 o = old[j]

@@ -74,6 +74,7 @@ NOT_ATOMIC = {
     ("corrections.py", 'open(archive.root / s / ".send.lock", "w")'): "a lock",
     ("treasurer.py", 'open(DATA / "treasurer.lock", "w")'): "a lock",
     ("upgrade.py", 'open(data / "upgrade.lock", "w")'): "a lock",
+    ("upgrade.py", "marker"): "a marker file (only that it exists counts; written after the copy is whole)",
 }
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time setup of the minutes app on a Debian container. Run as root. Safe to re-run.
-#   Layout:  /opt/club-minutes        app code (git clone of main), owned by the 'minutes' user
+#   Layout:  /opt/club-minutes        app code (git clone of main), owned by root (the 'minutes' user reads and runs it, never writes it)
 #            /etc/club-minutes/       club.yaml, google-service-account.json, env (secrets; not in git)
 #            /var/lib/club-minutes/   data: meetings archive, roster cache
 set -euo pipefail
@@ -13,7 +13,7 @@ if [ -n "${TZ_NAME:-}" ]; then
 fi
 
 apt-get update -qq
-# git/curl: deploy; sudo: update.sh runs git and uv as the app's user; pango + fonts: PDF rendering (WeasyPrint)
+# git/curl: deploy; sudo: the admin command runs the app as its user; pango + fonts: PDF rendering (WeasyPrint)
 apt-get install -y -qq git curl sudo ca-certificates libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core fonts-liberation >/dev/null
 
 id minutes >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/club-minutes-home --shell /usr/sbin/nologin minutes
@@ -27,8 +27,7 @@ if ! command -v uv >/dev/null; then
 fi
 
 if [ ! -d "$APP/.git" ]; then
-  install -d -o minutes -g minutes "$APP"
-  sudo -u minutes git clone -q "$REPO" "$APP"
+  (umask 022; git clone -q "$REPO" "$APP")
 fi
 
 # Admin command on the server, e.g. `club-minutes login-link N0CALL` or `club-minutes roster`

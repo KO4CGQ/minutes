@@ -139,6 +139,26 @@ def set_backing(value: str) -> None:
     _icons_from_logo()  # a tab icon made from the logo gets the same "behind it"
 
 
+def keep_logo() -> str:
+    """A copy of today's logo for minutes being published (branding/kept/<id>.png, by its content, so one per logo):
+    its id, or "" for the app's plain logo. Old minutes keep their logo after a new one is uploaded."""
+    import hashlib
+    if not custom():
+        return ""
+    data = (_dir() / FILES["logo"]).read_bytes()
+    kid = hashlib.sha256(data).hexdigest()[:16]
+    if not (p := kept_logo(kid)).exists():
+        p.parent.mkdir(exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_bytes(data)
+        tmp.replace(p)
+    return kid
+
+
+def kept_logo(kid: str) -> Path:
+    return _dir() / "kept" / f"{kid}.png"
+
+
 def custom() -> bool:
     return (_dir() / FILES["logo"]).exists()
 
