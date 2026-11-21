@@ -1,6 +1,7 @@
 """Published minutes keep what they showed the night they were made (snapshot.py), and so does their PDF."""
 import datetime as dt
 
+import pytest
 from starlette.testclient import TestClient
 from test_corrections import archive, edit, web_as
 
@@ -114,6 +115,26 @@ def test_the_upgrade_snapshots_old_minutes_and_their_versions_once_and_undoes(tm
     upgrade._v4(tmp_path)  # again: nothing changes
     assert (d / "minutes.md").read_text() == done
     assert upgrade.undo(3, tmp_path) and "shown" not in (d / "minutes.md").read_text() and upgrade.version(tmp_path) == 3
+
+
+def test_a_crash_mid_upgrade_keeps_the_clean_copy_and_a_rerun_finishes(tmp_path, monkeypatch):
+    archive(tmp_path / "meetings")
+    (tmp_path / "data-version").write_text("3\n")
+    real, n = Meeting.write, []
+
+    def flaky(self, p):
+        if n:
+            raise OSError("disk went away")
+        n.append(1)
+        real(self, p)
+    monkeypatch.setattr(Meeting, "write", flaky)
+    with pytest.raises(OSError):
+        upgrade.run(tmp_path)
+    assert upgrade.version(tmp_path) == 3 and (tmp_path / upgrade.STARTED).exists()
+    monkeypatch.setattr(Meeting, "write", real)
+    assert upgrade.run(tmp_path)
+    assert upgrade.version(tmp_path) == 4 and not (tmp_path / upgrade.STARTED).exists()
+    assert not any("shown:" in p.read_text() for p in (tmp_path / upgrade.COPY).rglob("minutes*.md"))
 
 
 def test_a_mentioned_members_name_is_kept_with_the_minutes(tmp_path):

@@ -190,7 +190,12 @@ def purge_removed(load_club=Club) -> int:
         if not club.members:  # a roster that didn't load isn't everyone leaving
             return 0
         keep = {mid for mid, m in club.members.items() if m.status.lower() not in ("inactive", "silent key")}
-        gone |= Auth(club).forget_removed(keep)
+        auth = Auth(club)
+        known = auth.known_ids() | set(_read("email-prefs.json")) | set(_read("settings.json"))
+        if known and len(known - keep) * 2 > len(known):  # a truncated roster would erase irreversibly
+            log.error("purge_removed: %d of %d members with saved data aren't on the roster; refusing", len(known - keep), len(known))
+            return 0
+        gone |= auth.forget_removed(keep)
         for name in ("email-prefs.json", "settings.json"):
             d = _read(name)
             if drop := set(d) - keep:
