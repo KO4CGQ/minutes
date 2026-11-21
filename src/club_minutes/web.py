@@ -831,8 +831,9 @@ def _prune_pictures(pids) -> None:
     comment, minutes or an earlier version, a console draft): a removed picture stops opening at once."""
     if not pids:
         return
-    for p in pictures.unused(archive, pids):
-        pictures.delete(p)
+    with business.locked():
+        for p in pictures.unused(archive, pids):
+            pictures.delete(p)
 
 
 def _refuse(e: ValueError):
@@ -875,27 +876,35 @@ async def business_pictures(request: Request, iid: str, back: str = Form(""),
 
 @app.post("/business/{iid}/pictures/{pid}/remove")
 def business_picture_remove(request: Request, iid: str, pid: str, back: str = Form(""), mid: str = Depends(me)):
+    done = []
+
     def rm(s):
         _may_edit_item(request, s, iid)
         business.remove_picture(s, iid, pid)
+        done.append(1)
     r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
-    with business.locked():  # minutes being written show the item's pictures: take it out of them too (published ones: a correction)
-        s = console.business_state(archive)
-        for m in [m for m in archive.meetings if m.status == "draft"]:
-            console.sync_business(archive, m.slug, s)
-    _prune_pictures([pid])
+    if done and pictures.ID.fullmatch(pid):  # a refused remove changed nothing: nothing to sync or prune
+        with business.locked():  # minutes being written show the item's pictures: take it out of them too (published ones: a correction)
+            s = console.business_state(archive)
+            for m in [m for m in archive.meetings if m.status == "draft"]:
+                console.sync_business(archive, m.slug, s)
+        _prune_pictures([pid])
     return r
 
 
 @app.post("/business/{iid}/comments/{cid}/pictures/{pid}/remove")
 def business_comment_picture_remove(request: Request, iid: str, cid: str, pid: str, back: str = Form(""),
                                     mid: str = Depends(moderator)):
+    done = []
+
     def rm(s):
         c = next((c for c in business.get(s, iid).get("comments", []) if c["id"] == cid), None)
         if c:
             c["pictures"] = [p for p in c.get("pictures") or [] if p != pid]
+            done.append(1)
     r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
-    _prune_pictures([pid])
+    if done and pictures.ID.fullmatch(pid):
+        _prune_pictures([pid])
     return r
 
 
@@ -2226,6 +2235,8 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
     new = corrections.from_form(archive, m, form)
     private = bool(form.get("private"))
     what = corrections.changes(m, new, archive.club, private)
+    pics = lambda x: {p for v in x.sections.values() for i in v for p in i.pictures}
+    removed = list(pics(m) - pics(new))
     notice = bool(form.get("notice"))
     if notice:  # first: a crash after the save leaves a note, so the daily job sends the notice
         console.mark_pending(archive, slug, f"emailed.v{m.version + 1}.json", f"{base_url(request)}/meetings/{slug}", what)
@@ -2236,6 +2247,8 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
         if notice and archive.by_slug[slug].version == m.version:  # nothing saved: no notice to send
             (archive.root / slug / f"emailed.v{m.version + 1}.json.pending").unlink(missing_ok=True)
         return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
+    if private:  # the hidden earlier version no longer holds on to the pictures the correction took out
+        await run_in_threadpool(_prune_pictures, removed)
     _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
     background.add_task(keep_pdf, slug)
     if notice:

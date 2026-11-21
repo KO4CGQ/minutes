@@ -1,5 +1,6 @@
 """Pictures on reports, business items and comments (pictures.py): checked like profile pictures,
 shrunk, no EXIF (no phone location), members only, at most 4 each; carried through the console and corrections."""
+import io
 import json
 from pathlib import Path
 
@@ -292,3 +293,56 @@ def test_prune_deletes_nothing_without_a_minutes_folder(env, tmp_path):
         os.utime(pictures.path(pid, small), (old_t, old_t))
     lost = type("A", (), {"root": tmp_path / "no-such-folder"})()
     assert pictures.prune_unused(lost) == 0 and pictures.exists(pid)
+
+
+def test_a_refused_remove_deletes_nothing_and_checks_nothing(env, monkeypatch):
+    _c, as_ = env
+    s = business.load()
+    x = business.add(s, "Fix the tower light", "pres", owner="n0call")
+    pid = pictures.save(photo())
+    x["pictures"] = [pid]
+    business.save(s)
+    calls = []
+    monkeypatch.setattr(pictures, "unused", lambda *a: calls.append(a) or [])
+    as_("w0demo").post(f"/business/{x['id']}/pictures/{pid}/remove")  # not theirs: refused
+    as_("pres").post(f"/business/{x['id']}/pictures/..%2Fx/remove")  # not a picture id
+    assert not calls and pictures.exists(pid) and business.load()["items"][-1]["pictures"] == [pid]
+
+
+def test_a_huge_transparent_picture_is_refused(env):
+    buf = io.BytesIO()
+    Image.new("RGBA", (6000, 5000)).save(buf, "PNG")  # 30 MP, a few KB
+    with pytest.raises(ValueError, match="too big"):
+        pictures.save(buf.getvalue())
+
+
+def test_prune_deletes_nothing_without_business_json(env):
+    import os
+    import time
+    pid = pictures.save(photo())
+    old_t = time.time() - 2 * 86400
+    for small in (False, True):
+        os.utime(pictures.path(pid, small), (old_t, old_t))
+    web.archive.root.mkdir(parents=True, exist_ok=True)
+    assert not (web.DATA / "business.json").exists()
+    assert pictures.prune_unused(web.archive) == 0 and pictures.exists(pid)
+
+
+def test_only_a_private_correction_deletes_the_pictures_it_removed(env):
+    import datetime as dt
+
+    from club_minutes.meeting import Item, Meeting
+    _c, as_ = env
+    business.save(business.load())
+    pres = as_("pres")
+    for private in (False, True):
+        a, b = pictures.save(photo()), pictures.save(photo())
+        date = dt.date(2026, 10, 15 + private)
+        Meeting(date=date, status="published", sections={"Community Reports": [Item("New antenna", "n0call", pictures=[a, b])]}).save(web.archive.root)
+        web.archive.reload()
+        m = web.archive.by_slug[date.isoformat()]
+        n = list(m.section_order(web.archive.club.sections())).index("Community Reports")
+        r = pres.post(f"/meetings/{m.slug}/correct", follow_redirects=False,
+                      data={f"s{n}-0": "New antenna", f"s{n}-0-pic-{a}-rm": "1", "reason": "Oops", "version": "1", **({"private": "1"} if private else {})})
+        assert r.status_code == 303 and "error" not in r.headers["location"], r.headers["location"]
+        assert pictures.exists(b) and pictures.exists(a) is (not private)
