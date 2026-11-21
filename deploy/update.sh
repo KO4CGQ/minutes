@@ -39,6 +39,9 @@ main() {
     done
     return 1
   }
+  # a version from before root owned the code (1.1 and older) runs git and uv as 'minutes': give it back its folder,
+  # or its own updater can't run git there ("dubious ownership"): after a rollback to one, or going back to one on purpose
+  give_back() { if grep -qE '^ *sudo -u minutes git fetch' deploy/update.sh; then chown -R minutes:minutes "$APP"; fi; }
   local before; before=$(git rev-parse HEAD)
   # The data's shape before (the new version may upgrade it at start: see src/club_minutes/upgrade.py)
   local DATA=${CLUB_MINUTES_DATA:-/var/lib/club-minutes} was
@@ -61,13 +64,13 @@ main() {
     # if it upgraded the data, put back the copy from before (the old version can't read the new shape)
     sudo -u minutes env CLUB_MINUTES_DATA="$DATA" "$APP/.venv/bin/club-minutes" data-undo "$was" >&2 || true
     git reset -q --hard "$before"
-    # a version from before root owned the code runs git and uv as 'minutes': give it back its folder
-    grep -qE '^ *sudo -u minutes git fetch' deploy/update.sh && chown -R minutes:minutes "$APP"
     install_and_restart
+    give_back  # after the install: what root's uv sync wrote goes back too
     if healthy; then echo "Rolled back: the app is running the version it had before." >&2
     else echo "Still not answering after rolling back: see journalctl -u club-minutes" >&2; fi
     exit 1
   fi
+  give_back
   echo "Now at $(git log --oneline -1)"
 }
 main "$@"; exit
