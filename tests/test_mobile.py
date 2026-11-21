@@ -573,6 +573,28 @@ def test_a_quote_goes_on_over_several_lines(engine):
 
 
 @pytest.mark.parametrize("engine", ENGINES)
+def test_the_toolbar_scrolls_instead_of_widening_the_console(engine):
+    """The console's columns (.cols2) grew to the one-row toolbar's width on a phone, so the whole page scrolled
+    sideways (found on stage 2026-11-21): the toolbar scrolls on its own row instead."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    root = Path(__file__).parents[1] / "src/club_minutes/static"
+    css = (root / "style.css").read_text() + (root / "console.css").read_text()
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_context(viewport={"width": 360, "height": 700}, has_touch=True, is_mobile=engine == "chromium").new_page()
+        page.set_content(f'<meta name="viewport" content="width=device-width"><style>{css}</style><div class="cols2"><div class="queue">People</div>'
+                         '<div class="card"><textarea data-format aria-label="Report"></textarea></div></div>')
+        page.add_script_tag(content=(root / "format.js").read_text())
+        page.get_by_label("Report").click()
+        assert page.locator(".fmtbar").is_visible()
+        assert page.evaluate("document.documentElement.scrollWidth") <= 360
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
 def test_typing_an_at_sign_picks_a_member(engine):
     """format.js: "@ja" lists matching Active members; Enter writes the mention and a space; Escape closes the list."""
     sync_api = pytest.importorskip("playwright.sync_api")

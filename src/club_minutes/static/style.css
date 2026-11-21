@@ -75,7 +75,9 @@ select, textarea {
   border-radius: var(--radius-sm); padding: .45rem .65rem; }
 input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
 fieldset { min-width: 0; }  select { max-width: 100%; }  /* long option text ("Every year on the 1st Thursday of January") mustn't widen a phone page */
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+/* Keyboard focus: a solid ring everywhere (the halo alone was faint) */
+:is(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
 input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 1.5rem; height: 1.5rem; }
 textarea { resize: vertical; line-height: 1.45; }
 
@@ -751,16 +753,18 @@ form.correct .rm { width: fit-content; }
 
 /* Formatted text in reports, business items and comments (richtext.py) */
 .itemtext { margin: .2rem 0 .6rem; } .itemtext p, .ctext p { margin: .25rem 0; } .itemtext ul, .itemtext ol, .ctext ul, .ctext ol { margin: .2rem 0; padding-left: 1.3rem; }
-/* The formatting toolbar (format.js), above the text box you're typing in; it wraps on a phone. With the script on, the
+/* The formatting toolbar (format.js), above the text box you're typing in; one row that scrolls sideways, so its height never changes. With the script on, the
    pictures' own file boxes give way to its Picture button. */
-.fmtbar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; margin: 0 0 .2rem; }
-.fmtbar .fmt { min-width: 2.2rem; min-height: 2rem; padding: .1rem .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.fmtbar { display: flex; flex-wrap: nowrap; overflow-x: auto; contain: inline-size; align-items: center; gap: .25rem; margin: 0 0 .2rem; }  /* contain: its buttons never widen the column it sits in (a phone page scrolled sideways) */
+.fmtbar .fmt { flex: none; white-space: nowrap; min-width: 2.2rem; min-height: 2rem; padding: .1rem .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .fmtbar .fmt-b { font-weight: 700; } .fmtbar .fmt-i { font-style: italic; }
 .fmtbar .fmt:hover, .fmtbar .fmt:focus-visible { background: var(--surface-2); }
 .fmtbar .fmt[hidden] { display: none; } .fmtnote { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
 .fmtcount { display: block; text-align: right; font-size: .8rem; color: var(--muted); margin-top: .1rem; }
-.fmtbar .fmt .ico { width: 1.2rem; height: 1.2rem; display: block; margin: auto; }  /* the toolbar's line icons (format.js) */
+.fmtbar .fmt .ico { width: 1.2rem; height: 1.2rem; display: inline-block; vertical-align: middle; }  /* the toolbar's line icons (format.js) */
 @media (pointer: coarse) { .fmtbar { gap: .4rem; } .fmtbar .fmt { min-width: 44px; min-height: 44px; font-size: 1.15rem; } .fmtbar .fmt .ico { width: 1.5rem; height: 1.5rem; } }  /* a finger-sized tap */
 .js-fmt .picfield { display: none; }
 .mention-menu { position: fixed; z-index: 40; min-width: 12rem; max-width: calc(100vw - 1rem); }  /* the @ list (format.js), under its box */
 .itemtext .who, .ctext .who { white-space: nowrap; font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }  /* a mention on the Business page, like the minutes' name pill */
+
+@media (pointer: coarse) { form.correct .rm, form.correct input[type=radio] { min-height: 44px; } form.correct .rm { display: inline-flex; align-items: center; } form.correct input[type=radio] { min-width: 44px; } }  /* a finger-sized tap */

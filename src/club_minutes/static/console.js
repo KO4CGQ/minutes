@@ -352,8 +352,8 @@
           h("button", { class: "btn ghost", onclick: () => { S.skipped.push(k); S.current = null; render(); save(); } }, "Come back later")));
       setTimeout(() => ta.focus(), 0);
     } else {
-      floor = h("div", { class: "floor" }, h("h3", {}, rem.length ? "Who's next?" : "Everyone has reported"),
-        h("p", { class: "hint" }, rem.length ? "Press “Suggest next” or call on someone." : "Use “Edit” to change a report, or move on to Old Business."));
+      floor = h("div", { class: "floor" }, h("h3", {}, rem.length ? "Who's next?" : present().length ? "Everyone has reported" : "Who's next?"),
+        h("p", { class: "hint" }, rem.length || !present().length ? "Press “Suggest next” or call on someone." : "Use “Edit” to change a report, or move on to Old Business."));
     }
     // Notes members sent in for tonight (Business page). Someone who's here anyway gives their own report.
     const here = (id) => M.in_person.includes(id) || M.remote.includes(id);
