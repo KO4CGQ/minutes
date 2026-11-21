@@ -2685,16 +2685,23 @@ def help_picture(name: str):
     return FileResponse(DOCS / "screenshots" / name, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
+def members_changelog(text: str) -> list[tuple[str, Markup]]:
+    """CHANGELOG.md for About's What's new: one (version, notes) per release, newest first, without the file's own title
+    and intro. Each release's "### Security" and "### For server admins" are left out (Jim, 2026-11-21): they're for
+    admins, who see the whole section on Admin → Updates; a release with nothing else (a security patch) isn't listed."""
+    import markdown
+    out = []
+    for head, _, body in (s.partition("\n") for s in text.split("\n## ")[1:]):
+        body = re.sub(r"^### (?:Security|For server admins)[ \t]*\n.*?(?=^### |\Z)", "", body, flags=re.MULTILINE | re.DOTALL | re.IGNORECASE)
+        if body.strip():  # an empty Unreleased, or only admin sections: not listed
+            out.append((head.strip(), Markup(markdown.markdown(body))))
+    return out
+
+
 @app.get("/about", response_class=HTMLResponse)
 def about(request: Request):
-    import markdown
     changes = (Path(__file__).resolve().parents[2] / "CHANGELOG.md")
-    changelog = None
-    if changes.exists():  # show the versions, without the file's own title and intro
-        text = re.sub(r"## Unreleased\s*(?=## )", "", changes.read_text())  # hide an empty Unreleased section
-        # one (version, notes) per release, newest first; the page folds all but the latest
-        changelog = [(head.strip(), Markup(markdown.markdown(body)))
-                     for head, _, body in (s.partition("\n") for s in text.split("\n## ")[1:])]
+    changelog = members_changelog(changes.read_text()) if changes.exists() else None
     return page(request, "about.html", deps=dependencies(), changelog=changelog, license=_license("club-minutes"))
 
 

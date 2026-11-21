@@ -242,6 +242,17 @@ def test_link_icons():
     assert link_icon("https://example.org/some/page") == "link"
 
 
+def test_about_leaves_out_each_releases_security_and_admin_notes():
+    from club_minutes.web import members_changelog
+    text = ("# Changelog\nIntro.\n\n## Unreleased\n\n## 1.3.0 (2027-01-02)\n### Added\n- **Polls**\n\n### Security\n- A fix. Update soon.\n\n"
+            "### For server admins\n- A data upgrade.\n\n## 1.2.1 (2026-12-20)\n### Security\n- pyyaml updated. Update soon.\n\n"
+            "## 1.2.0 (2026-12-01)\n### Fixed\n- Quotes.\n### For server admins\n- Root owns the code.\n")
+    log = members_changelog(text)
+    assert [v for v, _ in log] == ["1.3.0 (2027-01-02)", "1.2.0 (2026-12-01)"]  # empty Unreleased and a security-only patch: not listed
+    html = "".join(n for _, n in log)
+    assert "Polls" in html and "Quotes" in html and "Update soon" not in html and "upgrade" not in html and "Root" not in html
+
+
 def test_about_page(monkeypatch):
     from fastapi.testclient import TestClient
 
