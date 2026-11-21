@@ -94,7 +94,7 @@ def main() -> None:
         import getpass
 
         from . import backup
-        n = backup.restore(a.file.read_bytes(), os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE") or getpass.getpass("Passphrase: "), a.dest)
+        n = backup.restore(a.file, os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE") or getpass.getpass("Passphrase: "), a.dest)
         print(f"Restored {n} files into {a.dest}. Stop the app, move them into the data folder (chown minutes), start it.")
     elif a.cmd == "roster":
         from .roster import sync

@@ -114,7 +114,7 @@ systemctl stop club-minutes
 rsync -a /tmp/restored/ /var/lib/club-minutes/ && chown -R minutes:minutes /var/lib/club-minutes
 systemctl start club-minutes
 ```
-`restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same.
+`restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same. Backing up and restoring stream through temporary files (in `backups/`, and in the restore folder), so memory stays small but the disk needs room for the data about twice over.
 
 ## 🔒 Security
 The app blocks web visitors itself after repeated failed sign-ins (Admin → Security): 10 in an hour from one internet address bans it from signing in for 24 hours (LAN and tailnet addresses never are). Members already signed in from it keep working, and the public calendar stays open, since a clubhouse or a phone carrier puts many people behind one address. An old or used sign-in link doesn't count, only one the app never sent. An IPv6 ban covers the address's whole /64 block (shown as, say, `2001:db8:1:2::/64`), since a home gets billions of addresses. The same tab lists other hostile requests: **scanner probes** (addresses only attack tools ask for, like `.env` or `wp-login.php` files), which count toward a ban; and, listed but never counted, requests sent from another site's page (the address is the victim's, so they have no Ban button), actions a member's role doesn't allow, and uploads over the size limit. On **Failed attempts**, **Details** shows each attempt's device and browser, and a banned address links to its ban.

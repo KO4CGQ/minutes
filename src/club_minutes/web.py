@@ -40,6 +40,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
+from starlette.background import BackgroundTask
 from starlette.concurrency import (
     run_in_threadpool,  # async routes hand slow work (the roster sheet, email, S3) to a thread
 )
@@ -2954,7 +2955,7 @@ def security_backup_download_now(request: Request):
     except backup.BackupError as e:
         return RedirectResponse("/admin/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_downloaded=name)
-    return Response(blob, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return FileResponse(blob, media_type="application/octet-stream", filename=name, background=BackgroundTask(blob.unlink))
 
 
 @app.post("/admin/backups/now")
