@@ -2308,8 +2308,9 @@ def pdf(request: Request, slug: str, v: str = ""):
     if m.status == "draft":
         raise HTTPException(409, "This meeting is still in progress; the PDF is available once the minutes are submitted.")
     fname, data = render_pdf(m)
-    return Response(data, media_type="application/pdf",
-                    headers={"Content-Disposition": f'inline; filename="{fname}"'})
+    # octet-stream, not application/pdf: iPhone Safari opened a PDF in the tab even as an attachment (#157)
+    return Response(data, media_type="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @app.get("/meetings/{slug}/original.pdf")
@@ -2319,7 +2320,7 @@ def original(request: Request, slug: str):
     if not p.exists() or _original_hidden(request, m):
         raise HTTPException(404)
     name = f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes-original.pdf".lower()  # beside corrections.pdf_name's 12-mar-26-minutes.pdf
-    return FileResponse(p, media_type="application/pdf", filename=name, content_disposition_type="inline")
+    return FileResponse(p, media_type="application/octet-stream", filename=name)  # a download, as minutes.pdf: the button says Download
 
 
 @app.get("/search", response_class=HTMLResponse)

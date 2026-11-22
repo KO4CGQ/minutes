@@ -413,7 +413,7 @@ def test_imported_minutes_offer_the_original_and_new_ones_the_pdf(tmp_path, monk
     monkeypatch.setattr(web, "archive", Archive(root, c))
     o, n = m.get(f"/meetings/{old.slug}").text, m.get(f"/meetings/{new.slug}").text
     assert "Download original" in o and "Download PDF" not in o and 'original.pdf" download>' in o  # saved, the page stays
-    assert m.get(f"/meetings/{old.slug}/original.pdf").headers["content-disposition"] == f'inline; filename="{old.date.day}-{old.date:%b}-{old.date:%y}-minutes-original.pdf"'.lower()
+    assert m.get(f"/meetings/{old.slug}/original.pdf").headers["content-disposition"] == f'attachment; filename="{old.date.day}-{old.date:%b}-{old.date:%y}-minutes-original.pdf"'.lower()
     assert "Download original" not in n and "Download PDF" in n and 'minutes.pdf" download>' in n
     assert "Download PDF" in m.get(f"/meetings/{fixed.slug}").text  # imported, but no original to show: the PDF instead
 
