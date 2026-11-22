@@ -6,6 +6,8 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ## Unreleased
 
+## 1.2.0 (2026-11-22)
+
 ### Added
 - **Pictures** on community reports, business items, motions, comments and notes for the next meeting, up to four each. Members only, never public, and saved without the hidden details a phone adds (such as where it was taken).
 - **Formatting** in reports, business items, comments and the leader console: bold, italic, lists, quotes, code and links (with words to show and a numbered QR code, if you like), from a toolbar above the box. **Preview** shows how it will look.
