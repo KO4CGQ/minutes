@@ -12,6 +12,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 ### Changed
 - In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.
 - In the leader console, members' comments on a business item show their first two lines, formatted and ending in …, with **Show more** for the rest.
+- The leader console's **Submit minutes** buttons show only once the finished minutes are on screen, so they're never submitted unseen.
 
 ### Fixed
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.

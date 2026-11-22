@@ -5,6 +5,7 @@ New GET pages are picked up automatically from the app's routes. Pages are serve
 the test client, so no server runs. Run in Chromium, Firefox and WebKit; an engine that isn't installed is skipped
 (`uv run playwright install chromium firefox webkit`, then `sudo .venv/bin/playwright install-deps` once).
 """
+import datetime as dt
 import re
 from pathlib import Path
 
@@ -802,4 +803,47 @@ def test_site_video_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, 
         except Exception:  # noqa: BLE001, S110  # the dismissed "Leave site?" stops the navigation
             pass
         assert asked == ["beforeunload"]
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_submit_shows_only_once_the_minutes_are_on_screen(tmp_path, monkeypatch, engine):
+    """console.js Review: no Submit while the preview loads, nor if it fails (never submitted sight unseen)."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from club_minutes import console, web
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Jane", "last": "Doe", "email": "jane@example.org", "role": "President", "officer": True}])
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    m = console.start(web.archive, dt.date(2026, 11, 12), "n0admn", recorder="n0admn")
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("n0admn"))
+    live = {"fail": False}
+
+    def serve(route):
+        if "/live" in route.request.url and live["fail"]:
+            return route.fulfill(status=500, body="no")
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), data=route.request.post_data_buffer,
+                      headers={k: v for k, v in route.request.headers.items() if k.lower() == "content-type"}, follow_redirects=False)
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page(viewport={"width": 375, "height": 800})
+        page.route("http://testserver/**", serve)
+        page.on("dialog", lambda d: d.dismiss())
+        page.goto(f"http://testserver/console/{m.slug}")
+        live["fail"] = True
+        page.get_by_role("button", name=re.compile("Review")).click()
+        sync_api.expect(page.get_by_text("The preview didn't load")).to_be_visible()
+        assert page.get_by_role("button", name="Submit minutes").count() == 0  # hidden ones aren't in the role tree
+        live["fail"] = False
+        page.get_by_role("button", name=re.compile("Back")).click()
+        page.get_by_role("button", name=re.compile("Review")).click()
+        sync_api.expect(page.get_by_role("button", name="Submit minutes")).to_have_count(2)
         browser.close()
