@@ -11,7 +11,7 @@
   <h2>{% if live %}Meeting in progress{% else %}Next meeting{% endif %}</h2>
   {% if live %}<p class="big"><a href="/meetings/{{ live.slug }}?from=home">{{ emoji('🔴', 'live') }} Follow tonight's minutes live</a></p>
   {% elif next_meeting %}<p class="big">{{ next_meeting|date('weekday') }}{% if next_meeting == today %} · tonight{% endif %}</p>{% endif %}
-  {% if chow_next %}<p>Chow{% if not next_meeting or chow_next[0] != next_meeting.isoformat() %} {{ fmt(chow_next[0]) }}{% endif %}: {% if chow_next[1].status == 'none' %}none{% if chow_next[1].note %} ({{ chow_next[1].note }}){% endif %}{% elif chow_next[1].member %}{{ club.name(chow_next[1].member) }}{% else %}not set{% endif %}</p>{% endif %}
+  {% if chow_next %}<p>Chow: {% if chow_next.status == 'none' %}none{% if chow_next.note %} ({{ chow_next.note }}){% endif %}{% elif chow_next.member %}{{ club.name(chow_next.member) }}{% else %}not set{% endif %}</p>{% endif %}
   {% if teams %}<p><a href="{{ teams.url }}" target="_blank" rel="noopener">Join online ({{ teams.label }})</a></p>{% endif %}
 </section>
 {% if module('chow') %}<section class="card">

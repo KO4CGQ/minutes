@@ -1016,7 +1016,7 @@ def business_comment_delete(request: Request, iid: str, cid: str, back: str = Fo
 
 def upcoming_meetings(n: int = 4) -> list[dt.date]:
     today = dt.date.today()
-    return chow.meeting_nights(archive.club, today, today + dt.timedelta(days=7 * n))[:n]
+    return chow.meeting_nights(archive.club, today, today + dt.timedelta(days=7 * n + 56))[:n]  # +8 weeks: cancelled nights don't shorten the list
 
 
 @app.post("/business/notes")
@@ -2126,7 +2126,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
     if request.url.query and set(request.query_params) - {"error"}:  # old bookmarks of the archive (/?period=...)
         return RedirectResponse(f"/minutes?{request.url.query}", status_code=301)
     club, today = archive.club, dt.date.today()
-    nights = chow.meeting_nights(club, today, today + dt.timedelta(days=7))
+    nights = upcoming_meetings(1)
     s = chow.load() if club.has("chow") else {"swaps": []}
     upcoming = chow.upcoming(s, n=60) if club.has("chow") else []
     latest = next((m for m in archive.meetings if m.status != "draft"), None)  # newest first
@@ -2137,7 +2137,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
     coming = [e for e in coming if e.kind != "chow"][:8]
     # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
     undated = [richtext.title(i.text) for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
-    return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, certificate_note=treasurer.certificate_note(club), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
+    return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, certificate_note=treasurer.certificate_note(club), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=next((x for d, x in upcoming if nights and d == nights[0].isoformat()), None),  # that night's chow only (Jim, 2026-11-22)
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,

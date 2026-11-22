@@ -346,3 +346,53 @@ def test_the_schedule_pages_through_every_upcoming_night(env, tmp_path, monkeypa
     first, second = c.get("/chow").text, c.get("/chow?page=2").text
     assert "Page 1 of 2" in first and "/members/amy?from=chow" not in first and "Ask to swap" in first
     assert "/members/amy?from=chow" in second and "Page 2 of 2" in second
+
+
+def test_no_meeting_entry_drops_the_night(env, monkeypatch, tmp_path):
+    from club_minutes import events, web
+    club, _s, _ = env
+    monkeypatch.setattr(events, "DATA", tmp_path)
+    monkeypatch.setattr(web.archive, "club", club)
+    monkeypatch.setattr(web.dt, "date", type("D", (dt.date,), {"today": classmethod(lambda c: THU)}))
+    assert web.upcoming_meetings(2) == [THU, THU + dt.timedelta(days=7)]
+    evs = []
+    events.add(evs, "events", {"title": "no Meeting (Holiday)", "start": f"{THU}", "end": None}, "sec")
+    events.save(evs)
+    assert web.upcoming_meetings(2) == [THU + dt.timedelta(days=7), THU + dt.timedelta(days=14)]
+    assert chow.meeting_nights(club, THU, THU, with_cancelled=True) == [THU]  # dues still count it
+
+
+def test_deleting_a_meeting_date_cancels_it_and_no_meeting_hides_the_meeting(env, monkeypatch, tmp_path):
+    """Jim, 2026-11-22: either step alone cancels a night."""
+    from club_minutes import calview, events
+    club, _s, _ = env
+    monkeypatch.setattr(events, "DATA", tmp_path)
+    nxt = THU + dt.timedelta(days=7)
+    meet = events.add([], "events", {"title": "Club meeting", "start": f"{THU}T19:30", "end": f"{THU}T21:30",
+                                     "repeat": {"freq": "weekly", "interval": 1, "until": None}}, "sec") | {"meeting": True}
+    evs = [meet]
+    events.delete(evs, meet["id"], f"{THU}", "this")
+    events.add(evs, "events", {"title": "No meeting (Holiday)", "start": f"{nxt}", "end": None}, "sec")
+    events.save(evs)
+    assert chow.meeting_nights(club, THU, nxt) == []
+    monkeypatch.setattr(calview.store, "ensure_meeting", lambda club: None)
+    shown = [(x.start, x.title) for x in calview.entries(club, type("A", (), {"meetings": []})(), None, THU, nxt + dt.timedelta(days=7))[0]
+             if x.kind == "events"]
+    assert shown == [(nxt, "No meeting (Holiday)"), (nxt + dt.timedelta(days=7), "Club meeting")]
+
+
+def test_home_shows_the_chow_of_the_next_meeting_night_only(env, monkeypatch, tmp_path):
+    """Jim, 2026-11-22: with this Thursday cancelled, Home's Next meeting card said "Chow Thu …: none" for it."""
+    from fastapi.testclient import TestClient
+
+    from club_minutes import events, web
+    club, s, _ = env
+    monkeypatch.setattr(events, "DATA", tmp_path)
+    monkeypatch.setattr(web.dt, "date", type("D", (dt.date,), {"today": classmethod(lambda c: THU - dt.timedelta(days=3))}))
+    s["nights"] = {f"{THU}": {"status": "none", "note": "Holiday"}, f"{THU + dt.timedelta(days=7)}": {"member": "bob", "status": "scheduled"}}
+    chow.save(s)
+    events.save([events.add([], "events", {"title": "No meeting (Holiday)", "start": f"{THU}", "end": None}, "sec")])
+    monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "amy")
+    card = TestClient(web.app).get("/").text.split("Next meeting", 1)[1].split("</section>", 1)[0]
+    assert "Holiday" not in card and f"Chow: {club.name('bob')}" in card
