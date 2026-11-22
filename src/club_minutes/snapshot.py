@@ -7,7 +7,8 @@ matter (Meeting.shown) that the page and the PDF read, and a draft has none and 
     heading, label: the club's heading line and its label    links: [{label, url}] shown in the minutes
     dates: {document, list, day}: strftime formats
     logo: the logo kept (branding.keep_logo; "": the plain one)   backing: what went behind it   colours: {main, bar}
-    layout: 1 for minutes made before 1.2 (set by the upgrade): their reports are drawn as 1.1 drew them
+    layout: 1 for minutes made before 1.2 (set by the upgrade): their reports are drawn as 1.1 drew them;
+        none for 1.2's (a line between community reports); 2 from 1.3 on: a line between the items of every section (View.lines)
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ def take(club, m) -> dict:
             "label": club.label,
             "links": [{"label": ln.get("label", ""), "url": ln.get("url", "")} for ln in club.links if ln.get("minutes") is not False],
             "dates": {k: DATES[k] for k in FORMATS},
-            "logo": branding.keep_logo(), "backing": branding.backing(), "colours": branding.colours()}
+            "logo": branding.keep_logo(), "backing": branding.backing(), "colours": branding.colours(), "layout": 2}
 
 
 def heading(club) -> str:
@@ -92,6 +93,11 @@ class View:
     def old(self):
         """Minutes from before 1.2: each report as typed (web addresses linked, no formatting), its short name after it."""
         return self.s.get("layout") == 1
+
+    @property
+    def lines(self):
+        """A faint line between the items of every section (Jim, 2026-11-22): minutes made before it keep their look."""
+        return not self.m.shown or self.s.get("layout") == 2
 
     def short(self, mid):
         return n["short"] if (n := self._n(mid)) else self.club.short(mid)

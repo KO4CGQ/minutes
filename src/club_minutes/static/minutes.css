@@ -40,8 +40,9 @@ body.pdf svg.qr { width: 1.8cm; }
 .qrcap b, sup.qrn { color: var(--text, #123); font-weight: 700; }
 sup.qrn { font-size: .7em; margin-left: .1em; }
 body.pdf .qrcode { width: 2.2cm; } body.pdf .qrcap { font-size: 7pt; }
-/* A faint line between community reports (Jim, 2026-11-20): one report can run to lists, links, codes and pictures */
-.minutes ul.reports > li + li { border-top: 1px solid var(--border, #d7e1e5); padding-top: .4rem; margin-top: .4rem; }
+/* A faint line between items (Jim, 2026-11-20/22): one item can run to lists, links, codes and pictures. reports: 1.2's
+   minutes, Community Reports only (1.1's have none); lined: every section, minutes made since (snapshot.View.lines) */
+.minutes ul.reports > li + li, .minutes ul.lined > li + li { border-top: 1px solid var(--border, #d7e1e5); padding-top: .4rem; margin-top: .4rem; }
 /* Quotes and code in formatted text (richtext.py; Jim, 2026-11-20: a drafted email, a command) */
 blockquote.rquote { margin: .3rem 0; padding: .1rem .7rem; background: var(--surface-2, #eef2f4); border: 1px solid var(--border, #c5d1d6); border-left: 3px solid var(--border, #c5d1d6); border-radius: .5rem; color: var(--text, #111); }
 blockquote.rquote p { margin: .25rem 0; }
