@@ -549,13 +549,25 @@
           const said = c.meeting === M.slug, picked = said || c.minutes === M.slug;
           return h("div", { class: "bizcomment" + (picked ? " inmin" : "") }, h("b", {}, c.name), " ",
             h("span", { class: "hint" }, said ? "at the meeting" : new Date(c.at * 1000).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })),
-            h("b", {}, ": "), c.text, " ",
+            " ",
             said ? h("button", { class: "btn small ghost", title: "Delete (recorded by mistake)",
               onclick: () => { if (confirm("Delete what was recorded?")) send(`/business/${x.id}/comments/${c.id}/delete`, {}); } }, emo("✖️", "x"))
               : h("button", { class: "btn small" + (picked ? "" : " ghost"), title: picked ? "Take it out of the minutes" : "Put it in tonight's minutes, under this item",
-                onclick: () => send(`/business/${x.id}/comments/${c.id}/minutes`, { on: picked ? 0 : 1 }) }, picked ? [emo("✅", "check"), " In the minutes"] : "Add to the minutes"));
+                onclick: () => send(`/business/${x.id}/comments/${c.id}/minutes`, { on: picked ? 0 : 1 }) }, picked ? [emo("✅", "check"), " In the minutes"] : "Add to the minutes"),
+            commentBody(c));
         }),
         saidForm(x));
+    };
+    // A comment's formatted text (server-rendered, safe HTML), clamped to two lines; the button shows only when there's more, and opens it in place.
+    const commentBody = (c) => {
+      const body = h("div", { class: "ctext clamp" });
+      body.innerHTML = c.html;
+      if ((c.pictures || []).length) body.append(h("div", { class: "pics" }, c.pictures.map((p, i) => h("img", { src: `/pictures/${p}-s.jpg`, alt: `Picture ${i + 1} with ${c.name}'s comment` }))));
+      const btn = h("button", { class: "btn small ghost", type: "button", hidden: true, "aria-expanded": "false",
+        onclick: () => { const open = body.classList.toggle("clamp") === false; btn.setAttribute("aria-expanded", open); btn.textContent = open ? "Show less" : "Show more"; } }, "Show more");
+      // measured once the box is on screen (and again if it resizes); a clamped box that overflows has more to show
+      new ResizeObserver(() => { if (body.classList.contains("clamp")) btn.hidden = body.scrollHeight <= body.clientHeight + 1; }).observe(body);
+      return h("div", {}, body, btn);
     };
     // What someone says about an item at the meeting: their comment on it, and in the minutes under it
     const saidForm = (x) => {

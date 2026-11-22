@@ -385,3 +385,11 @@ def test_replies_to_the_minutes_go_to_the_recorder_and_the_leader(tmp_path, monk
     assert msg["Reply-To"] == "sam@example.org" and "Replies go to Sam." in msg.get_body(("plain",)).get_content()
     a.club.members["doe"].share = ["email"]  # the recorder shares too: both, recorder first
     assert console.reply_addresses(a.club.members["doe"], a.club.members["kim"], a.club.members["kim"]) == "jane@example.org, sam@example.org"
+
+
+def test_console_comment_html_is_formatted_and_safe():
+    from club_minutes import business
+    x = business.add({"items": [], "next_id": 1}, "Fix the tower light", "doe")
+    x["comments"] = [{"id": 1, "by": "doe", "at": 1, "text": "- one\n- two <script>x</script>"}]
+    h = business.view(club, x, "2026-11-22")["new_comments"][0]["html"]
+    assert "<li>one</li>" in h and "<script>" not in h
