@@ -32,6 +32,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - A community report's name shows once, as the tag leading the report, in the PDF too. A club can show full names instead of short ones, and short names now tell apart members who share a first name and last initial.
 - Business items, comments and notes can run to 5,000 characters, with a count; longer text is refused instead of cut off.
 - **Download PDF** saves the file and keeps the minutes page open.
+- In the formatting toolbar, **Preview** is an eye icon, and while the preview shows it turns into a pencil to go back to editing.
 
 ### Fixed
 - On iPhones, an empty Due or Hold date box on the Business page shrank to almost nothing.

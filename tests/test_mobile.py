@@ -622,8 +622,8 @@ def test_a_quote_goes_on_over_several_lines(engine):
 
 @pytest.mark.parametrize("engine", ENGINES)
 def test_preview_shows_the_text_as_the_server_renders_it_and_goes_back(engine):
-    """format.js: Preview swaps the box for the server's rendering (stubbed here with the same renderer), focus on it;
-    Back to editing brings the box back with its text, focus in it."""
+    """format.js: Preview (an eye) swaps the box for the server's rendering (stubbed here with the same renderer), focus on it;
+    Back to editing (the same button, a pencil) brings the box back with its text, focus in it."""
     sync_api = pytest.importorskip("playwright.sync_api")
     from club_minutes import richtext
     root = Path(__file__).parents[1] / "src/club_minutes/static"
@@ -646,8 +646,12 @@ def test_preview_shows_the_text_as_the_server_renders_it_and_goes_back(engine):
         region.locator("blockquote.rquote").wait_for()
         assert not box.is_visible() and page.get_by_role("button", name="Bold").is_disabled()
         assert page.evaluate("document.activeElement.className") == "fmtpreview"
+        icon = lambda: page.evaluate("document.querySelector('.fmt-prev svg path').getAttribute('d')")
+        assert page.locator(".fmt-prev").inner_text() == ""  # an icon, not words (the eye, then the pencil)
+        pencil = icon()
         page.get_by_role("button", name="Back to editing").click()
         assert box.is_visible() and box.input_value() == "> quoted" and region.count() == 0
+        assert icon() != pencil and page.get_by_role("button", name="Preview").is_visible()
         assert page.evaluate("document.activeElement.tagName") == "TEXTAREA"
         browser.close()
 
