@@ -6,6 +6,9 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ## Unreleased
 
+### Fixed
+- On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.
+
 ## 1.2.0 (2026-11-22)
 
 ### Added

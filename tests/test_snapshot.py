@@ -90,6 +90,8 @@ def test_the_pdf_is_made_once_kept_and_never_served_to_who_may_not_see_it(tmp_pa
     first = member.get(f"/meetings/{SLUG}/minutes.pdf")
     second = member.get(f"/meetings/{SLUG}/minutes.pdf")
     assert first.content == second.content and first.content.startswith(b"%PDF") and len(made) == 1
+    assert first.headers["content-disposition"].startswith("attachment;")
+    assert first.headers["content-type"] == "application/octet-stream"  # iPhone Safari shows any application/pdf in the tab  # Download PDF downloads (iOS opened inline ones in the tab)
     assert (a.root / SLUG / "minutes.v1.pdf").read_bytes() == first.content and not list((a.root / SLUG).glob("*.tmp"))
     m = a.by_slug[SLUG]
     corrections.correct(a, SLUG, "roe", "Took out a private detail", 1, edit(m, visitors=1), notice=False, private=True)
