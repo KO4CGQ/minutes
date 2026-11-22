@@ -6,8 +6,12 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ## Unreleased
 
+### Changed
+- In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.
+
 ### Fixed
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.
+- Minutes from before 1.2 no longer show a line between community reports: they look as they did when they were made.
 
 ## 1.2.0 (2026-11-22)
 

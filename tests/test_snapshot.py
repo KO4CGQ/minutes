@@ -177,10 +177,24 @@ def test_minutes_from_before_1_2_keep_1_1s_report_layout(tmp_path, monkeypatch):
     page = c.get(f"/meetings/{SLUG}").text
     assert "Sam K - net at *8pm` on " in page and 'href="https://example.org"' in page  # as typed: no pill first, no Markdown
     assert page.index("Sam K - net") < page.index('class="who"')  # the name after the report, as 1.1 had it
+    assert "items reports" not in page and "items lined" not in page  # and no line between items: 1.2 brought it
     corrections.correct(a, SLUG, "roe", "Typo", 1, edit(a.by_slug[SLUG], visitors=2), notice=False)
-    assert "layout" not in a.by_slug[SLUG].shown and corrections.load_version(a, SLUG, 1).shown["layout"] == 1
+    assert a.by_slug[SLUG].shown["layout"] == 2 and corrections.load_version(a, SLUG, 1).shown["layout"] == 1
     page = c.get(f"/meetings/{SLUG}").text  # version 2: the pill first, the typed name left off
     assert page.index('class="who"') < page.index("net at") and "Sam K - net" not in page
+
+
+def test_only_minutes_made_now_get_a_line_between_every_sections_items(tmp_path, monkeypatch):
+    """Jim, 2026-11-22: the line between items in every section leaves minutes made before it as they were."""
+    a, c = web_as(tmp_path, monkeypatch, "n0call")
+    m = a.by_slug[SLUG]
+    m.shown = snapshot.take(a.club, m)
+    del m.shown["layout"]  # as 1.2 made it: lines in Community Reports only
+    m.save(a.root)
+    a.reload()
+    assert 'class="items lined"' not in c.get(f"/meetings/{SLUG}").text
+    stamp(a)  # made today
+    assert 'class="items lined"' in c.get(f"/meetings/{SLUG}").text
 
 
 def test_published_minutes_keep_their_logo_and_colours_and_a_correction_takes_todays(tmp_path, monkeypatch):

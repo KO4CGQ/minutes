@@ -351,7 +351,7 @@ def test_a_name_after_a_minutes_line_never_splits(engine):
     line = ("Took his new antenna down since it got into the neighbor's TV, then put an 80m Hamstick on his jeep "
             '<a class="who" href="/members/n0rich">Rich S</a>')
     url = "https://example.org/a/very/long/address/without/any/spaces/at/all/to/break/at/minutes.pdf"
-    html = f'<style>{css}</style><article class="minutes"><ul class="items reports"><li>{line}</li><li>See <a href="{url}">{url}</a></li></ul></article>'
+    html = f'<style>{css}</style><article class="minutes"><ul class="items lined"><li>{line}</li><li>See <a href="{url}">{url}</a></li></ul></article>'
     with sync_api.sync_playwright() as p:
         try:
             browser = getattr(p, engine).launch()
