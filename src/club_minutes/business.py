@@ -24,7 +24,7 @@ import time
 
 from . import branding
 from .club import DATA, Club, show_date
-from .richtext import plain
+from .richtext import plain, render
 
 MAX_TEXT = 5000  # an item's text, a comment or a note (Jim, 2026-11-20: a drafted email fits); longer is refused, never cut
 
@@ -435,7 +435,7 @@ def sections(s: dict, club: Club, date: str, since: str | None = None) -> dict[s
 def view(club: Club, x: dict, today: str, since: str | None = None) -> dict:
     """An item for the console and the Business page. `since`: the previous meeting, for "new comments"."""
     cutoff = dt.datetime.fromisoformat(since).timestamp() if since else 0  # from that meeting's day on
-    return {**x, "new_comments": [{**c, "name": c.get("guest") or club.shown_name(c["by"])} for c in x.get("comments", []) if c["at"] >= cutoff],
+    return {**x, "new_comments": [{**c, "name": c.get("guest") or club.shown_name(c["by"]), "html": str(render(c["text"], names=club))} for c in x.get("comments", []) if c["at"] >= cutoff],
             "owner_name": club.name(x["owner"]) if x["owner"] else None,
             "overdue": bool(x["status"] == "open" and x["due"] and x["due"] < today), "quiet": quiet(x, today)}
 

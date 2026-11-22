@@ -372,6 +372,32 @@ def test_a_name_after_a_minutes_line_never_splits(engine):
 
 
 @pytest.mark.parametrize("engine", ENGINES)
+def test_a_console_comment_shows_two_whole_lines(engine):
+    """Jim, 2026-11-22: a max-height clamp cut a formatted comment mid-line on desktop; now two lines and an ellipsis."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from club_minutes.richtext import render
+    static = Path(__file__).parents[1] / "src/club_minutes/static"
+    css = (static / "style.css").read_text() + (static / "console.css").read_text()
+    texts = ["Para one that runs on.\n\nPara two.\n\nPara three.", "- one\n- two\n- three", "word " * 200]
+    html = f"<style>{css}</style>" + "".join(f'<div class="bizcomment"><div class="ctext clamp">{render(t)}</div></div>' for t in texts)
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        for w in (390, 1280):
+            page.set_viewport_size({"width": w, "height": 800})
+            page.set_content(html)
+            # the text starts at the box's top (a paragraph's margin pushed it down) and the box holds two lines
+            got = page.eval_on_selector_all(".ctext", """els => els.map(e => { const r = document.createRange(); r.selectNodeContents(e);
+                const top = r.getClientRects()[0].top - e.getBoundingClientRect().top;
+                return [Math.round(top), e.clientHeight / parseFloat(getComputedStyle(e).lineHeight)]; })""")
+            assert all(top <= 2 and 1.9 < n < 2.2 for top, n in got), (w, got)
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
 def test_hovering_a_member_link_leaves_the_initials_alone(engine):
     """A link with a member's initials circle (the Roster, Business, Home...) underlines its text on hover, never the
     letters in the circle: the circle looks the same hovered or not."""
