@@ -6,6 +6,9 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ## Unreleased
 
+### Added
+- **Cancelling a meeting night:** delete that date of the weekly meeting, or add a "No meeting" entry on the club's calendar (the meeting then drops off the calendar that night). Either one takes the night off Home, the business notes and the leader console, and the next week's meeting shows instead.
+
 ### Changed
 - In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.
 

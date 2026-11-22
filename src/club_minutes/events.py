@@ -129,6 +129,21 @@ def move_meeting(club, since: dt.date, where: str | None, online: str | None, by
     return first
 
 
+def cancelled(evs: list[dict], lo: dt.date, hi: dt.date) -> set[dt.date]:
+    """Meeting nights in lo..hi called off (Jim, 2026-11-22: either step alone does it): a date deleted from the weekly
+    meeting, or a "No meeting" entry (title starting so, any case) on the Club events calendar."""
+    out = set()
+    for e in evs:
+        if e.get("meeting"):
+            out |= {d for s in e.get("skip", []) if lo <= (d := dt.date.fromisoformat(s)) <= hi}
+        elif e.get("cal") == "events":
+            for d in dates(e, lo - reach(e), hi + reach(e)):
+                o = occurrence(e, d)
+                if o["title"].strip().lower().startswith("no meeting") and lo <= (day := _dt(o["start"]).date()) <= hi:
+                    out.add(day)
+    return out
+
+
 def quiet(e: dict) -> bool:
     """Left out of the console's read-out: ticked on the event, or the weekly meeting unless unticked."""
     return e.get("quiet", bool(e.get("meeting")))

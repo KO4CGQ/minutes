@@ -47,7 +47,7 @@ What a member may do comes from their **roles**. A role is given by the offices 
 - **Who changed what** (officers) lists every change.
 
 > [!TIP]
-> To skip the meeting on a holiday, delete that one date.
+> To cancel a meeting night, do either: delete that one date of the weekly meeting, or add a Club events entry on that date whose title starts with **No meeting** (for example "No meeting (Thanksgiving)"), which also tells members why; the weekly meeting then doesn't show that night. Either way the night is off Home's next meeting, the business notes' meeting list and the chow schedule's new nights. Nights already in the chow schedule stay as they are.
 
 **The weekly meeting** is on Club events. To change its day, time, place or online link, an admin uses **Admin → Site → Club** and picks the date it starts; earlier meetings stay as they were.
 

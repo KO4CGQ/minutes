@@ -401,7 +401,7 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     start, joined = max(c["start"], m.member_since or ""), m.member_since or c["start"]
     weekly = rate(c, "dues_weekly", today.isoformat())
     # Every meeting night accrues dues, holidays included (a weekly club's year is 52 nights).
-    nights_owed = chow.meeting_nights(club, dt.date.fromisoformat(start), today)
+    nights_owed = chow.meeting_nights(club, dt.date.fromisoformat(start), today, with_cancelled=True)
     missed = sorted(d for d, x in (nights if nights is not None else chow.load()["nights"]).items()
                     if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat()
                     ) if club.has("chow") else []  # the missed-chow fee is part of the chow module
@@ -421,7 +421,7 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
         j = dt.date.fromisoformat(m.member_since)
         cert_due = j.replace(year=j.year + int(c["certificate_years"]), day=28 if (j.month, j.day) == (2, 29) else j.day)
     ahead = -owed // weekly if owed < 0 else 0  # whole meeting nights already paid for (monthly or yearly payers)
-    later = chow.meeting_nights(club, today + dt.timedelta(days=1), today + dt.timedelta(weeks=ahead + 1))
+    later = chow.meeting_nights(club, today + dt.timedelta(days=1), today + dt.timedelta(weeks=ahead + 1), with_cancelled=True)
     return {"member": mid, "owed": owed, "weeks_behind": -(-owed // weekly) if owed > 0 else 0,
             "behind": owed >= int(c["arrears_weeks"]) * weekly, "missed_chow": missed, "certificate": cert,
             "certificate_bought": max((e["date"] for e in bonds), default=None) if cert else None, "suspended": m.status.lower() == "suspended", "paid_through": later[ahead - 1].isoformat() if ahead else None,

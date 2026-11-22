@@ -99,14 +99,20 @@ def eligible(club: Club, s: dict, mid: str, date: dt.date) -> bool:
     return not any(a <= date.isoformat() <= b for a, b in c.get("away") or [])
 
 
-def meeting_nights(club: Club, start: dt.date, until: dt.date) -> list[dt.date]:
+def meeting_nights(club: Club, start: dt.date, until: dt.date, with_cancelled: bool = False) -> list[dt.date]:
+    """Meeting weekdays from start to until. Nights with a "No meeting" calendar entry are left out unless `with_cancelled`
+    (dues still count them). The one place a later "meetings that aren't weekly" rule goes."""
     wd = club.meeting_weekday
     d = start + dt.timedelta(days=(wd - start.weekday()) % 7)
     out = []
     while d <= until:
         out.append(d)
         d += dt.timedelta(days=7)
-    return out
+    if with_cancelled:
+        return out
+    from . import events
+    off = events.cancelled(events.load(), start, until)
+    return [d for d in out if d not in off]
 
 
 def next_up(club: Club, s: dict) -> str | None:
