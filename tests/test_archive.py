@@ -242,6 +242,17 @@ def test_link_icons():
     assert link_icon("https://example.org/some/page") == "link"
 
 
+def test_about_leaves_out_each_releases_security_and_admin_notes():
+    from club_minutes.web import members_changelog
+    text = ("# Changelog\nIntro.\n\n## Unreleased\n\n## 1.3.0 (2027-01-02)\n### Added\n- **Polls**\n\n### Security\n- A fix. Update soon.\n\n"
+            "### For server admins\n- A data upgrade.\n\n## 1.2.1 (2026-12-20)\n### Security\n- pyyaml updated. Update soon.\n\n"
+            "## 1.2.0 (2026-12-01)\n### Fixed\n- Quotes.\n### For server admins\n- Root owns the code.\n")
+    log = members_changelog(text)
+    assert [v for v, _ in log] == ["1.3.0 (2027-01-02)", "1.2.0 (2026-12-01)"]  # empty Unreleased and a security-only patch: not listed
+    html = "".join(n for _, n in log)
+    assert "Polls" in html and "Quotes" in html and "Update soon" not in html and "upgrade" not in html and "Root" not in html
+
+
 def test_about_page(monkeypatch):
     from fastapi.testclient import TestClient
 
@@ -450,3 +461,26 @@ def test_front_matter_value_with_dashes_round_trips(m):
                             reviewed={"by": "n0call", "at": "2026-01-01"})
     back = Meeting.from_markdown(c.to_markdown())
     assert back.corrections == c.corrections and back.reviewed == c.reviewed
+
+
+def test_a_reports_name_shows_once_as_its_pill():
+    """club.unnamed: the minutes show the member's name as a pill before the report, so the name typed at its start
+    goes (any of full, short or first name, then " - " or ":"); a list under the name keeps its marks."""
+    assert club.unnamed("Jane D - built a dipole", "doe") == "built a dipole"
+    assert club.unnamed("Jane Doe: field day", "doe") == "field day"
+    assert club.unnamed("jane went to Dayton", "doe") == "went to Dayton"
+    assert club.unnamed("Jane D\n- mast\n- coax", "doe") == "- mast\n- coax"
+    assert club.unnamed("Rick Roe 50/50 drawing", "roe") == "50/50 drawing"
+    assert club.unnamed("Janet built a mast", "doe") == "Janet built a mast"  # a whole name only
+    assert club.unnamed("Jane D", "doe") == "" and club.unnamed("Sam built", None) == "Sam built"
+
+
+def test_short_names_tell_members_apart_and_former_members_dont_rename_anyone():
+    """club._auto_short_names: first name alone; plus the last name's first letter(s) when another member shares it
+    (enough letters to differ); only Active members count for an Active member; a former member is told apart from all."""
+    c = Club(FIX / "test-club.yaml", roster=[
+        {"id": "a", "first": "Jill", "last": "Doe"}, {"id": "b", "first": "Jill", "last": "Dunn"},
+        {"id": "c", "first": "Jill", "last": "Smith"}, {"id": "d", "first": "Sam", "last": "Kim"},
+        {"id": "e", "first": "Sam", "last": "Lee", "status": "Inactive"}, {"id": "f", "first": "Ray", "last": "Roe", "short": "Ray"},
+        {"id": "g", "first": "Ray", "last": "Rowe"}])
+    assert [c.short(i) for i in "abcdefg"] == ["Jill Do", "Jill Du", "Jill S", "Sam", "Sam L", "Ray", "Ray Row"]

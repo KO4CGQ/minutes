@@ -13,6 +13,8 @@ club:
   supports_app: false      # true: the club gives toward Club Minutes; the menu's Support link goes away for everyone
                            # (never chow or birthdays). Leave empty to keep every calendar members-only.
   remind_days_before: 3    # business item owners get an email this many days before the due date (and once if overdue)
+  names: short             # members' names in brief across the app (report tags, comments, chow, Old Business): short ("Jane D") or full ("Jane Doe")
+  pictures_per_day: 20     # pictures one member can add a day, on reports, business items and comments
   date_formats:          # strftime codes; %-d = day without leading zero
     list: "%b %-d, %Y"    # tables, e.g. Nov 5, 2026
     document: "%B %-d, %Y"  # minutes header, e.g. November 5, 2026
@@ -59,6 +61,9 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 # chow module) and Upcoming Events (the calendars). Any other name is the club's own free-text section, with an
 # optional hint for the console. Left out: the built-ins except Upcoming Chow (added with the chow module).
 # meeting:
+#   quorum:                # off unless set: the console shows whether there is one, and the minutes record it
+#     percent: 30          # at least this % of the Active members present (rounded up); leave out to not use
+#     officers: 2          # at least this many officers present; leave out to not use
 #   sections:
 #     - Bills and Communications
 #     - Financial Report

@@ -9,9 +9,20 @@ main() {
   # set -e stops silently, and the git commands are quiet: say what failed, for the Updates page and the email
   trap 'echo "Stopped: \"$BASH_COMMAND\" failed (exit $?)." >&2' ERR
   local APP=/opt/club-minutes BRANCH=${BRANCH:-main} TAG=${TAG:-}
+  # Root owns the code, so what runs as 'minutes' can't edit what runs as root here. An install from before
+  # (owned by minutes) is handed over once, before root runs git in it. The venv goes too: its Python may live in
+  # the minutes user's home, which that user can edit.
+  local handed=""
+  if find "$APP" -user minutes -print -quit | grep -q .; then
+    echo "Making root the owner of $APP (once; the app's user can no longer change its code)."
+    chown -R root:root "$APP"
+    handed=1
+  fi
   cd "$APP"
   install_and_restart() {
-    sudo -u minutes env UV_CACHE_DIR=/var/lib/club-minutes-home/.cache/uv uv sync -q --frozen --no-dev
+    if [ -n "$handed" ]; then rm -rf "$APP/.venv"; handed=""; fi  # rebuilt just below, with root's Python
+    # root's own uv cache and Python (readable by 'minutes', writable only by root)
+    env UV_CACHE_DIR=/var/cache/club-minutes-uv UV_PYTHON_INSTALL_DIR="$APP/.uv-python" uv sync -q --frozen --no-dev
     # Install the app's systemd units (new ones arrive with updates) and turn on its timers and watchers.
     install -m 644 "$APP"/deploy/club-minutes*.service "$APP"/deploy/club-minutes*.timer "$APP"/deploy/club-minutes*.path \
       /etc/systemd/system/
@@ -28,33 +39,38 @@ main() {
     done
     return 1
   }
-  local before; before=$(sudo -u minutes git rev-parse HEAD)
+  # a version from before root owned the code (1.1 and older) runs git and uv as 'minutes': give it back its folder,
+  # or its own updater can't run git there ("dubious ownership"): after a rollback to one, or going back to one on purpose
+  give_back() { if grep -qE '^ *sudo -u minutes git fetch' deploy/update.sh; then chown -R minutes:minutes "$APP"; fi; }
+  local before; before=$(git rev-parse HEAD)
   # The data's shape before (the new version may upgrade it at start: see src/club_minutes/upgrade.py)
   local DATA=${CLUB_MINUTES_DATA:-/var/lib/club-minutes} was
   was=$(cat "$DATA/data-version" 2>/dev/null || echo 1)
   # --force: GitHub's tags are the truth (the server resets to them anyway); without it, a tag moved on GitHub
   # makes every fetch fail ("would clobber existing tag"), as it did for 0.17.0
-  sudo -u minutes git fetch -q --tags --force origin
+  git fetch -q --tags --force origin
   if [ -n "$TAG" ]; then
     [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || { echo "Not a release tag: $TAG" >&2; exit 2; }
-    sudo -u minutes git reset -q --hard "refs/tags/$TAG"
+    git reset -q --hard "refs/tags/$TAG"
   else
-    sudo -u minutes git reset -q --hard "origin/$BRANCH"
+    git reset -q --hard "origin/$BRANCH"
   fi
   install_and_restart
   if ! healthy; then
-    echo "The app didn't come back up after the update: going back to $(sudo -u minutes git log --oneline -1 "$before")" >&2
+    echo "The app didn't come back up after the update: going back to $(git log --oneline -1 "$before")" >&2
     # why, for the Updates page and its email (often a club.yaml setting the new version needs)
     journalctl -u club-minutes --since "-10min" --no-pager -o cat 2>/dev/null | grep -E "Error|error:" | tail -1 | sed 's/^/Why: /' >&2 || true
     systemctl stop club-minutes
     # if it upgraded the data, put back the copy from before (the old version can't read the new shape)
     sudo -u minutes env CLUB_MINUTES_DATA="$DATA" "$APP/.venv/bin/club-minutes" data-undo "$was" >&2 || true
-    sudo -u minutes git reset -q --hard "$before"
+    git reset -q --hard "$before"
     install_and_restart
+    give_back  # after the install: what root's uv sync wrote goes back too
     if healthy; then echo "Rolled back: the app is running the version it had before." >&2
     else echo "Still not answering after rolling back: see journalctl -u club-minutes" >&2; fi
     exit 1
   fi
-  echo "Now at $(sudo -u minutes git log --oneline -1)"
+  give_back
+  echo "Now at $(git log --oneline -1)"
 }
 main "$@"; exit

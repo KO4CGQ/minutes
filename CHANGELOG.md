@@ -6,6 +6,33 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ## Unreleased
 
+## 1.2.0 (2026-11-22)
+
+### Added
+- **Pictures** on community reports, business items, motions, comments and notes for the next meeting, up to four each. Members only, never public, and saved without the hidden details a phone adds (such as where it was taken).
+- **Formatting** in reports, business items, comments and the leader console: bold, italic, lists, quotes, code and links (with words to show and a numbered QR code, if you like), from a toolbar above the box. **Preview** shows how it will look.
+- **@ mentions:** a member mentioned shows as their name tag, linked to their page.
+- **Business comments in the minutes:** the leader can add members' comments on a business item, and what's said about it at the meeting, under the item.
+- **Quorum check** (optional): the leader console shows whether there's a quorum and the votes a motion needs, and the minutes record it.
+
+### Changed
+- **Published minutes stay as they were** when the roster, names, agenda or club details change later.
+- A community report's name shows once, as the tag leading the report, in the PDF too. A club can show full names instead of short ones, and short names now tell apart members who share a first name and last initial.
+- Business items, comments and notes can run to 5,000 characters, with a count; longer text is refused instead of cut off.
+- **Download PDF** saves the file and keeps the minutes page open.
+
+### Fixed
+- On iPhones, an empty Due or Hold date box on the Business page shrank to almost nothing.
+- On a phone, the top bar ran off the screen while a meeting's minutes were open.
+- Keyboard focus was hard to see.
+- A name the club never records could reach the minutes through a business item, a note or a motion.
+
+### Security
+- Hardening of uploads and of how the server updates itself. Update soon.
+
+### For server admins
+- This release upgrades the data (going back to 1.1 means restoring a backup made before updating) and makes root the owner of the app's code. The server admin guide has the details.
+
 ## 1.1.0 (2026-11-19)
 - **Custom roles:** a club decides what each role may do and who has it (by office, or member by member), and can add roles of its own. Leading meetings (Meeting leader) and fixing published minutes (Minutes editor) are now separate roles, and a Secretary role gets the roster emails.
 - **Correct these minutes:** the meeting's leader or recorder, a Minutes editor or an admin can correct minutes in the archive, with a reason and a side-by-side preview. Earlier versions are kept (for editors only, if a correction takes out private details), and members can be emailed what changed. Imported minutes can be marked as reviewed.

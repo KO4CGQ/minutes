@@ -340,6 +340,10 @@ def test_console_saves_of_the_wrong_shape_or_size_are_refused_and_attendance_is_
         r = t.put(url, json={"meeting": bad, "tab": "j"})
         assert r.status_code == 400 and r.json()["detail"] == "That request wasn't readable.", bad
     assert t.put(url, json={"meeting": {}, "state": {"x": "y" * 300_000}, "tab": "j"}).status_code == 413
+    monkeypatch.setattr(a.club, "redact", ["mysteryguest"])  # never_record: refused with its own status (409 means taken over)
+    r = t.put(url, json={"meeting": {"sections": {"Community Reports": [{"text": "Mystery Guest spoke"}]}}, "tab": "j"})
+    assert r.status_code == 422 and "never records" in r.json()["detail"]
+    monkeypatch.setattr(a.club, "redact", [])
     ok = {"meeting": {"in_person": ["doe", "<script>x</script>", "n0olde", "roe"], "remote": ["nobody", 7],
                       "guests": [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}], "visitors": 2},
           "state": {}, "tab": "j"}
@@ -347,6 +351,28 @@ def test_console_saves_of_the_wrong_shape_or_size_are_refused_and_attendance_is_
     m = a.by_slug[m.slug]
     assert m.in_person == ["doe", "w0demo", "roe"] and m.remote == []   # an Inactive member and an old callsign kept
     assert m.guests == [{"name": "Pat Guest", "callsign": "N0YABC", "online": True}] and m.visitors == 2
+
+
+def test_quorum_counts_active_members_and_officers_and_the_minutes_keep_it():
+    c = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": f"m{i}", "first": "Jane", "last": f"Doe{i}", "officer": i < 2, "status": "Active"} for i in range(10)]
+        + [{"id": "gone", "first": "Ray", "last": "Roe", "status": "Inactive"}])
+    assert c.quorum is None and c.quorum_record(["m0"]) is None and console.quorum_rule(c) is None  # off by default
+    c._configure({**c.yaml, "meeting": {"quorum": {"percent": 25, "officers": 1}}})
+    assert c.quorum_needed() == 3  # 25% of 10 Active members is 2.5, rounded up; the Inactive one doesn't count
+    assert console.quorum_rule(c)["needed"] == 3 and "gone" not in console.quorum_rule(c)["active"]
+    assert c.quorum_record(["m5", "m6", "gone"]) == {"members": 10, "present": 2, "needed": 3, "officers": 0, "officers_needed": 1, "met": False}
+    rec = c.quorum_record(["m0", "m5", "m6"])
+    assert rec["met"] and rec["officers"] == 1
+    m = Meeting(date=dt.date(2026, 11, 19), in_person=["m0", "m5", "m6"], quorum=rec)
+    assert Meeting.from_markdown(m.to_markdown()).quorum_text == "Quorum present: 3 of 10 members; 3 needed; 1 officer present; 1 needed"
+    m.quorum = c.quorum_record(["m5"])
+    assert Meeting.from_markdown(m.to_markdown()).quorum_text.startswith("No quorum: 1 of 10 members; 3 needed")
+    bare = Meeting(date=dt.date(2026, 11, 19))
+    assert Meeting.from_markdown(bare.to_markdown()).quorum_text == "" and "quorum" not in bare.to_markdown()
+    for bad in ({"percent": 0}, {"percent": "x"}, {"officers": 99}, {"bogus": 1}):
+        with pytest.raises(ValueError):
+            c._configure({**c.yaml, "meeting": {"quorum": bad}})
 
 
 def test_replies_to_the_minutes_go_to_the_recorder_and_the_leader(tmp_path, monkeypatch):

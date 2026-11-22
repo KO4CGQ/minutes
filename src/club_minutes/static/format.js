@@ -1,0 +1,256 @@
+// The formatting toolbar (richtext.py): B, I, lists, a quote, code, a web address, QR and Picture, for a text box marked data-format. It appears
+// above the box when you click into it, wraps the selected text in Markdown marks, and fires the box's input and change
+// events (so the console saves as usual). A box marked data-pic="report|comment|edit" also gets Picture, which opens the
+// file box marked data-picker with the same value. Without JavaScript people type the marks or plain text (which
+// reads the same) and use the pictures' own file boxes, which this script hides (the js-fmt class) only when it runs.
+(() => {
+  document.documentElement.classList.add("js-fmt");
+  const WEB = /^https?:\/\/\S+\.\S+$/;
+  const ADDR = /https?:\/\/[^\s<>"')\]]+/g;  // an address in the text, as richtext.py finds them
+  // Link: one form for the address, its words (optional) and a QR code. With the caret on a link already in the text, the
+  // form opens with it to change; otherwise it adds one (the selected words, or address, filled in). Shown as "words (address)".
+  const LINKED = /\[([^[\]\n]+)\]\((https?:\/\/[^\s()]+)\)([ \t]*\[QR\])?/gi;  // "[words](address)", maybe "[QR]" after it
+  const linkAt = (v, s) => {  // [from, to, address, words, qr] of the link the caret is on, or null
+    for (const m of v.matchAll(LINKED)) if (s >= m.index && s <= m.index + m[0].length) return [m.index, m.index + m[0].length, m[2], m[1], !!m[3]];
+    for (const m of v.matchAll(ADDR)) {
+      if (v[m.index - 1] === "(") continue;  // the address of a "[words](address)"
+      const qr = v.slice(m.index + m[0].length).match(/^[ \t]*\[QR\]/i), end = m.index + m[0].length + (qr ? qr[0].length : 0);
+      if (s >= m.index && s <= end) return [m.index, end, m[0], "", !!qr];
+    }
+    return null;
+  };
+  const form = document.createElement("dialog");
+  form.className = "modal fmtlink"; form.setAttribute("aria-labelledby", "fmtlink-h");
+  form.innerHTML = `<form method="dialog" class="body modern"><h2 id="fmtlink-h">Add a link</h2>
+    <label>Web address <input name="u" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="example.org/page" required></label>
+    <label><span>Words to show <span class="hint">(optional)</span></span> <input name="w" type="text" autocomplete="off" maxlength="120"></label>
+    <label class="check"><input name="qr" type="checkbox"> <span>Add a QR code <span class="hint">(numbered, in the PDF and on screen)</span></span></label>
+    <p class="err" role="alert"></p>
+    <div class="dacts"><button class="btn" value="ok">Add</button><button class="btn ghost" value="" formnovalidate>Cancel</button></div></form>`;
+  const openLink = (t) => {
+    const v = t.value, s = t.selectionStart, e = t.selectionEnd, f = form.querySelector("form"), at = linkAt(v, s);
+    let [from, to, u, w, qr] = at || [s, e, "", "", false];
+    const sel = at ? "" : v.slice(s, e).trim();
+    if (sel && !sel.includes("\n")) { if (/^(https?:\/\/)?[^\s/]+\.[^\s]+$/i.test(sel)) u = sel; else w = sel; }
+    f.u.value = u; f.w.value = w; f.qr.checked = qr; f.querySelector(".err").textContent = "";
+    form.querySelector("h2").textContent = at ? "Change the link" : "Add a link";
+    form.querySelector("[value=ok]").textContent = at ? "Save" : "Add";
+    if (!form.isConnected) document.body.append(form);
+    form.onclose = () => t.focus();  // Cancel or Escape: back to the box as it was
+    done = (link) => {  // closed here, not by the form, so the box has its caret back before the next key
+      const x = at ? link : spaced(v, from, link);
+      form.close(); put(t, x, from, to); t.focus(); t.setSelectionRange(from + x.length, from + x.length);
+    };
+    form.showModal();
+  };
+  let done = null;
+  form.addEventListener("submit", (ev) => {  // "example.org" gets https:// in front; anything else that isn't an address says so
+    const f = ev.target;
+    if (ev.submitter?.value !== "ok") return;
+    let link = f.u.value.trim();
+    if (!/^[a-z][\w+.-]*:/i.test(link)) link = `https://${link}`;
+    if (!WEB.test(link)) {
+      ev.preventDefault();
+      f.querySelector(".err").textContent = `"${f.u.value.trim()}" doesn't look like a web address. Try one like example.org or https://example.org/page.`;
+      return f.u.focus();
+    }
+    const words = f.w.value.replace(/[[\]\s]+/g, " ").trim();
+    if (words) link = `[${words}](${link.replace(/\(/g, "%28").replace(/\)/g, "%29")})`;
+    ev.preventDefault(); done(f.qr.checked ? `${link} [QR]` : link);
+  });
+  const LI = /^(\s*)(?:([-*])|(\d+)\.)\s+/;  // a list line's mark: "- ", "* " or "3. "
+  const list = (t, num) => t.split("\n").map((l, n) => `${num ? `${n + 1}.` : "-"} ${l.replace(LI, "")}`).join("\n");
+  // With nothing selected, a list starts on its own line with the caret after the mark, ready to type.
+  const listAt = (v, s, e, num) => [s, e, s === e ? (s && v[s - 1] !== "\n" ? "\n" : "") + (num ? "1. " : "- ") : list(v.slice(s, e), num)];
+  const lines = (v, s, e) => {  // the whole lines the selection (or the caret) is on
+    const end = v.indexOf("\n", e > s && v[e - 1] === "\n" ? e - 1 : e);
+    return [v.lastIndexOf("\n", s - 1) + 1, end < 0 ? v.length : end];
+  };
+  const QM = /^((?:>[ \t]?)+)/;  // a quote line's marks
+  const spaced = (v, at, t) => (at && !/\s/.test(v[at - 1]) ? " " : "") + t;  // a space before it, unless there is one
+  // Each returns [from, to, replacement, caret in it (default: its end)] for the box's text v and selection s..e, or null to do nothing. Links always
+  // show their full address (a printed copy keeps it): see Link above.
+  const act = {
+    b: (v, s, e) => [s, e, `**${v.slice(s, e)}**`, s === e ? 2 : undefined],  // nothing selected: the caret between the marks, ready to type
+    i: (v, s, e) => [s, e, `*${v.slice(s, e)}*`, s === e ? 1 : undefined],
+    ul: (v, s, e) => listAt(v, s, e, false),
+    ol: (v, s, e) => listAt(v, s, e, true),
+    q: (v, s, e) => {  // "> " on each line (not on one that has it: no quote in a quote), or off if they all have it
+      const [a, b] = lines(v, s, e), ls = v.slice(a, b).split("\n"), on = ls.every((l) => QM.test(l));
+      return [a, b, ls.map((l) => (on ? l.replace(/^>[ \t]?/, "") : QM.test(l) ? l : l || ls.length === 1 ? `> ${l}` : ">")).join("\n")];  // an empty line on its own: "> ", ready to type
+    },
+    code: (v, s, e) => {  // a selection over lines, or the caret on an empty line: a block of its own; else `code`
+      const sel = v.slice(s, e), [a, b] = lines(v, s, s);
+      if (!sel.includes("\n") && (sel || v.slice(a, b).trim())) return [s, e, `\`${sel}\``, sel ? undefined : 1];
+      const pre = s && v[s - 1] !== "\n" ? "\n" : "", post = e < v.length && v[e] !== "\n" ? "\n" : "";
+      return [s, e, `${pre}\`\`\`\n${sel.replace(/\n$/, "")}\n\`\`\`${post}`, sel ? undefined : pre.length + 4];
+    },
+  };
+  // Line icons like the app's own (_icons.html): 24x24, stroke = currentColor; B and I stay letters.
+  const svg = (d) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICON = {
+    ul: svg('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
+    ol: svg('<path d="M10 6h10M10 12h10M10 18h10M4 4.5h1.5V9M4 9h3M4 14.5c.4-.6 2.7-.8 2.7.6 0 1.1-2.7 2-2.7 3.4h3"/>'),
+    a: svg('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'),
+    q: svg('<path d="M10 7H6a1 1 0 0 0-1 1v4h5V7zM10 12c0 3-1.5 4.5-4 5M19 7h-4a1 1 0 0 0-1 1v4h5V7zM19 12c0 3-1.5 4.5-4 5"/>'),
+    code: svg('<path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/>'),
+    pic: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m21 16-4.5-4.5L7 20"/>'),
+  };
+  const bar = document.createElement("div");
+  bar.className = "fmtbar"; bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Formatting");
+  for (const [k, label, title] of [["b", "B", "Bold"], ["i", "I", "Italic"], ["ul", "", "Bulleted list"], ["ol", "", "Numbered list"],
+      ["q", "", "Quote"], ["code", "", "Code (on lines of its own: a code block)"], ["a", "", "Link: a web address, with words or a QR code if you like"], ["pic", "", "Add pictures"], ["prev", "Preview", "Preview: the text as it will appear"]]) {
+    const btn = document.createElement("button");
+    Object.assign(btn, { type: "button", className: `fmt fmt-${k}`, title });
+    if (ICON[k]) btn.innerHTML = ICON[k]; else btn.textContent = label;  // our own fixed markup, never typed text
+    btn.setAttribute("aria-label", title); btn.dataset.fmt = k;
+    bar.append(btn);
+  }
+  const note = document.createElement("span");  // the picture files chosen for a comment
+  note.className = "fmtnote"; note.setAttribute("aria-live", "polite");
+  bar.append(note);
+  let box = null, pv = null;
+  // Preview swaps the box for the text as the server shows it (richtext.py, never a second renderer here); the box keeps its text.
+  const stopPreview = () => {
+    if (!pv) return;
+    pv.remove(); pv = null; box.hidden = false;
+    for (const b of bar.querySelectorAll(".fmt")) { b.disabled = false; }
+    const b = bar.querySelector(".fmt-prev"); b.textContent = "Preview"; b.setAttribute("aria-label", b.title);
+  };
+  const preview = async () => {
+    if (pv) { stopPreview(); box.focus(); return; }
+    const t = box, b = bar.querySelector(".fmt-prev");
+    pv = document.createElement("div");
+    Object.assign(pv, { className: "fmtpreview", tabIndex: -1 });
+    pv.setAttribute("role", "region"); pv.setAttribute("aria-label", "Preview");
+    pv.textContent = "Loading…";
+    (t.closest("label") || t).after(pv); t.hidden = true;  // not inside the label: a click there would go to the hidden box
+    for (const x of bar.querySelectorAll(".fmt")) x.disabled = x !== b;
+    b.textContent = "Back to editing"; b.setAttribute("aria-label", "Back to editing");
+    b.scrollIntoView({ block: "nearest", inline: "nearest" });  // the end of the phone's one-row toolbar: in view
+    pv.focus();
+    const mine = pv;
+    try {
+      const r = await fetch("/api/preview", { method: "POST", body: new URLSearchParams({ text: t.value }) });
+      if (pv !== mine) return;
+      if (r.ok) mine.innerHTML = await r.text();  // the server's own markup, as everywhere the text is shown
+      else mine.textContent = (await r.json().catch(() => ({}))).error || "The preview didn't load. Back to editing, and try again.";
+    } catch { if (pv === mine) mine.textContent = "The preview didn't load. Back to editing, and try again."; }
+  };
+  const put = (t, text, from, to) => {  // change the box's text as typing would: its input and change events fire
+    t.setRangeText(text, from, to, "end");
+    t.dispatchEvent(new Event("input", { bubbles: true }));
+    t.dispatchEvent(new Event("change", { bubbles: true }));  // boxes that save on change (a business item's text)
+  };
+  const picker = () => {  // the file box for this text box, nearest first; none: no Picture (4 already)
+    for (let el = box?.dataset.pic && box.parentElement; el; el = el.parentElement) {
+      const f = el.querySelector(`input[type=file][data-picker="${box.dataset.pic}"]`);
+      if (f) return f;
+    }
+  };
+  document.addEventListener("focusin", (e) => {
+    if (!e.target.matches?.("textarea[data-format]")) return;
+    stopPreview(); box = e.target; note.textContent = "";
+    // Above the box: never inside a <label> (it would pass each click on: B ran twice), nor beside it in a row with
+    // its buttons (the console's items: the bar took half the width, Jim 2026-11-20)
+    (box.closest("label") || (box.parentElement.matches(".row") ? box.parentElement : box)).before(bar);
+    bar.querySelector(".fmt-pic").hidden = !picker();
+  });
+  bar.addEventListener("mousedown", (e) => e.preventDefault());  // keep the box's selection
+  bar.addEventListener("click", (e) => {
+    const k = e.target.closest("[data-fmt]")?.dataset.fmt;
+    if (!k || !box) return;
+    if (k === "pic") { picker()?.click(); return; }
+    if (k === "prev") { closeMenu(); preview(); return; }
+    if (k === "a") { closeMenu(); openLink(box); return; }
+    const out = act[k](box.value, box.selectionStart, box.selectionEnd);
+    if (!out) return;
+    put(box, out[2], out[0], out[1]);
+    if (out[3] !== undefined) box.setSelectionRange(out[0] + out[3], out[0] + out[3]);
+    box.focus();
+  });
+  // Typing @ in a box lists the Active members (the page's #mentions JSON, club.mentionable()), narrowed by what follows;
+  // picking one writes "@[Jane D](n0call) " (richtext.py shows it as a name pill). Arrow keys + Enter or a tap picks, Escape closes.
+  const menu = document.createElement("ul");
+  Object.assign(menu, { className: "combo-menu mention-menu", id: "mention-list", hidden: true });
+  menu.setAttribute("role", "listbox"); menu.setAttribute("aria-label", "Members");
+  document.body.append(menu);
+  const say = document.createElement("div");  // read out by screen readers: the box is not a combobox
+  Object.assign(say, { className: "sr" }); say.setAttribute("aria-live", "polite");
+  document.body.append(say);
+  let people = null, shown = [], at = 0, from = 0;
+  const closeMenu = () => { menu.hidden = true; say.textContent = ""; };
+  const mark = () => {
+    [...menu.children].forEach((li, i) => { li.classList.toggle("at", i === at); li.setAttribute("aria-selected", i === at); });
+    say.textContent = `${shown.length} member${shown.length > 1 ? "s" : ""}, ${menu.children[at].firstChild.textContent} highlighted`;
+    menu.children[at].scrollIntoView({ block: "nearest" });
+  };
+  const choose = (p) => {
+    const t = box, name = (p.short || p.name).replace(/[\[\]\n]/g, "").slice(0, 60);
+    closeMenu(); put(t, `@[${name}](${p.id}) `, from, t.selectionStart);
+    t.focus();
+  };
+  const openMenu = (t) => {
+    people ??= JSON.parse(document.getElementById("mentions")?.textContent || "[]");
+    const m = t.value.slice(0, t.selectionStart).match(/(?:^|\s)@([^\n@[\]]{0,30})$/);
+    const q = m?.[1].toLowerCase() ?? "";
+    shown = m ? people.filter((p) => [p.name, p.short, p.callsign].some((x) => (x || "").toLowerCase().includes(q))).slice(0, 8) : [];
+    if (!shown.length) return closeMenu();
+    from = t.selectionStart - q.length - 1; at = 0;
+    menu.replaceChildren(...shown.map((p, i) => {
+      const li = document.createElement("li");
+      li.id = `mention-${i}`; li.setAttribute("role", "option"); li.textContent = p.short || p.name;
+      if (p.name !== p.short || p.callsign) { const s = document.createElement("span"); s.textContent = [p.name !== p.short && p.name, p.callsign].filter(Boolean).join(" · "); li.append(s); }
+      li.addEventListener("mousedown", (e) => { e.preventDefault(); choose(p); });  // keeps the box's focus, also on a tap
+      return li;
+    }));
+    const host = t.closest("dialog") || document.body;  // in a modal dialog (a business item's comments) the list must be
+    if (menu.parentElement !== host) host.append(menu);   // inside it: anything outside is drawn under it and can't be tapped
+    const r = t.getBoundingClientRect();
+    menu.hidden = false; menu.style.left = `${Math.max(4, r.left)}px`;
+    const h = menu.offsetHeight;  // under the box, or over it when the screen ends there
+    menu.style.top = `${r.bottom + h + 8 > innerHeight && r.top > h + 8 ? r.top - h - 4 : r.bottom + 4}px`;
+    box = t; mark();
+  };
+  document.addEventListener("input", (e) => { if (e.target.matches?.("textarea[data-format]") && !e.isComposing) { box = e.target; openMenu(e.target); } });
+  document.addEventListener("focusout", (e) => { if (e.target === box) closeMenu(); });
+  document.addEventListener("keydown", (e) => {
+    if (menu.hidden || e.target !== box) return;
+    if (e.key === "Tab") return closeMenu();  // focus moves on, nothing picked
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { at = (at + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length; mark(); }
+    else if (e.key === "Enter") choose(shown[at]);
+    else if (e.key === "Escape") closeMenu();
+    else return;
+    e.preventDefault(); e.stopImmediatePropagation();
+  }, true);
+  // Enter on a list line starts the next item ("- " or the next number), on a quote line the next quote line; Enter on
+  // an empty one ends the list or quote. Not inside a code block (an odd number of ``` lines above). On beforeinput, not
+  // keydown: phone keyboards send their Enter as an unnamed key, and Shift+Enter would break out of a quote.
+  document.addEventListener("beforeinput", (e) => {
+    const t = e.target;
+    if (!/^insert(LineBreak|Paragraph)$/.test(e.inputType) || !t.matches?.("textarea[data-format]") || t.selectionStart !== t.selectionEnd) return;
+    const v = t.value, at = t.selectionStart, from = v.lastIndexOf("\n", at - 1) + 1, m = v.slice(from, at).match(LI) || v.slice(from, at).match(QM);
+    if (!m || (v.slice(0, from).match(/^```/gm) || []).length % 2) return;
+    e.preventDefault();
+    if (!v.slice(from + m[0].length, at).trim()) put(t, "", from, at);
+    else if (m[0].startsWith(">")) put(t, `\n${m[1].replace(/[ \t]*$/, " ")}`, at, at);
+    else put(t, `\n${m[1]}${m[3] ? `${+m[3] + 1}.` : m[2]} `, at, at);
+  });
+  // A box marked data-count shows how much of its maxlength is used, after its label (Jim, 2026-11-20: business text,
+  // comments and notes; it was cut off silently).
+  const counts = new WeakMap();
+  const count = (t) => { counts.get(t).textContent = `${t.value.length.toLocaleString()} / ${t.maxLength.toLocaleString()} characters`; };
+  document.querySelectorAll("textarea[data-count]").forEach((t, i) => {
+    const c = document.createElement("small");
+    Object.assign(c, { className: "fmtcount", id: `count-${i}` });
+    (t.closest("label") || t).after(c); counts.set(t, c); count(t);
+    t.setAttribute("aria-describedby", `${t.getAttribute("aria-describedby") || ""} count-${i}`.trim());
+  });
+  document.addEventListener("input", (e) => counts.has(e.target) && count(e.target));
+  document.addEventListener("change", (e) => {
+    const f = e.target;
+    if (!f.matches?.("input[data-picker]") || !f.files.length) return;
+    if (f.dataset.picker === "edit") f.form.requestSubmit();  // an item's pictures: added at once
+    else note.textContent = [...f.files].map((x) => x.name).join(", ");  // a comment's, a new item's, a note's: sent with the form
+  });
+})();

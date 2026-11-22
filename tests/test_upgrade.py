@@ -109,7 +109,25 @@ def test_step_3_marks_1_1_data_so_a_failed_update_puts_the_copy_back(tmp_path):
     (and put back by data-undo), and 1.0 (which knows up to 2) refuses it instead of misreading it."""
     (tmp_path / "data-version").write_text("2\n")
     (tmp_path / "admins.json").write_text('["n0call"]')
-    assert upgrade.run(tmp_path)[-1].startswith("1.1.0's data") and upgrade.version(tmp_path) == 3
+    assert upgrade.run(tmp_path)[0].startswith("1.1.0's data") and upgrade.version(tmp_path) == upgrade.CURRENT
     assert upgrade.version(tmp_path / upgrade.COPY) == 2 and (tmp_path / upgrade.COPY / "admins.json").exists()
     (tmp_path / "admins-suspended.json").write_text('["n0call"]')  # written by 1.1
     assert upgrade.undo(2, tmp_path) and upgrade.version(tmp_path) == 2 and not (tmp_path / "admins-suspended.json").exists()
+
+
+def test_a_sqlite_file_is_copied_as_a_valid_database_and_put_back(tmp_path, steps):
+    import sqlite3
+    (tmp_path / "business.json").write_text("{}")
+    db = sqlite3.connect(tmp_path / "auth.sqlite")
+    db.execute("create table t (x)")
+    db.execute("insert into t values (7)")
+    db.commit()
+    (tmp_path / "auth.sqlite-wal").write_text("junk")
+    upgrade.run(tmp_path)
+    db.close()
+    copy = tmp_path / upgrade.COPY
+    assert not (copy / "auth.sqlite-wal").exists()
+    assert sqlite3.connect(copy / "auth.sqlite").execute("select x from t").fetchall() == [(7,)]
+    (tmp_path / "auth.sqlite").write_text("ruined")
+    assert upgrade.undo(1, tmp_path)
+    assert sqlite3.connect(tmp_path / "auth.sqlite").execute("select x from t").fetchall() == [(7,)]

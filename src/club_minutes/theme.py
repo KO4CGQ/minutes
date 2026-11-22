@@ -116,12 +116,13 @@ def palette(main: str = DEFAULT, bar: str | None = None) -> tuple[dict, dict, li
     return light, dark, sorted(notes)
 
 
-def css(main: str = DEFAULT, bar: str | None = None) -> str:
-    """The stylesheet that sets the palette (served at /brand/theme.css, after style.css)."""
+def css(main: str = DEFAULT, bar: str | None = None, scope: str = "") -> str:
+    """The stylesheet that sets the palette (served at /brand/theme.css, after style.css); with a scope (" .minutes"),
+    for that part of the page only: published minutes in the colours they were made with."""
     light, dark = palette(main, bar)[:2]
     block = lambda p: "; ".join(f"{k}: {v}" for k, v in p.items())
-    return (f":root {{ {block(light)}; }}\n:root[data-theme=\"dark\"] {{ {block(dark)}; }}\n"
-            f"@media (prefers-color-scheme: dark) {{ :root:not([data-theme=\"light\"]) {{ {block(dark)}; }} }}\n")
+    return (f":root{scope} {{ {block(light)}; }}\n:root[data-theme=\"dark\"]{scope} {{ {block(dark)}; }}\n"
+            f"@media (prefers-color-scheme: dark) {{ :root:not([data-theme=\"light\"]){scope} {{ {block(dark)}; }} }}\n")
 
 
 def from_logo(path) -> list[str]:

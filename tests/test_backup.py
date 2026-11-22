@@ -1,5 +1,6 @@
 """Backups: the data folder encrypted, checked, kept, sent to S3-compatible storage; restore into an empty folder."""
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -29,7 +30,9 @@ def data(tmp_path, monkeypatch):
 
 
 def test_backup_round_trip(data, tmp_path):
-    name, blob, n = backup.make()
+    name, path, n = backup.make()
+    blob = path.read_bytes()
+    path.unlink()
     assert name.endswith(".tar.gz.enc") and b"minutes" not in blob  # encrypted
     assert sorted(backup.members(blob, PW)) == ["auth.sqlite", "chow.json", "meetings/2026-11-05/minutes.md"]  # no lock file
     with pytest.raises(backup.BackupError, match="Wrong passphrase"):
@@ -63,6 +66,7 @@ class FakeDrive:
     def post(self, url, params, data, headers, timeout):
         if self.quota:
             return self._r(403, text='{"reason": "storageQuotaExceeded"}')
+        data = b"".join(data)  # streamed from the file
         name = json.loads(data.split(b"\r\n\r\n", 1)[1].split(b"\r\n", 1)[0])["name"]
         self.n += 1
         self.files.append({"id": str(self.n), "name": name})
@@ -194,3 +198,62 @@ def test_update_files_stay_out(tmp_path):
     for n in ("update-request.json", "update-running.json", "update-check.json", "update-check-next.json"):
         (tmp_path / n).write_text("{}")
     assert backup.data_size(tmp_path) == 2
+
+
+def test_backup_streams_pictures_in_chunks(data, tmp_path):
+    """A few MB of pictures: peak memory stays far under the data's size, the temp files are gone, and it restores."""
+    import os
+    import tracemalloc
+    for i in range(6):
+        (data / "pictures").mkdir(exist_ok=True)
+        (data / "pictures" / f"p{i}.jpg").write_bytes(os.urandom(2 * 2 ** 20))  # incompressible, like photos
+    size = backup.data_size()
+    tracemalloc.start()
+    _, path, n = backup.make()
+    peak = tracemalloc.get_traced_memory()[1]
+    tracemalloc.stop()
+    assert size > 12 * 2 ** 20 and peak < size / 4, (size, peak)
+    assert [p.name for p in (data / "backups").iterdir()] == [path.name]  # only the result: no leftover temp files
+    out = tmp_path / "restored"
+    assert backup.restore(path, PW, out) == n and (out / "pictures" / "p5.jpg").stat().st_size == 2 * 2 ** 20
+    path.unlink()
+
+
+def test_make_cleans_up_when_it_fails(data, monkeypatch):
+    monkeypatch.setattr(backup, "members", lambda *a, **k: [])
+    with pytest.raises(backup.BackupError, match="empty"):
+        backup.make()
+    assert list((data / "backups").iterdir()) == []
+
+
+def test_a_backup_made_by_the_old_in_memory_code_still_restores_and_new_ones_match_its_format(data, tmp_path):
+    """The previous release's make(): AESGCM one-shot over the whole tar.gz, MAGIC + salt + nonce + ciphertext + tag."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    salt, nonce = os.urandom(16), os.urandom(12)
+    old = backup.MAGIC + salt + nonce + AESGCM(backup._key(PW, salt)).encrypt(nonce, backup.archive(), backup.MAGIC)
+    old_file = tmp_path / "old.enc"
+    old_file.write_bytes(old)
+    out = tmp_path / "from-old"
+    assert backup.restore(old_file, PW, out) == 3 and (out / "chow.json").read_text() == "{}"
+    assert sorted(backup.members(old, PW)) == sorted(backup.members(old_file, PW))  # bytes and file both read
+    # and the other way: the new streamed file opens with the old one-shot decrypt
+    _, path, n = backup.make()
+    import io
+    import tarfile
+    with tarfile.open(fileobj=io.BytesIO(backup.decrypt(path.read_bytes(), PW))) as t:
+        assert len(t.getnames()) == n
+    path.unlink()
+
+
+def test_a_crashed_backups_leftover_is_swept(tmp_path, monkeypatch):
+    import os
+    monkeypatch.setattr(backup, "DATA", tmp_path)
+    (tmp_path / "roster.json").write_text("{}")
+    d = tmp_path / "backups"
+    d.mkdir()
+    old, new = d / ".making-old.part", d / ".making-new.part"
+    old.write_bytes(b"x"), new.write_bytes(b"x")
+    os.utime(old, (0, 0))
+    _name, path, _n = backup.make("correct horse battery staple")
+    path.unlink()
+    assert not old.exists() and new.exists()

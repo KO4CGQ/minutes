@@ -11,3 +11,9 @@ Environment=CLUB_MINUTES_DATA=/var/lib/club-minutes
 ExecStart=/opt/club-minutes/.venv/bin/club-minutes roster
 # Pick up roster changes in the running app
 ExecStartPost=+/bin/systemctl try-restart club-minutes
+# Hardening, as the web app: the job writes only the data folder (backups are in it).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/club-minutes

@@ -5,11 +5,13 @@
 # club's data of the old shape, which the unit tests (hand-made old shapes) can miss. Run by tests.yml and dev/checks.sh.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-tag=$(git ls-remote --tags --refs origin 'v1.*' | sed 's#.*refs/tags/##' | sort -V | tail -1)
+tag=$(git ls-remote --tags --refs origin 'v1.*' | sed 's#.*refs/tags/##' | grep -v -- '-rc\.' | sort -V | tail -1)  # releases, not candidates
 [ -n "$tag" ] || { echo "No 1.x release found on origin." >&2; exit 1; }
 work=$(mktemp -d)
 trap 'git worktree remove --force "$work/old" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
-git fetch -q --depth=1 origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || true  # CI's checkout has no tags
+# CI's checkout has no tags. No --depth: in a full clone it would make the repository shallow at the tag, hiding
+# everything before it (a release tag on the branch itself, as an rc's is, then cut it off from main)
+git fetch -q origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || true
 git worktree add -q --detach "$work/old" "$tag"
 echo "Building the demo club with $tag…"
 (cd "$work/old" && uv run -q --frozen python demo/build.py "$work/club")

@@ -27,6 +27,7 @@ from club_minutes import (
     profile,
     roster,
     treasurer,
+    upgrade,
 )
 from club_minutes.club import MEETINGS, Club
 from club_minutes.meeting import Item, Meeting
@@ -147,4 +148,5 @@ events.save(evs)
 # Preview mode kept the roster in preview-sheet.json: make it the club's own, as in a real install.
 (OUT / "data" / "preview-sheet.json").replace(roster._local())
 (OUT / "data" / "preview-outbox.jsonl").unlink(missing_ok=True)
+(OUT / "data" / "data-version").write_text(f"{upgrade.CURRENT}\n")  # made by today's code: no upgrade (it would mark these minutes old)
 print(f"Demo club in {OUT}: CLUB_MINUTES_CONFIG={OUT}/club.yaml CLUB_MINUTES_DATA={OUT}/data club-minutes serve")

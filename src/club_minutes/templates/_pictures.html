@@ -1,0 +1,10 @@
+{# Pictures on a report, business item or comment (pictures.py): thumbnails that open the full picture; in a PDF,
+   half the page wide, two side by side. `remove`: a form action prefix to take one off (the item's editors). #}
+{% macro pics(ids, pdf=False, label="Picture", remove="", back="") %}{% if ids %}<div class="pics">{% for p in ids %}
+  {% if pdf %}<img src="{{ picture_src(p, True) }}" alt="{{ label }} {{ loop.index }}">
+  {% else %}<span class="pic"><a class="picopen" href="/pictures/{{ p }}.jpg" target="_blank" rel="noopener"><img src="{{ picture_src(p) }}" alt="{{ label }} {{ loop.index }} of {{ ids|length }} (opens full size in a new tab)" loading="lazy"></a>
+    {% if remove %}<form method="post" action="{{ remove }}/{{ p }}/remove" class="inline" data-confirm="Remove this picture?">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<button class="picx" title="Remove this picture" aria-label="Remove picture {{ loop.index }}">×</button></form>{% endif %}</span>{% endif %}
+{% endfor %}</div>{% endif %}{% endmacro %}
+{% macro add_form(action, back="", left=4) %}{% if left > 0 %}<form method="post" action="{{ action }}" enctype="multipart/form-data" class="modern picadd">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
+  <label>Add pictures <input type="file" data-picker="edit" name="files" accept="image/jpeg,image/png,image/webp" multiple required><span class="hint">Up to {{ left }} more (JPEG, PNG or WebP). Members see them; they're never public.</span></label>
+  <button class="btn small">Add</button></form>{% endif %}{% endmacro %}

@@ -131,7 +131,8 @@ def release(changelog: str, version: str, deps: str, ghsa: str, today: dt.date) 
     if not sep:
         raise SystemExit("CHANGELOG.md has no '## Unreleased' heading")
     waiting, _, older = rest.partition("\n## ")
-    lines = [f"- **Security:** {deps} updated ({ghsa}). Update soon."] + [ln for ln in waiting.strip().splitlines() if ln.strip()]
+    # Security comes after the other groups (Keep a Changelog's order: docs/developers.md), so after what waited
+    lines = [ln for ln in waiting.strip().splitlines() if ln.strip()] + ["### Security", f"- {deps} updated ({ghsa}). Update soon."]
     section = f"{head}## Unreleased\n\n## {new} ({today.isoformat()})\n" + "\n".join(lines) + "\n"
     return new, section + (f"\n## {older}" if older else "")
 

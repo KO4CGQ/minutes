@@ -39,6 +39,7 @@ MEMBER_TAG = re.compile(r"\s*<!--\s*member:\s*([\w-]+)\s*-->")
 WHEN_TAG = re.compile(r"\s*<!--\s*when:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
 UNTIL_TAG = re.compile(r"\s*<!--\s*until:\s*(\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?)\s*-->")
 CAL_TAG = re.compile(r"\s*<!--\s*cal:\s*(community|planning)\s*-->")
+PICS_TAG = re.compile(r"\s*<!--\s*pictures:\s*([0-9a-f]{16}(?: [0-9a-f]{16}){0,3})\s*-->")  # pictures.py ids
 EVENT_HOURS = 2  # how long a timed event with no end is taken to last
 
 
@@ -51,6 +52,19 @@ def one_line(text: str) -> str:
     return text.strip()
 
 
+ITEM_MAX = 10000  # characters in one item: a business item (5,000) with comments under it; richtext.py keeps odd text quick
+
+
+def item_text(text: str) -> str:
+    """Typed text as an item: line breaks kept (a report may hold a list), but no "<!--", no control characters and no
+    trailing spaces, so typing can't forge a tag; to_markdown indents every line after the first, so none can start a
+    section or an item. At most ITEM_MAX characters."""
+    text = "\n".join(re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", p).rstrip() for p in text.splitlines())[:ITEM_MAX]
+    while (clean := text.replace("<!--", "")) != text:
+        text = clean
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 @dataclass
 class Item:
     text: str
@@ -58,6 +72,7 @@ class Item:
     when: str | None = None  # Upcoming Events: "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM"
     until: str | None = None  # its end: the last day, or the end time (same formats)
     cal: str | None = None  # its calendar: "community" or "planning"; None for Club events
+    pictures: list[str] = field(default_factory=list)  # pictures.py ids, shown under the item
 
     def span(self) -> tuple[dt.datetime, dt.datetime, bool]:
         """(start, end, all_day). All-day: end is the last day (inclusive). Timed: end is the end time; with
@@ -72,13 +87,16 @@ class Item:
 
     @property
     def shown(self) -> str:
+        return self.show()
+
+    def show(self, day: str | None = None) -> str:
         """The text as readers see it, dates first: "Sat Nov 21, 10:00 AM – 1:00 PM: VE testing",
-        "Sat Jun 27 – Sun Jun 28: Field Day" (dates in the club's format)."""
+        "Sat Jun 27 – Sun Jun 28: Field Day" (dates in the club's format, or in `day`'s strftime format)."""
         from .club import DATES  # club.py imports this module"
         if not self.when:
             return self.text
         start, end, all_day = self.span()
-        day, clock = DATES["day"], "%-I:%M %p"
+        day, clock = day or DATES["day"], "%-I:%M %p"
         if all_day:
             when = start.strftime(day) + (end.strftime(" – " + day) if end.date() != start.date() else "")
         else:
@@ -101,11 +119,15 @@ class Meeting:
     remote: list[str] = field(default_factory=list)
     guests: list[dict] = field(default_factory=list)  # {name, callsign}
     visitors: int = 0  # guests counted but not named (e.g. family, minors)
+    quorum: dict | None = None  # Club.quorum_record() as saved from the console: what was true that night (none: no rule)
     sections: dict[str, list[Item]] = field(default_factory=dict)
     # Each correction, oldest first: {version (the one it made), at (unix time), by (roster id), reason, notice (bool)}.
     # The versions before it are kept beside minutes.md as minutes.v1.md, minutes.v2.md… (corrections.py).
     corrections: list[dict] = field(default_factory=list)
     reviewed: dict | None = None  # imported minutes someone looked over: {by, at}
+    # What these minutes show that depends on the club's settings and roster, as it was when they were submitted
+    # (snapshot.py); empty for a draft, which follows today's.
+    shown: dict = field(default_factory=dict)
 
     @property
     def slug(self) -> str:
@@ -119,6 +141,17 @@ class Meeting:
     @property
     def attendance(self) -> int:
         return len(self.in_person) + len(self.remote)
+
+    @property
+    def quorum_text(self) -> str:
+        """The minutes' line under Attendance: "Quorum present: 14 of 41 members; 13 needed" or "No quorum: …"."""
+        q = self.quorum
+        if not q:
+            return ""
+        parts = [f"{q['present']} of {q['members']} members; {q['needed']} needed"] if "needed" in q else []
+        if "officers_needed" in q:
+            parts.append(f"{q['officers']} officer{'' if q['officers'] == 1 else 's'} present; {q['officers_needed']} needed")
+        return ("Quorum present: " if q.get("met") else "No quorum: ") + "; ".join(parts)
 
     def section_order(self, agenda: list[str]) -> list[str]:
         """The club's agenda, then any other section these minutes have (one later dropped from the agenda still shows)."""
@@ -140,16 +173,19 @@ class Meeting:
             "attendance": {"in_person": self.in_person, "remote": self.remote},
             "guests": self.guests,
             "visitors": self.visitors,
+            "quorum": self.quorum,
             "corrections": self.corrections,
             "reviewed": self.reviewed,
+            "shown": self.shown,
         }
         fm = {k: v for k, v in fm.items() if v not in (None, [], {}, 0)}
         out = ["---", yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip(), "---", ""]
         for name in self.sections:  # in the order they were made (the club's agenda), so nothing is dropped
             out.append(f"## {name}")
             for it in self.items(name):
-                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "")
-                out.append(f"- {one_line(it.text)}{tag}")
+                tag = (f" <!-- member: {it.member} -->" if it.member else "") + (f" <!-- when: {it.when} -->" if it.when else "") + (f" <!-- until: {it.until} -->" if it.until else "") + (f" <!-- cal: {it.cal} -->" if it.cal and it.when else "") + (f" <!-- pictures: {' '.join(it.pictures)} -->" if it.pictures else "")
+                first, *rest = item_text(it.text).split("\n")  # a report with a list in it: its other lines indented
+                out += [f"- {first}{tag}", *(f"  {x}" for x in rest)]
             out.append("")
         return "\n".join(out)
 
@@ -170,8 +206,10 @@ class Meeting:
             remote=att.get("remote") or [],
             guests=fm.get("guests") or [],
             visitors=fm.get("visitors", 0),
+            quorum=fm.get("quorum") or None,
             corrections=fm.get("corrections") or [],
             reviewed=fm.get("reviewed"),
+            shown=fm.get("shown") or {},
         )
         current = None
         for line in body.splitlines():
@@ -182,23 +220,28 @@ class Meeting:
                 text = line[2:]
                 tag = MEMBER_TAG.search(text)
                 member = tag.group(1) if tag else None
-                when, until, cal = WHEN_TAG.search(text), UNTIL_TAG.search(text), CAL_TAG.search(text)
-                text = CAL_TAG.sub("", UNTIL_TAG.sub("", WHEN_TAG.sub("", MEMBER_TAG.sub("", text)))).strip()
+                when, until, cal, pics = WHEN_TAG.search(text), UNTIL_TAG.search(text), CAL_TAG.search(text), PICS_TAG.search(text)
+                text = PICS_TAG.sub("", CAL_TAG.sub("", UNTIL_TAG.sub("", WHEN_TAG.sub("", MEMBER_TAG.sub("", text))))).strip()
                 m.sections[current].append(Item(text, member, when.group(1) if when else None,
-                                                until.group(1) if until and when else None, cal.group(1) if cal and when else None))
+                                                until.group(1) if until and when else None, cal.group(1) if cal and when else None,
+                                                pics.group(1).split() if pics else []))
+            elif current and line.startswith("  ") and m.sections[current]:
+                m.sections[current][-1].text += "\n" + line[2:].rstrip()  # another line of the same item (since 1.1)
             elif current and line.strip() and m.sections[current]:
-                # continuation line of the previous bullet
+                # continuation line of the previous bullet (older files: joined with a space, as they always were)
                 m.sections[current][-1].text += " " + line.strip()
         return m
 
     def save(self, root: Path) -> Path:
         d = root / self.slug
         d.mkdir(parents=True, exist_ok=True)
-        p = d / "minutes.md"
-        tmp = d / "minutes.md.tmp"
+        self.write(d / "minutes.md")
+        return d / "minutes.md"
+
+    def write(self, p: Path) -> None:
+        tmp = p.with_name(p.name + ".tmp")
         tmp.write_text(self.to_markdown())
         tmp.replace(p)  # a crash mid-write leaves the old minutes, never half of them
-        return p
 
     @classmethod
     def load(cls, path: Path) -> Meeting:

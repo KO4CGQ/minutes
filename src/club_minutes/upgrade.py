@@ -1,7 +1,8 @@
 """Automatic data upgrades: the data folder says which shape its files are in (data-version, a number), and the
 app brings it up to date by itself at start, so reshaping stored data in a 1.x needs nothing from the club.
 
-Before the first step it copies the data folder to before-upgrade/ (replacing an earlier copy). If the new version
+Before the first step it copies the data folder to before-upgrade/ (replacing an earlier copy; SQLite files with
+its backup API), then writes upgrade-started: a rerun after a crash keeps that clean copy. If the new version
 then doesn't start, update.sh puts that copy back (undo) before going back to the old version. An older version
 finding data newer than it knows refuses to start, rather than misread it.
 
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import fcntl
 import shutil
+import sqlite3
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -41,13 +43,54 @@ def _v3(data: Path) -> None:
     update keep the copy from before, which a failed update puts back, and 1.0 refuses this data instead."""
 
 
+def _v4(data: Path) -> None:
+    """4 (1.2.0): every published or imported meeting, and each earlier version kept beside it (minutes.vN.md), gets the
+    snapshot of what it shows (snapshot.py), made from the club as it stands now: the best there is for minutes made
+    before. A file that has one already is left alone. No PDFs here: each is kept the first time it's downloaded.
+    1.1 ignores the new `shown:` key, but it can't be told to: the version number makes it refuse this data instead."""
+    import yaml
+
+    from . import snapshot
+    from .club import Club
+    from .meeting import Meeting
+    files = sorted((data / "meetings").glob("*/minutes*.md"))
+    club = Club() if files else None
+    for p in files:
+        try:
+            m = Meeting.load(p)
+        except (yaml.YAMLError, ValueError, KeyError, OSError):  # unreadable: the archive skips it too
+            m = None
+        if m and m.status != "draft" and not m.shown:
+            m.shown = snapshot.take(club, m) | {"layout": 1}  # made before 1.2: drawn as 1.1 drew it (snapshot.View.old)
+            m.write(p)
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
     (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
+    (4, "published minutes keep their names, agenda order, heading and links from when they were made (snapshot.py): 1.1 can't tell", _v4),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"
 SKIP = ("backups", COPY)  # never copied or put back: the backups, and the copy itself
+STARTED = "upgrade-started"  # written once the copy is complete, holding its data version; removed when the steps finish
+
+
+def _copy_file(src: str, dst: str) -> None:
+    """A SQLite database is copied with its backup API (a job may hold it open); anything else as is."""
+    if not src.endswith(".sqlite"):
+        shutil.copy2(src, dst)
+        return
+    a, b = sqlite3.connect(src), sqlite3.connect(dst)
+    with b:
+        a.backup(b)
+    a.close()
+    b.close()
+
+
+def _copytree(src: Path, dst: Path, skip: Callable[[str, list[str]], list[str]]) -> None:
+    shutil.copytree(src, dst, dirs_exist_ok=True, copy_function=_copy_file,
+                    ignore=lambda d, names: [*skip(d, names), *(n for n in names if n.endswith(("-wal", "-shm")))])
 
 
 def version(data: Path = DATA) -> int:
@@ -78,12 +121,18 @@ def run(data: Path = DATA) -> list[str]:
                                f"knows up to {CURRENT}). Install that version again, or restore a backup made with this one.")
         todo = [s for s in STEPS if s[0] > have]
         if todo:
-            shutil.rmtree(data / COPY, ignore_errors=True)
-            shutil.copytree(data, data / COPY, ignore=lambda d, names: SKIP if Path(d) == data else ())
-            _set(data / COPY, have)
+            marker = data / STARTED
+            # A run that crashed part way (even after some steps) left the marker: its copy is still the clean one
+            if not ((data / COPY).is_dir() and marker.exists()):
+                marker.unlink(missing_ok=True)
+                shutil.rmtree(data / COPY, ignore_errors=True)
+                _copytree(data, data / COPY, lambda d, names: SKIP if Path(d) == data else ())
+                _set(data / COPY, have)
+                marker.write_text(f"{have}\n")
         for v, _what, step in todo:
             step(data)
             _set(data, v)
+        (data / STARTED).unlink(missing_ok=True)
         if not (data / "data-version").exists():
             _set(data, CURRENT)
         return [what for _v, what, _s in todo]
@@ -103,6 +152,6 @@ def undo(was: int, data: Path = DATA) -> bool:
         for p in data.iterdir():
             if p.name not in SKIP and not p.name.endswith(".lock"):
                 shutil.rmtree(p) if p.is_dir() and not p.is_symlink() else p.unlink()
-        shutil.copytree(copy, data, dirs_exist_ok=True, ignore=lambda d, _names: ["data-version"] if Path(d) == copy else [])
+        _copytree(copy, data, lambda d, _names: ["data-version"] if Path(d) == copy else [])
         shutil.copy2(copy / "data-version", data / "data-version")
     return True

@@ -15,16 +15,19 @@ import threading
 import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import quote, urlsplit
 
 from fastapi import (
     BackgroundTasks,
     Depends,
     FastAPI,
+    File,
     Form,
     HTTPException,
     Query,
     Request,
+    UploadFile,
 )
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import (
@@ -37,6 +40,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
+from starlette.background import BackgroundTask
 from starlette.concurrency import (
     run_in_threadpool,  # async routes hand slow work (the roster sheet, email, S3) to a thread
 )
@@ -57,10 +61,13 @@ from . import (
     meet,
     membership,
     offices,
+    pictures,
     prefs,
     profile,
     recovery,
     regions,
+    richtext,
+    snapshot,
     theme,
     treasurer,
     updates,
@@ -92,7 +99,7 @@ from .roster import COLUMNS, SHAREABLE, SheetError
 
 # Not birthday and share (the member's own choice), nor the role ticks (Admin → Site → Roles, roles.json)
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share", "minutes_editor", "calendar_editor"))
-from .meeting import SECTIONS
+from .meeting import ITEM_MAX, SECTIONS
 from .pdf import linkify
 from .store import SEARCH_WORDS, Archive, spellings
 
@@ -126,7 +133,11 @@ def by_last_name(ids):
     return sorted(ids, key=lambda i: (c.members[i].last, c.members[i].first) if i in c.members else (i, ""))
 
 
+templates.env.globals["minutes_view"] = snapshot.View  # _minutes.html
 templates.env.filters["linkify"] = linkify
+templates.env.filters["rich"] = richtext.rich_filter  # reports, items, comments (richtext.py)
+templates.env.filters["plain"] = richtext.plain
+templates.env.filters["firstline"] = richtext.title
 templates.env.filters["date"] = show_date  # {{ d|date("weekday") }}: club.show_date
 templates.env.filters["longdate"] = lambda d: show_date(d, "document")
 templates.env.filters["listdate"] = show_date
@@ -196,7 +207,8 @@ templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"),
                              # the logo: for a page, its address (new after each upload); for a PDF, the file itself
                              brand=lambda kind="logo", pdf=False: branding.path(kind).as_uri() if pdf else
                              f"/brand/{branding.FILES[kind]}?v={branding.stamp()}",
-                             logo_class=lambda: f"logo bg-{branding.backing()}")  # what's behind it (Site)
+                             logo_class=lambda: f"logo bg-{branding.backing()}",  # what's behind it (Site)
+                             picture_src=pictures.src, pictures_per_day=lambda: pictures.per_day(archive.club))
 
 
 _THEME_CODE = (HERE / "theme.py").read_bytes()  # how the colours are made: a change there (an update) is a new file too
@@ -225,6 +237,31 @@ def _security_event(request: Request, kind: str) -> None:
     who = getattr(request.state, "real_member", None) or authn.member_for(_session_token(request))
     authn.event(kind, client_ip(request), who, f"{request.method} {request.url.path}"[:200],
                 agent=request.headers.get("user-agent", ""))
+
+
+class CountUpload:
+    """The same limit on what actually arrives: a hand-made request can leave out its size (chunked) and would
+    otherwise be spooled to disk whole before any check. Added before the other middleware, so it sits innermost:
+    the route's own reads raise the 413 (raised under a BaseHTTPMiddleware's receive task, it would crash)."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        seen, most = 0, limits.max_upload() + limits.FORM_ROOM
+
+        async def counted():
+            nonlocal seen
+            msg = await receive()
+            seen += len(msg.get("body", b""))
+            if seen > most:
+                raise HTTPException(413, f"That's too big to upload: {limits.upload_mb()} MB at most.")
+            return msg
+        await self.app(scope, counted, send)
+
+
+app.add_middleware(CountUpload)
 
 
 @app.middleware("http")
@@ -510,6 +547,14 @@ def brand_theme():
     return Response(theme.css(c["main"], c["bar"]), media_type="text/css", headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/brand/kept/{kid}.png", include_in_schema=False)
+def brand_kept(kid: str):
+    """A logo kept with published minutes (branding.keep_logo). Public, like the logo."""
+    if not re.fullmatch(r"[0-9a-f]{16}", kid) or not (p := branding.kept_logo(kid)).exists():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @app.get("/brand/{name}", include_in_schema=False)
 def brand_picture(name: str):
     """The club's logo and icons (uploaded on Site), or the plain ones that come with the app. Public: the sign-in
@@ -709,32 +754,53 @@ def suggestion_dismiss(request: Request, sid: str, mid: str = Depends(moderator)
 
 
 @app.post("/business/add")
-def business_add(request: Request, text: str = Form(...), owner: str = Form(""), due: str = Form(""),
-                 agenda: str = Form(""), meeting: str = Form(""), mid: str = Depends(me)):
+async def business_add(request: Request, text: str = Form(...), owner: str = Form(""), due: str = Form(""),
+                       agenda: str = Form(""), meeting: str = Form(""),
+                       files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
     if not manages_business(request, meeting):
         raise HTTPException(403, "Only officers, or the meeting's leader in the console, can add business items.")
-    return business_change(request, lambda s: business.add(s, text, mid, owner_id(owner), due, agenda,
-                                                           opened=meeting or None), meeting,
-                           back="/business?note=Added." if not meeting else "/business")
+    back = "/business?note=Added." if not meeting else "/business"
+    try:
+        owner_id(owner)  # a mistake here is refused before any picture is stored
+        if not business.tidy(text):
+            raise ValueError("The item needs some text.")
+        _unrecorded(text)  # before any picture is stored
+        pics = await _uploads(mid, files)  # pictures with a new item (Jim, 2026-11-20): checked above, before storing
+    except ValueError as e:
+        return business_change(request, _refuse(e), meeting, back="/business?tab=add")
+
+    def run(s):
+        x = business.add(s, text, mid, owner_id(owner), due, agenda, opened=meeting or None)
+        if pics:
+            business.add_pictures(s, x["id"], pics)
+    return business_change(request, run, meeting, back=back)
 
 
 @app.post("/business/motion")
 def business_motion(request: Request, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
-                    result: str = Form(""), meeting: str = Form(""), date: str = Form(""), mid: str = Depends(me)):
-    """A motion from the console (meeting set), or a past one an officer records from old minutes (date set)."""
+                    result: str = Form(""), meeting: str = Form(""), date: str = Form(""),
+                    pics: Annotated[list[str] | None, Form()] = None, mid: str = Depends(me)):
+    """A motion from the console (meeting set; with pictures uploaded there, /api/pictures), or a past one an officer
+    records from old minutes (date set)."""
     if not manages_business(request, meeting):
         raise HTTPException(403, "Only officers, or the meeting's leader in the console, can record motions.")
-    return business_change(request, lambda s: business.add_motion(
-        s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result, opened=meeting or date or None,
-        past=not meeting), meeting, back="/business?tab=motions&note=Recorded." if not meeting else "/business")
+
+    def run(s):
+        _unrecorded(what)
+        x = business.add_motion(s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result,
+                                opened=meeting or date or None, past=not meeting)
+        if pictures.ids(pics):
+            business.add_pictures(s, x["id"], pictures.ids(pics))
+    return business_change(request, run, meeting, back="/business?tab=motions&note=Recorded." if not meeting else "/business")
 
 
 @app.post("/business/{iid}/motion")
 def business_motion_edit(request: Request, iid: str, mover: str = Form(""), seconder: str = Form(""), what: str = Form(""),
                          result: str = Form(""), mid: str = Depends(moderator)):
-    return business_change(request, lambda s: business.set_motion(s, archive.club, iid, mid, owner_id(mover),
-                                                                  owner_id(seconder), what, result),
-                           back=f"/business?tab=motions#i{iid}")
+    def run(s):
+        _unrecorded(what)
+        business.set_motion(s, archive.club, iid, mid, owner_id(mover), owner_id(seconder), what, result)
+    return business_change(request, run, back=f"/business?tab=motions#i{iid}")
 
 
 @app.post("/business/{iid}/edit")
@@ -745,6 +811,7 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
     fields = {k: form.get(k) for k in allowed if k in form}
     def run(s):
         _may_edit_item(request, s, iid, meeting)
+        _unrecorded(str(fields.get("text") or ""))
         if "owner" in fields:
             fields["owner"] = owner_id(fields["owner"])
         business.edit(s, iid, mid, meeting=form.get("meeting") or None, **fields)
@@ -752,16 +819,199 @@ async def business_edit(request: Request, iid: str, mid: str = Depends(me)):
                                    _back(str(form.get("back", "")), iid, "/business"))
 
 
+async def _uploads(mid: str, files: list[UploadFile] | None) -> list[str]:
+    """Pictures from a form's file box, checked and stored (pictures.py): their ids. ValueError with a message."""
+    files = [f for f in files or [] if f.filename]
+    if len(files) > pictures.MAX_EACH:
+        raise ValueError(f"{pictures.MAX_EACH} pictures at most.")
+    pictures.take(mid, len(files), archive.club)
+    out = []
+    for f in files:
+        out.append(await run_in_threadpool(pictures.save, await f.read(limits.max_upload() + 1)))
+    return out
+
+
+def _prune_pictures(pids) -> None:
+    """Delete pictures just taken off an item or comment, unless something saved still names them (another item or
+    comment, minutes or an earlier version, a console draft): a removed picture stops opening at once."""
+    if not pids:
+        return
+    with business.locked():
+        for p in pictures.unused(archive, pids):
+            pictures.delete(p)
+
+
+def _refuse(e: ValueError):
+    def fn(_s):
+        raise e
+    return fn
+
+
 @app.post("/business/{iid}/comment")
-def business_comment(request: Request, iid: str, text: str = Form(...), back: str = Form(""), mid: str = Depends(me)):
-    """Any member can comment on an item: an update, a question, "I can help with this"."""
-    return business_change(request, lambda s: business.comment(s, iid, mid, text), back=_back(back, iid, f"/business#i{iid}"))
+async def business_comment(request: Request, iid: str, text: str = Form(...), back: str = Form(""),
+                           files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
+    """Any member can comment on an item: an update, a question, "I can help with this", with pictures if they like."""
+    back = _back(back, iid, f"/business#i{iid}")
+    try:
+        business.get(console.business_state(archive), iid)  # checked before storing anything
+        if not text.strip():
+            raise ValueError("The comment is empty.")
+        pics = await _uploads(mid, files)
+    except ValueError as e:
+        return business_change(request, _refuse(e), back=back)
+    return business_change(request, lambda s: business.comment(s, iid, mid, text, pics), back=back)
+
+
+@app.post("/business/{iid}/pictures")
+async def business_pictures(request: Request, iid: str, back: str = Form(""),
+                            files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
+    """Pictures on an item: its owner, or whoever may change any item."""
+    back = _back(back, iid, f"/business#i{iid}")
+
+    def add(s, pics):
+        _may_edit_item(request, s, iid)
+        business.add_pictures(s, iid, pics)
+    try:
+        _may_edit_item(request, console.business_state(archive), iid)  # before storing anything; again under the lock
+        pics = await _uploads(mid, files)
+    except ValueError as e:
+        return business_change(request, _refuse(e), back=back)
+    return business_change(request, lambda s: add(s, pics), back=back)
+
+
+@app.post("/business/{iid}/pictures/{pid}/remove")
+def business_picture_remove(request: Request, iid: str, pid: str, back: str = Form(""), mid: str = Depends(me)):
+    done = []
+
+    def rm(s):
+        _may_edit_item(request, s, iid)
+        business.remove_picture(s, iid, pid)
+        done.append(1)
+    r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
+    if done and pictures.ID.fullmatch(pid):  # a refused remove changed nothing: nothing to sync or prune
+        with business.locked():  # minutes being written show the item's pictures: take it out of them too (published ones: a correction)
+            s = console.business_state(archive)
+            for m in [m for m in archive.meetings if m.status == "draft"]:
+                console.sync_business(archive, m.slug, s)
+        _prune_pictures([pid])
+    return r
+
+
+@app.post("/business/{iid}/comments/{cid}/pictures/{pid}/remove")
+def business_comment_picture_remove(request: Request, iid: str, cid: str, pid: str, back: str = Form(""),
+                                    mid: str = Depends(moderator)):
+    done = []
+
+    def rm(s):
+        c = next((c for c in business.get(s, iid).get("comments", []) if c["id"] == cid), None)
+        if c:
+            c["pictures"] = [p for p in c.get("pictures") or [] if p != pid]
+            done.append(1)
+    r = business_change(request, rm, back=_back(back, iid, f"/business#i{iid}"))
+    if done and pictures.ID.fullmatch(pid):
+        _prune_pictures([pid])
+    return r
+
+
+@app.get("/pictures/{name}")
+def picture(name: str, mid: str = Depends(me)):
+    """A picture from a report, item or comment: signed-in members only (the minutes aren't public)."""
+    m = re.fullmatch(r"([0-9a-f]{16})(-s)?\.jpg", name)
+    if not m or not pictures.exists(m.group(1)):
+        raise HTTPException(404)
+    return FileResponse(pictures.path(m.group(1), bool(m.group(2))), media_type="image/jpeg",
+                        headers={"Cache-Control": "private, no-cache"})  # checked each time: a removed picture stops showing
+
+
+@app.post("/api/pictures")
+async def picture_upload(request: Request, file: Annotated[UploadFile, File()], mid: str = Depends(leader)):
+    """The console: a picture for a community report, stored now; it shows once the report is saved with it."""
+    try:
+        pictures.take(mid, 1, archive.club)
+        return {"id": await run_in_threadpool(pictures.save, await file.read(limits.max_upload() + 1))}
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.post("/api/preview")
+def preview(text: Annotated[str, Form()] = "", mid: str = Depends(me)):
+    """The formatting toolbar's Preview: the text as the page will show it (richtext.py), as an HTML fragment. Pictures
+    aren't text, so they aren't shown."""
+    if len(text) > 5000:  # the longest any box takes
+        return JSONResponse({"error": "That is longer than a box takes (5,000 characters)."}, status_code=400)
+    return HTMLResponse(str(richtext.render(text, names=archive.club)))
+
+
+def _draft_meeting(meeting: str) -> str:
+    m = archive.by_slug.get(meeting)
+    if not m or m.status != "draft":
+        raise HTTPException(403, "Only while that meeting's minutes are being written.")
+    return meeting
+
+
+@app.post("/business/{iid}/said")
+def business_said(request: Request, iid: str, meeting: str = Form(...), who: str = Form(""), text: str = Form(""),
+                  mid: str = Depends(leader)):
+    """At the meeting (the console): what someone said about the item, as their comment and in the minutes. `who` is a
+    member (as the owner box takes them) or else a guest's name."""
+    meeting = _draft_meeting(meeting)
+
+    def run(s):
+        name = " ".join(who.split())[:60]
+        try:
+            speaker, guest = owner_id(name), None
+        except ValueError:  # no member of that name: a guest's (two members of it: say so)
+            low = name.lower()
+            if any(low in (m.name.lower(), (m.callsign or "").lower(), archive.club.short(m.id).lower()) for m in archive.club.members.values()):
+                raise
+            speaker, guest = None, re.sub(r"[^\w .'’-]|_", "", name).strip()  # plain words only: no marks or mentions in the minutes
+        if not speaker and not guest:
+            raise ValueError("Who said it?")
+        if guest and archive.club.is_redacted(guest):  # a name the club never records (as guests at the meeting)
+            raise ValueError("That name isn't recorded in the minutes: leave it out.")
+        _unrecorded(text)
+        business.said(s, iid, mid, meeting, text, speaker, guest)
+        _fits_minutes(s, iid, meeting)
+    return business_change(request, run, meeting)
+
+
+def _unrecorded(text: str) -> None:
+    if archive.club.is_redacted(text):  # never_record: the minutes are emailed to every member
+        raise ValueError("That names someone the club never records in the minutes: leave the name out.")
+
+
+def _fits_minutes(s: dict, iid: str, meeting: str) -> None:
+    """The item with its comments must fit one item of the minutes (meeting.ITEM_MAX), never cut there."""
+    if len(business.line(archive.club, business.get(s, iid), meeting)) > ITEM_MAX:
+        raise ValueError(f"The item and its comments would be longer than the minutes take ({ITEM_MAX:,} characters): shorten it.")
+
+
+@app.post("/business/{iid}/comments/{cid}/minutes")
+def business_comment_minutes(request: Request, iid: str, cid: str, meeting: str = Form(...), on: int = Form(1),
+                             mid: str = Depends(leader)):
+    """The leader puts a member's written comment into tonight's minutes, or takes it out again."""
+    meeting = _draft_meeting(meeting)
+
+    def run(s):
+        if on:
+            _unrecorded(next((c["text"] for c in business.get(s, iid).get("comments", []) if c["id"] == cid), ""))
+        business.pick_comment(s, iid, cid, meeting, bool(on))
+        _fits_minutes(s, iid, meeting)
+    return business_change(request, run, meeting)
 
 
 @app.post("/business/{iid}/comments/{cid}/delete")
-def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), mid: str = Depends(me)):
-    return business_change(request, lambda s: business.delete_comment(s, iid, cid, mid, moderates(request)),
-                           back=_back(back, iid, f"/business#i{iid}"))
+def business_comment_delete(request: Request, iid: str, cid: str, back: str = Form(""), meeting: str = Form(""),
+                            mid: str = Depends(me)):
+    gone = []
+
+    def rm(s):
+        gone.extend(next((c.get("pictures") or [] for c in business.get(s, iid).get("comments", []) if c["id"] == cid), []))
+        business.delete_comment(s, iid, cid, mid, moderates(request))
+    meeting = _draft_meeting(meeting) if meeting and can_lead_now(request) else ""  # from the console: its draft's items back
+    r = business_change(request, rm, meeting, back=_back(back, iid, f"/business#i{iid}"))
+    _prune_pictures(gone)  # only if the comment really went: still named in the saved state otherwise
+    return r
 
 
 def upcoming_meetings(n: int = 4) -> list[dt.date]:
@@ -770,18 +1020,35 @@ def upcoming_meetings(n: int = 4) -> list[dt.date]:
 
 
 @app.post("/business/notes")
-def business_note_add(request: Request, text: str = Form(...), meeting: str = Form(...), mid: str = Depends(me)):
+async def business_note_add(request: Request, text: str = Form(...), meeting: str = Form(...),
+                            files: Annotated[list[UploadFile] | None, File()] = None, mid: str = Depends(me)):
     if meeting not in {d.isoformat() for d in upcoming_meetings()}:
         raise HTTPException(400, "Pick one of the next meetings.")
-    return business_change(request, lambda s: business.add_note(s, mid, text, meeting), back="/business?tab=notes")
+    try:
+        if not text.strip():
+            raise ValueError("The note is empty.")  # before any picture is stored
+        _unrecorded(text)
+        pics = await _uploads(mid, files)  # a note's pictures (Jim, 2026-11-20): they go in the minutes with it
+    except ValueError as e:
+        return business_change(request, _refuse(e), back="/business?tab=notes")
+    def run(s):
+        business.add_note(s, mid, text, meeting, pics)
+    return business_change(request, run, back="/business?tab=notes")
 
 
 @app.post("/business/notes/{nid}/{status}")
 def business_note_status(request: Request, nid: str, status: str, meeting: str = Form(""), mid: str = Depends(me)):
     if status not in ("read", "dismissed", "withdrawn"):
         raise HTTPException(404)
-    return business_change(request, lambda s: business.note_status(s, nid, status, mid, can_lead_now(request)),
-                           meeting, back="/business?tab=notes")
+    gone = []
+
+    def run(s):
+        n = business.note_status(s, nid, status, mid, can_lead_now(request))
+        if status != "read":  # withdrawn or skipped: its pictures go (a note read out keeps them, in the minutes)
+            gone.extend(n.pop("pictures", None) or [])
+    r = business_change(request, run, meeting, back="/business?tab=notes")
+    _prune_pictures(gone)  # unless something saved still names them
+    return r
 
 
 @app.post("/business/{iid}/done")
@@ -1869,7 +2136,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
     coming, _ = calview.entries(club, archive, mid, today, today + dt.timedelta(days=13))
     coming = [e for e in coming if e.kind != "chow"][:8]
     # Upcoming Events the minutes give without a date (all of them before events had dates) still show, as written
-    undated = [i.text for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
+    undated = [richtext.title(i.text) for i in (latest.items("Upcoming Events") if latest else []) if not i.when]
     return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, certificate_note=treasurer.certificate_note(club), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=upcoming[0] if upcoming else None,
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
@@ -1985,6 +2252,8 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
     new = corrections.from_form(archive, m, form)
     private = bool(form.get("private"))
     what = corrections.changes(m, new, archive.club, private)
+    pics = lambda x: {p for v in x.sections.values() for i in v for p in i.pictures}
+    removed = list(pics(m) - pics(new))
     notice = bool(form.get("notice"))
     if notice:  # first: a crash after the save leaves a note, so the daily job sends the notice
         console.mark_pending(archive, slug, f"emailed.v{m.version + 1}.json", f"{base_url(request)}/meetings/{slug}", what)
@@ -1995,7 +2264,10 @@ async def correct_save(request: Request, background: BackgroundTasks, slug: str)
         if notice and archive.by_slug[slug].version == m.version:  # nothing saved: no notice to send
             (archive.root / slug / f"emailed.v{m.version + 1}.json.pending").unlink(missing_ok=True)
         return RedirectResponse(f"/meetings/{m.slug}/correct?error=" + quote(str(e)), status_code=303)  # m.slug: the archive's
+    if private:  # the hidden earlier version no longer holds on to the pictures the correction took out
+        await run_in_threadpool(_prune_pictures, removed)
     _admin_log(request, corrected=f"{slug} v{m.version}", reason=m.corrected["reason"], notice=notice, private=private)
+    background.add_task(keep_pdf, slug)
     if notice:
         background.add_task(corrections.email_notice, archive, slug, what, lambda: render_pdf(archive.by_slug[slug]),
                             f"{base_url(request)}/meetings/{slug}")
@@ -2025,7 +2297,7 @@ def html_to_pdf(template: str, **ctx) -> bytes:
 def render_pdf(m) -> tuple[str, bytes]:
     """(file name, PDF bytes) for submitted minutes: 15-oct-26-minutes.pdf, or -v2.pdf for a corrected version."""
     try:
-        return pdfmod.render_pdf(archive, m, authn.rp_id)
+        return pdfmod.kept(archive, m, authn.rp_id)
     except OSError as e:  # missing system libraries (pango)
         raise HTTPException(503, f"PDF rendering unavailable on this server: {e}")
 
@@ -2046,7 +2318,8 @@ def original(request: Request, slug: str):
     p = archive.root / slug / "original.pdf"
     if not p.exists() or _original_hidden(request, m):
         raise HTTPException(404)
-    return FileResponse(p, media_type="application/pdf")
+    name = f"{m.date.day}-{m.date:%b}-{m.date:%y}-minutes-original.pdf".lower()  # beside corrections.pdf_name's 12-mar-26-minutes.pdf
+    return FileResponse(p, media_type="application/pdf", filename=name, content_disposition_type="inline")
 
 
 @app.get("/search", response_class=HTMLResponse)
@@ -2421,16 +2694,23 @@ def help_picture(name: str):
     return FileResponse(DOCS / "screenshots" / name, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
+def members_changelog(text: str) -> list[tuple[str, Markup]]:
+    """CHANGELOG.md for About's What's new: one (version, notes) per release, newest first, without the file's own title
+    and intro. Each release's "### Security" and "### For server admins" are left out (Jim, 2026-11-21): they're for
+    admins, who see the whole section on Admin → Updates; a release with nothing else (a security patch) isn't listed."""
+    import markdown
+    out = []
+    for head, _, body in (s.partition("\n") for s in text.split("\n## ")[1:]):
+        body = re.sub(r"^### (?:Security|For server admins)[ \t]*\n.*?(?=^### |\Z)", "", body, flags=re.MULTILINE | re.DOTALL | re.IGNORECASE)
+        if body.strip():  # an empty Unreleased, or only admin sections: not listed
+            out.append((head.strip(), Markup(markdown.markdown(body))))
+    return out
+
+
 @app.get("/about", response_class=HTMLResponse)
 def about(request: Request):
-    import markdown
     changes = (Path(__file__).resolve().parents[2] / "CHANGELOG.md")
-    changelog = None
-    if changes.exists():  # show the versions, without the file's own title and intro
-        text = re.sub(r"## Unreleased\s*(?=## )", "", changes.read_text())  # hide an empty Unreleased section
-        # one (version, notes) per release, newest first; the page folds all but the latest
-        changelog = [(head.strip(), Markup(markdown.markdown(body)))
-                     for head, _, body in (s.partition("\n") for s in text.split("\n## ")[1:])]
+    changelog = members_changelog(changes.read_text()) if changes.exists() else None
     return page(request, "about.html", deps=dependencies(), changelog=changelog, license=_license("club-minutes"))
 
 
@@ -2483,7 +2763,7 @@ def _security_admin(request: Request) -> str:
 
 
 SECURITY_TABS = (("signins", "Sign-ins"), ("members", "Members"), ("devices", "Signed-in devices"), ("failed", "Failed attempts"),
-                 ("bans", "Banned addresses"), ("admins", "Admins"), ("admin", "Admin actions"), ("server", "Server"))
+                 ("bans", "Banned addresses"), ("admins", "Admins"), ("admin", "Admin actions"), ("uploads", "Uploads"))
 # Backups has its own card on the Admin page and its own page; it keeps this address (emails link to it)
 SECURITY_PAGES = dict(SECURITY_TABS) | {"backups": "Backups"}
 
@@ -2573,7 +2853,6 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
         return RedirectResponse(f"/admin/confirm?next={here}", status_code=303)
     p = DATA / "admin-log.jsonl"
     admin_log = [json.loads(x) for x in p.read_text().splitlines() if x.strip()][::-1][:50] if p.exists() else []
-    roster = DATA / "roster.json"
     events = authn.events(100)
     bs = backup.settings()
     bs["s3"] = {k: v for k, v in bs["s3"].items() if k != "secret_enc"} | {"secret": bool(bs["s3"].get("secret_enc"))}  # never sent back
@@ -2586,8 +2865,7 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 by_member=authn.by_member() if tab == "members" else {},
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log,
                 add=request.query_params.get("add", ""), event_names=authmod.EVENT_NAMES,
-                my_ip=client_ip(request), roster_synced=int(roster.stat().st_mtime) if roster.exists() else None,
-                test_mode=archive.club.email_only_to() is not None, session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
+                my_ip=client_ip(request), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
                 upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
 
 
@@ -2596,9 +2874,9 @@ def security_limits(request: Request, upload_mb: int = Form(...), _mid: str = De
     try:
         limits.set_upload_mb(upload_mb)
     except ValueError as e:
-        return RedirectResponse("/admin/security/server?error=" + quote(str(e)), status_code=303)
+        return RedirectResponse("/admin/security/uploads?error=" + quote(str(e)), status_code=303)
     _admin_log(request, upload_mb=upload_mb)
-    return RedirectResponse("/admin/security/server?note=" + quote(f"Uploads up to {upload_mb} MB."), status_code=303)
+    return RedirectResponse("/admin/security/uploads?note=" + quote(f"Uploads up to {upload_mb} MB."), status_code=303)
 
 
 FRESH_SECONDS = 300  # making someone an admin needs a passkey or emailed link this recent
@@ -2694,7 +2972,7 @@ def security_backup_download_now(request: Request):
     except backup.BackupError as e:
         return RedirectResponse("/admin/backups?error=" + quote(str(e)), status_code=303)
     _admin_log(request, backup_downloaded=name)
-    return Response(blob, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return FileResponse(blob, media_type="application/octet-stream", filename=name, background=BackgroundTask(blob.unlink))
 
 
 @app.post("/admin/backups/now")
@@ -2743,9 +3021,10 @@ PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
 FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
-                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"))
+                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"),
+                ("club", "pictures_per_day"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
-CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone")
+CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone", "names")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
                 "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
 
@@ -2806,7 +3085,8 @@ async def site_dates(request: Request):
 
 
 OFF = {("modules", "jitsi"): False, ("jitsi", "domain"): "", ("jitsi", "app_id"): "", ("modules", "chow"): False, ("club", "public_calendars"): [], ("club", "supports_app"): False, ("calendar", "holidays"): "",
-       ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {}}
+       ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {},
+       ("club", "pictures_per_day"): pictures.PER_DAY}
 
 
 def _keep_changes(club, values: dict) -> dict:
@@ -2866,7 +3146,10 @@ async def site_features(request: Request):
                 raise ValueError("Video meetings: give the Jitsi server's address and the app ID, or untick it.")
             if domain and not meet.DOMAIN.match(domain) or app_id and not meet.APP_ID.match(app_id):
                 raise ValueError("Video meetings: the address is the Jitsi server's name (meet.example.org), the app ID letters, numbers, dots, - and _.")
-            values = _keep_changes(club, {("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
+            per_day = num(form.get("pictures_per_day")) if form.get("pictures_per_day") else pictures.per_day(club)
+            if per_day is None or not 1 <= per_day <= pictures.MAX_PER_DAY:
+                raise ValueError(f"Pictures: a member can add 1 to {pictures.MAX_PER_DAY} a day.")
+            values = _keep_changes(club, {("club", "pictures_per_day"): per_day, ("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
                                           ("modules", "chow"): bool(form.get("chow")), ("club", "supports_app"): bool(form.get("supports_app")),
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
@@ -2996,7 +3279,7 @@ async def site_agenda(request: Request):
     """Agenda tab: the sections in order (tick to use, a number for the place) with their console hints, and the two
     reminders. Only what differs from club.yaml is kept."""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
-    keys = (("meeting", "sections"), ("club", "invite_after_visits"), ("club", "remind_days_before"))
+    keys = (("meeting", "sections"), ("club", "invite_after_visits"), ("club", "remind_days_before"), ("meeting", "quorum"))
     try:
         if form.get("back"):
             values = dict.fromkeys(keys)
@@ -3019,11 +3302,19 @@ async def site_agenda(request: Request):
                 if v is None or not lo <= v <= hi:
                     raise ValueError(f"{'Invite a guest after' if k == 'invite_after_visits' else 'Remind owners'}: a whole number from {lo} to {hi}.")
                 numbers[k] = v
+            quorum = {}
+            for k, hi in (("percent", 100), ("officers", 50)):
+                raw = (form.get("quorum_" + k) or "").strip()
+                if raw and not (raw.isascii() and raw.isdigit() and 1 <= int(raw) <= hi):
+                    raise ValueError(f"Quorum, {'percent of the members' if k == 'percent' else 'officers present'}: a whole number from 1 to {hi}, or empty.")
+                if raw:
+                    quorum[k] = int(raw)
             yc, ym = club.yaml.get("club") or {}, club.yaml.get("meeting") or {}
             yaml_sections = _agenda(ym.get("sections")) or _default_agenda()
             values = {("meeting", "sections"): None if sections == yaml_sections else sections,
                       **{("club", k): None if v == int(yc.get(k) or {"invite_after_visits": 3, "remind_days_before": 3}[k]) else v
-                         for k, v in numbers.items()}}
+                         for k, v in numbers.items()},
+                      ("meeting", "quorum"): None if quorum == {k: v for k, v in (ym.get("quorum") or {}).items() if v} else quorum}
         club.save_site_settings(values)
     except ValueError as e:
         msg = str(e).replace("club.yaml meeting: sections: ", "Section ")
@@ -3167,7 +3458,7 @@ def _meeting_where(since: dt.date) -> tuple[str, str]:
 
 @app.post("/admin/site/club")
 async def site_club(request: Request):
-    """Club tab: name, callsign, meeting day and time, time zone; all saved together, or back to club.yaml's.
+    """Club tab: name, callsign, meeting day and time, time zone, short or full names; all saved together, or back to club.yaml's.
     Only what differs from club.yaml is kept, so later changes there still count for the rest."""
     mid, form, club = _site_admin(request), await request.form(), archive.club
     old_day, old_time = club.meeting_weekday, club.meeting_time
@@ -3192,10 +3483,14 @@ async def site_club(request: Request):
                 raise ValueError("The callsign is letters and digits, like N0CALL.")
         except ValueError as e:
             return RedirectResponse("/admin/site/club?error=" + quote(str(e)), status_code=303)
-        typed = {"name": name, "callsign": call, "meeting_day": (form.get("meeting_day") or "").strip().title(),
+        names = form.get("names") or "short"
+        if names not in ("short", "full"):
+            return RedirectResponse("/admin/site/club?error=" + quote("Names: short or full."), status_code=303)
+        typed = {"name": name, "callsign": call, "names": names, "meeting_day": (form.get("meeting_day") or "").strip().title(),
                  "meeting_time": (form.get("meeting_time") or "").strip()[:5], "timezone": (form.get("timezone") or "").strip()}
         yc = club.yaml.get("club") or {}
-        base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone()}
+        base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone(),
+                                                                    "names": str(yc.get("names") or "short")}
         values = {k: None if v.lower() == base[k].lower() else v for k, v in typed.items()}  # only what differs is kept
     try:
         club.save_site_settings({("club", k): v for k, v in values.items()})
@@ -3769,9 +4064,20 @@ async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
         console.apply(archive, slug, data)
     except console.Unreadable:
         raise HTTPException(400, "That request wasn't readable.") from None
+    except console.Unrecorded as e:  # not 409: the console reads that as someone else taking over
+        raise HTTPException(422, str(e))
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {"ok": True}
+
+
+def keep_pdf(slug: str) -> None:
+    """Make and keep the current version's PDF now, so it stays as it was (pdf.kept); first of a submit's or a
+    correction's background tasks, and one that fails (no Pango) mustn't stop the email after it."""
+    try:
+        render_pdf(archive.by_slug[slug])
+    except Exception:
+        logging.getLogger("club_minutes").exception("couldn't keep the PDF of %s", slug)
 
 
 def email_minutes(slug: str, url: str) -> None:
@@ -3793,6 +4099,7 @@ def console_submit(request: Request, background: BackgroundTasks, slug: str, mid
         if isinstance(e, ValueError):  # already in the archive: never rebuilt or emailed again
             raise HTTPException(409, str(e))
         raise
+    background.add_task(keep_pdf, slug)
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)

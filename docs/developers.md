@@ -41,13 +41,12 @@ PDF generation needs the system Pango library: `sudo apt install libpango-1.0-0 
 - Every pull request runs the tests (the Tests workflow).
 
 ## Writing the changelog
-Members read the Unreleased section on the About page as What's new, so it's written for them, not for developers.
-- **Only what members would notice since the last release**, in plain words: what they can do now, or what works differently. Not how it's built, and not where to set it up or how to turn it off: that's the guides' job (point to one if it helps).
+It follows [Keep a Changelog](https://keepachangelog.com): each version's lines go under `### Added`, `### Changed`, `### Fixed`, `### Security` and `### Removed`, in that order (only those with something in them), then `### For server admins`. Members read the Unreleased section on the About page as What's new, so it's written for them, not for developers. About leaves out each release's `### Security` and `### For server admins` (a release with nothing else isn't listed there); admins see the whole section on Admin → Updates.
+- **What changed, not how to use it:** one short line per change, in plain words: what members can do now, or what works differently. No how-to, no where to set it up or how to turn it off, no list of options: that's the guides' job.
 - **No line for a fix to something new in this release:** members never saw the bug, so it's part of that feature's line. Development-only work (tests, checks, tooling) gets none either (the `no-changelog` label if the check asks).
-- **Biggest first:** new features, then **Smaller changes**, **Fixed**, **Security**, **Removed**, **For server admins**.
-- **Short:** a bold lead, then a sentence or two, one point each. Name buttons and settings as members see them, in bold, and point to a guide for the details ("officers guide") rather than listing every option.
-- **Smaller changes:** only the few (at most three) members will notice most, as sub-bullets indented 4 spaces (the About page's Markdown needs 4). The rest needs no line.
+- **Biggest first** in each group. **Changed** holds only the few changes members will notice most; the rest needs no line.
 - **A security fix:** one short line, no how-to ("fixes a way a roster keeper could gain another member's access; update soon"); the details go in a GitHub security advisory published once the release is out.
+- **For server admins:** a line at most, on what they must know before updating (a data upgrade, a change of owner), pointing to the server admin guide for the details. Steps the update needs by hand are Deploy notes (above), which the Updates page shows.
 - **Before a release, reread the whole section** as a member would: merge lines about the same feature, drop what later changes overtook, and check every sentence still reads.
 
 ## Compatibility (what a 1.x keeps)

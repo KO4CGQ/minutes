@@ -143,6 +143,11 @@ def test_the_upload_limit_is_the_admins_and_turns_big_requests_away(app, tmp_pat
     big = b"x" * (limits.max_upload() + limits.FORM_ROOM + 1)
     r = amy.post("/profile/photo", files={"photo": ("p.jpg", big, "image/jpeg")})
     assert r.status_code == 413 and "1 MB at most" in r.text  # turned away before it's read
+    def chunks():  # no size given: counted as it arrives
+        for _ in range(3):
+            yield b"x" * (limits.max_upload() + limits.FORM_ROOM)
+    r = amy.post("/profile/photo", content=chunks(), headers={"content-type": "multipart/form-data; boundary=b"})
+    assert r.status_code == 413 and "1 MB at most" in r.text
     with pytest.raises(ValueError, match="1 MB at most"):
         avatars.save("n0aaaa", b"x" * (limits.max_upload() + 1))
     assert amy.post("/admin/security/limits", data={"upload_mb": "50"}).status_code == 404  # admins only
@@ -166,7 +171,7 @@ def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
     a.set_admin(tok, 60)
     r = t.post("/admin/security/limits", data={"upload_mb": "25"})
     assert r.status_code == 200 and "Uploads up to 25 MB." in r.text and limits.upload_mb() == 25
-    assert 'value="25"' in t.get("/admin/security/server").text
+    assert 'value="25"' in t.get("/admin/security/uploads").text
 
 
 def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, monkeypatch):
@@ -368,6 +373,13 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
         admin.post("/admin/site/club", data={"back": "1"})
         assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay
+        # short or full names, site-wide: full saved and used; a bad value refused; short again (club.yaml's) keeps nothing
+        short = c.shown_name("n0bbbb")
+        admin.post("/admin/site/club", data={**same, "names": "full"})
+        assert c.site_settings["club"]["names"] == "full" and c.shown_name("n0bbbb") == c.name("n0bbbb") != short
+        assert "msg err" in admin.post("/admin/site/club", data={**same, "names": "<b>"}).text and c.info["names"] == "full"
+        admin.post("/admin/site/club", data={**same, "names": "short"})
+        assert "names" not in c.site_settings["club"] and c.shown_name("n0bbbb") == short
     finally:
         clubmod.set_dates(None)
 
@@ -423,6 +435,23 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
     assert "Agenda: sections, invite after visits" in admin.get("/admin/security/admin").text
     admin.post("/admin/site/agenda", data={"back": "1"})
     assert c.site_settings == {} and "Financial Report" in c.sections() and c.info.get("invite_after_visits") is None
+    # a reminder changed here alone shows "Changed here" and Back to club.yaml (they looked for the wrong key)
+    admin.post("/admin/site/agenda", data=form(remind_days_before="5"))
+    page_ = admin.get("/admin/site/agenda").text
+    assert page_.count("Changed here") == 1 and "Back to club.yaml" in page_
+    admin.post("/admin/site/agenda", data={"back": "1"})
+    # quorum: a percent and/or officers (empty: off); bad values refused; only a change from club.yaml is kept
+    assert c.quorum is None
+    admin.post("/admin/site/agenda", data=form(quorum_percent="30", quorum_officers="2"))
+    assert c.site_settings == {"meeting": {"quorum": {"percent": 30, "officers": 2}}} and c.quorum == {"percent": 30, "officers": 2}
+    assert 'name="quorum_percent" min="1" max="100" value="30"' in admin.get("/admin/site/agenda").text
+    for bad in ("0", "101", "x", "-1", "3.5"):
+        assert "msg err" in admin.post("/admin/site/agenda", data=form(quorum_percent=bad)).text
+    assert c.quorum == {"percent": 30, "officers": 2}
+    admin.post("/admin/site/agenda", data=form(quorum_officers="2"))
+    assert c.quorum == {"percent": None, "officers": 2}
+    admin.post("/admin/site/agenda", data=form())
+    assert c.site_settings == {} and c.quorum is None
     with _pytest.raises(ValueError, match="invite_after_visits"):
         c._configure({"club": {"invite_after_visits": "three"}})  # club.yaml's too: stops the app at start
     c._configure(c.yaml)
