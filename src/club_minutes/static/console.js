@@ -674,18 +674,22 @@
   // ---------- review & submit ----------
   function review() {
     const box = h("div", { class: "hint" }, "Loading preview…");
+    const top = submit(), end = submit();  // hidden until the minutes are on screen: never submitted sight unseen (Jim, 2026-11-22)
+    top.hidden = end.hidden = true;
     save(true).then(async () => {
-      const r = await fetch(`/api/meetings/${M.slug}/live`); box.className = ""; box.innerHTML = await r.text();
-    });
+      const r = await fetch(`/api/meetings/${M.slug}/live`);
+      if (!r.ok) throw new Error(r.status);
+      box.className = ""; box.innerHTML = await r.text(); top.hidden = end.hidden = false;
+    }).catch(() => { box.className = "msg warn"; box.textContent = "The preview didn't load, so the minutes can't be submitted yet. Go back a step and return to Review to try again."; });
     const missing = present().filter((k) => !S.done.includes(k));
     const invites = M.guests.filter(inviteDue);
     return h("div", {},
       h("h2", {}, "Review"),
       invites.length ? h("div", { class: "invitebox" }, `Before closing: invite ${invites.map((g) => `${g.name} (${ordinal(visitNo(g))} visit)`).join(", ")} to apply for membership.`) : null,
       missing.length ? h("p", { class: "hint" }, `No report recorded for: ${missing.map(label).join(", ")}.`) : null,
-      submit(),
+      top,
       box,
-      submit());  // at the end too, where Next is on the other steps (Jim, 2026-11-21)
+      end);  // at the end too, where Next is on the other steps (Jim, 2026-11-21)
   }
   function submit() {
     return h("p", {}, h("button", { class: "btn warn", onclick: async () => {
