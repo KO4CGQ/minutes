@@ -18,6 +18,9 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.
 - Minutes from before 1.2 no longer show a line between community reports: they look as they did when they were made.
 
+### Security
+- Someone who knows a member's email address can no longer stop them signing in with an emailed link for an hour.
+
 ## 1.2.0 (2026-11-22)
 
 ### Added

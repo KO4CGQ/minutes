@@ -146,6 +146,7 @@ def test_a_failed_roster_save_changes_nothing(tmp_path, monkeypatch):
 STALE = {  # one row each that is long gone
     "sessions": ["insert into sessions (token_hash, member, created, expires) values ('old', 'w0demo', 1, 2)"],
     "links": ["insert into links (token_hash, member, expires, created) values ('old', 'w0demo', 2, 1)"],
+    "known_browsers": ["insert into known_browsers (token_hash, member, expires) values ('old', 'w0demo', 2)"],
     "email_changes": ["insert into email_changes (token_hash, member, email, expires, created) values ('old', 'w0demo', 'a@example.org', 2, 1)"],
     "challenges": ["insert into challenges (id, challenge, member, kind, expires) values ('old', x'00', 'w0demo', 'login', 2)"],
     "signins": ["insert into signins (at, member) values (1, 'w0demo')"],
@@ -165,7 +166,7 @@ def test_every_login_table_is_pruned_or_listed(tmp_path):
         a.db.execute(sql)
     a.prune()
     left = {t: a.db.execute(f"select count(*) from {t}").fetchone()[0] for t in STALE}
-    assert left == {"sessions": 1, "links": 0, "email_changes": 0, "challenges": 0, "signins": 1, "events": 0, "bans": 1}  # signins: the latest stays
+    assert left == {"sessions": 1, "links": 0, "known_browsers": 0, "email_changes": 0, "challenges": 0, "signins": 1, "events": 0, "bans": 1}  # signins: the latest stays
 
 
 # Logs that only grow, and why that's fine; the others trim themselves (tests/test_profile.py).

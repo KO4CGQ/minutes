@@ -466,3 +466,53 @@ def test_a_member_refused_an_action_is_logged(a, monkeypatch):
         web.app.router.routes.pop()
     (e,) = a.events()
     assert (e["kind"], e["member"], e["detail"]) == ("refused", "n0aaaa", "POST /test-refused")
+
+
+def test_known_browser_links_have_their_own_cap(a, monkeypatch):
+    clock = [1_000_000_000.0]
+    monkeypatch.setattr(auth_mod.time, "time", lambda: clock[0])
+    mine = a.mark_known("n0aaaa", None)
+
+    def ask(ip, email="jane@example.org", browser=None):
+        clock[0] += auth_mod.REPEAT_SECONDS + 1
+        n = len(a.sent)
+        a.send_link(email, ip=ip, browser=browser)
+        return len(a.sent) > n
+
+    for i in range(auth_mod.LINKS_PER_HOUR_ALL):          # strangers use up the all-addresses cap
+        assert ask(f"7.7.{i}.1")
+    assert not ask("7.7.99.1")
+    assert not ask("8.8.8.8", browser="forged")           # a made-up cookie is a stranger
+    assert not ask("8.8.8.8", browser=a.mark_known("n0bbbb", None))  # another member's cookie doesn't help
+    for i in range(auth_mod.KNOWN_PER_HOUR):              # the known browser still gets links, up to its own cap
+        assert ask(f"8.8.{i}.1", browser=mine)
+    assert not ask("8.8.99.1", browser=mine)
+    assert a.is_known("n0aaaa", mine) and not a.is_known("n0bbbb", mine) and mine not in str(a.db.execute("select * from known_browsers").fetchall())
+    clock[0] += 3600
+    for _ in range(auth_mod.EMAILS_PER_HOUR):              # a stranger on the member's own network uses up its 5...
+        ask("6.6.6.6")
+    assert ask("6.6.6.6", browser=mine)                    # ...and the known browser still gets one
+    a.end_all_sessions("n0aaaa")                           # signing out everywhere forgets it
+    assert not a.is_known("n0aaaa", mine)
+
+
+def test_cli_links_count_toward_no_cap(a):
+    for _ in range(20):
+        a.create_link("n0aaaa")
+    a.send_link("jane@example.org", ip="9.9.9.9")
+    assert len(a.sent) == 1
+
+
+def test_known_cookie_survives_sign_out_and_never_signs_in(a, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    monkeypatch.setattr(web, "authn", a)
+    t = TestClient(web.app, base_url="https://testserver")
+    t.get("/login/link?t=" + a.create_link("n0aaaa").split("t=")[1], follow_redirects=False)
+    known = t.cookies.get(web.KNOWN_COOKIE)
+    assert known and a.is_known("n0aaaa", known)
+    t.post("/logout")
+    assert t.cookies.get(web.KNOWN_COOKIE) == known and t.get("/login", follow_redirects=False).status_code == 200
+    a.forget_removed(set())
+    assert not a.is_known("n0aaaa", known)
