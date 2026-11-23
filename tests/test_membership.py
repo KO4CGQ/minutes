@@ -1,5 +1,6 @@
 """Adding a member: a new roster row and Membership Log row (values only), the app updated, guests offered."""
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -41,20 +42,22 @@ def test_add_member_writes_rows_and_updates_the_app(env):
     (tmp / "preview-sheet.json").write_text(json.dumps(tabs))
     mid = membership.add_member(club, {"first": "Ann", "last": "New", "callsign": "n0newc", "email": "ann@example.org",
                                        "license_class": "General", "joined": "2026-11-05"}, by="n0bbbb", sheet=sheet)
-    assert mid == "n0newc" and club.members["n0newc"].name == "Ann New" and club.members["n0newc"].status == "Active"
+    assert re.fullmatch(r"m[a-z0-9]{6}", mid) and club.members[mid].name == "Ann New" and club.members[mid].status == "Active"
+    assert club.resolve("N0NEWC") == mid and club.member_url(mid) == "/members/n0newc"  # new members get a random id; pages use the callsign
     tabs = json.loads((tmp / "preview-sheet.json").read_text())
     roster_rows, log_rows = tabs["Member Roster"], tabs["Membership Log"]
     assert roster_rows[len(PEOPLE) + 1][:3] == ["N0NEWC", "Ann New", "ann@example.org"]  # into the dropdown-only row
+    assert roster_rows[len(PEOPLE) + 1][roster_rows[0].index("id")] == mid
     assert len(roster_rows) == 1 + len(PEOPLE) + 1
     assert log_rows[1] == ["N0NEWC", "Ann New", "2026-11-05", "Joined", "Added in the app by Tom Tester"]
     assert json.loads((tmp / "roster.json").read_text())[-1]["member_since"] == "2026-11-05"
-    assert chow.load()["order"] == ["n0newc"]                    # at the bottom of the chow rotation
+    assert chow.load()["order"] == [mid]                         # at the bottom of the chow rotation
     assert sent == [(["jane@example.org"], "New member: Ann New")]  # the Secretary is told
     with pytest.raises(ValueError):
         membership.add_member(club, {"first": "Ann", "last": "Again", "callsign": "N0NEWC", "license_class": "General"},
                               by="n0bbbb", sheet=sheet)
     e = profile.history()[0]
-    assert e["added"] and e["member"] == "n0newc" and e["by"] == "n0bbbb" and e["new"]["callsign"] == "N0NEWC"
+    assert e["added"] and e["member"] == mid and e["by"] == "n0bbbb" and e["new"]["callsign"] == "N0NEWC"
     with pytest.raises(ValueError):
         profile.undo(club, e["id"], by="n0aaaa")  # an addition isn't undone from Recent changes
     for bad in ({"first": "Ann"}, {"first": "A", "last": "B", "callsign": "not a call"},
@@ -88,7 +91,7 @@ def test_only_roster_keepers_can_add(env, monkeypatch):
     who["id"] = "n0bbbb"  # the Treasurer
     assert "Add a member" in c.get("/roster").text and c.get("/roster/add").status_code == 200
     r = c.post("/roster/add", data={"first": "Ann", "last": "New", "callsign": "N0NEWC", "license_class": "Technician"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/members/n0newc?added=1"
+    assert r.status_code == 303 and r.headers["location"] == "/members/n0newc?added=1"  # the callsign, not the id
     assert "Added to the roster" in c.get(r.headers["location"]).text
     assert "Added to the roster" in c.get("/roster/changes").text and "Tom Tester" in c.get("/roster/changes").text
     assert "already on the roster" in c.post("/roster/add", data={"first": "X", "last": "Y", "callsign": "N0NEWC", "license_class": "General"}).text

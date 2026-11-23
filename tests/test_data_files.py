@@ -1,4 +1,4 @@
-"""Checks over the source itself, for kinds of bug that reviews found: data files that miss a callsign change, writes
+"""Checks over the source itself, for kinds of bug that reviews found: data files that miss a rename-id, writes
 that can leave half a file, and SQL that breaks when a table gains a column."""
 import re
 from pathlib import Path
@@ -7,15 +7,15 @@ from club_minutes import callsign
 
 SRC = sorted((Path(__file__).parents[1] / "src" / "club_minutes").glob("*.py"))
 
-# JSON files in the data folder that a callsign change (callsign.STATE_FILES) doesn't rewrite, and why.
+# JSON files in the data folder that `club-minutes rename-id` (callsign.STATE_FILES; a callsign change no longer renames) doesn't rewrite, and why.
 NO_MEMBER_IDS = {
     "backup-status.json": "when the last backup ran",
     "branding.json": "the club's look",
     "limits.json": "the upload limit",
     "links.json": "the club's links",
     "reminders-sent.json": "keys of reminders already sent (an id inside only stops a repeat; dropped after 60 days)",
-    "roster.json": "the roster cache: rebuilt from the sheet, which the rename rewrites",
-    "roster-sheet.json": "the sheet itself: the rename rewrites it row by row",
+    "roster.json": "the roster cache: rebuilt from the sheet (it holds the ids, which a callsign change keeps)",
+    "roster-sheet.json": "the sheet itself: its id column keeps each id when a callsign changes",
     "preview-sheet.json": "the preview's sheet, as roster-sheet.json",
     "site-settings.json": "club-wide settings",
     "stage-sync-status.json": "when stage last synced",
@@ -35,25 +35,8 @@ def test_every_data_file_with_member_ids_follows_a_callsign_change():
     assert not set(callsign.STATE_FILES) & set(NO_MEMBER_IDS)
 
 
-# Each renamed file and what keeps a callsign change from racing a save of it: the lock the change takes (web.py's
-# member_callsign holds them all), or "none" and why. One owner per file: a save elsewhere takes the same lock.
-LOCK = {"chow.json": "_chow_lock", "business.json": "business.locked()", "events.json": "events.locked()",
-        "treasurer.json": "treasurer.locked()", "recovery.json": "recovery.locked()", "admins.json": "recovery.locked()",
-        "admins-suspended.json": "recovery.locked()", "roles.json": "none: an admin's Roles save, rarely",
-        "email-prefs.json": "prefs.locked()", "settings.json": "prefs.locked()",
-        "calendar-feeds.json": "none: a member's own feed list", "ask-about.json": "none: one meeting leader at a time",
-        "meet-rooms.json": "none: written when a host opens a room"}
-
-
-def test_every_renamed_file_has_one_lock_owner_a_callsign_change_takes():
-    assert set(LOCK) == set(callsign.STATE_FILES), 'a file added to STATE_FILES needs its lock named here, or "none: why"'
-    route = (SRC[0].parent / "web.py").read_text().split("def member_callsign", 1)[1].split("\n@app", 1)[0]
-    assert all(h in route for h in {v for v in LOCK.values() if not v.startswith("none")}), "member_callsign must hold each"
-
-
 # Writes that aren't a temporary file then .replace(): "not atomic yet", except the locks and markers (nothing to tear).
 NOT_ATOMIC = {
-    ("callsign.py", "keep"): "a backup copy made before a rename",
     ("auth.py", "p"): "the email log trimmed to its last lines",
     ("console.py", "state_path(archive, slug)"): "a console's saved state",
     ("console.py", "(archive.root / slug / name)"): "a console status file",

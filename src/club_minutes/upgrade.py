@@ -65,10 +65,43 @@ def _v4(data: Path) -> None:
             m.write(p)
 
 
+def _v5(data: Path) -> None:
+    """5 (1.3.0): the roster's new `id` column holds each member's id, which used to be worked out from the callsign on
+    every rebuild. Each row gets exactly the id it has today, so no other file changes; from now on a callsign change
+    keeps the id. 1.2 would read a changed callsign as a different member, so it must refuse this data. A row that
+    has an id is left alone, so running it again is harmless."""
+    import json
+
+    from .roster import derived_id
+    p = data / "roster-sheet.json"
+    if not p.exists():
+        return
+    tabs = json.loads(p.read_text())
+    grid = tabs.get("Member Roster") or []
+    if not grid:
+        return
+    header = [str(h).strip().lower() for h in grid[0]]
+    if not {"full_name", "callsign"} <= set(header):  # not a roster this app wrote: leave it, ids are derived as before
+        return
+    if "id" not in header:
+        grid[0] = [*grid[0], "id"]
+        header.append("id")
+    i, name, call = header.index("id"), header.index("full_name"), header.index("callsign")
+    for row in grid[1:]:
+        row += [""] * (len(header) - len(row))
+        if not str(row[i]).strip() and str(row[name]).strip():
+            row[i] = derived_id(str(row[name]), str(row[call]))
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(tabs))
+    tmp.chmod(0o600)
+    tmp.replace(p)
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
     (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
     (4, "published minutes keep their names, agenda order, heading and links from when they were made (snapshot.py): 1.1 can't tell", _v4),
+    (5, "each member's id is stored in the roster's id column, so a callsign change keeps it: 1.2 would misread a changed callsign", _v5),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"

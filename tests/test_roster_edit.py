@@ -325,6 +325,8 @@ def test_no_role_can_change_a_higher_roles_email_status_callsign_or_titles(one_o
     club, _tmp, sent, who, c = env
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     club.save_roles({k: {**r, "members": [ROLE_CALLS[k].lower()] if k in ROLE_CALLS else r["members"]} for k, r in club.role_table().items()})
+    prefix = "N0"
+    spare = iter("ABCDEFGHJKLMNPQRSTUVWXYZ" * 3)  # a new callsign for each try, as a change that goes through keeps it
     for actor, actor_call in ROLE_CALLS.items():
         who["id"] = actor_call.lower()
         for target, call in ROLE_CALLS.items():
@@ -339,8 +341,9 @@ def test_no_role_can_change_a_higher_roles_email_status_callsign_or_titles(one_o
             c.post(f"/members/{tid}/edit", data={**base, "status": "Inactive"}, follow_redirects=False)
             assert (m.status != "Active") == allowed, (actor, target, "status")
             m.status = "Active"
-            c.post(f"/members/{tid}/callsign", data={"callsign": "N0NEWC", "date": "2026-11-15"}, follow_redirects=False)
-            assert m.callsign == call and tid in club.members and "n0newc" not in club.members, (actor, target, "callsign")
+            new_call = f"{prefix}NEW{next(spare)}"
+            c.post(f"/members/{tid}/callsign", data={"callsign": new_call, "date": "2026-11-15"}, follow_redirects=False)
+            assert (club.members[tid].callsign == new_call) == allowed and club.resolve(tid) == tid, (actor, target, "callsign")
             if actor != "roster_keeper":  # the edit page is closed to them altogether: titles and other spellings too
                 c.post(f"/members/{tid}/edit", data={"tab": "titles", "title_new": "Chief"}, follow_redirects=False)
                 c.post(f"/members/{tid}/edit", data={**base, "aliases": "Zed"}, follow_redirects=False)

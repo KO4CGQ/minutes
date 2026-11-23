@@ -1,4 +1,4 @@
-"""A new callsign: the sheet, a backup first, and the member's id renamed in every current record."""
+"""A new callsign: the sheet and aliases change, the member's id and every record keep as they are; rename_id finishes old renames."""
 import json
 import sqlite3
 from pathlib import Path
@@ -54,38 +54,42 @@ def env(tmp_path, monkeypatch):
     for mod in (roster, profile, callsign, backup):
         monkeypatch.setattr(mod, "DATA", d)
     monkeypatch.setattr(roster, "PREVIEW", "test")
-    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "a long test passphrase")
     return Club(FIX / "test-club.yaml", roster=json.loads(cache.read_text())), d
 
 
-def test_callsign_change_renames_everything(env):
+def test_callsign_change_keeps_the_id_and_renames_nothing(env):
     club, d = env
     club.admins = {"n0aaaa"}
-    assert callsign.change(club, "n0aaaa", "w0amya", "2026-11-08", "n0bbbb") == "w0amya"
-    assert "n0aaaa" not in club.members and club.members["w0amya"].callsign == "W0AMYA"
-    assert club.canonical("n0aaaa") == "w0amya" and club.canonical("n0oldc") == "w0amya"  # both old calls still find her
-    assert club.is_admin("w0amya") and club.name("n0aaaa") == "Amy Appleseed"  # club.yaml and old log entries still work
+    before = {p: p.read_bytes() for p in d.rglob("*") if p.is_file() and p.name not in ("roster.json", "preview-sheet.json")}
+    assert callsign.change(club, "n0aaaa", "w0amya", "2026-11-08", "n0bbbb") is None
+    assert club.members["n0aaaa"].callsign == "W0AMYA" and "w0amya" not in club.members  # the id stays
+    assert club.resolve("w0amya") == club.resolve("N0AAAA") == club.resolve("n0oldc") == "n0aaaa"  # new, old and earlier calls
+    assert club.is_admin("n0aaaa") and club.canonical("w0amya") == "n0aaaa" and club.member_url("n0aaaa") == "/members/w0amya"
     row = json.loads((d / "roster.json").read_text())[0]
-    assert row["aliases"] == ["Amelia", "N0OLDC", "N0AAAA"] and row["events"][-1]["event"] == "Callsign Change"
+    assert row["id"] == "n0aaaa" and row["aliases"] == ["Amelia", "N0OLDC", "N0AAAA"] and row["events"][-1]["event"] == "Callsign Change"
     sheet = json.loads((d / "preview-sheet.json").read_text())
     assert sheet["Member Roster"][1][0] == "W0AMYA" and sheet["Membership Log"][-1][3:] == ["Callsign Change", "N0AAAA to W0AMYA"]
-    chow = json.loads((d / "chow.json").read_text())
-    assert chow["nights"]["2026-11-12"]["member"] == "w0amya" and chow["order"] == ["n0bbbb", "w0amya"] and "w0amya" in chow["constraints"]
-    biz = json.loads((d / "business.json").read_text())["items"][0]
-    assert biz["owner"] == "w0amya" and biz["history"][0]["by"] == "w0amya" and biz["text"].startswith("n0aaaa")  # text untouched
-    assert "w0amya" in json.loads((d / "email-prefs.json").read_text())
-    assert json.loads((d / "treasurer.json").read_text())["entries"][0]["member"] == "w0amya"  # payments follow the member
-    md = (d / "meetings" / "2026-11-05" / "minutes.md").read_text()
-    assert "leader: w0amya" in md and "  - w0amya\n  - n0bbbb" in md and "<!-- member: w0amya -->" in md
-    assert "N0AAAA's friend" in md  # text in the minutes is left as written
-    con = sqlite3.connect(d / "auth.sqlite")
-    assert con.execute("select member from passkeys").fetchone() == ("w0amya",)  # passkeys keep working
-    assert (d / "avatars" / "w0amya.jpg").exists()
-    assert any("before-w0amya" in p.name for p in (d / "backups").iterdir())  # the backup taken first
+    assert before == {p: p.read_bytes() for p in before}  # no file renamed, rewritten or added (no backup either)
+    assert profile.history()[0]["member"] == "n0aaaa"
 
 
-def test_callsign_change_refusals(env, monkeypatch):
+def test_an_old_callsign_never_takes_over_its_first_holder(env):
+    """Security review, 2026-11-22: after N0AAAA became W0AMYA, a new member given N0AAAA would have taken over the
+    id n0aaaa (club.yaml admins:, sessions). The id always means its own member, and adding that call is refused."""
     club, d = env
+    callsign.change(club, "n0aaaa", "w0amya", "2026-11-08", "n0bbbb")
+    form = {"callsign": "N0AAAA", "first": "Jane", "last": "Roe", "email": "jane.roe@example.org", "license_class": "General",
+            "joined": "2026-11-20"}
+    with pytest.raises(ValueError, match="was .*'s callsign"):
+        membership.add_member(club, form, by="n0bbbb")
+    rows = json.loads((d / "roster.json").read_text())  # even if the roster gets that call some other way (edited by hand)
+    rows.append({**rows[1], "id": "m1abcde", "callsign": "N0AAAA", "first": "Jane", "last": "Roe", "aliases": []})
+    club._load(rows)
+    assert club.canonical("n0aaaa") == "n0aaaa" and club.resolve("w0amya") == "n0aaaa"
+
+
+def test_callsign_change_refusals(env):
+    club, _d = env
     for call, msg in (("N0BBBB", "another member"), ("N0AAAA", "already"), ("not a call", "doesn't look like")):
         with pytest.raises(ValueError, match=msg):
             callsign.change(club, "n0aaaa", call, "2026-11-08", "n0bbbb")
@@ -93,13 +97,9 @@ def test_callsign_change_refusals(env, monkeypatch):
     club.former_ids["w0xyzk"] = "n0bbbb"  # Bob's old call
     with pytest.raises(ValueError, match="another member"):
         callsign.change(club, "n0aaaa", "W0XYZK", "2026-11-08", "n0bbbb")
-    monkeypatch.setenv("CLUB_MINUTES_BACKUP_PASSPHRASE", "")
-    with pytest.raises(backup.BackupError):  # no backup, no rename
-        callsign.change(club, "n0aaaa", "W0AMYA", "2026-11-08", "n0bbbb")
-    assert json.loads((d / "chow.json").read_text())["order"] == ["n0bbbb", "n0aaaa"]
 
 
-def test_callsign_change_from_the_page(env, monkeypatch):
+def test_member_pages_answer_to_a_callsign_a_former_callsign_or_an_id(env, monkeypatch):
     from fastapi.testclient import TestClient
 
     from club_minutes import web
@@ -108,40 +108,30 @@ def test_callsign_change_from_the_page(env, monkeypatch):
     club.members["n0bbbb"].role = "Secretary"  # a roster keeper
     a = Archive(d / "meetings", club)
     monkeypatch.setattr(web, "archive", a)
-    for mod in (web.business, web.events):
-        monkeypatch.setattr(mod, "DATA", d)
     who = {"id": "n0aaaa"}
     monkeypatch.setattr(web.authn, "member_for", lambda token: who["id"])
     c = TestClient(web.app)
     assert c.post("/members/n0aaaa/callsign", data={"callsign": "W0AMYA", "date": "2026-11-08"}).status_code == 403
     who["id"] = "n0bbbb"
-    assert "New callsign" in c.get("/members/n0aaaa/edit").text
     r = c.post("/members/n0aaaa/callsign", data={"callsign": "W0AMYA", "date": "2026-11-08"}, follow_redirects=False)
     assert r.headers["location"].startswith("/members/w0amya/edit?tab=callsign&saved=1")
-    assert a.by_slug["2026-11-05"].leader == "w0amya" and c.get("/members/w0amya").status_code == 200
     club.members["n0bbbb"].role = "Secretary"  # the roster reload dropped the test's in-memory title
+    for who_url in ("w0amya", "W0AMYA", "n0aaaa", "n0oldc"):  # the callsign, any capitals, the id, a former callsign
+        assert "Amy Appleseed" in c.get(f"/members/{who_url}").text, who_url
+    assert 'href="/members/w0amya' in c.get("/roster").text and 'href="/members/n0aaaa' not in c.get("/roster").text
+    assert c.get("/members/nobody").status_code == 404
     assert "error=" in c.post("/members/w0amya/callsign", data={"callsign": "N0BBBB", "date": "2026-11-08"},
                               follow_redirects=False).headers["location"]
 
 
-def test_a_change_that_stops_partway_says_how_to_finish_and_rename_id_finishes_it(env, monkeypatch, caplog):
-    club, d = env
-    real, calls = callsign._write, []
-    def flaky(p, text):  # the second file write fails, as a full disk would
-        calls.append(p)
-        if len(calls) == 2:
-            raise OSError("disk full")
-        real(p, text)
-    monkeypatch.setattr(callsign, "_write", flaky)
-    with pytest.raises(OSError):
-        callsign.change(club, "n0aaaa", "w0amya", "2026-11-08", "n0bbbb")
-    assert "club-minutes rename-id n0aaaa w0amya" in caplog.text
-    left = [f for f in ("chow.json", "business.json", "email-prefs.json", "treasurer.json") if "n0aaaa" in (d / f).read_text()]
-    assert left  # stopped partway
-    monkeypatch.setattr(callsign, "_write", real)
+def test_rename_id_finishes_an_old_partial_rename(env):
+    _club, d = env
     callsign.rename_id("n0aaaa", "w0amya", d)  # what the command runs; safe to run again
+    callsign.rename_id("n0aaaa", "w0amya", d)
     assert not [f for f in ("chow.json", "email-prefs.json", "treasurer.json") if "n0aaaa" in (d / f).read_text()]
     assert (d / "avatars" / "w0amya.jpg").exists() and "w0amya" in (d / "meetings" / "2026-11-05" / "minutes.md").read_text()
+    assert json.loads((d / "chow.json").read_text())["nights"]["2026-11-12"]["member"] == "w0amya"
+    assert sqlite3.connect(d / "auth.sqlite").execute("select member from passkeys").fetchone() == ("w0amya",)
 
 
 def test_rename_follows_recorder_corrections_review_and_earlier_versions(tmp_path):

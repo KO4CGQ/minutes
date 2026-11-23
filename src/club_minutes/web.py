@@ -1810,9 +1810,10 @@ def profile_photo_remove(mid: str = Depends(me)):
 @app.post("/members/{who}/photo/remove")
 def member_photo_remove(request: Request, who: str, mid: str = Depends(moderator)):
     """Officers (and admins in admin mode) can take down someone's picture."""
+    who = _member_or_404(who)
     if avatars.remove(who):
         _log.info("%s removed the profile picture of %s", one_line(mid), one_line(who))
-    return RedirectResponse(f"/members/{who}", status_code=303)
+    return RedirectResponse(archive.club.member_url(who), status_code=303)
 
 
 @app.get("/avatars/{name}")
@@ -1911,7 +1912,7 @@ async def roster_add(request: Request, mid: str = Depends(roster_keeper)):
         return page(request, "roster_add.html", ready=ready, guest=None, f=form, error=str(e),
                     classes=membership.CLASSES, today=dt.date.today().isoformat(),
                     invite_after=archive.club.info.get("invite_after_visits", 3))
-    return RedirectResponse(f"/members/{new}?added=1", status_code=303)
+    return RedirectResponse(f"{archive.club.member_url(new)}?added=1", status_code=303)
 
 
 # ---------------- offices: who holds each, who held them when, and changing a holder ----------------
@@ -2324,10 +2325,16 @@ def _search_calendar(q: str) -> list[dict]:
     return sorted(out, key=lambda r: (r["date"] < today, abs((r["date"] - today).days)))
 
 
-@app.get("/members/{mid}", response_class=HTMLResponse)
-def member(request: Request, mid: str):
-    if mid not in archive.club.members:
+def _member_or_404(who: str) -> str:
+    """The member id for what a /members/ address names: a callsign (current or former) or an id."""
+    if (mid := archive.club.resolve(who)) is None:
         raise HTTPException(404)
+    return mid
+
+
+@app.get("/members/{who}", response_class=HTMLResponse)
+def member(request: Request, who: str):
+    mid = _member_or_404(who)
     m, viewer, club = archive.club.members[mid], request.state.member, archive.club
     values = {"email": (m.email, f"mailto:{m.email}"), "phone": (m.phone, f"tel:{m.phone}"),
               "address": (m.address, None), "birthday": (monthday(m.birthday), None)}
@@ -2347,8 +2354,7 @@ STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
 def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0, tab: str = "details", email_sent: str = "",
                      mid: str = Depends(roster_keeper)):
     """Roster keepers (and admins in admin mode) edit what the roster sheet holds about a member."""
-    if who not in archive.club.members:
-        raise HTTPException(404)
+    who = _member_or_404(who)
     m = archive.club.members[who]
     club = archive.club
     office_titles = {o["title"] for o in offices.offices(club)}
@@ -2364,8 +2370,7 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
 
 @app.post("/members/{who}/edit")
 async def member_edit(request: Request, background: BackgroundTasks, who: str, mid: str = Depends(roster_keeper)):
-    if who not in archive.club.members:
-        raise HTTPException(404)
+    who = _member_or_404(who)
     m, f = archive.club.members[who], await request.form()
     tab = "titles" if f.get("tab") == "titles" else "details"  # each tab saves its own fields, leaving the others as they are
     back = _edit_url(who, tab)
@@ -2388,8 +2393,7 @@ async def member_edit(request: Request, background: BackgroundTasks, who: str, m
         if new_email and not valid_email(email):
             raise ValueError(f"{email} doesn't look like an email address.")
         for a in (x.strip() for x in f.get("aliases", "").split(",")):
-            other = archive.club.former_ids.get(a.lower()) if CALLSIGN.match(a) else None
-            if CALLSIGN.match(a) and (a.lower() in archive.club.members and a.lower() != who or other not in (None, who)):
+            if CALLSIGN.match(a) and archive.club.resolve(a) not in (None, who):
                 raise ValueError(f"{a.upper()} is another member's callsign: it can't be one of {m.first}'s other spellings.")
         for changed, perm, what in ((new_email, "emails", "email"), (status != m.status, "status", "status")):
             if changed and (err := may_change(request, who, perm, what)):
@@ -2431,10 +2435,9 @@ def why_not_change(club, mid: str, who: str, perm: str, what: str) -> str | None
 
 
 def _edit_url(who: str, tab: str) -> str:
-    """A member's Edit page on a tab, ready for "error=..." or "saved=1": built from the member's id as the roster has
+    """A member's Edit page on a tab, ready for "error=..." or "saved=1": built from the member's callsign or id as the roster has
     it, never the address typed, so a redirect only ever leads to a member's own page (and code scanning sees that)."""
-    m = archive.club.members.get(archive.club.canonical(who))
-    return f"/members/{quote(m.id if m else '', safe='')}/edit?tab={tab if tab in EDIT_TABS else 'details'}&"
+    return f"{archive.club.member_url(who)}/edit?tab={tab if tab in EDIT_TABS else 'details'}&"
 
 
 EDIT_TABS = {"details": "Details", "titles": "Titles", "callsign": "New callsign", "log": "Membership log"}
@@ -2456,28 +2459,25 @@ def member_titles(m, f) -> str:
 @app.post("/members/{who}/callsign")
 def member_callsign(request: Request, who: str, callsign: str = Form(""), date: str = Form(""),
                     mid: str = Depends(roster_keeper)):
-    """A new callsign: the roster sheet, and the member's id in every record (callsign.py). Backed up first. Like email
+    """A new callsign: the roster sheet only; the member's id stays (callsign.py). Like email
     and status, never for someone who holds an office or can do more than you (an admin in admin mode may)."""
-    if who not in archive.club.members:
-        raise HTTPException(404)
+    who = _member_or_404(who)
     try:
         if err := may_change(request, who, "members", "callsign"):
             raise ValueError(err)
-        with business.locked(), events.locked(), treasurer.locked(), _chow_lock, recovery.locked(), prefs.locked():  # nothing else writes those files meanwhile
-            new = callsign_mod.change(archive.club, who, callsign, date, mid)
+        callsign_mod.change(archive.club, who, callsign, date, mid)
         archive.reload()
-    except (ValueError, SheetError, backup.BackupError) as e:
+    except (ValueError, SheetError) as e:
         return RedirectResponse(_safe_next(_edit_url(who, "callsign") + "error=" + quote(str(e))), status_code=303)
     if admin_mode(request):
-        _admin_log(request, callsign_change=f"{who} to {new}")
-    return RedirectResponse(_safe_next(_edit_url(new, "callsign") + "saved=1"), status_code=303)
+        _admin_log(request, callsign_change=f"{who} to {callsign.strip().upper()}")
+    return RedirectResponse(_safe_next(_edit_url(who, "callsign") + "saved=1"), status_code=303)
 
 
 @app.post("/members/{who}/log")
 def member_log_event(request: Request, who: str, event: str = Form(""), date: str = Form(""), note: str = Form(""),
                      mid: str = Depends(roster_keeper)):
-    if who not in archive.club.members:
-        raise HTTPException(404)
+    who = _member_or_404(who)
     try:
         membership.add_event(archive.club, who, event, date, note, mid)
     except (ValueError, SheetError) as e:

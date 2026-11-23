@@ -131,3 +131,22 @@ def test_a_sqlite_file_is_copied_as_a_valid_database_and_put_back(tmp_path, step
     (tmp_path / "auth.sqlite").write_text("ruined")
     assert upgrade.undo(1, tmp_path)
     assert sqlite3.connect(tmp_path / "auth.sqlite").execute("select x from t").fetchall() == [(7,)]
+
+
+def test_step_5_stores_each_members_id_as_it_is_today_and_nothing_else(tmp_path):
+    """The roster gets an id column holding exactly the id worked out until now (lowercase callsign, else a name slug);
+    a row that has one keeps it; running again changes nothing."""
+    grid = [["callsign", "full_name", "email"], ["N0AAAA", "Jane Doe", "jane@example.org"], ["", "John Q. Doe", ""], []]
+    (tmp_path / "roster-sheet.json").write_text(json.dumps({"Member Roster": grid, "Membership Log": [["callsign"]]}))
+    (tmp_path / "chow.json").write_text('{"order": ["n0aaaa"]}')
+    upgrade._v5(tmp_path)
+    tabs = json.loads((tmp_path / "roster-sheet.json").read_text())
+    assert tabs["Member Roster"][0] == ["callsign", "full_name", "email", "id"] and tabs["Membership Log"] == [["callsign"]]
+    assert [r[3] for r in tabs["Member Roster"][1:3]] == ["n0aaaa", "john-q-doe"]
+    from club_minutes.roster import _dicts, to_members
+    assert [m["id"] for m in to_members(_dicts(tabs["Member Roster"]))] == ["n0aaaa", "john-q-doe"]
+    tabs["Member Roster"][1][3] = "m1x2y3"  # an id once stored is never worked out again
+    (tmp_path / "roster-sheet.json").write_text(json.dumps(tabs))
+    upgrade._v5(tmp_path)
+    assert json.loads((tmp_path / "roster-sheet.json").read_text()) == tabs and (tmp_path / "chow.json").read_text() == '{"order": ["n0aaaa"]}'
+    upgrade._v5(tmp_path / "empty")  # no roster yet: nothing to do

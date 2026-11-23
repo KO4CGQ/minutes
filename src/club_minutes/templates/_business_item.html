@@ -6,7 +6,7 @@
 {% set ev = [] %}{% for e in x.history %}{% set _ = ev.append({'at': e.at, 'e': e}) %}{% endfor %}
 {% if comments %}{% for c in x.comments or [] %}{% set _ = ev.append({'at': c.at, 'c': c}) %}{% endfor %}{% endif %}
 <ul class="timeline">{% for t in ev|sort(attribute='at', reverse=True) %}<li>
-  <div class="tl-head">{% set who = (t.e or t.c).by %}{% if who %}<span class="chip">{{ avatar(who, 'xs') }}<a href="/members/{{ who }}{{ from_item(x) }}">{{ club.shown_name(who) }}</a></span>{% endif %}
+  <div class="tl-head">{% set who = (t.e or t.c).by %}{% if who %}<span class="chip">{{ avatar(who, 'xs') }}<a href="{{ club.member_url(who) }}{{ from_item(x) }}">{{ club.shown_name(who) }}</a></span>{% endif %}
     <span class="muted small">{{ t.at|tsfull }}{% if t.e and t.e.meeting and is_meeting(t.e.meeting) %} · at the <a href="/meetings/{{ t.e.meeting }}{{ from_item(x) }}">{{ fmt(t.e.meeting) }}</a> meeting{% endif %}</span></div>
   {% if t.c %}<div class="tl-comment">{{ emoji('💬', 'chat') }} {{ t.c.text|plain }}</div>
   {% else %}<div>{{ t.e.what|capitalize }}</div>{% for f, ov in (t.e.changes or {}).items() %}<div class="change small"><b>{{ f }}:</b> <s class="muted">{{ ov[0] or '(none)' }}</s> → {{ ov[1] or '(none)' }}</div>{% endfor %}{% endif %}
@@ -19,7 +19,7 @@
 <div class="body">{% set first, _, rest = x.text.partition("\n") %}<h2 id="t{{ x.id }}">{{ x.text|firstline }}</h2>{% if rest.strip() %}<div class="itemtext">{{ rest|rich }}</div>{% elif first|plain != first or 'http' in first %}<div class="itemtext">{{ first|rich }}</div>{% endif %}{{ caller() }}</div></dialog>{% endmacro %}
 
 {% macro chips(x, full=False) %}{# full: in the dialog, with links and when it was first mentioned #}
-    {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{% if full %}<a href="/members/{{ x.owner }}{{ from_item(x) }}">{{ x.owner_name }}</a>{% else %}{{ x.owner_name }}{% endif %}</span>{% else %}<span class="chip muted">No owner</span>{% endif %}
+    {% if x.owner %}<span class="chip">{{ avatar(x.owner, 'xs') }}{% if full %}<a href="{{ club.member_url(x.owner) }}{{ from_item(x) }}">{{ x.owner_name }}</a>{% else %}{{ x.owner_name }}{% endif %}</span>{% else %}<span class="chip muted">No owner</span>{% endif %}
     {% if x.due %}<span class="chip{{ ' late' if x.overdue }}">{{ emoji('⏰', 'clock') }} due {{ fmt(x.due) }}{% if x.overdue %} · overdue{% endif %}</span>{% endif %}
     {% if x.agenda and x.agenda > today|string %}<span class="chip">{{ emoji('⏸️', 'pause') }} on the agenda for {{ fmt(x.agenda) }}</span>{% endif %}
     {% if x.quiet %}<span class="chip warn" title="Nothing has changed on it for weeks">quiet for a while: still on?</span>{% endif %}
@@ -47,7 +47,7 @@
       <div class="formrow"><button class="btn small">Save</button> <button type="button" class="btn small ghost" data-toggle="e{{ x.id }}">Cancel</button></div></form></div>{% endif %}
   <h3>Comments</h3>
   <div class="comments">{% for c in cs %}<div class="comment">
-      {% if c.guest %}<span class="chip">{{ c.guest }}</span>{% else %}<span class="chip">{{ avatar(c.by, 'xs') }}<a href="/members/{{ c.by }}{{ from_item(x) }}">{{ club.shown_name(c.by) }}</a></span>{% endif %} <span class="muted small">{{ c.at|tsfull }}{% if c.meeting %} · at the meeting, recorded by {{ club.shown_name(c.recorded_by) }}{% endif %}</span>
+      {% if c.guest %}<span class="chip">{{ c.guest }}</span>{% else %}<span class="chip">{{ avatar(c.by, 'xs') }}<a href="{{ club.member_url(c.by) }}{{ from_item(x) }}">{{ club.shown_name(c.by) }}</a></span>{% endif %} <span class="muted small">{{ c.at|tsfull }}{% if c.meeting %} · at the meeting, recorded by {{ club.shown_name(c.recorded_by) }}{% endif %}</span>
       {% if leader or c.by == me.id or c.recorded_by == me.id %}<form method="post" action="/business/{{ x.id }}/comments/{{ c.id }}/delete" class="inline" data-confirm="Delete this comment?">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<button class="linkbtn" title="Delete this comment">Delete</button></form>{% endif %}
       <div class="ctext">{{ c.text|rich }}</div>{{ pics(c.pictures, label="Picture with " ~ club.shown_name(c.by) ~ "'s comment", remove="/business/" ~ x.id ~ "/comments/" ~ c.id ~ "/pictures" if leader else "", back=back) }}</div>{% else %}<p class="muted small">No comments yet.</p>{% endfor %}</div>
   <form method="post" action="/business/{{ x.id }}/comment" class="modern" enctype="multipart/form-data">{% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}<textarea data-format data-pic="comment" name="text" rows="3" required maxlength="5000" data-count placeholder="Write an update, a question, or an offer to help…" aria-label="Comment"></textarea>
