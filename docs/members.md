@@ -37,7 +37,7 @@ Published minutes don't change when the club's settings or roster change (member
 **Chow** shows the schedule and your nights, 16 to a page. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
 
 ## 📌 Business
-**Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. An item, a comment or a note takes up to 5,000 characters; the count is under the box. Add up to four pictures to an item of yours, or to a comment (the **Picture** button above the box): a quote, a photo of the tower. Tap a picture to see it full size. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting), with pictures if you like, and the leader reads it out; it goes in the minutes with its pictures.
+**Business** lists the club's open items; tap one to see its comments and history. Anyone can comment (the meeting's leader may pick a comment to go in the minutes, which every member gets); if an item is yours, update it or mark it done. An item, a comment or a note takes up to 5,000 characters; the count is under the box. Add up to four pictures to an item of yours, or to a comment (the **Picture** button above the box): a quote, a photo of the tower. Tap a picture to see it full size. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting), with pictures if you like, and the leader reads it out; it goes in the minutes with its pictures.
 
 ![Business: the club's open items](screenshots/business.png)
 
@@ -80,4 +80,4 @@ With tracking on (the same switch as your dues, above), **Spending** in the menu
 - **Video meetings:** joining sends your name and callsign to the club's video server.
 - **Admin recovery:** if the officers ever have to recover admin access, every member is emailed at each step.
 - **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both.
-- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night, and your address leaves the Email log. Made Active again, you sign in with an emailed link and add a passkey again.
+- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night, and your address leaves the Email log. Made Active again, you sign in with an emailed link and add a passkey again. Minutes already published keep your name where they recorded it (attendance, reports, motions).
