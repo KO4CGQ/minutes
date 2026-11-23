@@ -273,11 +273,13 @@ def test_a_damaged_settings_file_breaks_no_page(env):
     assert as_("n0call").get("/").status_code == 200
 
 
-def test_guests_told_members_only_and_own_rooms_expire_when_unused(env):
+def test_guests_sent_to_sign_in_and_own_rooms_expire_when_unused(env):
     c, as_ = env
     c.yaml["jitsi"]["adhoc"] = {"on": True, "guests": False}
-    r = as_(None).get("/meet/net-night", follow_redirects=False)  # a guest, in a room that lets none in: a page, not Jitsi
-    assert r.status_code == 403 and "members only" in r.text and "/login?next=/meet/net-night" in r.text
+    as_("n0call").post("/meet", data={"name": "Board"})
+    for room in ("board", "no-such-room"):  # signed out, a room that lets no guests in reads like one that doesn't exist
+        r = as_(None).get(f"/meet/{room}", follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == f"/login?next=/meet/{room}"
     as_("n0call").post("/meet", data={"name": "Net night"})
     d = json.loads((clubmod.DATA / "meet-rooms.json").read_text())
     d["room:net-night"]["at"] -= 23 * 3600  # almost lapsed: a join keeps it

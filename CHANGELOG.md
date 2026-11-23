@@ -18,6 +18,9 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.
 - Minutes from before 1.2 no longer show a line between community reports: they look as they did when they were made.
 
+### Security
+- Someone signed out can no longer tell which video rooms are for members only.
+
 ## 1.2.0 (2026-11-22)
 
 ### Added
