@@ -46,8 +46,8 @@ from starlette.concurrency import (
 )
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from . import auth as authmod
 from . import (
-    ai,
     avatars,
     backup,
     branding,
@@ -73,7 +73,6 @@ from . import (
     updates,
     upgrade,
 )
-from . import auth as authmod
 from . import callsign as callsign_mod
 from . import pdf as pdfmod
 from .auth import Auth, _safe_next
@@ -383,7 +382,7 @@ def privileged(request: Request) -> bool:
 
 def moderates(request: Request) -> bool:
     """The "moderate" permission (officers, as it ships), and admins in admin mode: any business item, motions and
-    suggestions, comments, pictures, the calendar change log."""
+    comments, pictures, the calendar change log."""
     return archive.club.may(getattr(request.state, "member", None), "moderate") or admin_mode(request)
 
 
@@ -681,71 +680,19 @@ def business_page(request: Request, tab: str = "open", error: str = "", note: st
     members = sorted((m for m in archive.club.members.values() if m.status.lower() not in ("inactive", "silent key")),
                      key=lambda m: (m.last, m.first))
     leader_ = manages_business(request)
-    pending = [g for g in s["suggestions"] if g["status"] == "pending"] if leader_ else []
-    submitted = [m for m in archive.meetings if m.status != "draft"][:6]
     my_notes = [n for n in s["notes"] if n["by"] == mid and n["status"] == "pending"]
     all_notes = [n for n in s["notes"] if n["status"] == "pending"] if leader_ else []
     tabs = [("open", f"Open ({len(open_)})"), ("notes", "Notes for the next meeting"), ("done", "Done"), ("motions", "Motions")]
     if leader_:
         tabs.insert(1, ("add", "Add an item"))
-    if leader_ and (pending or ai.configured(archive.club)):
-        tabs.append(("suggestions", f"Suggestions ({len(pending)})"))
     if tab not in dict(tabs):
         tab = "open"
     return page(request, "business.html", tab=tab, tabs=tabs, open_items=open_, done=done, error=error, note=note, leader=leader_,
                 my_notes=my_notes, all_notes=all_notes, next_meetings=upcoming_meetings(),
-                suggestions=pending, ai_on=ai.configured(archive.club) and leader_, submitted=submitted,
                 by_id={x["id"]: x for x in items}, results=business.RESULTS, result=result,
                 motions=[x for x in business.motions(s) if not result or x["motion"]["result"] == result],
                 members=members, today=today, fmt=show_date)
 
-
-def run_followups(slug: str) -> str:
-    """Ask the AI for follow-ups from a meeting's minutes and store them as pending suggestions."""
-    m = archive.by_slug[slug]
-    with business.locked():
-        s = console.business_state(archive)
-        open_items = [x for x in s["items"] if x["status"] == "open"]
-    found = ai.suggest_followups(archive.club, m, open_items)  # outside the lock: it takes a few seconds
-    with business.locked():
-        s = console.business_state(archive)
-        n = business.add_suggestions(s, slug, found, archive.club.ai.get("model", ""))
-        business.save(s)
-    _log.info("AI suggested %d follow-ups for %s", n, one_line(slug))
-    return f"{n} suggestion{'s' if n != 1 else ''} from the {show_date(m.date, 'long')} minutes." if n else \
-        f"No follow-ups found in the {show_date(m.date, 'long')} minutes."
-
-
-def followups_after_submit(slug: str) -> None:
-    """After Submit: AI follow-up suggestions, and fresh "ask about" prompts for next week's reports."""
-    if ai.configured(archive.club):
-        try:
-            run_followups(slug)
-        except Exception:  # noqa: BLE001
-            _log.exception("AI follow-ups for %s failed", slug)
-        try:
-            console.refresh_ask_about(archive)
-        except Exception:  # noqa: BLE001
-            _log.exception("AI ask-about prompts after %s failed", slug)
-
-
-@app.post("/business/suggest")
-def business_suggest(request: Request, meeting: str = Form(...), mid: str = Depends(moderator)):
-    if not ai.configured(archive.club):
-        raise HTTPException(404)
-    get_meeting(meeting)
-    try:
-        msg = run_followups(meeting)
-    except ai.AIError as e:
-        return RedirectResponse("/business?tab=suggestions&error=" + quote(str(e)), status_code=303)
-    return RedirectResponse("/business?tab=suggestions&note=" + quote(msg), status_code=303)
-
-
-@app.post("/business/suggestions/{sid}/accept")
-def suggestion_accept(request: Request, sid: str, text: str = Form(""), owner: str = Form(""), due: str = Form(""),
-                      mid: str = Depends(moderator)):
-    return business_change(request, lambda s: business.accept_suggestion(s, sid, mid, text or None, owner_id(owner) or "", due),
-                           back="/business?tab=suggestions")
 
 
 @app.post("/business/suggestions/{sid}/dismiss")
@@ -4102,7 +4049,6 @@ def console_submit(request: Request, background: BackgroundTasks, slug: str, mid
         raise
     background.add_task(keep_pdf, slug)
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
-    background.add_task(followups_after_submit, slug)
     return RedirectResponse(f"/meetings/{slug}", status_code=303)
 
 

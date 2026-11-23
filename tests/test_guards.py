@@ -127,7 +127,6 @@ def test_destructive_forms_ask_first():
         'action="/admin/security/unban"': "Unban gives an address its access back",
         'action="/profile/photo/remove"': "a member's own picture: uploading again undoes it",
         'action="/chow/requests/{{ r.id }}/answer"': "cancelling a chow request can be asked again",
-        'action="/business/suggestions/{{ g.id }}/accept"': "adds a card that can be edited or deleted",
     }
     bad = []
     for t in sorted(TEMPLATES.glob("*.html")):

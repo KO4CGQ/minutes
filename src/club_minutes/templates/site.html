@@ -130,7 +130,7 @@
 <p class="muted">Names that are never recorded. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/privacy" class="profile">
 <div class="card sitesec"><h2>Never recorded {{ origin('privacy.never_record') }}</h2>
-<p class="hint">One name a line: someone who asked not to be in the minutes (a guest, say). A guest with one of these names is left out each time the console saves, a line with one is left out of imported minutes, and the AI never sees one. Minutes already saved keep what they have: edit those by hand.</p>
+<p class="hint">One name a line: someone who asked not to be in the minutes (a guest, say). A guest with one of these names is left out each time the console saves, a line with one is left out of imported minutes. Minutes already saved keep what they have: edit those by hand.</p>
 <textarea name="names" rows="6" maxlength="10000" aria-label="Names never recorded, one a line">{{ club.never_record|join('\n') }}</textarea>
 </div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>

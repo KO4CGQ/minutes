@@ -199,7 +199,7 @@ PERMISSIONS = {
     "chow": "change the chow schedule",
     "contacts": "see every member's contact details",
     "oversee": "see Roster changes and undo them",
-    "moderate": "moderate: any business item, motions, suggestions, comments, pictures, the calendar log",
+    "moderate": "moderate: any business item, motions, comments, pictures, the calendar log",
     "treasurer": "look at the Treasurer pages",
     "money": "record money and change the Treasurer settings",
     "members": "add members and edit their details",
@@ -250,7 +250,7 @@ def _quorum(raw) -> dict | None:
 
 
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
-# Never sign-in, admins, email test mode or AI: a mistake there locks people out or needs the server anyway.
+# Never sign-in, admins or email test mode: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                     "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day", "names")} | {
     ("meeting", "sections"), ("meeting", "quorum"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
@@ -352,7 +352,6 @@ class Club:
         self.email = cfg.get("email") or {}
         self.never_record = [" ".join(str(x).split()) for x in (cfg.get("privacy") or {}).get("never_record") or [] if str(x).strip()]
         self.redact = [_n(x) for x in self.never_record]
-        self.ai = cfg.get("ai") or {}  # AI assistance (ai.py): model, and whether it's on
         self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
         # Offices whose holders add new members to the roster (the Secretary keeps it, usually).
         self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
