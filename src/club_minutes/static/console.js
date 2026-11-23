@@ -333,8 +333,10 @@
     if (S.current) {
       const k = S.current;
       const past = k.startsWith("g:") ? [] : (D.history[k] || []);
-      const ta = h("textarea", { rows: 4, "data-format": true, "data-pic": "report", placeholder: "What are they working on? (their name is added automatically)", oninput: (e) => { S.reports[k] = e.target.value; grow(e.target); save(); } });
+      const ta = h("textarea", { rows: 4, "data-format": true, "data-pic": "report", placeholder: "What are they working on? (their name is added automatically)", oninput: (e) => { S.reports[k] = e.target.value; none.hidden = !!e.target.value.trim(); grow(e.target); save(); } });
       ta.value = S.reports[k] || "";
+      // "Nothing new" means nothing to report: only while the box is empty
+      const none = h("button", { class: "btn ghost", hidden: !!ta.value.trim(), onclick: () => finish(true) }, "Nothing new");
       floor = h("div", { class: "floor" },
         h("h3", {}, `${fullName(k)} has the floor`),
         k.startsWith("g:") && inviteDue(M.guests.find((g) => "g:" + g.name === k) || { name: k.slice(2) })
@@ -345,7 +347,7 @@
         picRow(k),
         h("div", { class: "row" },
           h("button", { class: "btn", onclick: () => finish(false) }, "Done"),
-          h("button", { class: "btn ghost", onclick: () => finish(true) }, "Nothing new"),
+          none,
           h("button", { class: "btn ghost", onclick: () => { S.skipped.push(k); S.current = null; render(); save(); } }, "Come back later")));
       setTimeout(() => ta.focus(), 0);
     } else {
