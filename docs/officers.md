@@ -5,7 +5,7 @@ For officers, meeting leaders, minutes editors, roster keepers, calendar editors
 ## 🔑 Who can do what
 What a member may do comes from their **roles**. A role is given by the offices a member holds (the whole office title: "Assistant Treasurer" isn't the Treasurer's office, and a title that isn't an office gives no role) and by members picked by hand. Admins set what each role allows, which offices give it and who is picked, and add the club's own roles, on **Admin → Site → Roles**. A member's roles show on their page. As each role ships:
 
-- 🏛️ **Officers** (holders of an officer's office) see every member's contact details and Roster changes, and can undo profile changes; they moderate (any business item, motions and suggestions, comments, pictures, the calendar change log), lead meetings and edit the calendar too.
+- 🏛️ **Officers** (holders of an officer's office) see every member's contact details and Roster changes, and can undo profile changes; they moderate (any business item, motions, comments, pictures, the calendar change log), lead meetings and edit the calendar too.
 - ✏️ **Minutes editors** (holders of any office) correct minutes already in the archive. A meeting's own leader and recorder may always correct its minutes.
 - 🎙️ **Meeting leaders** (picked on Site → Roles) run the meeting console and edit the minutes and the calendar.
 - 📅 **Calendar editors** (picked on Site → Roles, say the net manager) edit the calendar.

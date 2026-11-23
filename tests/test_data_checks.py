@@ -169,8 +169,7 @@ def test_every_login_table_is_pruned_or_listed(tmp_path):
 
 
 # Logs that only grow, and why that's fine; the others trim themselves (tests/test_profile.py).
-HISTORY = {"ai-log.jsonl": "a line per AI request, off unless AI is set up",
-           "calendar-log.jsonl": "a line per calendar change",
+HISTORY = {"calendar-log.jsonl": "a line per calendar change",
            "chow-log.jsonl": "a line per chow change", "profile-changes.jsonl": "a line per roster change, the undo history",
            "treasurer-log.jsonl": "the treasurer's audit trail", "preview-outbox.jsonl": "a preview's fake outbox, never a real club"}
 TRIMS = {"email-log.jsonl", "admin-log.jsonl", "api-log.jsonl"}  # the last two: 90 days, in the daily job

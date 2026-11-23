@@ -308,17 +308,12 @@
     if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return; }
     D.business = j; render(); save();
   }
-  // What to ask a member about: the AI's short prompts when there are any, with what they actually said one click away.
+  // What to ask a member about: what they said in their last few reports.
   function followUp(k, past) {
     if (k.startsWith("g:")) return h("p", { class: "hint" }, "Guest: ask what brought them in, and their license and callsign.");
     if (!past.length) return h("p", { class: "hint" }, "No earlier reports on record.");
     const said = past.map(([d, t]) => h("div", { class: "past" }, h("b", {}, d + ": "), t));
-    const asks = (D.ask_about || {})[k];
-    if (!asks) return h("div", {}, h("div", { class: "hint" }, "Follow up on what they said before:"), said);
-    return h("div", { class: "askabout" },
-      h("div", { class: "hint" }, asks.length ? "Ask about " : "Nothing from earlier reports needs a follow-up ", h("span", { class: "badge ai" }, "AI")),
-      asks.length ? h("ul", {}, asks.map((a) => h("li", {}, a))) : null,
-      h("details", {}, h("summary", { class: "hint" }, "What they said before"), said));
+    return h("div", {}, h("div", { class: "hint" }, "Follow up on what they said before:"), said);
   }
   function reports() {
     const rem = remaining();

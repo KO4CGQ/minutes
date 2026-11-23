@@ -246,7 +246,7 @@
   "static/format.js": "68bcc3b938e74ea21a54530e94cf1f3d93b8cedcca46503623cb1d23dc651340",
   "static/minutes.css": "31d415f04cbaad0edad71760d3d99f7daf8bc62ecc49680ce12837a779b73b13",
   "static/sort.js": "b7a9af370a7fee958f5ab413ae4d0045f4e1828a0fb082646d1e857131668f39",
-  "static/style.css": "095399e925372557199b05e33a243e6f6d0de94b2b030d5f649723adb34d4c8d",
+  "static/style.css": "fc98ba491c425df9c91cbb5543e7931ae38cd17348295d4b25b377815ab2d7ab",
   "templates/_avatar.html": "6706c6fa69201c1a1d29914618a54e5da08322a68108e51c2e0cbb040d7e4feb",
   "templates/_business_item.html": "94b92e37cadf6d6fd03e9b9ea53efa032306afc10725c670a634f53914f9fcd7",
   "templates/_icons.html": "d7909338dc8d708dd8f49e8a15337a8af23a6d24b45f9d0ece1212f682d25c26",
@@ -256,7 +256,7 @@
   "templates/_pictures.html": "244db628cfc3c26d42622c744acd11bcf6ae794382f455712df29f41dd16e885",
   "templates/admin.html": "0c1a6efb472f31ef6feecddaba69b9b4cfa742570b8692557b82f5545d00e5e1",
   "templates/base.html": "812bde4a16e94d0f341edc2909c963485f8ea4cbef50b6090914ab2d830c9841",
-  "templates/business.html": "4508cef9c6843174456c929724af09564ec1928d853bb4da3e151200738146a5",
+  "templates/business.html": "56f7f53a75881f3f72e117596f6bc87bcf49c07a514fd3a33cc24297343d3cc8",
   "templates/calendar.html": "444da838ded3dbe954e463b2680da316ef6328292b88458b305c999e95f5a665",
   "templates/chow.html": "b01b1af294a9e32b49f1fde9591371118b08337e1c7148667d045ada9ecf892d",
   "templates/home.html": "8c27386cc174792b11039a91f146d45519c44bea2bd3515e1bfc1e0d236a73fd",
@@ -264,7 +264,7 @@
   "templates/member_edit.html": "933e7aa753c4ddf7024567ddc0dea64d28f5f30d5616c82a95619edd3fc355f4",
   "templates/offices.html": "55f94a999da798d60e7586e87c6be06f60550892a5d11068822ef28dccf01ffe",
   "templates/security.html": "a49f34c09cbcc3042e67d24ebadb6ea3765f09b0b83cde84e12e6adfe731da92",
-  "templates/site.html": "5d64f092686b7b77f83610b7900942a528825697c2ab14b506395e7718c757d8",
+  "templates/site.html": "0a5de41744535289f779fedd401e10bb958d92c468e08f6fa03a64b5392f3a6d",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
   "templates/treasurer.html": "74200ac3bf6cff29497e97c6ebdd98e367b70cb029d2f819c166dec9359dd1e1"
  }

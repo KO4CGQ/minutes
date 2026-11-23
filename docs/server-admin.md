@@ -16,7 +16,7 @@ To set the server's time zone too: `… | TZ_NAME=America/Chicago bash` (otherwi
     - `auth: rp_id`: the HTTPS address members will use (passkeys only work there)
     - your own callsign under `admins:`
 
-    Everything else is set in the app (step 3) or has a default; `club.example.yaml` lists every setting, for what's only in club.yaml (sign-in, email test mode, AI).
+    Everything else is set in the app (step 3) or has a default; `club.example.yaml` lists every setting, for what's only in club.yaml (sign-in, email test mode).
 
     Then `systemctl restart club-minutes`.
 
@@ -58,12 +58,12 @@ Admin → **Site** changes most of the club's settings in the app, checked as yo
 | **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own), election days, video meetings, how many pictures a member can add a day (20 by default), and **The club supports Club Minutes** (it takes the menu's Support link away for everyone and the About page thanks the club). |
 | **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
 | **Dates** | How dates are written (US order unless changed). |
-| **Privacy** | Names never recorded: a guest with one is left out of the minutes, a line with one out of imported minutes, and the AI never sees one. |
+| **Privacy** | Names never recorded: a guest with one is left out of the minutes, a line with one out of imported minutes. |
 
 ![Site → Roles: what each role allows and who has it](screenshots/site-roles.png)
 
 > [!NOTE]
-> What's saved on Site wins over club.yaml until an admin picks **Back to club.yaml**. Sign-in (`auth:`), email test mode and AI can only be set in club.yaml; admins beyond the first are added under Security → Admins.
+> What's saved on Site wins over club.yaml until an admin picks **Back to club.yaml**. Sign-in (`auth:`) and email test mode can only be set in club.yaml; admins beyond the first are added under Security → Admins.
 
 ## 🔑 Sign-in and email
 Members sign in with a passkey, or with a one-time link emailed to their roster address.
@@ -71,7 +71,6 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 - **Passkeys** only work at the HTTPS address in club.yaml (`auth.rp_id`).
 - **Email** needs `CLUB_MINUTES_SMTP_USER` and `CLUB_MINUTES_SMTP_PASSWORD` (a Gmail app password) in `/etc/club-minutes/env`. Without them, links go to the server log instead.
 - **Locked out?** On the server: `club-minutes login-link N0CALL` prints a one-time link for any member.
-- **AI** (optional): `CLUB_MINUTES_OPENROUTER_KEY` in the env file and `ai: {model: ...}` in club.yaml. Each call is logged (time, model, size, cost; never the text).
 
 **Emailing the minutes:** when a leader submits them, every member with an email address (except Inactive and Silent Key) gets their own copy: the PDF, or a link, as each chose on their profile (or nothing, if they turned it off). Replies go to whoever took the minutes and whoever led the meeting, each only if they share their email with members, otherwise to the club's address. Each meeting is emailed once, and leaders see the outcome on the minutes page. If it doesn't go out (an email server problem, or a restart while sending), the minutes page shows **Send it now**, and the daily job tries again overnight (and drops the note of an email still unsent after 90 days); corrected minutes work the same way.
 
@@ -249,7 +248,7 @@ Once, for a club moving its chow list into the app: `club-minutes chow-import FI
 - **Sign-in:** `auth:` (the HTTPS address passkeys use, how long a sign-in lasts).
 - **Admins:** `admins:`, the callsigns who can always get in.
 - **Email test mode:** `email: only_to:`.
-- **AI:** `ai: {model: ...}`, and the private never-record list.
+- **Privacy:** the private never-record list.
 - **Offices:** `offices:`, the club's offices (a title with one seat, or `{title: Trustee, officer: false, seats: 3}` for a board seat).
 - **Roster keepers:** `roster_keepers:`, the offices the Roster keeper role starts with (`[Secretary, Treasurer]` by default; admins in admin mode always can). Once an admin changes that role on Site → Roles, the page wins.
 - **Starting links** for the Links page.
@@ -260,6 +259,6 @@ People, their titles and who may lead come from the roster the app keeps, edited
 All in the data folder (`/var/lib/club-minutes`), and all in the backups:
 
 - **State:** the roster (`roster-sheet.json`, rebuilt into `roster.json` daily at 04:00), `events.json` (calendars), `chow.json`, `business.json`, `treasurer.json`, `email-prefs.json`, `settings.json` (each member's display choices), `site-settings.json` (Site), `branding/` and `branding.json` (Look), `admins.json`, `limits.json`, `backup-settings.json` (not in the backups: it holds the S3 secret).
-- **Logs**, each change with who made it: `profile-changes.jsonl` (roster), `calendar-log.jsonl`, `chow-log.jsonl`, `treasurer-log.jsonl`, `admin-log.jsonl`, `api-log.jsonl`, `ai-log.jsonl`, `email-log.jsonl`. The admin and API logs keep 90 days (the daily job trims them); the API log holds only calls from allowed addresses.
+- **Logs**, each change with who made it: `profile-changes.jsonl` (roster), `calendar-log.jsonl`, `chow-log.jsonl`, `treasurer-log.jsonl`, `admin-log.jsonl`, `api-log.jsonl`, `email-log.jsonl`. The admin and API logs keep 90 days (the daily job trims them); the API log holds only calls from allowed addresses.
 - **The minutes:** a folder per meeting, with `emailed.json` beside each saying who it was sent to.
 - **`data-version`:** which shape the files are in. A new version that stores something differently reshapes the files itself at start, after copying the folder to `before-upgrade/` (not in the backups); if it then doesn't start, the update puts that copy back and returns to the version before. An older version won't start on data a newer one has reshaped: restore a backup made before the update instead.

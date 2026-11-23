@@ -30,7 +30,7 @@ def _settings_read() -> set[str]:
     """Every club.yaml setting the code reads, as "section: key" (or "key" at the top)."""
     code = "\n".join(p.read_text() for p in SRC.glob("*.py"))
     found = {f"club: {k}" for k in re.findall(r'\binfo\.get\("(\w+)"', code)}
-    for sec in ("auth", "email", "ai", "calendar", "bylaws"):
+    for sec in ("auth", "email", "calendar", "bylaws"):
         found |= {f"{sec}: {k}" for k in re.findall(rf'\b{sec}\.get\("(\w+)"', code)}
     configure = (SRC / "club.py").read_text().split("def _configure", 1)[1].split("\n    @", 1)[0]
     found |= set(re.findall(r'cfg\.get\("(\w+)"', configure))
@@ -54,10 +54,13 @@ def test_settings_from_1_0_0_are_still_read_or_renamed():
     had = {f"{s}: {k}" for s, v in old.items() if isinstance(v, dict) for k in v} | {s for s, v in old.items() if not isinstance(v, dict)}
     read = _settings_read() | {s for s, v in old.items() if isinstance(v, dict)} | {"links", "offices", "admins", "roster_keepers"}
     renamed = {f"{s}: {k}" for s, k in RENAMED}
-    assert not sorted(had - read - renamed - {"privacy: never_record"}), "a 1.0.0 setting is no longer read"
+    assert not sorted(had - read - renamed - REMOVED - {"privacy: never_record"}), "a 1.0.0 setting is no longer read"
 
 
 # What clubs, their members' calendar apps and the Discord bot use, as of 1.0.0.
+# Taken out on purpose: AI assistance left the app for a plugin in 1.3. A club.yaml with an ai: block still starts
+# (test_a_1_0_0_club_yaml_with_every_setting_still_starts reads one); the command and the key are simply gone.
+REMOVED = {"ai-ask-about", "ai: model", "ai: enabled", "CLUB_MINUTES_OPENROUTER_KEY"}
 COMMANDS_1_0 = {"import", "roster", "login-link", "first-member", "delete-meeting", "chow-import", "reminders",
                 "auto-update", "ai-ask-about", "backup", "restore", "data-undo", "serve"}
 ROUTES_1_0 = {"/login", "/login/link", "/calendar/public", "/calendar/public.ics", "/calendar/feed/{token}.ics",
@@ -77,7 +80,7 @@ def test_commands_are_kept():
     out = subprocess.run([sys.executable, "-c", "from club_minutes import main; main()", "--help"],
                          check=True, capture_output=True, text=True).stdout
     have = set(re.search(r"\{([\w,-]+)\}", out)[1].split(","))
-    assert not COMMANDS_1_0 - have, f"commands gone: {COMMANDS_1_0 - have}"
+    assert not COMMANDS_1_0 - have - REMOVED, f"commands gone: {COMMANDS_1_0 - have - REMOVED}"
 
 
 def test_addresses_are_kept():
@@ -97,7 +100,7 @@ def test_services_and_environment_are_kept():
     units = {p.name for p in (ROOT / "deploy").iterdir()}
     assert not UNITS_1_0 - units, f"units gone: {UNITS_1_0 - units}"
     code = "\n".join(p.read_text() for p in SRC.glob("*.py"))
-    assert not {e for e in ENV_1_0 if e not in code}, "an environment setting is no longer read"
+    assert not {e for e in ENV_1_0 - REMOVED if e not in code}, "an environment setting is no longer read"
 
 
 def test_upgrade_steps_are_numbered_in_order():

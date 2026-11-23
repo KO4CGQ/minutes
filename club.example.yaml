@@ -127,16 +127,9 @@ offices:
   - Treasurer
   - {title: Trustee, officer: false, seats: 3}
 
-# AI assistance (suggested follow-ups from the minutes), through OpenRouter. Needs the API key in the
-# environment too: CLUB_MINUTES_OPENROUTER_KEY=... in /etc/club-minutes/env. Leave out to keep AI off.
-# ai:
-#   model: provider/model-name   # any chat model id from openrouter.ai/models
-#   enabled: true
-
 privacy:
   never_record: []  # names never recorded in the minutes (also on Admin → Site → Privacy)
 
 # People come only from the roster the app keeps (roster-sheet.json in the data folder).
 # Secrets aren't kept here but in /etc/club-minutes/env (the server admin guide has them all), e.g. CLUB_MINUTES_SMTP_HOST, _PORT, _USER,
-# _PASSWORD, _FROM, _REPLY_TO (email); CLUB_MINUTES_BACKUP_PASSPHRASE; CLUB_MINUTES_ROSTER_API_TOKEN (the Discord bot);
-# CLUB_MINUTES_OPENROUTER_KEY (AI).
+# _PASSWORD, _FROM, _REPLY_TO (email); CLUB_MINUTES_BACKUP_PASSPHRASE; CLUB_MINUTES_ROSTER_API_TOKEN (the Discord bot).
