@@ -150,3 +150,39 @@ def test_step_5_stores_each_members_id_as_it_is_today_and_nothing_else(tmp_path)
     upgrade._v6(tmp_path)
     assert json.loads((tmp_path / "roster-sheet.json").read_text()) == tabs and (tmp_path / "chow.json").read_text() == '{"order": ["n0aaaa"]}'
     upgrade._v6(tmp_path / "empty")  # no roster yet: nothing to do
+
+
+def test_step_7_moves_video_meetings_into_the_meet_plugin(tmp_path, monkeypatch):
+    """Everything Jitsi had (club.yaml's and Site's settings, own rooms, the app-made secret, the permission) lands in
+    plugins/meet.json, the plugin is ticked on, and the update can be undone; a club that never used it is left alone."""
+    import stat
+    cfg = tmp_path / "club.yaml"
+    cfg.write_text("modules: {jitsi: true}\njitsi: {domain: meet.example.org, app_id: club-minutes, room: net}\n")
+    monkeypatch.setenv("CLUB_MINUTES_CONFIG", str(cfg))
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "data-version").write_text("6\n")
+    (data / "site-settings.json").write_text(json.dumps({"club": {"name": "Test"}, "modules": {"chow": True, "jitsi": True},
+                                                         "jitsi": {"rooms": [{"slug": "board", "name": "Board"}], "adhoc": {"on": True}}}))
+    (data / "meet-rooms.json").write_text('{"room:x": {"by": "m1", "at": 1}}')
+    (data / "jitsi-secret").write_text("s" * 64 + "\n")
+    (data / "roles.json").write_text(json.dumps({"table": {"treasurer": {"perms": ["treasurer", "meet_host"]}, "mine": {"name": "Mine", "perms": ["meet_host"]}}}))
+    assert upgrade.run(data)[-1].startswith("video meetings moved")
+    plugin = json.loads((data / "plugins" / "meet.json").read_text())
+    assert plugin["domain"] == "meet.example.org" and plugin["room"] == "net" and plugin["rooms"] == [{"slug": "board", "name": "Board"}]
+    assert plugin["adhoc"] == {"on": True} and plugin["openers"] == {"room:x": {"by": "m1", "at": 1}} and plugin["secret"] == "s" * 64
+    assert stat.S_IMODE((data / "plugins" / "meet.json").stat().st_mode) == 0o600
+    assert not (data / "meet-rooms.json").exists() and not (data / "jitsi-secret").exists()
+    site = json.loads((data / "site-settings.json").read_text())
+    assert site == {"club": {"name": "Test"}, "modules": {"chow": True}, "plugins": {"meet": True}}
+    table = json.loads((data / "roles.json").read_text())["table"]
+    assert table["treasurer"]["perms"] == ["treasurer", "meet.host"] and table["mine"]["perms"] == ["meet.host"]
+    assert "meet.host" in table["officer"]["perms"] and "meet.host" in table["minutes_editor"]["perms"] and "lead" in table["officer"]["perms"]  # as shipped, plus it
+    upgrade._v7(data)  # again, as after a stop part way: nothing lost
+    assert json.loads((data / "plugins" / "meet.json").read_text())["secret"] == "s" * 64
+    assert upgrade.undo(6, data) and (data / "jitsi-secret").exists() and not (data / "plugins").exists()  # put back as it was
+    fresh = tmp_path / "other"
+    fresh.mkdir()
+    cfg.write_text("club: {}\n")
+    upgrade._v7(fresh)
+    assert not (fresh / "plugins").exists() and not (fresh / "roles.json").exists()

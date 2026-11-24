@@ -110,12 +110,16 @@ The module declares `API = 1`, `NAME` (lowercase letters and digits; also its ad
 - `NAV`: `[("Hello", "/", None), ("Editor", "/edit", "edit")]`: label, path on the router, and the permission needed (or `None`); shown in the menu to the members allowed (admins in admin mode see all).
 - A `templates/` folder next to the module. Its files are `"<NAME>/file.html"`; they extend `base.html`. Render with `api.page(request, "file.html", **context)`, which gives the app's menu and styles. The same rules as the app's templates: no inline `on…=` handlers, a `<script>` needs `nonce="{{ csp_nonce }}"`, never `|safe` on text members typed.
 - `GUIDE`: the path of a Markdown file (relative to the module), shown under Help while the plugin is on.
-- `calendar_links(api)`: a list of `(label, url)` buttons on the calendar event form that fill in the online link.
+- `nav_ready(api)`: `False` hides the plugin's menu links (say, until its settings are filled in); admins in admin mode still see them, to finish setting it up. An error in it counts as `False`.
+- `calendar_links(api)`: a list of `(label, url)` buttons on the calendar event form that fill in the online link. A `url` that starts with `/` (a page of the plugin) gets the app's own address put in front.
+- `form_action(api)`: a list of origins (`["https://meet.example.org"]`, each `https://host` or `https://host:port`; anything else is dropped) that the pages' forms may end on, for a form that redirects to another site. The app adds them to the Content Security Policy's `form-action` **only** on the plugin's own addresses (`/<NAME>` and below) while it's on, never elsewhere.
 - A settings page at `/<NAME>/admin`; Site → Features links to it. The app writes every change there (any method but GET) to the admin log itself. Before a sensitive one (a new secret, say), ask for a fresh confirmation: `if again := api.fresh(request, "/<NAME>/admin"): return again` sends the admin to confirm with a passkey or emailed link, then back to that address, unless they did in the last few minutes.
 
 **What it gets.** The app sets `api` on the module before the first request (read it inside handlers, not when the module is imported):
 - `api.member(id)`: `{"id", "name", "active"}` or `None`; nothing else about a member.
 - `api.may(id, perm)`, `api.who(request)` (the signed-in member's id, or `None`), `api.admin_mode(request)`.
+- `api.roles(id)`: the role keys the member holds; `api.role_labels()`: `{role key: its name}`, for a settings page that picks roles.
+- `api.base_url(request)`: the address members reach the app at (`https://host`), for links a page shows.
 - `api.email(id)`: only with `NEEDS = {"email"}`; otherwise it raises `PermissionError`.
 - `api.storage.load()` / `.save(dict)` / `.update(change)`: one JSON file for the plugin in the data folder (`plugins/<NAME>.json`, in the backups), each call locked and saved atomically. To change what's stored, use `update(lambda d: ...)`: a `load()` then `save()` isn't one locked step, so two requests could lose each other's change.
 No `Club`, no sign-in internals, no other plugin's storage. `tests/test_plugins.py` and `tests/fixtures/helloplugin/` are a small working example.

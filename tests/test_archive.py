@@ -322,7 +322,7 @@ def test_help_pages_show_the_guides(monkeypatch):
     assert 'popovertarget="shot1"' in admin and '<div popover id="shot1"' in admin and "<p><button" not in admin  # pictures open full size
     assert c.get("/help/developers").status_code == 404 and c.get("/help/..%2Fsecrets").status_code == 404
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: True)
-    assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin", "jitsi"))
+    assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin"))
     found = c.get("/search", params={"q": "passphrase", "kind": "help"}).text  # the search finds guide sections
     assert 'href="/help/server-admin#backups"' in found and 'id="backups"' in c.get("/help/server-admin").text
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: False)

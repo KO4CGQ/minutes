@@ -86,6 +86,19 @@ class Api:
         separate: `admin_mode(request)`."""
         return self._club().may(id, f"{self._p.name}.{perm}")
 
+    def roles(self, id: str) -> list[str]:
+        """The role keys the member holds (Site → Roles; admin isn't one)."""
+        return self._club().roles(id)
+
+    def role_labels(self) -> dict[str, str]:
+        """Every role's key and name, for a settings page that picks roles."""
+        return {k: r["name"] for k, r in self._club().role_table().items()}
+
+    def base_url(self, request) -> str:
+        """The address members reach the app at (https://host), for links a page shows."""
+        from .web import base_url
+        return base_url(request)
+
     def email(self, id: str) -> str | None:
         if not self._p.needs_email:
             raise PermissionError(f"{self._p.name} didn't declare NEEDS = {{'email'}}")
@@ -223,6 +236,22 @@ def failed(path: str) -> bool:
     return path.startswith("/") and path.split("/")[1] in PROBLEMS.keys() - APP_PREFIXES
 
 
+ORIGIN = re.compile(r"https://[A-Za-z0-9.-]{1,253}(:\d{1,5})?")
+
+
+def form_action(path: str, club) -> list[str]:
+    """Origins for the CSP form-action on `path`: what a plugin's form_action(api) names, only on that plugin's own
+    addresses (/<NAME> and below) while it's on, and only if each is https://host[:port]."""
+    p = owner(path)
+    if not p or not club.plugin_on(p.name) or not hasattr(p.mod, "form_action"):
+        return []
+    try:
+        return [o for o in p.mod.form_action(p.api) if isinstance(o, str) and ORIGIN.fullmatch(o)]
+    except Exception:
+        log.exception("plugin %s: form_action failed", p.name)
+        return []
+
+
 def is_admin_path(p: Plugin, path: str) -> bool:
     return path == f"/{p.name}/admin" or path.startswith(f"/{p.name}/admin/")
 
@@ -234,9 +263,20 @@ def is_public(path: str) -> bool:
 
 
 def nav(club, mid: str, admin: bool) -> list[tuple[str, str]]:  # (address, label), as the menu takes them
-    """Menu links of the plugins that are on, for the members whose permission each needs (admin mode: all)."""
-    return [(f"/{p.name}{path}", label) for p in LOADED.values() if club.plugin_on(p.name)
+    """Menu links of the plugins that are on and ready (nav_ready; admin mode: always, to finish setting one up), for
+    the members whose permission each needs (admin mode: all)."""
+    return [(f"/{p.name}{path}", label) for p in LOADED.values() if club.plugin_on(p.name) and (admin or _ready(p))
             for label, path, perm in p.nav if perm is None or admin or club.may(mid, f"{p.name}.{perm}")]
+
+
+def _ready(p: Plugin) -> bool:
+    if not hasattr(p.mod, "nav_ready"):
+        return True
+    try:
+        return bool(p.mod.nav_ready(p.api))
+    except Exception:
+        log.exception("plugin %s: nav_ready failed", p.name)
+        return False
 
 
 def calendar_links(club) -> list[tuple[str, str]]:

@@ -15,6 +15,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - **Dues by the week, the month or the year:** the Treasurer sets the period with the amount (a yearly club picks the day dues fall due), and "behind after" counts in that period. Meetings, cancellations and schedule changes never change what anyone owes. A weekly club's dues stay the same.
 
 ### Changed
+- **Video meetings (Jitsi) are now a plugin**, available to the app's supporters: the app no longer has them built in. A club that used them installs the plugin (server admin guide → Video meetings); the update moves its video settings, rooms and secret into it and turns it on, and existing room links (`/meet/…`) keep working. Then remove the `jitsi:` block and `modules: jitsi` from club.yaml.
 - In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.
 - In the leader console, members' comments on a business item show their first two lines, formatted and ending in …, with **Show more** for the rest.
 - The leader console's **Submit minutes** buttons show only once the finished minutes are on screen, so they're never submitted unseen.

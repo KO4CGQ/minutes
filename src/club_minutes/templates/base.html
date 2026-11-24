@@ -55,7 +55,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
     {# search only below 820px, where the bar has no room for it #}
     <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business{{ ', chow' if module('chow') }} and calendar"></form>
     {% for href, label in PAGES if href != '/chow' or module('chow') %}{% if href == '/business' %}<div class="sep"></div>{% endif %}{{ navlink(href, label) }}{% endfor %}
-    {% if club.may(me.id, 'treasurer') or admin_until or keeps_fund %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}{% if show_spending %}{{ navlink('/spending', 'Spending') }}{% endif %}{% if video_ready() %}{{ navlink('/meet', 'Video meeting') }}{% endif %}{% for href, label in plugin_nav %}{{ navlink(href, label) }}{% endfor %}
+    {% if club.may(me.id, 'treasurer') or admin_until or keeps_fund %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}{% if show_spending %}{{ navlink('/spending', 'Spending') }}{% endif %}{% for href, label in plugin_nav %}{{ navlink(href, label) }}{% endfor %}
     {% if show_support %}<a class="kofi" href="https://ko-fi.com/jflattery" aria-label="Support Club Minutes on Ko-fi (opens in a new tab)">{{ icon('si:kofi') }} Support Club Minutes</a>{% endif %}
   </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">{% if acting_as %}Acting as <b>{{ club.name(viewing_as) }}</b>: changes you make are made as them and logged; emails reach only you.{% else %}Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.{% endif %}

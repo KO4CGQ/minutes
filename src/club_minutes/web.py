@@ -58,7 +58,6 @@ from . import (
     corrections,
     events,
     limits,
-    meet,
     membership,
     offices,
     pictures,
@@ -198,7 +197,6 @@ def _assets_stamp() -> str:
 templates.env.globals.update(club=archive.club, VERSION=version("club-minutes"), PREVIEW=PREVIEW, STAGE=STAGE,
                              ASSETS=_assets_stamp(),
                              module=lambda name: archive.club.has(name),  # an optional part turned on (club.yaml modules:)
-                             video_ready=lambda: bool(meet.settings(archive.club)),  # Jitsi on, set up, and its secret set
                              cite=lambda rule: archive.club.cite(rule),
                              email_ready=authmod.email_ready,  # a new server, before its SMTP settings: links go to its log
                              cert=lambda: archive.club.certificate,
@@ -317,8 +315,6 @@ async def require_login(request: Request, call_next):
             _admin_log(request, plugin_admin=f"{request.method} {path}"[:200])
     if request.state.member or path.startswith(PUBLIC_PATHS) or plugins.is_public(path):  # every other plugin path needs sign-in
         return await call_next(request)
-    if request.method == "GET" and path.startswith("/meet/") and (g := meet.guest_room(archive.club, path[6:].lower())):
-        return page(request, "meet.html", guest=g, domain=meet.settings(archive.club)["domain"])  # sign in, or join as a guest
     if request.method == "GET" and not path.startswith("/api/"):
         target = path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(f"/login?next={quote(target)}", status_code=303)
@@ -359,8 +355,8 @@ async def security_headers(request: Request, call_next):
     h = response.headers
     # scripts only from the app's own files or a <script> block this page was given the nonce for: injected markup
     # (an <img onerror=...>, a <script> in typed text) doesn't run. Inline style= attributes are still allowed.
-    # form-action holds for every redirect after a form, so /meet's "Open it" may end on the club's Jitsi server
-    to = f" https://{j['domain']}" if request.url.path == "/meet" and (j := meet.settings(archive.club)) else ""
+    # form-action holds for every redirect after a form, so a plugin may name the origins its own pages' forms end on
+    to = "".join(f" {o}" for o in plugins.form_action(request.url.path, archive.club))
     h.setdefault("Content-Security-Policy", f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
                  f"img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'{to}")
     h.setdefault("X-Content-Type-Options", "nosniff")
@@ -1459,74 +1455,6 @@ def admin_confirm_link(request: Request, t: str = "", next: str = "/", mid: str 
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
-# ---------------- Jitsi Meet sign-in (an optional module; meet.py) ----------------
-
-def _room_roles(room: dict) -> str:
-    """The names of the roles a room lets straight in: "Board and Officer"."""
-    t = archive.club.role_table()
-    names = [t[k]["name"] for k in room.get("roles") or [] if k in t] or ["nobody"]
-    return ", ".join(names[:-1]) + (" and " if len(names) > 1 else "") + names[-1]
-
-
-@app.get("/meet", response_class=HTMLResponse)
-def meet_home(request: Request, error: str = "", mid: str = Depends(real_me)):
-    """The club's video rooms this member may join (the Jitsi server's bare address comes here, so nobody starts a
-    random room). One room too: its card, so Join always opens a new tab."""
-    s = meet.settings(archive.club)
-    if not s:
-        raise HTTPException(404)
-    rooms = [r | {"for": _room_roles(r) if r["roles"] else "", "inside": admin_mode(request) or meet.lets_in(archive.club, mid, r)}
-             for r in meet.rooms(archive.club)]
-    rooms, adhoc = [r for r in rooms if r["inside"] or r["others"] == "knock"], meet.adhoc(archive.club)
-    return page(request, "meet.html", rooms=rooms, adhoc=adhoc, mine=meet.mine(mid) if adhoc else [], base=base_url(request), error=error)
-
-
-@app.post("/meet")
-async def meet_open(request: Request, mid: str = Depends(real_me)):
-    """Open a room of one's own (while the admin allows them): its opener hosts it for a day."""
-    form = await request.form()
-    name = " ".join((form.get("name") or "").split())
-    room = meet.slug(name)
-    if not meet.settings(archive.club) or not meet.adhoc(archive.club):
-        raise HTTPException(404)
-    if not meet.ROOM.match(room) or room in {r["slug"] for r in meet.rooms(archive.club)}:
-        return RedirectResponse("/meet?error=" + quote("Give the room a name of letters and numbers, not one of the club's rooms."), status_code=303)
-    if not request.state.viewing_as:
-        try:
-            meet.open_room(room, mid, name)
-        except ValueError as e:
-            return RedirectResponse("/meet?error=" + quote(str(e)), status_code=303)
-    return RedirectResponse(f"/meet/{room}", status_code=303)
-
-
-@app.get("/meet/{room}")
-def meet_room(request: Request, room: str, mid: str = Depends(real_me)):
-    """Signed-in members only (others get the sign-in page, then come back): a token for this room, minutes long,
-    hosting if their roles allow it (or they opened this room of their own), with the room's rules for guests, and on
-    to the Jitsi server. A room that's neither the club's nor allowed as one of their own: 404. Never while viewing
-    the app as someone else."""
-    s, room = meet.settings(archive.club), room.lower()  # Jitsi's room names are lower case: NET is net, with net's rules
-    if not s or not meet.ROOM.match(room):
-        raise HTTPException(404)
-    named = next((r for r in meet.rooms(archive.club) if r["slug"] == room), None)
-    room_rules = named or meet.adhoc(archive.club)
-    if room_rules is None:
-        raise HTTPException(404)
-    if request.state.viewing_as:
-        raise HTTPException(403, "Stop viewing the app as another member first: you'd join as them.")
-    inside = admin_mode(request) or meet.lets_in(archive.club, mid, room_rules)
-    if not inside and room_rules.get("others") == "no":
-        raise HTTPException(403, f"{room_rules['name']} is for {_room_roles(room_rules)} only.")
-    # a host must also be let straight in: a meeting leader who isn't on the board knocks at the board's room
-    host = inside and (archive.club.may(mid, "meet_host") or admin_mode(request) or (not named and meet.opener(room) == mid))
-    jwt = meet.token(archive.club, mid, room, host, room_rules=room_rules, straight_in=inside)
-    if not named:
-        meet.touch(room)
-    r = RedirectResponse(f"https://{s['domain']}/{room}?jwt={jwt}{meet.p2p_off(room_rules)}", status_code=303)
-    r.headers["Referrer-Policy"] = "no-referrer"  # the token is in the address: don't hand it on
-    return r
-
-
 # ---------------- recover admin access (officers; recovery.py) ----------------
 
 _recover_errors: dict[str, str] = {}  # session token hash -> the app's refusal, shown once after the redirect
@@ -2593,7 +2521,7 @@ def dependencies() -> list[dict]:
     return sorted(out, key=lambda d: d["name"].lower())
 
 
-GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin", "jitsi": "Video meetings"}  # docs/<name>.md; not developers.md
+GUIDES = {"members": "Members", "officers": "Officers", "server-admin": "Server admin"}  # docs/<name>.md; not developers.md
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 # GitHub's alert syntax ("> [!TIP]" on a blockquote's first line), so a box looks the same here and on GitHub
 CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Important", "WARNING": "⚠️ Warning", "CAUTION": "🛑 Caution"}
@@ -2601,9 +2529,9 @@ CALLOUTS = {"NOTE": "ℹ️ Note", "TIP": "💡 Tip", "IMPORTANT": "❗ Importan
 
 def guides_for(request: Request) -> dict:
     """The guides offered to this member: everyone gets the members guide, leaders, officers and admins the
-    officers guide (it has admins' setup steps too), admins the server admin and video meetings guides."""
+    officers guide (it has admins' setup steps too), admins the server admin guide."""
     mid, admin = request.state.member, archive.club.is_admin(real_me(request))
-    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or moderates(request), "server-admin": admin, "jitsi": admin}
+    show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or moderates(request), "server-admin": admin}
     return {g: t for g, t in GUIDES.items() if show[g]} | plugins.guides(archive.club)
 
 
@@ -3002,12 +2930,12 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
 SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("bylaws", "Bylaws"),
-             ("dates", "Dates"), ("privacy", "Privacy"), ("video", "Video"))
+             ("dates", "Dates"), ("privacy", "Privacy"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
 FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
-                ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"),
+                ("club", "supports_app"),
                 ("club", "pictures_per_day"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone", "names", "ham")
@@ -3018,18 +2946,14 @@ DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B
 @app.get("/admin/site", response_class=HTMLResponse)
 @app.get("/admin/site/{tab}", response_class=HTMLResponse)
 def site_page(request: Request, tab: str = "look", error: str = "", note: str = "", mid: str = Depends(real_me)):
-    if not archive.club.is_admin(mid) or tab not in dict(_site_tabs()):
+    if not archive.club.is_admin(mid) or tab not in dict(SITE_TABS):
         raise HTTPException(404)
     if not admin_mode(request):
         return RedirectResponse(f"/admin/confirm?next=/admin/site/{tab}", status_code=303)
     club = archive.club
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
-    return page(request, "site.html", tab=tab, tabs=_site_tabs(), error=error, note=note,
-                video_rooms=meet.rooms(club), video_adhoc=meet.adhoc(club), video_leaves=meet.LEAVES, video_others=meet.OTHERS,
-                video_roles={k: r["name"] for k, r in club.role_table().items()},
-                jitsi_secret=len(meet.secret()) >= 32, jitsi_source=(src := meet.secret_source()) and src[0],
-                jitsi_made=dt.date.fromtimestamp(src[1]) if src and src[0] == "app" else None, jitsi_domain=meet._setting(club, "domain") or "", jitsi_app_id=meet._setting(club, "app_id") or "",
+    return page(request, "site.html", tab=tab, tabs=SITE_TABS, error=error, note=note,
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -3071,7 +2995,7 @@ async def site_dates(request: Request):
     return RedirectResponse("/admin/site/dates?note=" + quote(f"Saved: dates now read like {show_date(dt.date.today(), 'weekday')}."), status_code=303)
 
 
-OFF = {("modules", "jitsi"): False, ("jitsi", "domain"): "", ("jitsi", "app_id"): "", ("modules", "chow"): False, ("club", "public_calendars"): [], ("club", "supports_app"): False, ("calendar", "holidays"): "",
+OFF = {("modules", "chow"): False, ("club", "public_calendars"): [], ("club", "supports_app"): False, ("calendar", "holidays"): "",
        ("calendar", "extra_holidays"): [], ("calendar", "elections"): "", ("bylaws", "refs"): {}, ("bylaws", "arrears_note"): "", ("treasurer", "certificate"): {},
        ("club", "pictures_per_day"): pictures.PER_DAY}
 
@@ -3126,17 +3050,10 @@ async def site_features(request: Request):
             hol = next((code for code, name in regs["holidays"].items() if typed.lower() in (code, name.lower())), typed.lower())  # a name or a code
             if hol and hol not in regs["holidays"] or ele and ele not in regs["elections"]:
                 raise ValueError("Pick a region from the list.")
-            domain, app_id = (" ".join((form.get(k) or "").split()).strip("/") for k in ("jitsi_domain", "jitsi_app_id"))
-            if domain.startswith(("https://", "http://")):
-                domain = domain.split("://", 1)[1].strip("/")
-            if form.get("jitsi") and not (domain and app_id):
-                raise ValueError("Video meetings: give the Jitsi server's address and the app ID, or untick it.")
-            if domain and not meet.DOMAIN.match(domain) or app_id and not meet.APP_ID.match(app_id):
-                raise ValueError("Video meetings: the address is the Jitsi server's name (meet.example.org), the app ID letters, numbers, dots, - and _.")
             per_day = num(form.get("pictures_per_day")) if form.get("pictures_per_day") else pictures.per_day(club)
             if per_day is None or not 1 <= per_day <= pictures.MAX_PER_DAY:
                 raise ValueError(f"Pictures: a member can add 1 to {pictures.MAX_PER_DAY} a day.")
-            values = _keep_changes(club, {("club", "pictures_per_day"): per_day, ("modules", "jitsi"): bool(form.get("jitsi")), ("jitsi", "domain"): domain, ("jitsi", "app_id"): app_id,
+            values = _keep_changes(club, {("club", "pictures_per_day"): per_day,
                                           ("modules", "chow"): bool(form.get("chow")), ("club", "supports_app"): bool(form.get("supports_app")),
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
@@ -3149,76 +3066,6 @@ async def site_features(request: Request):
         return RedirectResponse("/admin/site/features?error=" + quote("The club's own holidays: each needs a name, a month and a day." if "extra_holidays" in str(e) else str(e)), status_code=303)
     _admin_log(request, site_features="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
     return RedirectResponse("/admin/site/features?note=" + quote("Saved."), status_code=303)
-
-
-def _site_tabs():
-    return [t for t in SITE_TABS if t[0] != "video" or archive.club.has("jitsi")]
-
-
-def _video_rules(form, k: str) -> dict:
-    """One room's (or the ad-hoc rooms') rules for guests, from the Video tab's ticks: k is the row's suffix."""
-    return {"guests": bool(form.get(f"guests{k}"))} | {f"guest_{g}": bool(form.get(f"{g}{k}")) for g in meet.GUEST} | {
-        "last_host_leaves": form.get(f"leaves{k}") if form.get(f"leaves{k}") in meet.LEAVES else "stay", "p2p": form.get(f"p2p{k}") == "direct"}
-
-
-@app.post("/admin/site/video")
-async def site_video(request: Request):
-    """Video tab: the named rooms and their rules for guests, and whether members may open rooms of their own."""
-    _mid, form, club = _site_admin(request), await request.form(), archive.club
-    if not club.has("jitsi"):
-        raise HTTPException(404)
-    try:
-        if form.get("back"):
-            values = {("jitsi", "rooms"): None, ("jitsi", "adhoc"): None}
-        elif gone := form.get("delete"):  # one room's Delete: that room alone, the rest as saved
-            rooms = [r for r in meet.rooms(club) if r["slug"] != gone]
-            if len(rooms) == len(meet.rooms(club)):
-                raise ValueError("That room was already gone.")
-            if not rooms:
-                raise ValueError("Keep at least one room: it's where Video meeting in the menu goes.")
-            values = {("jitsi", "rooms"): rooms}
-        else:
-            rooms = []
-            for i in range(min(num(form.get("rows")) or 0, 30)):
-                name = " ".join((form.get(f"name{i}") or "").split())[:60]
-                if not name:  # a new row left empty
-                    continue
-                slug = (form.get(f"slug{i}") or "").strip().lower() or meet.slug(name)
-                if not meet.ROOM.match(slug):
-                    raise ValueError(f"{name}: its address is letters, numbers, - and _ only.")
-                if slug in {r["slug"] for r in rooms}:
-                    raise ValueError(f"Two rooms have the address {slug}: change one.")
-                known = club.role_table()
-                # a role removed since keeps meaning "nobody" (the form can't show it): never everyone after a save
-                gone = [k for r in meet.rooms(club) if r["slug"] == slug for k in r["roles"] if k not in known]
-                rooms.append({"slug": slug, "name": name, "about": " ".join((form.get(f"about{i}") or "").split())[:300], "roles": [k for k in form.getlist(f"roles{i}") if k in known] + gone,
-                              "others": form.get(f"others{i}") if form.get(f"others{i}") in meet.OTHERS else "knock"} | _video_rules(form, i))
-            if not rooms:
-                raise ValueError("Keep at least one room: it's where Video meeting in the menu goes.")
-            values = {("jitsi", "rooms"): rooms, ("jitsi", "adhoc"): {"on": bool(form.get("adhoc"))} | _video_rules(form, "_a")}
-        club.save_site_settings(values)
-    except ValueError as e:
-        return RedirectResponse("/admin/site/video?error=" + quote(str(e)), status_code=303)
-    short = lambda r: (f"straight in: {', '.join(r['roles'])}, others {r['others']}; " if r.get("roles") else "") + ("guests" if r["guests"] else "members only") + "".join(f" {g}" for g in meet.GUEST if r[f"guest_{g}"]) + f", last host: {r['last_host_leaves']}" + (", peer-to-peer" if r["p2p"] else "")
-    if form.get("delete"):
-        _admin_log(request, site_video=f"deleted {form.get('delete')}")
-        return RedirectResponse("/admin/site/video?note=" + quote("Room deleted."), status_code=303)
-    _admin_log(request, site_video="club.yaml" if form.get("back") else "; ".join(f"{r['slug']} ({short(r)})" for r in rooms)
-               + (f"; own rooms ({short(values[('jitsi', 'adhoc')])})" if not form.get("back") and form.get("adhoc") else ""))
-    return RedirectResponse("/admin/site/video?note=" + quote("Saved. Meetings already going on keep the rules they started with."), status_code=303)
-
-
-@app.post("/admin/site/jitsi-secret", response_class=HTMLResponse)
-def site_jitsi_secret(request: Request):
-    """Make a new secret for the Jitsi server and show it once (never again: the card then only says it's set)."""
-    _site_admin(request)
-    if meet.secret_source() and meet.secret_source()[0] == "env":
-        return RedirectResponse("/admin/site/features?error=" + quote("The server's env file sets the secret: change it there."), status_code=303)
-    value = meet.new_secret()
-    _admin_log(request, jitsi_secret="made a new one")
-    r = page(request, "jitsi_secret.html", value=value, domain=meet._setting(archive.club, "domain") or "", app_id=meet._setting(archive.club, "app_id") or "club-minutes")
-    r.headers["Cache-Control"] = "no-store"  # shown once: never kept by the browser
-    return r
 
 
 @app.post("/admin/site/bylaws")
@@ -3320,8 +3167,8 @@ def _roles_stamp() -> str:
 
 
 def _shown_perms(club) -> dict[str, str]:
-    """The permissions Site → Roles shows: a module's only while it's on (Jitsi's meet_host), a plugin's (name.key) only while it's on."""
-    return {p: label for p, label in PERMISSIONS.items() if (p != "meet_host" or club.has("jitsi")) and ("." not in p or club.plugin_on(p.split(".")[0]))}
+    """The permissions Site → Roles shows: a plugin's (name.key) only while it's on."""
+    return {p: label for p, label in PERMISSIONS.items() if "." not in p or club.plugin_on(p.split(".")[0])}
 
 
 def _role_rows(club) -> list[dict]:
@@ -3768,8 +3615,7 @@ def _calendar_editor(request: Request) -> None:
 def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
     r = page(request, "calendar_edit.html", f=f, id=id, d=d, cals=events.CALS, error=error, repeats=repeats, scopes=events.SCOPES,
              repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()), zones=events.ZONES, club_tz=_club_tz(),
-             plugin_links=plugins.calendar_links(archive.club),
-             video_rooms=[(f"{base_url(request)}/meet/{x['slug']}", x["name"], x["slug"]) for x in meet.rooms(archive.club)] if meet.settings(archive.club) else [])
+             plugin_links=[(label, base_url(request) + url if url.startswith("/") else url) for label, url in plugins.calendar_links(archive.club)])
     r.status_code = status
     return r
 

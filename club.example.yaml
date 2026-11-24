@@ -99,28 +99,12 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #         Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.
 # modules:
 #   chow: true
-#   jitsi: true     # members join the club's Jitsi Meet server signed in from here (with the jitsi: block below)
 
 # Plugins (experimental) installed on the server, each off until turned on here or on Site → Features (server admin guide → Plugins):
 # plugins:
 #   hello: true     # the plugin's NAME
 # plugin_hold:      # wait for this plugin before updating the app (a release for the new version), instead of turning it off
 #   hello: true
-
-# Jitsi Meet sign-in (only with modules: jitsi). The secret is CLUB_MINUTES_JITSI_SECRET in /etc/club-minutes/env (32+ characters), the
-# same one the Jitsi server's Prosody has (server admin guide → Video meetings).
-# jitsi:
-#   domain: meet.example.org   # the club's Jitsi server
-#   app_id: club-minutes       # Prosody's app_id
-#   room: club                 # the club's one room, until rooms: (or Site → Video) lists them
-#   rooms:                     # the club's rooms; each guest_ setting: true = guests may, false = a host must allow it
-#     - {slug: club, name: Club meeting, about: "The weekly meeting, Tuesdays at 7 PM",   # about: shown under its name
-#        guests: true, guest_mic: false, guest_camera: false, guest_screen: false,
-#        guest_chat: true, last_host_leaves: end, p2p: false}   # last_host_leaves: stay, guests (dropped) or end;
-#                                                  # p2p: true lets calls of two connect directly (guests' limits then don't hold)
-#     - {slug: board, name: Board, guests: false, roles: [board], others: knock}   # roles: who comes straight in
-#                                                  # (role keys; none: every member); others: knock or no
-#   adhoc: {on: false}         # members may open rooms of their own (with the same settings as a room, for all of them)
 
 # Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer). Also on Admin → Site → Offices.
 # roster_keepers: [Secretary, Treasurer]

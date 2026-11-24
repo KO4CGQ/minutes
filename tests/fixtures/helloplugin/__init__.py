@@ -48,7 +48,16 @@ def note(text: str):
 
 
 def calendar_links(api):
-    return [("Hello room", "https://example.org/hello")]
+    return [("Hello room", "https://example.org/hello"), ("Hello page", "/hello/")]  # a path: the app adds its own address
+
+
+def form_action(api):
+    return ["https://forms.example.org:8443", "http://plain.example.org", "https://bad.example.org; script-src *", 5]
+
+
+@router.get("/roles")
+def roles(request: Request):
+    return {"roles": api.roles(api.who(request)), "labels": api.role_labels(), "base": api.base_url(request)}
 
 
 @router.post("/admin/secret")
@@ -56,3 +65,10 @@ def new_secret(request: Request):
     if again := api.fresh(request, "/hello/admin"):
         return again
     return {"secret": "new"}
+
+
+READY = [True]  # tests flip it
+
+
+def nav_ready(api):
+    return READY[0]

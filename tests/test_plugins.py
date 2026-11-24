@@ -126,7 +126,8 @@ def test_calendar_buttons_show_only_while_the_plugin_is_on(env):
     admin = client(a, "n0admn", admin=True)
     assert "Hello room" not in admin.get("/calendar/edit").text
     club.save_site_settings({("plugins", "hello"): True})
-    assert 'data-url="https://example.org/hello"' in admin.get("/calendar/edit").text
+    page = admin.get("/calendar/edit").text
+    assert 'data-url="https://example.org/hello"' in page and 'data-url="http://testserver/hello/"' in page  # a path gets the app's address
 
 
 def test_plugin_admin_changes_are_logged_and_a_stale_confirmation_is_asked_again(env, monkeypatch):
@@ -156,3 +157,30 @@ def test_a_damaged_settings_file_never_reads_as_hold(env, monkeypatch):
     monkeypatch.setenv("CLUB_MINUTES_CONFIG", str(FIX / "test-club.yaml"))
     (clubmod.DATA / "site-settings.json").write_text("[1]")
     assert plugins.check() == 2
+
+
+def test_roles_labels_and_form_action_only_on_the_plugins_own_addresses(env):
+    club, a, _ = env
+    assert "form-action 'self';" in client(a, "m1").get("/hello/roles").headers["content-security-policy"] + ";"  # off: nothing added
+    club.save_site_settings({("plugins", "hello"): True})
+    t = club.role_table()
+    t["officer"]["members"] = ["m1"]
+    club.save_roles(t)
+    d = client(a, "m1").get("/hello/roles").json()
+    assert d["roles"] == ["officer"] and d["labels"]["officer"] == "Officer" and d["base"].startswith("http")
+    assert "form-action 'self' https://forms.example.org:8443;" in client(a, "m1").get("/hello/").headers["content-security-policy"] + ";"  # only the valid origin
+    assert "form-action 'self';" in client(a, "m1").get("/").headers["content-security-policy"] + ";"
+    assert "form-action 'self';" in client(a, "m1").get("/helloworld").headers["content-security-policy"] + ";"  # another address that starts the same
+
+
+def test_nav_ready_false_hides_the_menu_links_except_in_admin_mode(env):
+    import helloplugin
+    club, a, _ = env
+    club.save_site_settings({("plugins", "hello"): True})
+    helloplugin.READY[0] = False
+    try:
+        assert 'href="/hello/"' not in client(a, "m1").get("/").text
+        assert 'href="/hello/"' in client(a, "n0admn", admin=True).get("/").text  # to finish setting it up
+        assert client(a, "m1").get("/hello/").status_code == 200  # the page itself is still there
+    finally:
+        helloplugin.READY[0] = True

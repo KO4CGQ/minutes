@@ -42,9 +42,9 @@ Published minutes don't change when the club's settings or roster change (member
 ![Business: the club's open items](screenshots/business.png)
 
 ## 🎥 Video meeting
-If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists the club's rooms you can join. Each has a **Join** button that opens the meeting in a new tab, already signed in as you: no other password. Joining sends the video server your name and callsign.
+If the club has video meetings (its own Jitsi Meet server and the video meetings plugin), **Video meeting** in the menu lists the club's rooms you can join. Each has a **Join** button that opens the meeting in a new tab, already signed in as you: no other password. Joining sends the video server your name and callsign.
 
-- **Who hosts:** officers and meeting leaders.
+- **Who hosts:** the members whose roles allow it (officers and meeting leaders, usually).
 - **Rooms for certain members** (the board, say): the page says who. Other members wait in the lobby until a host lets them in, or don't see the room at all.
 - **Guests:** send them a room's address, shown on its card (the club calendar links to it too). Anyone not signed in can sign in there or join as a guest; guests wait in the lobby until a host lets them in, even if they come before anyone else. Some rooms are for members only.
 - **What guests may do:** each room says. If they must ask to unmute, turn their camera on or share their screen, a host allows it in the meeting as usual.

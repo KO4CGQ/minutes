@@ -147,18 +147,6 @@
 <div class="card sitesec"><h2>Supporting Club Minutes {{ origin('club.supports_app') }}</h2>
 <label class="check"><input type="checkbox" name="supports_app" value="1"{{ ' checked' if club.info.get('supports_app') }}> <span><b>The club supports Club Minutes</b><br><span class="muted small">This club, {{ club.label }}, gives toward the maintenance and development of this app (<a href="https://github.com/sponsors/jflattery">GitHub Sponsors</a> or <a href="https://ko-fi.com/jflattery">Ko-fi</a>): the menu's Support Club Minutes link goes away for everyone, and the About page thanks the club instead.</span></span></label>
 </div>
-<div class="card sitesec"><h2>Video meetings {{ origin('modules.jitsi') }}</h2>
-<label class="check"><input type="checkbox" name="jitsi" value="1"{{ ' checked' if module('jitsi') }}> <span><b>The club's own Jitsi Meet server</b><br><span class="muted small">Members join it signed in from here (Video meeting in the menu); guests knock and a host lets them in. The rooms and their rules are on the <a href="/admin/site/video">Video</a> tab once it's on. Setting up the Jitsi server: the <a href="/help/jitsi">video meetings guide</a>.</span></span></label>
-<div class="fmtgrid">
-<label for="f-jd">The Jitsi server</label><input id="f-jd" name="jitsi_domain" value="{{ jitsi_domain }}" maxlength="260" placeholder="meet.example.org" autocomplete="off" spellcheck="false">{{ origin('jitsi.domain') }}
-<label for="f-ja">App ID</label><input id="f-ja" name="jitsi_app_id" value="{{ jitsi_app_id }}" maxlength="64" placeholder="club-minutes" autocomplete="off" spellcheck="false">{{ origin('jitsi.app_id') }}
-</div>
-<p class="hint">The address and app ID must match the Jitsi server's own settings. The app and the Jitsi server also share a <b>secret</b>: a long password only they know, which proves a member's sign-in came from this app.
-{% if jitsi_source == 'env' %}It's set in this server's env file, so it's changed there, not here.
-{% elif jitsi_source %}It was made here {{ jitsi_made|listdate }}, and isn't shown again. If the Jitsi server lost it, make a new one and set that in its configuration: the old one then stops working.
-{% else %}<b>Not working yet:</b> there's no secret. Make one, then set it in the Jitsi server's configuration. Until both have it, Video meeting stays hidden.{% endif %}</p>
-{% if jitsi_source != 'env' %}<p><button class="btn small{{ ' ghost' if jitsi_source }}" form="jitsi-secret"{% if jitsi_source %} data-confirm="Make a new secret? Video meetings stop working until the Jitsi server has the new one."{% endif %}>{{ 'Make a new secret' if jitsi_source else 'Make a secret' }}</button></p>{% endif %}
-</div>
 {% if plugin_rows %}<div class="card sitesec"><h2>Plugins (experimental)</h2>
 <p class="hint">Installed add-ons. Each is off until ticked; off, none of its pages, menu links, permissions or guide show.</p>
 {% for r in plugin_rows %}<label class="check"><input type="checkbox" name="plugin_{{ r.name }}" value="1"{{ ' checked' if r.on }}> <span><b>{{ r.title }}</b><br><span class="muted small">{{ r.description }}{% if r.needs_email %} It needs members' email addresses.{% endif %}{% if r.on and r.admin %} <a href="{{ r.admin }}">Its settings</a>.{% endif %}</span>{% if r.problem %}<br><span class="small"><b>Not running:</b> {{ r.problem }}</span>{% endif %}</span></label>
@@ -208,8 +196,7 @@
 </div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
-{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'modules.jitsi', 'jitsi.domain', 'jitsi.app_id', 'club.supports_app', 'club.pictures_per_day'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, video meetings, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
-{% if tab == 'features' %}<form id="jitsi-secret" method="post" action="/admin/site/jitsi-secret"></form>{% endif %}
+{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'club.supports_app', 'club.pictures_per_day'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'bylaws' %}
 <p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/bylaws" class="profile sitewide">
@@ -233,52 +220,6 @@
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if here_keys|select('in', ['bylaws.refs', 'bylaws.arrears_note', 'treasurer.certificate'])|list %}<form method="post" action="/admin/site/bylaws" data-confirm="Go back to club.yaml's bylaws references, arrears note and certificate?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
-{% elif tab == 'video' %}
-<p class="muted">The rooms on the club's Jitsi Meet server. Changes go in the admin log, win over club.yaml, and apply from each room's next meeting.</p>
-{% macro guest_rules(k, r) %}
-<label class="check small"><input type="checkbox" name="guests{{ k }}" value="1"{{ ' checked' if r.guests }}> Guests may join: they knock, and a host lets them in</label>
-<fieldset><legend class="small"><b>Guests may, without asking a host</b></legend><div class="guestgrid">
-{% for g, label in (('mic', 'Unmute'), ('camera', 'Turn their camera on'), ('screen', 'Share their screen'), ('chat', 'Chat')) %}<label class="check small"><input type="checkbox" name="{{ g }}{{ k }}" value="1"{{ ' checked' if r['guest_' ~ g] }}> {{ label }}</label>{% endfor %}
-</div></fieldset>
-<label class="small">While only two are in the meeting <select name="p2p{{ k }}">
-  <option value="server"{{ ' selected' if not r.p2p }}>Still go through the club's server</option>
-  <option value="direct"{{ ' selected' if r.p2p }}>Connect the two directly</option></select></label>
-<label class="small">When the last host leaves <select name="leaves{{ k }}">{% for v, label in video_leaves.items() %}<option value="{{ v }}"{{ ' selected' if r.last_host_leaves == v }}>{{ label }}</option>{% endfor %}</select></label>
-{% endmacro %}
-<form method="post" action="/admin/site/video" class="profile sitevideo">
-<input type="hidden" name="rows" value="{{ video_rooms|length }}">
-<div class="card sitesec"><h2>Rooms {{ origin('jitsi.rooms') }}</h2>
-<p class="hint">Listed on Video meeting. In a meeting, a host can still let one guest unmute, use their camera or share their screen (chat is for the whole room). The last host leaving counts after a minute, in case they come back. <b>Two in a meeting:</b> connecting them directly is lighter on the server, but a guest alone with a host could then get around the guest limits.</p>
-{% macro room_row(i, r) %}
-<details class="role"{{ ' open' if not r.name }}><summary><span class="sr">Room: </span><b>{{ r.name or 'A new room' }}</b>{% if r.slug %}<br><span class="muted small">/{{ r.slug }}</span>{% endif %}</summary>
-  <div class="pair"><label class="small">Name <input name="name{{ i }}" value="{{ r.name }}" maxlength="60" placeholder="e.g. Net night"></label>
-  <label class="small">Address <input name="slug{{ i }}" value="{{ r.slug }}" maxlength="64" pattern="[A-Za-z0-9_\-]{1,64}" title="Letters, numbers, dashes and underscores" placeholder="made from the name"></label></div>
-  <label class="small">About it <span class="muted">(shown under its name on Video meeting)</span> <textarea name="about{{ i }}" rows="2" maxlength="300" placeholder="e.g. The weekly club meeting, Tuesdays at 7 PM">{{ r.about or '' }}</textarea></label>
-  <fieldset><legend class="small"><b>Members who come straight in</b></legend>
-  <p class="hint">Every member, or only the roles picked. They host if they also have "host video meetings" (Roles).</p>
-  <details class="multi"><summary data-none="Every member">{% for key in r.roles or [] if key in video_roles %}<span class="chip">{{ video_roles[key] }}</span>{% else %}Every member{% endfor %}</summary><div class="multi-list">
-    {% if video_roles|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter roles…" aria-label="Filter roles" hidden>{% endif %}
-    <div class="multi-opts">{% for key, label in video_roles.items() %}<label class="check"><input type="checkbox" name="roles{{ i }}" value="{{ key }}" data-label="{{ label }}"{{ ' checked' if key in (r.roles or []) }}> {{ label }}</label>{% endfor %}</div>
-  </div></details>
-  <label class="small">Other members <select name="others{{ i }}">{% for v, label in video_others.items() %}<option value="{{ v }}"{{ ' selected' if (r.others or 'knock') == v }}>{{ label }}</option>{% endfor %}</select></label>
-  </fieldset>
-  {{ guest_rules(i, r) }}
-  <p>{% if r.slug %}<button class="btn small ghost" form="video-delete" name="delete" value="{{ r.slug }}" data-confirm="Delete {{ r.name }}? Changes on this page you haven't saved are discarded.">Delete {{ r.name }}</button>{% else %}<button type="button" class="btn small ghost" data-drop>Delete this new room</button>{% endif %}</p>
-</details>
-{% endmacro %}
-<div class="rolelist" id="roomlist">{% for r in video_rooms %}{{ room_row(loop.index0, r) }}{% endfor %}</div>
-<template id="t-room">{{ room_row('__i__', {'name': '', 'slug': '', 'about': '', 'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False, 'roles': [], 'others': 'knock'}) }}</template>
-<p><button type="button" class="btn small" data-add="t-room" data-into="roomlist" data-focus="name" data-next="{{ video_rooms|length }}" hidden>+ Add a room</button></p>
-</div>
-<div class="card sitesec" role="group" aria-label="Members' own rooms"><h2>Members' own rooms {{ origin('jitsi.adhoc') }}</h2>
-<label class="check"><input type="checkbox" name="adhoc" value="1"{{ ' checked' if video_adhoc }}> Members may open rooms of their own</label>
-<p class="hint">A member names one on Video meeting and hosts it, with the usual hosts, until a day passes with no one joining. These rules cover them all:</p>
-{{ guest_rules('_a', video_adhoc or {'guests': True, 'guest_mic': False, 'guest_camera': False, 'guest_screen': False, 'guest_chat': True, 'last_host_leaves': 'end', 'p2p': False}) }}
-</div>
-<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button>{% if 'jitsi.rooms' in here_keys or 'jitsi.adhoc' in here_keys %} <button class="btn small ghost" form="video-back">Back to club.yaml</button>{% endif %}</p>
-</form>
-<form method="post" action="/admin/site/video" id="video-delete"></form>{# a room's Delete: that room alone, nothing else on the page #}
-<form method="post" action="/admin/site/video" id="video-back" data-confirm="Go back to club.yaml's video rooms?"><input type="hidden" name="back" value="1"></form>
 {% elif tab == 'dates' %}
 <p class="muted">How dates are written across the app, its emails and the minutes. Each change is in the admin log.
 {{ 'Changed here.' if dates_here }}</p>
@@ -426,7 +367,6 @@ document.querySelectorAll("form[data-preview]").forEach((f) => {
 });
 </script>
 {% endif %}
-{% if tab == 'video' %}{% include "_multi.html" %}{% endif %}
 <script nonce="{{ csp_nonce }}">
 // Changed fields are marked; while a form has changes its Discard shows, and leaving the tab asks first (the browser's
 // own "Leave site?"). A save, Discard, or Cancel on Look clears it.
@@ -456,7 +396,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("click", (e) => { if (e.target.matches("[data-drop]")) { const f = e.target.form; e.target.closest("details").remove(); check(f); } });
 </script>
-{% if tab in ('roles', 'video') %}<script nonce="{{ csp_nonce }}">
+{% if tab == 'roles' %}<script nonce="{{ csp_nonce }}">
 // + Add an office or a room: a row from the <template>, numbered after the others, and the row count the server reads raised
 for (const b of document.querySelectorAll("[data-add]")) {
   b.hidden = false;

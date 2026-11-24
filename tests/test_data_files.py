@@ -24,6 +24,7 @@ NO_MEMBER_IDS = {
     "update-request.json": "an update asked for (a member id is the asker, gone once it runs)",
     "update-running.json": "that request while the updater runs it",
     "update-settings.json": "update times",
+    "meet-rooms.json": "1.3's upgrade only: moved into the meet plugin's file, then deleted",
 }
 
 
