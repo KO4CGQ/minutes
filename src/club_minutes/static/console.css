@@ -14,6 +14,7 @@
 .legend span { display: inline-block; padding: 0 .5rem; border-radius: .3rem; margin-right: .4rem; font-size: .85rem; }
 .row { display: flex; gap: .4rem; align-items: start; margin: .35rem 0; }
 .row textarea, .row input[type=text] { flex: 1; }
+.row > div > textarea { width: 100%; }  /* a box with its character count under it (itemRows' counted) */
 textarea { resize: vertical; min-height: 2.4rem; }
 .hint { margin: .2rem 0 .6rem; } .ghint { color: var(--accent-text); font-size: .85rem; }
 .cols2 { display: grid; grid-template-columns: 17rem 1fr; gap: 1.2rem; } @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } }
@@ -67,3 +68,4 @@ textarea { resize: vertical; min-height: 2.4rem; }
 .bizitem label.due .clearwrap > input[type=date] { min-width: 11.5rem; }  /* a business item's Due: room for the date beside the ✕ */
 .calhead { align-items: center; }  /* Upcoming Events: "From the calendar", how far ahead and the repeating-events tick, on one line */
 .bizcard summary { cursor: pointer; } .bizcard summary h3 { display: inline; margin: 0; font-size: 1.05rem; } .bizcard[open] summary { margin-bottom: .5rem; }  /* New Business: Items and Motions */
+.othercard { margin-top: 1.2rem; }  /* Community Reports: Other reports, under the floor */
