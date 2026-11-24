@@ -85,7 +85,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 ## 🛡️ Admin mode
 Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged. Turning it on asks you to confirm it's you: with a passkey that checks your PIN, fingerprint or face (a security key that only takes a tap isn't enough here, though it still signs you in), or with a link emailed to you.
 
-- **Who's an admin:** callsigns under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins. There's always an active admin: the last one can't be removed, or set Inactive or Silent Key (an Inactive admin can't sign in, so doesn't count), and the Admin page warns while there's only one. To step down, add a successor first. Only an admin in admin mode changes an admin's email or status. If the admins can't be reached, the officers can make a new one, and suspend admins, on **Recover admin access** (officers guide); suspensions are kept in `admins-suspended.json` and lifted on the Admins tab.
+- **Who's an admin:** callsigns (or member ids) under `admins:` in club.yaml, and members made admins in the app (Admin → Security → **Admins**). Making someone an admin asks for a passkey or emailed link unless you confirmed in the last 5 minutes; each change is emailed to the other admins. There's always an active admin: the last one can't be removed, or set Inactive or Silent Key (an Inactive admin can't sign in, so doesn't count), and the Admin page warns while there's only one. To step down, add a successor first. Only an admin in admin mode changes an admin's email or status. If the admins can't be reached, the officers can make a new one, and suspend admins, on **Recover admin access** (officers guide); suspensions are kept in `admins-suspended.json` and lifted on the Admins tab.
 - Admins in club.yaml can only be removed there, so whoever has the server can always get back in.
 - **View the app as …** (on a member's page): the app as that member sees it, read-only, until **Stop** or admin mode ends. Also logged.
 
@@ -247,7 +247,7 @@ Once, for a club moving its chow list into the app: `club-minutes chow-import FI
 `/etc/club-minutes/club.yaml` (copied from `club.example.yaml`, which explains each setting). Most of it can be changed on Site instead; these only here:
 
 - **Sign-in:** `auth:` (the HTTPS address passkeys use, how long a sign-in lasts).
-- **Admins:** `admins:`, the callsigns (or member ids, for a member without a callsign) who can always get in.
+- **Admins:** `admins:`, the callsigns (or member ids, for a member without a callsign) who can always get in. A member's former callsign doesn't count: after a new callsign, list the new one (or the member's id). An entry that names no current member is logged when the app starts.
 - **Email test mode:** `email: only_to:`.
 - **Privacy:** the private never-record list.
 - **Offices:** `offices:`, the club's offices (a title with one seat, or `{title: Trustee, officer: false, seats: 3}` for a board seat).
