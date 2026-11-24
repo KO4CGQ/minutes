@@ -40,21 +40,22 @@ def split_name(name: str) -> tuple[str, str]:
     return (first, last) if first else (last, "")
 
 
-def clean(form: dict) -> dict:
+def clean(form: dict, ham: bool = True) -> dict:
+    """The form checked. Callsign and license class are optional; not asked for at all (dropped) when the club isn't an
+    amateur radio club."""
     f = {k: (form.get(k) or "").strip() for k in ("first", "last", "callsign", "email", "phone", "address",
                                                     "license_class", "joined")}
     f["callsign"] = f["callsign"].upper()
+    if not ham:
+        f["callsign"] = f["license_class"] = ""
     f["address"] = "\n".join(line.strip() for line in f["address"].splitlines() if line.strip())
     if not f["first"] or not f["last"]:
         raise ValueError("First and last name are both needed.")
-    # Membership needs an amateur license (no associate members in the bylaws yet).
-    if not f["callsign"] or not f["license_class"]:
-        raise ValueError("A callsign and license class are needed: members must be licensed.")
-    if not re.fullmatch(r"[A-Z0-9]{3,7}", f["callsign"]):
+    if f["callsign"] and not re.fullmatch(r"[A-Z0-9]{3,7}", f["callsign"]):
         raise ValueError(f"{f['callsign']} doesn't look like a callsign.")
     if f["email"] and not valid_email(f["email"]):
         raise ValueError(f"{f['email']} doesn't look like an email address.")
-    if f["license_class"] not in CLASSES:
+    if f["license_class"] and f["license_class"] not in CLASSES:
         raise ValueError(f"Unknown license class: use one of {', '.join(CLASSES)}.")
     try:
         f["joined"] = dt.date.fromisoformat(f["joined"]).isoformat() if f["joined"] else dt.date.today().isoformat()
@@ -74,7 +75,7 @@ def new_id(club: Club) -> str:
 @roster_locked
 def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url: str = "") -> str:
     """Add a member to the roster sheet and the app. Returns their id. Raises ValueError or SheetError."""
-    f = clean(form)
+    f = clean(form, club.ham)
     name = f"{f['first']} {f['last']}"
     for m in club.members.values():
         if f["callsign"] and m.callsign == f["callsign"]:
@@ -123,7 +124,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
             auth.send_email(to, f"New member: {name}",
                             f"{club.name(by)} added {name}{f' ({f['callsign']})' if f['callsign'] else ''} to the roster, "
                             f"joined {show_date(f['joined'], 'document')}. The roster sheet and its Membership Log have a new row.\n\n"
-                            f"{url}{club.member_url(mid)}\n\nYou get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())
+                            f"{url}{club.member_url(mid)}\n\nYou get these because you keep the roster. To stop them: {url}/profile/email\n\n{club.sign_off}\n{branding.name(club)}", only_to=club.email_only_to())
         except Exception:
             log.exception("couldn't email the Secretary about new member %s", mid)
     return mid

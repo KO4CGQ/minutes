@@ -318,7 +318,7 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
     c = web.archive.club
     c.save_app_admins({"n0offc"})
     admin, member = app("n0offc"), app("n0bbbb")
-    same = {"name": "Test Club", "callsign": "w0test", "meeting_day": "thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
+    same = {"name": "Test Club", "callsign": "w0test", "ham": "1", "meeting_day": "thursday", "meeting_time": "19:30", "timezone": "America/New_York"}
     try:
         assert member.get("/admin/site/club").status_code == 404 and member.post("/admin/site/club", data=same).status_code == 404
         assert "Changed here" not in admin.get("/admin/site/club").text  # tagged only once changed here
@@ -328,6 +328,19 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
                          ({"meeting_time": "25:99"}, "start time: &#39;25:99&#39;"), ({"meeting_day": "Caturday"}, "meeting day: &#39;caturday&#39;")):
             r = admin.post("/admin/site/club", data={**same, **bad})
             assert "msg err" in r.text and why in r.text.lower() and "club.yaml club" not in r.text and c.site_settings == {}, bad
+        admin.post("/admin/site/club", data={k: v for k, v in same.items() if k != "ham"} | {"callsign": ""})  # unticked, no club call
+        assert "ham" not in c.site_settings["club"] and not c.ham  # the default without a callsign
+        admin.post("/admin/site/club", data=same | {"callsign": ""})  # ticked, no club call: stays on
+        assert c.site_settings["club"]["ham"] is True and c.ham
+        admin.post("/admin/site/club", data={k: v for k, v in same.items() if k != "ham"})  # unticked, with a club call: stays off
+        assert c.site_settings["club"]["ham"] is False and not c.ham
+        assert 'id="c-call"' not in admin.get("/admin/site/club").text  # off: no callsign field...
+        admin.post("/admin/site/club", data={k: v for k, v in same.items() if k not in ("ham", "callsign")})
+        assert c.info["callsign"] == "W0TEST" and not c.ham  # ...and saving without it keeps the club's callsign
+        admin.post("/admin/site/club", data={k: v for k, v in same.items() if k != "callsign"})  # ticked again, still no field
+        assert c.info["callsign"] == "W0TEST" and c.ham and 'id="c-call"' in admin.get("/admin/site/club").text
+        admin.post("/admin/site/club", data=same)
+        assert c.site_settings == {} and c.ham
         c.save_site_settings({("club", "date_formats"): {"list": "%-d %b %Y"}})
         (tmp_path / "x").mkdir(exist_ok=True)
         (events.DATA / "events-meeting-added").unlink()

@@ -175,14 +175,15 @@ def context(archive: Archive, m: Meeting) -> dict:
     guests = {}
     past = []  # earlier guests who aren't members, most recent first (for the quick-pick buttons)
     for g in archive.guests():
+        call = g["callsign"] if club.ham else None  # not an amateur radio club: callsigns aren't shown or matched
         if not g.get("member") and g["visits"][-1][0] < m.date:
-            past.append({"name": g["name"], "callsign": g["callsign"], "visits": len(g["visits"]),
+            past.append({"name": g["name"], "callsign": call, "visits": len(g["visits"]),
                          "last": g["visits"][-1][0].isoformat()})
-        info = {"name": g["name"], "callsign": g["callsign"], "visits": len(g["visits"]),
+        info = {"name": g["name"], "callsign": call, "visits": len(g["visits"]),
                 "last": g["visits"][-1][0].isoformat(), "member": g.get("member")}
         guests[_key(g["name"])] = info
-        if g["callsign"]:
-            guests[_key(g["callsign"])] = info
+        if call:
+            guests[_key(call)] = info
     return {
         "meeting": {
             "slug": m.slug, "date": m.slug, "status": m.status, "leader": m.leader,
@@ -191,8 +192,9 @@ def context(archive: Archive, m: Meeting) -> dict:
                          for s in m.section_order(club.sections())},
         },
         "state": load_state(archive, m.slug),
-        "members": [{"id": x.id, "name": x.name, "short": club.shown_name(x.id), "callsign": x.callsign}
+        "members": [{"id": x.id, "name": x.name, "short": club.shown_name(x.id), "callsign": x.callsign if club.ham else None}
                     for x in members],
+        "ham": club.ham,
         "history": history,
         "guest_history": guests,
         "past_guests": sorted(past, key=lambda g: (g["last"], g["visits"]), reverse=True),
@@ -500,7 +502,7 @@ def email_minutes(archive: Archive, slug: str, make_pdf, url: str) -> dict:
             f"{f', recorded by {recorder.name}' if recorder else ''}. The PDF is attached.\n\n"
             f"Read them online, along with past minutes: {url}\n\n"
             f"Replies go to {' and '.join(x.first for x in repliers) or 'the club'}.\n\n"
-            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.label}")
+            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n{club.sign_off}\n{club.label}")
     subject, reply_to = f"{club.label} meeting minutes, {date}", reply_addresses(*repliers)
     return send_to_members(archive, slug, subject, body, " The PDF is attached.", make_pdf, reply_to, "emailed.json")
 

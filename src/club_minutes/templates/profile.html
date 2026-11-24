@@ -22,8 +22,8 @@
   <fieldset class="fixed"><legend>From the club roster</legend>
     <div class="fixedrow">
       <label>Name <input value="{{ m.name }}" readonly tabindex="-1"></label>
-      <label>Callsign <input value="{{ m.callsign or '' }}" readonly tabindex="-1" class="cs"></label>
-      <label>License class <input value="{{ m.license_class or '' }}" readonly tabindex="-1"></label>
+      {% if club.ham %}<label>Callsign <input value="{{ m.callsign or '' }}" readonly tabindex="-1" class="cs"></label>
+      <label>License class <input value="{{ m.license_class or '' }}" readonly tabindex="-1"></label>{% endif %}
     </div>
     <span class="hint">{{ emoji('🔒', 'lock') }} The Secretary keeps these on the roster. To change one, ask an officer.</span>
   </fieldset>

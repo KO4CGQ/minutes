@@ -31,7 +31,7 @@
     </div>
     <div class="formrow"><button class="btn small">Add the term</button> <button type="button" class="btn small ghost" data-close>Cancel</button></div></form></div>{% endif %}
 </article>{% endfor %}</div>
-{% if can_change %}<datalist id="office-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign or '' }}</option>{% endfor %}</datalist>
+{% if can_change %}<datalist id="office-names">{% for m in members %}<option value="{{ m.name }}">{{ m.callsign if club.ham and m.callsign }}</option>{% endfor %}</datalist>
 <script src="/static/combo.js?v={{ ASSETS }}"></script>
 <script nonce="{{ csp_nonce }}">
 // One panel (Change / Add a past term) open at a time in each card.

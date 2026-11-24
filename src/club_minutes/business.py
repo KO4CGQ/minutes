@@ -440,7 +440,7 @@ def reminder_email(club: Club, mid: str, items: list[tuple[dict, str]], today: d
     body = (f"Hi {m.first},\n\nA reminder about club business you're looking after:\n\n{lines}\n\n"
             f"If it's finished, mark it done (or change the date) here: {url}/business\n"
             f"Or just bring it up at the next meeting.\n\n"
-            f"To stop these reminders, or choose which emails you get: {url}/profile/email\n\n73,\n{branding.name(club)}")
+            f"To stop these reminders, or choose which emails you get: {url}/profile/email\n\n{club.sign_off}\n{branding.name(club)}")
     return subject, body
 
 

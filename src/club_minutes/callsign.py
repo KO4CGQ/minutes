@@ -115,7 +115,7 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
     old_call = m.callsign
     aliases = list(row.get("aliases") or []) + ([old_call] if old_call else [])
     sheet = sheet or Sheet()
-    sheet.update_member(old_call, m.name, {"callsign": new_call, "aliases": ", ".join(aliases)})
+    sheet.update_member(m.id, {"callsign": new_call, "aliases": ", ".join(aliases)})
     sheet.add_row({"callsign": new_call, "full_name": m.name, "date": date, "event": "Callsign Change",
                    "note": f"{old_call or '(none)'} to {new_call}"}, tab=LOG_TAB, optional=("note",))
     event = {"date": date, "event": "Callsign Change", "note": f"{old_call or '(none)'} to {new_call}"}

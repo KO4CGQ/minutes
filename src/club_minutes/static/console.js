@@ -280,12 +280,12 @@
           g.name, h("small", {}, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`, { inperson: "in person", online: "online" }[gwhere(g)]].filter(Boolean).join(" · ")),
           g.visits + 1 >= D.invite_after ? h("span", { class: "invite" }, "invite to join") : null)))] : null,
       datalist,
-      M.guests.map((g, i) => h("div", { class: "row" }, h("span", { style: "flex:1" }, `${g.name} ${g.callsign || ""} ${g.notes ? "(" + g.notes + ")" : ""}`,
+      M.guests.map((g, i) => h("div", { class: "row" }, h("span", { style: "flex:1" }, `${g.name} ${D.ham ? g.callsign || "" : ""} ${g.notes ? "(" + g.notes + ")" : ""}`,
           inviteDue(g) ? h("span", { class: "invite" }, "invite to join") : null),
         h("button", { class: "btn small ghost", title: "Switch between in person and online",
           onclick: () => { if (g.online) delete g.online; else g.online = true; render(); save(); } }, g.online ? "Online" : "In person"),
         h("button", { class: "btn small ghost", onclick: () => { M.guests.splice(i, 1); render(); save(); } }, "Remove"))),
-      h("div", { class: "row" }, gname, gcall, gnote, h("button", { class: "btn small", onclick: add }, "Add guest")),
+      h("div", { class: "row" }, gname, D.ham ? gcall : null, gnote, h("button", { class: "btn small", onclick: add }, "Add guest")),
       guestInfo,
       h("p", { class: "counter" }, "Visitors whose names aren't recorded (e.g. family): ",
         h("button", { class: "btn small ghost", onclick: () => { M.visitors = Math.max(0, M.visitors - 1); render(); save(); } }, "−"),
@@ -311,7 +311,7 @@
   }
   // What to ask a member about: what they said in their last few reports.
   function followUp(k, past) {
-    if (k.startsWith("g:")) return h("p", { class: "hint" }, "Guest: ask what brought them in, and their license and callsign.");
+    if (k.startsWith("g:")) return h("p", { class: "hint" }, D.ham ? "Guest: ask what brought them in, and their license and callsign." : "Guest: ask what brought them in.");
     if (!past.length) return h("p", { class: "hint" }, "No earlier reports on record.");
     const said = past.map(([d, t]) => h("div", { class: "past" }, h("b", {}, d + ": "), t));
     return h("div", {}, h("div", { class: "hint" }, "Follow up on what they said before:"), said);

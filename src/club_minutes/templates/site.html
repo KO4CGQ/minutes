@@ -6,15 +6,17 @@
 <nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% if tab == 'club' %}
-<p class="muted">The club's name and callsign, and when it meets. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
+<p class="muted">The club's name, whether it's an amateur radio club (and its callsign), and when it meets. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
 <form method="post" action="/admin/site/club" class="profile siteclub">
 <div class="card sitesec"><h2>The club</h2>
 <div class="fmtgrid">
 <label for="c-name">Name</label><input id="c-name" name="name" value="{{ club.info.name or '' }}" required maxlength="80">{{ origin('name') }}
-<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" required maxlength="12" pattern="[A-Za-z0-9\/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}
+<label for="c-ham">Amateur radio club</label><label class="check"><input id="c-ham" type="checkbox" name="ham" value="1"{{ ' checked' if club.ham }} data-confirm-off="Hide callsigns and license classes everywhere? {{ ham_count }} member{{ ' has' if ham_count == 1 else 's have' }} one; they're kept and come back if you tick this again."> <span>Members have callsigns and license classes</span></label>{{ origin('ham') }}
+{% if club.ham %}<label for="c-call">Callsign</label><input id="c-call" name="callsign" value="{{ club.info.callsign or '' }}" maxlength="12" pattern="[A-Za-z0-9\/]{3,12}" autocapitalize="characters" spellcheck="false">{{ origin('callsign') }}{% endif %}
 <label for="c-app">App name</label><input id="c-app" name="app_name" value="{{ app_name() if app_name() != default_name else '' }}" maxlength="60" placeholder="{{ default_name }}">{% if app_name() != default_name %}<span class="muted small">Changed here</span>{% else %}<span></span>{% endif %}
 </div>
-<p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("73, {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
+<p class="hint">Unticked, callsigns and license classes aren't shown or asked for anywhere (they stay in the roster), and the club's name stands in for its callsign. {% if club.ham %}The club's callsign is optional.{% else %}Tick this and save to see the club's callsign again.{% endif %}</p>
+<p class="hint">The app name is in the top bar, page titles, the sign-in page, emails ("{{ club.sign_off }} {{ app_name() }}") and the name a phone shows for a passkey. Empty: "{{ default_name }}".</p></div>
 <div class="card sitesec"><h2>Names {{ origin('names') }}</h2>
 {% set full = club.info.get('names') == 'full' %}
 <div role="radiogroup" aria-label="Names">
@@ -143,7 +145,7 @@
 <label class="check"><input type="checkbox" name="chow" value="1"{{ ' checked' if module('chow') }}> <span><b>A chow rotation</b><br><span class="muted small">Members take turns bringing food to meetings: the Chow page, swaps, reminders, the console's Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.</span></span></label>
 </div>
 <div class="card sitesec"><h2>Supporting Club Minutes {{ origin('club.supports_app') }}</h2>
-<label class="check"><input type="checkbox" name="supports_app" value="1"{{ ' checked' if club.info.get('supports_app') }}> <span><b>The club supports Club Minutes</b><br><span class="muted small">This club, {{ club.info.callsign or club.info.name }}, gives toward the maintenance and development of this app (<a href="https://github.com/sponsors/jflattery">GitHub Sponsors</a> or <a href="https://ko-fi.com/jflattery">Ko-fi</a>): the menu's Support Club Minutes link goes away for everyone, and the About page thanks the club instead.</span></span></label>
+<label class="check"><input type="checkbox" name="supports_app" value="1"{{ ' checked' if club.info.get('supports_app') }}> <span><b>The club supports Club Minutes</b><br><span class="muted small">This club, {{ club.label }}, gives toward the maintenance and development of this app (<a href="https://github.com/sponsors/jflattery">GitHub Sponsors</a> or <a href="https://ko-fi.com/jflattery">Ko-fi</a>): the menu's Support Club Minutes link goes away for everyone, and the About page thanks the club instead.</span></span></label>
 </div>
 <div class="card sitesec"><h2>Video meetings {{ origin('modules.jitsi') }}</h2>
 <label class="check"><input type="checkbox" name="jitsi" value="1"{{ ' checked' if module('jitsi') }}> <span><b>The club's own Jitsi Meet server</b><br><span class="muted small">Members join it signed in from here (Video meeting in the menu); guests knock and a host lets them in. The rooms and their rules are on the <a href="/admin/site/video">Video</a> tab once it's on. Setting up the Jitsi server: the <a href="/help/jitsi">video meetings guide</a>.</span></span></label>

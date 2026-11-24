@@ -7,8 +7,8 @@
 {% if not total %}<p class="muted">Nothing found.</p>{% endif %}{% endif %}
 
 {% macro rows(k, list) %}<ul class="results">{% for r in list %}
-{% if k == 'members' %}<li><a href="{{ club.member_url(r.id) }}?from=search&amp;q={{ q|urlencode }}">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}{% if r.status != 'Active' %} <span class="muted small">{{ r.status }}</span>{% endif %}</li>
-{% elif k == 'guests' %}<li><a href="/guests">{{ r.name }}</a>{% if r.callsign %} <span class="sec">{{ r.callsign }}</span>{% endif %}
+{% if k == 'members' %}<li><a href="{{ club.member_url(r.id) }}?from=search&amp;q={{ q|urlencode }}">{{ r.name }}</a>{% if r.callsign and club.ham %} <span class="sec">{{ r.callsign }}</span>{% endif %}{% if r.status != 'Active' %} <span class="muted small">{{ r.status }}</span>{% endif %}</li>
+{% elif k == 'guests' %}<li><a href="/guests">{{ r.name }}</a>{% if r.callsign and club.ham %} <span class="sec">{{ r.callsign }}</span>{% endif %}
 <span class="muted small">{{ r.visits|length }} visit{{ 's' if r.visits|length != 1 }}, last {{ r.visits[-1][0]|listdate }}</span></li>
 {% elif k == 'items' %}<li><a href="/business{{ '?tab=done' if r.status == 'done' }}#i{{ r.id }}">{{ r.text|firstline }}</a>
 <div class="muted small">{{ 'Open' if r.status == 'open' else 'Done' }}{% if r.owner_name %} · {{ r.owner_name }}{% endif %}{% if r.due and r.status == 'open' %} · due {{ r.due }}{% endif %}</div></li>
