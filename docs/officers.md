@@ -59,7 +59,7 @@ What a member may do comes from their **roles**. A role is given by the offices 
 ## 🎙️ At the meeting
 Whoever starts the meeting in the console is marked present: in person when they're on the meeting place's network, online otherwise. Tap their name in Attendance to change it.
 
-If the club has a quorum rule (an admin sets it on Site → Agenda), the console's Attendance step shows whether there is a quorum as you mark people present. Only Active members count, never guests. Without a quorum, the step where you add a motion warns you not to bring motions up yet; once enough members are present, it shows how many votes a motion needs to pass (a majority of the members present). The minutes and their PDF record the result under Attendance; minutes from before the rule, or from a club without one, show nothing.
+If the club has a quorum rule (an admin sets it on Site → Agenda), the console's Attendance step shows whether there is a quorum as you mark people present. Only Active members count, never guests. Without a quorum, the step where you add a motion warns you not to bring motions up yet; once enough members are present, it shows how many votes a motion needs to pass (a majority of the members present). The minutes and their PDF record the result under Attendance; minutes from before the rule, or from a club without one, show nothing. A correction to the attendance updates that line to match.
 
 Each step of the leader console has a box ready to type in. **New Business** has two cards, **Items** and **Motions** (tap a card's title to fold it away): a motion records who moved it, what, who seconded it and the result, with pictures if wanted (the Picture button above "moved to"). A business item's formatting and pictures go in the minutes with it.
 
