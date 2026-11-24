@@ -388,7 +388,10 @@ def discard(archive: Archive, slug: str, by: str | None = None) -> None:
     """Delete a draft (e.g. a practice run). Submitted minutes can't be discarded."""
     m = archive.by_slug[slug]
     _draft(m)
-    shutil.rmtree(archive.root / slug)
+    try:
+        shutil.rmtree(archive.root / slug)
+    except FileNotFoundError:  # already deleted on the server (delete-meeting without a restart): just forget it
+        pass
     _holds.pop(slug, None)
     if by:
         closed_by[slug] = by
