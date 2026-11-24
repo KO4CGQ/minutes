@@ -246,7 +246,7 @@
   "static/format.js": "68bcc3b938e74ea21a54530e94cf1f3d93b8cedcca46503623cb1d23dc651340",
   "static/minutes.css": "31d415f04cbaad0edad71760d3d99f7daf8bc62ecc49680ce12837a779b73b13",
   "static/sort.js": "b7a9af370a7fee958f5ab413ae4d0045f4e1828a0fb082646d1e857131668f39",
-  "static/style.css": "fc98ba491c425df9c91cbb5543e7931ae38cd17348295d4b25b377815ab2d7ab",
+  "static/style.css": "0b7f0b07280c81d22ad20e1e5100123b10ea5efa75a4972dec57ae4afabe6c55",
   "templates/_avatar.html": "6706c6fa69201c1a1d29914618a54e5da08322a68108e51c2e0cbb040d7e4feb",
   "templates/_business_item.html": "94b92e37cadf6d6fd03e9b9ea53efa032306afc10725c670a634f53914f9fcd7",
   "templates/_icons.html": "d7909338dc8d708dd8f49e8a15337a8af23a6d24b45f9d0ece1212f682d25c26",
@@ -266,6 +266,6 @@
   "templates/security.html": "a49f34c09cbcc3042e67d24ebadb6ea3765f09b0b83cde84e12e6adfe731da92",
   "templates/site.html": "0a5de41744535289f779fedd401e10bb958d92c468e08f6fa03a64b5392f3a6d",
   "templates/spending.html": "8a23641cd7de0f6c2962805f2e0228d3e88d51be895fef1a1d85363d83b9ccb1",
-  "templates/treasurer.html": "74200ac3bf6cff29497e97c6ebdd98e367b70cb029d2f819c166dec9359dd1e1"
+  "templates/treasurer.html": "b353414c9b9a1dff89b82727589a3758a3d8fa7f195ed2e9c44f504bc748ce00"
  }
 }

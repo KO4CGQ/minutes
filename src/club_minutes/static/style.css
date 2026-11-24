@@ -614,6 +614,8 @@ nav.crumb a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 /* ---------- Site → Colours: two small previews, each drawn with the palette set on it ---------- */
 form.colours .row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; margin: .4rem 0; }
 form.colours input[type=color] { width: 3rem; height: 2rem; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+form.colours input:disabled { color: var(--text); border-color: var(--border-strong); }  /* off, but still readable */
+@media (max-width: 30rem) { form.colours .row > label.check { flex-basis: 100%; } }  /* a phone: the label on its own line, the colour and its hex together under it */
 .swatch { width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); cursor: pointer; vertical-align: middle; margin-left: .2rem; }
 .themeprev { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .8rem; margin: .8rem 0; max-width: 40rem; }
 .tp { border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; color: var(--text); }

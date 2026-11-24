@@ -9,12 +9,12 @@
   const HINTS = {
     "Old Business": "Every business item still open, carried from meeting to meeting until it's marked done. Update the text, give it an owner or a due date, or mark it done; done items show as done in tonight's minutes, then drop off.",
     "New Business": "Each item you add here is tracked: next week it's in Old Business, and it stays there until it's marked done.",
-    "Upcoming Events": "Carried forward from last meeting; past dates drop off by themselves. Give each event a date (and a time, if it has one) so it goes on the calendar picked beside it. Add an end for a time range or an event over several days.",
+    "Upcoming Events": "Past dates drop off by themselves; a dated event goes on the calendar beside it (add an end for a range).",
     "Upcoming Chow": "This section comes from the chow schedule and is updated when you submit. To change who brings chow, use the Chow page.",
   };
   Object.assign(HINTS, D.hints);  // the club's own sections' hints
   const shint = (...t) => (t[0] ? h("p", { class: "hint shint" }, ...t) : null);  // a section's hint, in its box under the heading
-  if (D.events_public) HINTS["Upcoming Events"] += " Dated events also go on the public calendar, which anyone can see, signed in or not: keep anything members-only out of them.";
+  if (D.events_public) HINTS["Upcoming Events"] += " Dated events also go on the public calendar, so keep anything members-only out.";
   const RECENT_GUESTS = 8; // quick-pick buttons; older guests are in the name field's autocomplete
   // A guest on their Nth visit or later gets a reminder to invite them to apply for membership.
   const visitNo = (g) => { const p = D.guest_history[key(g.callsign)] || D.guest_history[key(g.name)]; return p && !p.member ? p.visits + 1 : 1; };
@@ -375,19 +375,21 @@
       D.business.notes.map(noteCard)) : null;
     const others = h("div", {}, h("h3", { style: "margin-top:1.2rem" }, "Other reports"),
       h("p", { class: "hint" }, "For news passed along by someone who isn't present, e.g. “Jeremy sent a message recommending…”."),
-      itemRows(S.others, (arr) => { S.others = arr; syncReports(); }, S.otherPics));
+      itemRows(S.others, (arr) => { S.others = arr; syncReports(); }, S.otherPics, true));
     return h("div", {}, h("h2", {}, "Community Reports"), notes, h("div", { class: "cols2" }, queue, h("div", {}, floor, others)));
   }
 
   // ---------- plain list sections ----------
-  function itemRows(arr, setArr, pics) {  // pics: a list kept in step with arr (Other reports' pictures), shown as a count
+  function itemRows(arr, setArr, pics, counted) {  // counted: show "n / 5,000 characters" (as format.js does for data-count boxes); pics: a list kept in step with arr (Other reports' pictures), shown as a count
     const wrap = h("div", {});
     const draw = () => wrap.replaceChildren(
       ...(arr.length ? arr : arr.concat("")).map((t, i) => {  // an empty section: one box ready to type in (a blank is never saved)
-        const ta = h("textarea", { rows: 1, "data-format": true, oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); save(); } });
-        ta.value = t;
+        const cnt = counted ? h("small", { class: "fmtcount" }) : null;
+        const show = () => { if (cnt) cnt.textContent = `${ta.value.length.toLocaleString()} / ${ta.maxLength.toLocaleString()} characters`; };
+        const ta = h("textarea", { rows: 1, "data-format": true, ...(counted && { maxlength: 5000 }), oninput: (e) => { arr[i] = e.target.value; setArr(arr); grow(e.target); show(); save(); } });
+        ta.value = t; show();
         const n = pics?.[i]?.length;
-        return h("div", { class: "row" }, ta, n ? h("span", { class: "hint" }, `${n} picture${n === 1 ? "" : "s"}`) : null,
+        return h("div", { class: "row" }, cnt ? h("div", { style: "flex:1 1 12rem" }, ta, cnt) : ta, n ? h("span", { class: "hint" }, `${n} picture${n === 1 ? "" : "s"}`) : null,
           h("button", { class: "btn small ghost", title: "Remove", onclick: () => { arr.splice(i, 1); pics?.splice(i, 1); setArr(arr); draw(); save(); } }, emo("✖️", "x")));
       }),
       h("button", { class: "btn small ghost", onclick: () => { arr.push(""); setArr(arr); draw(); wrap.querySelectorAll("textarea")[arr.length - 1].focus(); } }, "+ Add item"));
@@ -478,7 +480,7 @@
       [["next", "until the next meeting"], ["14", "the next 2 weeks"], ["31", "the next month"], ["92", "the next 3 months"]]
         .map(([v, t]) => h("option", { value: v, selected: v === ahead }, t)));
     const onceBox = h("label", { class: "check small" }, h("input", { type: "checkbox", checked: once, onchange: (e) => { once = e.target.checked; fill(); } }),
-      " Repeating events: the next date only");
+      " Show a repeating event once (its next date)");
     const fill = () => {
       // already in the minutes: same day, and the text starts with its title ("Fox hunt, the park")
       const have = (c) => evs.some((e) => (e.when || "").slice(0, 10) === c.start && same(e, c));
