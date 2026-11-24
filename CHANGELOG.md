@@ -17,6 +17,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - The leader console's **Submit minutes** buttons show only once the finished minutes are on screen, so they're never submitted unseen.
 - The treasurer's **Delete** asks about the entry by its amount, date and member, and the leader console's Other reports show a character count, as the other boxes do.
 - In the leader console's Community Reports, **Nothing new** shows only while the report box is empty.
+- In the leader console's Community Reports, **Other reports** is a card under the floor, closed until you open it (or it has something in it), with a box as wide as the floor's.
 - Starting a meeting in the leader console marks you present: in person on the meeting place's network, online from anywhere else.
 - A member's **New callsign** no longer needs the backup passphrase or moves any records: they keep everything, links to their page use the new callsign, and old links still work.
 

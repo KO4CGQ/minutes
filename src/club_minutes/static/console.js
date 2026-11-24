@@ -294,6 +294,7 @@
   }
 
   // ---------- community reports ----------
+  let otherOpen = false;  // Other reports' card: collapsed until opened or it has something in it
   function call(k) { if (S.current && !S.done.includes(S.current)) S.skipped.push(S.current); S.skipped = S.skipped.filter((x) => x !== k); S.current = k; render(); save(); }
   function finish(nothing) {
     const k = S.current; if (!k) return;
@@ -375,8 +376,9 @@
       h("p", { class: "notelead" }, "Members sent these for tonight. Read each one out, then add it to the minutes. " +
         "If they came after all, let them give their report and skip the note (or use it in their report)."),
       D.business.notes.map(noteCard)) : null;
-    const others = h("div", {}, h("h3", { style: "margin-top:1.2rem" }, "Other reports"),
-      h("p", { class: "hint" }, "For news passed along by someone who isn't present, e.g. “Jeremy sent a message recommending…”."),
+    const others = h("details", { class: "card bizcard othercard", open: otherOpen || S.others.some((t) => t.trim()), ontoggle: (e) => { otherOpen = e.target.open; } },
+      h("summary", {}, h("h3", {}, "Other reports")),
+      h("p", { class: "hint" }, "For news passed along by someone who isn't present, e.g. “Jane Doe sent a message recommending…”."),
       itemRows(S.others, (arr) => { S.others = arr; syncReports(); }, S.otherPics, true));
     return h("div", {}, h("h2", {}, "Community Reports"), notes, h("div", { class: "cols2" }, queue, h("div", {}, floor, others)));
   }
