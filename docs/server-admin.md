@@ -118,6 +118,8 @@ systemctl start club-minutes
 ```
 `restore` only unpacks into an empty folder, never over live data. Members stay signed in, and passkeys keep working as long as the address is the same. Backing up and restoring stream through temporary files (in `backups/`, and in the restore folder), so memory stays small but the disk needs room for the data about twice over.
 
+**What an update promises: recovery, not rollback.** Any 1.x server updates straight to the newest 1.x, with no versions in between. Every update keeps a copy of the data first, and a failed update puts it back by itself and stays on the version before. Once an update has worked, older code isn't promised to read the new data: to go back, restore a backup made before the update, as below.
+
 **Going back a version** (say, from 1.2 to 1.1): a version can't read data a newer one has upgraded, so put back a backup made before the update (Back up first on the Updates page, and automatic updates, make one in `backups/`), then install the older release. Anything changed since that backup is lost; the newer data stays beside it until you remove it.
 ```sh
 sudo -u minutes /opt/club-minutes/.venv/bin/club-minutes restore /var/lib/club-minutes/backups/BACKUP.tar.gz.enc /tmp/restored
