@@ -306,6 +306,7 @@ def auto(club, url: str, wait: float = 900, poll: float = 10, now=None) -> str:
             ok = done.get("ok")
             _tell_admins(club, f"updated to {v}" if ok else f"the update to {v} failed",
                          (f"The app updated itself to {v} overnight, after a backup ({b.get('name')})."
+                          + "".join(f"\n\n{x}" for x in done.get("output", "").splitlines() if x.startswith("Plugin "))  # moved or turned off
                           if ok else f"The automatic update to {v} failed. The updater's last words are below: if it had "
                                      f"installed anything, they say whether it went back to the version before. "
                                      f"It won't try {v} again by itself.\n\n"

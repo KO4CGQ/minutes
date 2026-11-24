@@ -317,7 +317,7 @@ class Club:
         """Set Site page settings together ({(section, key): value}; None: back to club.yaml's). Checked as the app
         checks club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
         with _site_lock:  # two admins saving at once: one after the other, neither lost
-            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS and not (s == "plugins" and re.fullmatch(r"[a-z0-9]+", k))]:
+            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS and not (s in ("plugins", "plugin_hold") and re.fullmatch(r"[a-z0-9]+", k))]:
                 raise ValueError(f"{', '.join(bad)} can't be changed here.")
             site = self.site_settings
             for (section, key), value in values.items():
@@ -370,6 +370,7 @@ class Club:
             regions.check(k, self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
         regions.parse_extra(self.calendar.get("extra_holidays"))
         self.plugins_on = {k for k, v in (cfg.get("plugins") or {}).items() if v}  # installed plugins an admin ticked (plugins.py)
+        self.plugins_hold = {k for k, v in (cfg.get("plugin_hold") or {}).items() if v}  # an update that doesn't fit them waits
         self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
 
     @property

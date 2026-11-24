@@ -637,6 +637,7 @@ details.sitesec > summary h2 { margin: 0; } details.sitesec[open] > summary { ma
 form .sitesec label.check { display: flex; width: 100%; gap: .6rem; align-items: flex-start; padding: .45rem 0; margin: 0; }
 .sitesec label.check input { margin-top: .25rem; flex: none; }  /* a wrapped label mustn't squeeze the box */
 .sitesec label.check.small input { margin-top: 0; }
+.sitesec label.check.plughold { padding: 0 0 .6rem 1.6rem; }  /* Features: a plugin's update choice, under its tick */
 main input.changed, main select.changed, main textarea.changed { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }  /* Site: changed, not saved yet */
 main label.changed { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: var(--radius-sm); }  /* small text: the .25rem above would drop the box below its line */
 .sitevideo .pair { display: flex; flex-wrap: wrap; column-gap: .8rem; margin-bottom: .5rem; }  /* Site → Video: name and address side by side */

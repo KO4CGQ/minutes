@@ -138,3 +138,21 @@ def test_plugin_admin_changes_are_logged_and_a_stale_confirmation_is_asked_again
     monkeypatch.setattr(web, "FRESH_SECONDS", -1)
     r = admin.post("/hello/admin/secret", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/admin/confirm?next=/hello/admin"
+
+
+def test_update_check_turns_off_a_plugin_that_wont_load_or_holds_the_update_if_chosen(env, monkeypatch, capsys):
+    club, a, _ = env
+    monkeypatch.setenv("CLUB_MINUTES_CONFIG", str(FIX / "test-club.yaml"))
+    club.save_site_settings({("plugins", "hello"): True, ("plugins", "wrong"): True})
+    assert plugins.check() == 0 and "Plugin wrong has no release for this version yet" in capsys.readouterr().out
+    assert club.site_settings["plugins"] == {"hello": True, "wrong": False}  # turned off; hello untouched
+    club.save_site_settings({("plugins", "wrong"): True, ("plugin_hold", "wrong"): True})
+    assert plugins.check() == 1 and "wait for it" in capsys.readouterr().out
+    assert club.site_settings["plugins"]["wrong"] is True  # held: nothing changed
+    assert 'name="plugin_hold_wrong" value="1" checked' in client(a, "n0admn", admin=True).get("/admin/site/features").text
+
+
+def test_a_damaged_settings_file_never_reads_as_hold(env, monkeypatch):
+    monkeypatch.setenv("CLUB_MINUTES_CONFIG", str(FIX / "test-club.yaml"))
+    (clubmod.DATA / "site-settings.json").write_text("[1]")
+    assert plugins.check() == 2
