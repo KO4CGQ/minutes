@@ -2814,7 +2814,8 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log,
                 add=request.query_params.get("add", ""), event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
-                upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
+                upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB),
+                pic_space=pictures.space() if tab == "uploads" else (0, 0))
 
 
 @app.post("/admin/security/limits")

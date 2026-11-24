@@ -12,8 +12,10 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
+import os
 import re
 import secrets
+import shutil
 import threading
 import time
 
@@ -31,6 +33,12 @@ def _dir():
     d = DATA / "pictures"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def space() -> tuple[int, int]:
+    """(bytes the pictures take, bytes free on the disk holding the data folder), for Admin -> Security -> Uploads."""
+    with os.scandir(_dir()) as it:
+        return sum(e.stat().st_size for e in it if e.is_file()), shutil.disk_usage(DATA).free
 
 
 def path(pid: str, small: bool = False):
