@@ -29,7 +29,7 @@
 </section>
 <section><h2>Per member</h2>
 <table class="list"><thead><tr><th>Member</th><th class="n">In person</th><th class="n">Online</th><th class="n">Rate</th><th>Last</th></tr></thead>
-<tbody>{% for r in s.members %}<tr><td><a href="/members/{{ r.id }}?from=stats">{{ r.name }}</a></td>
+<tbody>{% for r in s.members %}<tr><td><a href="{{ club.member_url(r.id) }}?from=stats">{{ r.name }}</a></td>
 <td class="n">{{ r.in_person }}</td><td class="n">{{ r.remote }}</td><td class="n">{{ '%.0f'|format(r.rate*100) }}%</td><td data-sort="{{ r.last }}">{{ r.last|listdate if r.last }}</td></tr>{% endfor %}</tbody></table>
 </section></div>
 {% endblock %}

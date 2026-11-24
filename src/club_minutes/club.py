@@ -15,6 +15,7 @@ import threading
 from dataclasses import dataclass, field, fields
 from functools import cached_property, wraps
 from pathlib import Path
+from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
@@ -460,6 +461,9 @@ class Club:
                 if CALLSIGN.match(a):
                     claims.setdefault(a.lower(), set()).add(m.id)
         self.former_ids = {a: next(iter(ids)) for a, ids in claims.items() if len(ids) == 1 and a not in self.members}
+        # A current callsign that isn't the member's id (their id stayed when the callsign changed): club.yaml may name it.
+        self._by_call = {m.callsign.lower(): m.id for m in self.members.values()
+                         if m.callsign and m.callsign.lower() != m.id and m.callsign.lower() not in self.members}
         for m in self.members.values():  # callsign aliases aren't name spellings
             m.aliases = [a for a in m.aliases if not CALLSIGN.match(a)]
         if (picked := self._picked()) is not None:  # roles.json, once there is one, over the roster's old ticks
@@ -481,7 +485,23 @@ class Club:
 
     def canonical(self, mid: str) -> str:
         """Current id for a member id that may be an old callsign."""
-        return self.former_ids.get(mid, mid)
+        if mid in self.members:  # an id is always its own member, even if someone now holds that callsign
+            return mid
+        return self.former_ids.get(mid) or self._by_call.get(mid, mid)
+
+    def resolve(self, who: str) -> str | None:
+        """The member id for a callsign (current or former) or an id, in any capitals; a callsign wins. None if no member."""
+        w = who.strip().lower()
+        for m in self.members.values():
+            if (m.callsign or "").lower() == w:
+                return m.id
+        w = self.former_ids.get(w, w)
+        return w if w in self.members else None
+
+    def member_url(self, mid: str) -> str:
+        """The address of a member's page: their lowercase callsign, else their id."""
+        m = self.members.get(self.canonical(mid))
+        return "/members/" + quote(m.callsign.lower() if m and m.callsign else m.id if m else mid, safe="")
 
     def _auto_short_names(self) -> None:
         """A member's short name is their first name, plus as much of their last name as tells them apart from others

@@ -94,7 +94,7 @@ def render(text: str, pdf: bool = False, names=None) -> Markup:
     def pill(m: re.Match) -> str:  # a private-use token Markdown leaves alone, swapped for the pill after it
         name = names.known_name(m.group(2)) if names else None
         pills.append(html.escape(m.group(1)) if name is None else "a member" if name == "" else (f'<span class="who">{html.escape(name)}</span>' if pdf else
-                     f'<a class="who" href="/members/{m.group(2)}">{html.escape(name)}</a>'))
+                     f'<a class="who" href="{names.member_url(m.group(2))}">{html.escape(name)}</a>'))
         return f"\ue000{len(pills) - 1}\ue001"
     text = MENTION.sub(pill, text)
     text = URL.sub(lambda m: f"[{m.group(1)}]({m.group(1)}{' \"qr\"' if m.group(2) else ''})", text or "")  # "[QR]" after one: a code

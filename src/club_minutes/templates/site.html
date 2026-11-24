@@ -115,7 +115,7 @@
     {% if r.choices|length > 6 %}<input type="search" class="multi-filter" placeholder="Filter members…" aria-label="Filter members" hidden>{% endif %}
     <div class="multi-opts">{% for i in r.choices %}<label class="check"><input type="checkbox" name="members.{{ k }}" value="{{ i }}" data-label="{{ club.name(i) }}" {{ 'checked' if i in r.members }}> {{ club.name(i) }}</label>{% endfor %}</div>
   </div></details>
-  <p class="small"><b>Who has it now:</b> {% for i in r.who %}<span class="chip"><a href="/members/{{ i }}">{{ club.name(i) }}</a></span> {% else %}<span class="muted">nobody</span>{% endfor %}</p>
+  <p class="small"><b>Who has it now:</b> {% for i in r.who %}<span class="chip"><a href="{{ club.member_url(i) }}">{{ club.name(i) }}</a></span> {% else %}<span class="muted">nobody</span>{% endfor %}</p>
   {% if not r.builtin %}<label class="check small rmrole"><input type="checkbox" name="remove.{{ k }}" value="1"> Remove this role when you save</label>
   {% elif r.edited %}<p class="small"><button class="btn small ghost" form="roleback-{{ k }}">Back to the built-in</button></p>{% endif %}
 </details>{% endfor %}</div>

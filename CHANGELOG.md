@@ -18,6 +18,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - The treasurer's **Delete** asks about the entry by its amount, date and member, and the leader console's Other reports show a character count, as the other boxes do.
 - In the leader console's Community Reports, **Nothing new** shows only while the report box is empty.
 - Starting a meeting in the leader console marks you present: in person on the meeting place's network, online from anywhere else.
+- A member's **New callsign** no longer needs the backup passphrase or moves any records: they keep everything, links to their page use the new callsign, and old links still work.
 
 ### Fixed
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.

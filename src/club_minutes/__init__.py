@@ -103,7 +103,7 @@ def main() -> None:
         from .auth import Auth
         from .club import Club
         auth = Auth(Club())
-        mid = a.who.lower() if a.who.lower() in auth.club.members else auth.member_by_email(a.who)
+        mid = auth.club.resolve(a.who) or auth.member_by_email(a.who)
         if not mid or not auth.is_active(mid):
             raise SystemExit(f"No active member matches {a.who!r}")
         print(f"Sign-in link for {auth.club.name(mid)} (one use, 15 minutes):")

@@ -66,6 +66,9 @@ class View:
         live = self.club.known_name(mid)  # never_record is checked now: a snapshot from before it never shows the name
         return n["shown"] if (n := self._n(mid)) and live != "" else live
 
+    def member_url(self, mid):
+        return self.club.member_url(mid)
+
     def logo(self, pdf):
         """The logo kept with these minutes (a file for the PDF), or None: today's (drafts, minutes from before 1.2's
         upgrade kept none)."""

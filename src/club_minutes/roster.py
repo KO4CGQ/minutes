@@ -2,7 +2,7 @@
 Sheet in 0.13.0; same tabs and columns). data/roster.json, what the rest of the app reads, is built from it.
 
 Reads columns by header name, so adding or reordering columns doesn't break it.
-Columns used: callsign, full_name, email, Title(s), is_officer, is_board, Class,
+Columns used: id (the member's id, kept when the callsign changes), callsign, full_name, email, Title(s), is_officer, is_board, Class,
 minutes_editor and calendar_editor (read only until data/roles.json exists: Admin → Site → Roles), Status (Active / Inactive /
 Silent Key / Prospect) and aliases (comma-separated spellings seen in old minutes).
 
@@ -36,8 +36,8 @@ def _local() -> Path:
 
 SHAREABLE = ("email", "phone", "address", "birthday")
 EDITABLE = ("email", "phone", "address", "birthday", "share")  # what members change themselves
-# What roster keepers (and admins) change: member field -> roster sheet header (lowercase). Not the callsign: it's
-# the member's id in the app's records, so a change needs its own step.
+# What roster keepers (and admins) change: member field -> roster sheet header (lowercase). Not the callsign: a change
+# needs its own step (callsign.change: the old call goes to aliases, with a Membership Log row).
 COLUMNS = {"name": "full_name", "license_class": "class", "status": "status", "role": "title(s)", "officer": "is_officer",
            "board": "is_board", "minutes_editor": "minutes_editor", "calendar_editor": "calendar_editor",
            "aliases": "aliases", **{f: f for f in EDITABLE}}
@@ -169,7 +169,7 @@ class PreviewSheet(LocalSheet):
     """Preview mode's copy (preview-sheet.json), built from the roster cache, so roster edits can be tried without
     touching the real roster."""
     HEADER = ["callsign", "full_name", "email", "Phone", "Address", "Class", "Title(s)", "Status", "birthday", "share",  # noqa: RUF012 (read only)
-              "is_officer", "is_board", "minutes_editor", "calendar_editor", "aliases"]
+              "is_officer", "is_board", "minutes_editor", "calendar_editor", "aliases", "id"]
     LOG_HEADER = ["callsign", "full_name", "date", "event", "note"]  # noqa: RUF012 (read only)
 
     def __init__(self):
@@ -180,7 +180,7 @@ class PreviewSheet(LocalSheet):
                      p.get("address") or "", p.get("license_class") or "", p.get("role") or "",
                      p.get("status") or "Active", p.get("birthday") or "", ", ".join(p.get("share") or []),
                      bool(p.get("officer")), bool(p.get("board")), bool(p.get("minutes_editor")),
-                     bool(p.get("calendar_editor")), ", ".join(p.get("aliases") or [])]
+                     bool(p.get("calendar_editor")), ", ".join(p.get("aliases") or []), p["id"]]
                     for p in people]
             self.save({"Member Roster": [self.HEADER] + rows, "Membership Log": [self.LOG_HEADER]})
 
@@ -197,6 +197,11 @@ def fetch_rows(tab: str | None = None) -> list[dict[str, str]]:
     return _dicts(LocalSheet(_local())._tabs().get(tab or "Member Roster", []))
 
 
+def derived_id(name: str, callsign: str) -> str:
+    """The id a roster row had before ids were stored: its lowercase callsign, else a slug of the name."""
+    return callsign.strip().lower() or re.sub(r"[^a-z]+", "-", name.lower()).strip("-")
+
+
 def to_members(rows: list[dict[str, str]]) -> list[dict]:
     out = []
     for r in rows:
@@ -206,8 +211,8 @@ def to_members(rows: list[dict[str, str]]) -> list[dict]:
         first, _, last = name.partition(" ")
         titles = _split(r.get("title(s)", ""))
         out.append({
-            # Callsign is the stable key; fall back to the name (e.g. a silent key whose call is unknown).
-            "id": cs.lower() or re.sub(r"[^a-z]+", "-", name.lower()).strip("-"),
+            # The row's stored id (it stays when the callsign changes); a row without one gets what it had before ids were stored.
+            "id": r.get("id", "").strip().lower() or derived_id(name, cs),
             "first": first,
             "last": last,
             "callsign": cs or None,
