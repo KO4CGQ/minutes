@@ -62,6 +62,7 @@ from . import (
     membership,
     offices,
     pictures,
+    plugins,
     prefs,
     profile,
     recovery,
@@ -288,6 +289,9 @@ async def require_login(request: Request, call_next):
     if not real and PROBE.search(path):  # before the sign-in redirect, which every unknown address gets
         _security_event(request, "probe")
         return HTMLResponse("Not Found", status_code=404)
+    plugin = plugins.owner(path)
+    if plugin and not archive.club.plugin_on(plugin.name) or plugins.failed(path):  # off or broken: as if not installed, for everyone
+        return HTMLResponse("Not Found", status_code=404)
     if request.state.viewing_as:
         request.state.admin_until = None  # their permissions, not the admin's
         # their sign-ins and private calendar feed (prod's, on stage), even when acting
@@ -302,7 +306,16 @@ async def require_login(request: Request, call_next):
             _admin_log(request, acted_as=request.state.viewing_as, did=f"{request.method} {path}"[:200])
             _log.info("%s acting as %s: %s %s", one_line(real), one_line(request.state.viewing_as), request.method,
                       one_line(path))
-    if request.state.member or path.startswith(PUBLIC_PATHS):
+    if plugin and real and plugins.is_admin_path(plugin, path):  # a plugin's settings: admin mode only
+        if not request.state.admin_until:
+            if not archive.club.is_admin(real):
+                return HTMLResponse("Not Found", status_code=404)
+            if request.method == "GET":
+                return RedirectResponse("/admin/confirm?next=" + quote(path), status_code=303)
+            return HTMLResponse("Turn on admin mode first.", status_code=403)
+        if request.method not in ("GET", "HEAD"):  # every change on a plugin's settings, as for the app's own
+            _admin_log(request, plugin_admin=f"{request.method} {path}"[:200])
+    if request.state.member or path.startswith(PUBLIC_PATHS) or plugins.is_public(path):  # every other plugin path needs sign-in
         return await call_next(request)
     if request.method == "GET" and path.startswith("/meet/") and (g := meet.guest_room(archive.club, path[6:].lower())):
         return page(request, "meet.html", guest=g, domain=meet.settings(archive.club)["domain"])  # sign in, or join as a guest
@@ -455,6 +468,7 @@ def _page(request: Request, name: str, **ctx) -> HTMLResponse:
         "viewing_as": getattr(request.state, "viewing_as", None),
         "acting_as": getattr(request.state, "acting_as", False),
         **_money_nav(request, mid),
+        "plugin_nav": plugins.nav(archive.club, mid, admin_mode(request)) if mid else [],
         # tonight's meeting while it's being taken; the top bar links everyone to its live minutes
         "live": next((m for m in archive.meetings if m.status == "draft" and m.date == dt.date.today()), None),
         # an open meeting from another day (say, last week's never submitted): leaders get "Continue minutes"
@@ -2590,11 +2604,11 @@ def guides_for(request: Request) -> dict:
     officers guide (it has admins' setup steps too), admins the server admin and video meetings guides."""
     mid, admin = request.state.member, archive.club.is_admin(real_me(request))
     show = {"members": True, "officers": admin or archive.club.can_lead(mid) or privileged(request) or moderates(request), "server-admin": admin, "jitsi": admin}
-    return {g: t for g, t in GUIDES.items() if show[g]}
+    return {g: t for g, t in GUIDES.items() if show[g]} | plugins.guides(archive.club)
 
 
 def _guide_text(guide: str) -> str:
-    text = (DOCS / f"{guide}.md").read_text()
+    text = (plugins.LOADED[guide[7:]].guide if guide.startswith("plugin-") else DOCS / f"{guide}.md").read_text()
     text = re.sub(r"\]\(([\w-]+)\.md(#[\w-]+)?\)", r"](/help/\1\2)", text)  # links between guides stay in the app
     text = text.replace("](screenshots/", "](/help/screenshots/")
     return text.replace("](../", "](https://github.com/KO4CGQ/minutes/blob/main/")  # anything else in the repo
@@ -2616,7 +2630,7 @@ def help_page(request: Request, guide: str = "members"):
     """A guide from docs/, as of the running version, with its contents at the top. Open to every member (they're
     public on GitHub anyway); the tabs offer each one to whoever it's for."""
     import markdown
-    if guide not in GUIDES:
+    if guide not in GUIDES and guide not in plugins.guides(archive.club):
         raise HTTPException(404)
     md = markdown.Markdown(extensions=["fenced_code", "tables", "toc"], extension_configs={"toc": {"toc_depth": "2-2"}})
     html = re.sub(r"<blockquote>\s*<p>\[!(\w+)\]\s*",
@@ -2634,7 +2648,7 @@ def help_page(request: Request, guide: str = "members"):
     if toc:  # after the title and the line under it
         html = html.replace("</p>", f'</p><nav class="toc" aria-label="On this page">{toc}</nav>', 1)
     guides = guides_for(request)
-    return page(request, "help.html", guide=guide, guides=guides | ({guide: GUIDES[guide]} if guide not in guides else {}),
+    return page(request, "help.html", guide=guide, guides=guides | ({guide: GUIDES[guide]} if guide in GUIDES and guide not in guides else {}),
                 html=Markup(html))
 
 
@@ -2846,6 +2860,15 @@ def security_limits(request: Request, upload_mb: int = Form(...), _mid: str = De
 FRESH_SECONDS = 300  # making someone an admin needs a passkey or emailed link this recent
 
 
+def fresh_confirm(request: Request, next: str) -> RedirectResponse | None:
+    """None if they confirmed it's them (passkey or emailed link) in the last FRESH_SECONDS; otherwise the redirect
+    to confirm, which comes back to `next`."""
+    confirmed = (request.state.admin_until or 0) - ADMIN_MINUTES * 60  # when they last confirmed it's them
+    if confirmed < time.time() - FRESH_SECONDS:
+        return RedirectResponse("/admin/confirm?next=" + quote(_safe_next(next)), status_code=303)
+    return None
+
+
 def _tell_admins(request: Request, before: set[str], subject: str, what: str) -> None:
     """Every admin before or after the change (so the one added or removed too), except whoever made it."""
     club = archive.club
@@ -2863,9 +2886,8 @@ def admins_add(request: Request, member: str = Form("")):
         raise HTTPException(400, "Pick a member from the roster.")
     if member in club.all_admins:
         return RedirectResponse("/admin/security/admins", status_code=303)
-    confirmed = (request.state.admin_until or 0) - ADMIN_MINUTES * 60  # when they last confirmed it's them
-    if confirmed < time.time() - FRESH_SECONDS:
-        return RedirectResponse("/admin/confirm?next=" + quote(f"/admin/security/admins?add={member}"), status_code=303)
+    if again := fresh_confirm(request, f"/admin/security/admins?add={member}"):
+        return again
     before = club.all_admins
     with recovery.locked():
         club.save_app_admins(club.app_admins | {member})
@@ -3017,7 +3039,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), roles_stamp=_roles_stamp(), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
-                pictures=SITE_PICTURES, source=branding.source,
+                pictures=SITE_PICTURES, source=branding.source, plugin_rows=plugins.rows(club),
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.label} Minutes", upload_mb=limits.upload_mb(),
                 colours=(c := branding.colours()), colours_own=bool(branding._settings().get("theme")),
@@ -3119,6 +3141,7 @@ async def site_features(request: Request):
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
                                           ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})
+            values |= {("plugins", n): bool(form.get(f"plugin_{n}")) for n in (*plugins.LOADED, *plugins.PROBLEMS) if re.fullmatch(r"[a-z0-9]+", n)}  # a misnamed one can't be ticked
         club.save_site_settings(values)
     except ValueError as e:
         return RedirectResponse("/admin/site/features?error=" + quote("The club's own holidays: each needs a name, a month and a day." if "extra_holidays" in str(e) else str(e)), status_code=303)
@@ -3295,8 +3318,8 @@ def _roles_stamp() -> str:
 
 
 def _shown_perms(club) -> dict[str, str]:
-    """The permissions Site → Roles shows: a module's only while it's on (Jitsi's meet_host)."""
-    return {p: label for p, label in PERMISSIONS.items() if p != "meet_host" or club.has("jitsi")}
+    """The permissions Site → Roles shows: a module's only while it's on (Jitsi's meet_host), a plugin's (name.key) only while it's on."""
+    return {p: label for p, label in PERMISSIONS.items() if (p != "meet_host" or club.has("jitsi")) and ("." not in p or club.plugin_on(p.split(".")[0]))}
 
 
 def _role_rows(club) -> list[dict]:
@@ -3743,6 +3766,7 @@ def _calendar_editor(request: Request) -> None:
 def _event_form(request: Request, f: dict, id: str = "", d: str = "", error: str = "", repeats: bool = False, status: int = 200):
     r = page(request, "calendar_edit.html", f=f, id=id, d=d, cals=events.CALS, error=error, repeats=repeats, scopes=events.SCOPES,
              repeat_choices=_repeat_choices(f.get("date") or dt.date.today().isoformat()), zones=events.ZONES, club_tz=_club_tz(),
+             plugin_links=plugins.calendar_links(archive.club),
              video_rooms=[(f"{base_url(request)}/meet/{x['slug']}", x["name"], x["slug"]) for x in meet.rooms(archive.club)] if meet.settings(archive.club) else [])
     r.status_code = status
     return r
@@ -4083,3 +4107,7 @@ def console_discard(slug: str, mid: str = Depends(leader)):
     except ValueError as e:
         raise HTTPException(409, str(e))
     return RedirectResponse("/console", status_code=303)
+
+
+# Last, so each plugin's address is checked against every route above (plugins.py)
+plugins.load(app, templates.env, lambda: archive.club, lambda request: getattr(request.state, "member", None), admin_mode, page)

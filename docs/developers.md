@@ -92,6 +92,32 @@ CodeQL findings reviewed as false positives are listed in `dev/codeql-accepted.t
 ## Roles and permissions
 What a member may do is a **permission** (`PERMISSIONS` in `src/club_minutes/club.py`: lead, correct, calendar, chow, contacts, emails, status, oversee (Roster changes), moderate (business items, comments, pictures, the calendar log), treasurer, money, members, roster_emails), and **roles** say which permissions each gives. A new check asks `archive.club.may(member, "permission")`, plus `admin_mode(request)` (admins in admin mode may do everything); never `member.officer`, `member.role` or words in a title. `Club.role_table()` is every role: the built-ins (`ROLES`, with what they allow as they ship) and the club's own, each given by whole office titles (`Club.office_list()`; any capitals; a title that isn't an office gives nothing) and by members picked by hand. Admins edit it on Admin → Site → Roles; `data/roles.json` keeps each role's picked members under its key (1.0's shape, so a rollback still reads Meeting leader and Calendar editor) and, under `table`, each role that differs from how it ships. Two built-in keys are older than their names: `board` is Minutes editor and `minutes_editor` is Meeting leader. A save is refused if any permission would be left with no role; `money` always brings `treasurer`. Admin isn't a role: it's `admins:` and Admin → Security, with admin mode and its re-confirm. A new permission goes in `PERMISSIONS` (and in a built-in role's defaults if one should have it) and shows on Site → Roles by itself.
 
+## Writing a plugin (experimental)
+A plugin is a Python package an admin installs next to the app and ticks on at Admin → Site → Features. Experimental: the API (`PLUGIN_API = 1` in `src/club_minutes/plugins.py`) may change; a plugin written for another number is skipped and Site says so.
+
+**Finding it.** An entry point in the group `club_minutes.plugins`, named the same as the module's `NAME`:
+```toml
+[project.entry-points."club_minutes.plugins"]
+hello = "hello_plugin"
+```
+The module declares `API = 1`, `NAME` (lowercase letters and digits; also its address prefix, `/` and the name; refused if the app has that address already), `TITLE`, `DESCRIPTION` and, optionally, `NEEDS = {"email"}` (Site then says it needs members' email addresses). Everything below is optional. A plugin that raises when it loads, or has another API, is skipped and logged and the app runs on; if an admin had turned it on, the admins get one email per start.
+
+**What it may add.**
+- `router`: a FastAPI `APIRouter`, mounted at `/<NAME>`. **The app enforces access, not the plugin:** every path needs sign-in unless it is in `PUBLIC` (a set of paths on the router, route paths like `{"/open", "/door/{room}"}`; a `{part}` stands for any one part of the address, never a `/`; open to every method, not just GET); anything under `/<NAME>/admin` needs an admin in admin mode (others get "not found"). While the plugin is off every one of its addresses is a 404. Write the page's own checks (`api.may`) for permissions.
+- `PERMISSIONS`: `{"edit": "edit the board"}`. They show on Site → Roles, as `hello.edit`, while the plugin is on; no role has them until an admin gives one. Ask with `api.may(member_id, "edit")`; admins in admin mode count too: `api.may(...) or api.admin_mode(request)`.
+- `NAV`: `[("Hello", "/", None), ("Editor", "/edit", "edit")]`: label, path on the router, and the permission needed (or `None`); shown in the menu to the members allowed (admins in admin mode see all).
+- A `templates/` folder next to the module. Its files are `"<NAME>/file.html"`; they extend `base.html`. Render with `api.page(request, "file.html", **context)`, which gives the app's menu and styles. The same rules as the app's templates: no inline `on…=` handlers, a `<script>` needs `nonce="{{ csp_nonce }}"`, never `|safe` on text members typed.
+- `GUIDE`: the path of a Markdown file (relative to the module), shown under Help while the plugin is on.
+- `calendar_links(api)`: a list of `(label, url)` buttons on the calendar event form that fill in the online link.
+- A settings page at `/<NAME>/admin`; Site → Features links to it. The app writes every change there (any method but GET) to the admin log itself. Before a sensitive one (a new secret, say), ask for a fresh confirmation: `if again := api.fresh(request, "/<NAME>/admin"): return again` sends the admin to confirm with a passkey or emailed link, then back to that address, unless they did in the last few minutes.
+
+**What it gets.** The app sets `api` on the module before the first request (read it inside handlers, not when the module is imported):
+- `api.member(id)`: `{"id", "name", "active"}` or `None`; nothing else about a member.
+- `api.may(id, perm)`, `api.who(request)` (the signed-in member's id, or `None`), `api.admin_mode(request)`.
+- `api.email(id)`: only with `NEEDS = {"email"}`; otherwise it raises `PermissionError`.
+- `api.storage.load()` / `.save(dict)` / `.update(change)`: one JSON file for the plugin in the data folder (`plugins/<NAME>.json`, in the backups), each call locked and saved atomically. To change what's stored, use `update(lambda d: ...)`: a `load()` then `save()` isn't one locked step, so two requests could lose each other's change.
+No `Club`, no sign-in internals, no other plugin's storage. `tests/test_plugins.py` and `tests/fixtures/helloplugin/` are a small working example.
+
 ## Election days for another state
 Election days are worked out from a state's rules in a small file in `src/club_minutes/regions/`, named for its code: `us_oh.py` is `us-oh`. A file there is listed on Admin → Site → Features by itself; nothing else needs changing. It has:
 - `NAME`: how the list shows it, e.g. `"Ohio: primaries and general election"`.

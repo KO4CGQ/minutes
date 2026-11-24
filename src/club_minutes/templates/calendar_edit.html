@@ -33,6 +33,10 @@ const picks = document.getElementById("room-picks"), online = document.getElemen
 picks.hidden = false;
 picks.addEventListener("click", (e) => { const b = e.target.closest("button[data-url]"); if (b) { online.value = b.dataset.url; online.focus(); } });
 </script>{% endif %}
+{% if plugin_links %}<p class="muted small" id="plugin-picks">{% for label, url in plugin_links %}<button type="button" class="chip" data-url="{{ url }}">{{ label }}</button> {% endfor %}</p>
+<script nonce="{{ csp_nonce }}">
+document.getElementById("plugin-picks").addEventListener("click", (e) => { const b = e.target.closest("button[data-url]"); if (b) { const o = document.getElementById("online"); o.value = b.dataset.url; o.focus(); } });
+</script>{% endif %}
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
 <label class="check"><input type="checkbox" name="quiet" value="1" {{ 'checked' if f.quiet }}> Leave out of the leader console's Upcoming Events</label>
 <p class="muted small">The console lists what's on the calendar until the next meeting, for the leader to read out. Tick this for something that needn't be announced (the weekly meeting is left out unless you untick it there).</p>
