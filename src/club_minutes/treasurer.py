@@ -11,15 +11,19 @@ State lives in treasurer.json in the data directory; every change is appended to
 - bills: amounts read under "Bills and Communications", keyed by meeting, text and position: {key: {status, entry}}.
 - regular: bills the club pays every month or year. alerted: {member: date} for the arrears emails.
 
-What a member owes is worked out, never stored: the weekly dues for each meeting night since tracking started (or
-since they joined), the initiation fee if they joined since then, a charge for each chow night marked missed, plus
-adjustments, minus payments. Each amount has dates it takes effect, so a bylaws change doesn't rewrite the past.
+What a member owes is worked out, never stored: the dues for each due date since tracking started (or since they
+joined), the initiation fee if they joined since then, a charge for each chow night marked missed, plus adjustments,
+minus payments. Each amount has dates it takes effect, so a bylaws change doesn't rewrite the past. Dues are a week, a
+month or a year at a time (each dated step has its period): a charge falls due at the start of each period, that is on
+each meeting weekday, on the 1st of each month, or on the step's month and day each year, and uses the step in effect
+that day. A member's first charge is the first due date on or after the later of the tracking start and joining.
 """
 from __future__ import annotations
 
 import datetime as dt
 import fcntl
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -47,7 +51,7 @@ def certificate_note(club: Club) -> str:
 
 LABELS = {"dues": "Dues", "initiation": "Initiation fee", "chow": "Missed-chow charge", "certificate": "Certificate",
           "adjustment": "Adjustment", "income": "Other income", "expense": "Expense"}
-RATES = {"dues_weekly": "Dues, each meeting night", "initiation": "Initiation fee", "certificate": "Certificate", "missed_chow": "Missed chow night"}
+RATES = {"dues": "Dues", "initiation": "Initiation fee", "certificate": "Certificate", "missed_chow": "Missed chow night"}
 # Where the club's money goes, for the Spending page; each expense has one (guessed from its words, the Treasurer can change it).
 MAX_CATEGORIES = 8  # the chart's tested colours; a ninth would need a colour nobody checked
 CATEGORIES = {"utilities": "Utilities", "insurance": "Insurance", "internet": "Internet and phone", "food": "Food",
@@ -57,16 +61,23 @@ GUESSES = (("utilities", r"\bgas\b|\belec|edison|water|sewer"), ("insurance", r"
            ("equipment", r"radio|antenna|rope|pull[ei]|\bups\b|bulb|\bkeys?\b|tool|part|cable|coax|print|shirt"))
 MODES = {"off": "Off", "preview": "Preview: officers only", "on": "On: members see their own figures"}
 # the club's amounts; in cents, each a list of {from, cents} so a change takes effect on a date
-DEFAULTS = {"mode": "off", "start": None, "certificate_years": 2, "arrears_weeks": 4, "alerts": False,
-            "rates": {"dues_weekly": 350, "initiation": 2500, "certificate": 10000, "missed_chow": 3500},
+DEFAULTS = {"mode": "off", "start": None, "certificate_years": 2, "arrears_periods": 4, "alerts": False,
+            "rates": {"dues": 350, "initiation": 2500, "certificate": 10000, "missed_chow": 3500},
             "accounts": ["Checking", "Cash"], "funds": [], "categories": [{"key": k, "label": v, "slot": n} for n, (k, v) in enumerate(CATEGORIES.items(), 1)]}
 AMOUNTS = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)|(?<![\d$.,])(\d{1,5}\.\d{2})\b")  # "$81", "$1,200.50", "Electric 50.64"
 
 
+PERIODS = {"week": "weeks", "month": "months", "year": "years"}
+
+
 def config(s: dict) -> dict:
-    c = {**DEFAULTS, **s.get("settings", {})}
-    c["rates"] = {k: (c["rates"].get(k) if isinstance(c["rates"].get(k), list) else [{"from": "2000-01-01", "cents": v}])
+    st = s.get("settings", {})
+    c = {**DEFAULTS, **st}
+    c["arrears_periods"] = st.get("arrears_periods", st.get("arrears_weeks", DEFAULTS["arrears_periods"]))  # the old keys, until upgraded
+    old = {**c["rates"], "dues": c["rates"].get("dues", c["rates"].get("dues_weekly"))}
+    c["rates"] = {k: (old.get(k) if isinstance(old.get(k), list) else [{"from": "2000-01-01", "cents": v}])
                   for k, v in DEFAULTS["rates"].items()}
+    c["rates"]["dues"] = [{"period": "week", **x} for x in c["rates"]["dues"]]
     return c
 
 
@@ -80,10 +91,53 @@ def members_see(s: dict) -> bool:
     return on(s) and config(s)["mode"] == "on"
 
 
-def rate(c: dict, kind: str, day: str) -> int:
-    """The amount in effect on a day, in cents (before the first change, the first amount)."""
+def step(c: dict, kind: str, day: str) -> dict:
+    """The amount in effect on a day (before the first change, the first one): {from, cents}, and for dues the period."""
     steps = sorted(c["rates"][kind], key=lambda x: x["from"])
-    return ([x for x in steps if x["from"] <= day] or steps[:1])[-1]["cents"]
+    return ([x for x in steps if x["from"] <= day] or steps[:1])[-1]
+
+
+def rate(c: dict, kind: str, day: str) -> int:
+    """The amount in effect on a day, in cents."""
+    return step(c, kind, day)["cents"]
+
+
+def dues_text(x: dict, paren: bool = False) -> str:
+    """A dues step in words: "$3.50 a week", "$150.00 a year, due July 1" (or "(due July 1)" with paren)."""
+    out = f"{money(x['cents'])} a {x['period']}"
+    if x["period"] == "year":
+        m, d = map(int, x["due"].split("-"))
+        due = f"due {dt.date(2001, m, 1):%B} {d}"
+        out += f" ({due})" if paren else f", {due}"
+    return out
+
+
+def _due_dates(period: str, due: str | None, wd: int, a: dt.date, b: dt.date | None):
+    """The due dates from a to b (inclusive; forever when b is None): each meeting weekday, each 1st, or each MM-DD."""
+    if period == "year":
+        m, d = map(int, (due or "01-01").split("-"))
+        y = a.year
+        while b is None or dt.date(y, m, d) <= b:
+            if dt.date(y, m, d) >= a:
+                yield dt.date(y, m, d)
+            y += 1
+        return
+    d = a + dt.timedelta(days=(wd - a.weekday()) % 7) if period == "week" else a if a.day == 1 else (a.replace(day=1) + dt.timedelta(days=32)).replace(day=1)
+    while b is None or d <= b:
+        yield d
+        d = d + dt.timedelta(days=7) if period == "week" else (d + dt.timedelta(days=32)).replace(day=1)
+
+
+def dues_dates(c: dict, wd: int, first: dt.date):
+    """Each charge from the first due date on or after `first`, as (date, cents), in order and without end: walking
+    the dated steps, each step's period decides the due dates until the next step takes over."""
+    steps = sorted(c["rates"]["dues"], key=lambda x: x["from"])
+    for i, x in enumerate(steps):
+        lo = first if not i else max(first, dt.date.fromisoformat(x["from"]))  # the first step also covers earlier dates
+        hi = dt.date.fromisoformat(steps[i + 1]["from"]) - dt.timedelta(days=1) if i + 1 < len(steps) else None
+        if hi is None or lo <= hi:
+            for d in _due_dates(x["period"], x.get("due"), wd, lo, hi):
+                yield d, x["cents"]
 
 
 def categories(s: dict) -> dict[str, str]:
@@ -386,8 +440,8 @@ def spending(s: dict, today: dt.date, months: int = 12, club: Club | None = None
         out["members"] = round(avg)
         out["per_member_year"] = round(out["total"] / avg) if avg else None  # one member's share of the 12 months
         out["per_member_month"] = round(out["total"] / avg / months) if avg else None  # a month's cost per member, on average
-        out["dues_week"] = rate(config(s), "dues_weekly", today.isoformat())
-        out["dues_month"] = out["dues_week"] * 52 // 12  # what dues bring in a month, per member
+        out["dues"] = x = step(config(s), "dues", today.isoformat())
+        out["dues_month"] = {"week": x["cents"] * 52 // 12, "month": x["cents"], "year": x["cents"] // 12}[x["period"]]  # per member
     return out
 
 
@@ -399,14 +453,15 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     if not on(s) or not m or m.status.lower() in ("inactive", "silent key", "prospect"):
         return None
     start, joined = max(c["start"], m.member_since or ""), m.member_since or c["start"]
-    weekly = rate(c, "dues_weekly", today.isoformat())
-    # Every meeting night accrues dues, holidays included (a weekly club's year is 52 nights).
-    nights_owed = chow.meeting_nights(club, dt.date.fromisoformat(start), today, with_cancelled=True)
+    now = step(c, "dues", today.isoformat())
+    # Weekly dues fall due on every meeting weekday, holidays included (a weekly club's year is 52 nights).
+    due = dues_dates(c, club.meeting_weekday, dt.date.fromisoformat(start))
+    charges = list(itertools.takewhile(lambda x: x[0] <= today, due))
     missed = sorted(d for d, x in (nights if nights is not None else chow.load()["nights"]).items()
                     if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat()
                     ) if club.has("chow") else []  # the missed-chow fee is part of the chow module
     mine = [e for e in s["entries"] if e["member"] == mid]
-    charged = (sum(rate(c, "dues_weekly", d.isoformat()) for d in nights_owed) + sum(rate(c, "missed_chow", d) for d in missed)
+    charged = (sum(x[1] for x in charges) + sum(rate(c, "missed_chow", d) for d in missed)
                + (rate(c, "initiation", joined) if m.member_since and m.member_since >= c["start"] else 0)
                + sum(e["cents"] for e in mine if e["kind"] == "adjustment"))
     paid = sum(e["cents"] for e in mine if e["kind"] in PAYMENTS and e["kind"] != "certificate")
@@ -420,11 +475,16 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     if not cert and m.member_since:  # (only with a certificate: cert is True without one)
         j = dt.date.fromisoformat(m.member_since)
         cert_due = j.replace(year=j.year + int(c["certificate_years"]), day=28 if (j.month, j.day) == (2, 29) else j.day)
-    ahead = -owed // weekly if owed < 0 else 0  # whole meeting nights already paid for (monthly or yearly payers)
-    later = chow.meeting_nights(club, today + dt.timedelta(days=1), today + dt.timedelta(weeks=ahead + 1), with_cancelled=True)
-    return {"member": mid, "owed": owed, "weeks_behind": -(-owed // weekly) if owed > 0 else 0,
-            "behind": owed >= int(c["arrears_weeks"]) * weekly, "missed_chow": missed, "certificate": cert,
-            "certificate_bought": max((e["date"] for e in bonds), default=None) if cert else None, "suspended": m.status.lower() == "suspended", "paid_through": later[ahead - 1].isoformat() if ahead else None,
+    # paid ahead: the day before the first due date their credit doesn't cover (None when it covers none)
+    credit, covered, through = -owed, 0, None
+    for d, cents_ in itertools.islice(dues_dates(c, club.meeting_weekday, today + dt.timedelta(days=1)), 1000) if credit > 0 else ():
+        if credit < cents_:
+            through = d - dt.timedelta(days=1) if covered else None
+            break
+        credit, covered = credit - cents_, covered + 1
+    return {"member": mid, "owed": owed, "periods_behind": int(owed / (now["cents"] or 1) + 0.5) if owed > 0 else 0,
+            "period": now["period"], "behind": owed >= int(c["arrears_periods"]) * now["cents"], "missed_chow": missed, "certificate": cert,
+            "certificate_bought": max((e["date"] for e in bonds), default=None) if cert else None, "suspended": m.status.lower() == "suspended", "paid_through": through.isoformat() if through else None,
             "certificate_due": cert_due.isoformat() if cert_due else None,
             "certificate_late": bool(cert_due and cert_due < today)}
 
@@ -444,31 +504,44 @@ def _settings(s: dict) -> dict:
     return s["settings"]
 
 
-def set_general(s: dict, by: str, mode: str, start: str, arrears_weeks: int, certificate_years: int, alerts: bool) -> None:
+def set_general(s: dict, by: str, mode: str, start: str, arrears_periods: int, certificate_years: int, alerts: bool) -> None:
     if mode not in MODES:
         raise ValueError("Pick off, preview or on.")
     if start:
         start = day(start)
     elif mode != "off":
         raise ValueError("Give the date tracking starts before turning it on.")
-    if not (1 <= arrears_weeks <= 52 and 0 <= certificate_years <= 10):
-        raise ValueError("Weeks behind: 1 to 52; years to buy the certificate: 0 to 10.")
-    new = {"mode": mode, "start": start or None, "arrears_weeks": arrears_weeks, "certificate_years": certificate_years, "alerts": alerts}
+    if not (1 <= arrears_periods <= 52 and 0 <= certificate_years <= 10):
+        raise ValueError("Periods behind: 1 to 52; years to buy the certificate: 0 to 10.")
+    new = {"mode": mode, "start": start or None, "arrears_periods": arrears_periods, "certificate_years": certificate_years, "alerts": alerts}
     _settings(s).update(new)
     _log("settings", by, **new)
 
 
-def add_rate(s: dict, by: str, kind: str, start: str, amount: str) -> None:
-    """A new amount from a date on (or a correction of the one starting that day)."""
+def add_rate(s: dict, by: str, kind: str, start: str, amount: str, period: str = "week", due: str = "") -> None:
+    """A new amount from a date on (or a correction of the one starting that day). Dues also take their period (week,
+    month or year; a year's `due` is "MM-DD"); the others ignore both."""
     if kind not in RATES:
         raise ValueError("Pick which amount.")
     start = day(start)
     c = cents(amount)
     if c < 0:
         raise ValueError("The amount can't be negative.")
-    steps = [x for x in _settings(s)["rates"][kind] if x["from"] != start] + [{"from": start, "cents": c}]
+    new = {"from": start, "cents": c}
+    if kind == "dues":
+        if period not in PERIODS:
+            raise ValueError("Pick week, month or year.")
+        new["period"] = period
+        if period == "year":
+            try:
+                m, d = map(int, due.split("-"))
+                dt.date(2001, m, d)  # a year without a 29th: refuses 02-29 and impossible dates
+            except ValueError:
+                raise ValueError("Pick the month and day dues fall due each year (not February 29).") from None
+            new["due"] = f"{m:02d}-{d:02d}"
+    steps = [x for x in _settings(s)["rates"][kind] if x["from"] != start] + [new]
     s["settings"]["rates"][kind] = sorted(steps, key=lambda x: x["from"])
-    _log("rate", by, kind=kind, start=start, cents=c)
+    _log("rate", by, kind=kind, start=start, cents=c, **{k: v for k, v in new.items() if k in ("period", "due")})
 
 
 def remove_rate(s: dict, by: str, kind: str, start: str) -> None:
@@ -567,9 +640,10 @@ def arrears_alert(club: Club, s: dict, today: dt.date) -> tuple[list[str], str, 
         alerted[x["member"]] = today.isoformat()
     to = sorted({m.email for m in club.members.values() if m.email and m.status.lower() == "active"
                  and (club.holds_office(m.id) or club.may(m.id, "money"))})
-    lines = "\n".join(f"- {club.name(x['member'])}: {money(x['owed'])}, about {x['weeks_behind']} weeks" for x in new)
+    per = PERIODS[step(c, "dues", today.isoformat())["period"]]
+    lines = "\n".join(f"- {club.name(x['member'])}: {money(x['owed'])}, about {x['periods_behind']} {per}" for x in new)
     note = " ".join(str(club.bylaws.get("arrears_note") or "").split())  # the club's own rules on what happens next
-    body = (f"These members are now {c['arrears_weeks']} or more weeks behind on dues{club.cite('arrears')}:\n\n{lines}\n\n"
+    body = (f"These members are now {c['arrears_periods']} or more {per} behind on dues{club.cite('arrears')}:\n\n{lines}\n\n"
             + (f"{note}\n\n" if note else "") + "The app never suspends anyone. If the club suspends a member, record it "
             "on their member page (status Suspended, and a Membership Log row).\n")
-    return to, f"Dues: {len(new)} member{'s' if len(new) > 1 else ''} {c['arrears_weeks']}+ weeks behind", body
+    return to, f"Dues: {len(new)} member{'s' if len(new) > 1 else ''} {c['arrears_periods']}+ {per} behind", body

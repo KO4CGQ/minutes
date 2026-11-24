@@ -63,12 +63,12 @@ The app's money pages (your dues here, and Spending below) start when the Treasu
 Once tracking is on, Home shows what you owe (or that you're paid up, and through which date) and, if your club has a certificate each member buys once (some clubs call it a bond), whether you still need to buy it. 🔒 Only you and the officers see your figures. Pay the Treasurer at a meeting.
 
 > [!NOTE]
-> **An example:** with dues of $3.50 a meeting night, someone who's paid for all but the last 7 meeting nights sees **You owe $24.50**, "about 7 weeks of dues". Paid ahead? Home says which date you're paid through instead.
+> **An example:** with dues of $3.50 a week, someone who's paid for all but the last 7 meeting nights sees **You owe $24.50**, "about 7 weeks of dues" (months or years, if the club's dues are monthly or yearly; under half a period reads "less than a week's dues"). Paid ahead? Home says which date you're paid through instead.
 
 ![Home, for a member 7 weeks behind on dues](screenshots/home-dues.png)
 
 ## 📊 Where the club's money goes
-With tracking on (the same switch as your dues, above), **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in.
+With tracking on (the same switch as your dues, above), **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in (weekly or yearly dues converted to a month).
 
 ![Where the club's money goes: a year of spending by category](screenshots/spending.png)
 

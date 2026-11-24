@@ -1137,7 +1137,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                 show=show if show in ("waiting", "paid", "dismissed", "all") else "waiting", regular=treasurer.regular_due(s, dt.date.today()),
                 regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=rates,
                 labels=treasurer.labels(club), kinds=[k for k in (treasurer.KINDS if edit else treasurer.NO_MEMBER) if (k != "chow" or chow_on) and (k != "certificate" or club.certificate)], accounts=c["accounts"] if edit else kept,
-                rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.all_admins)),
+                rate=treasurer.rate, rate_step=treasurer.step, dues_text=treasurer.dues_text, admins=' or '.join(sorted(club.name(a) for a in club.all_admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: show_date(d, "day_year"))
 
 
@@ -1223,16 +1223,17 @@ def treasurer_regular_remove(rid: str, mid: str = Depends(treasurer_only)):
 
 
 @app.post("/treasurer/settings")
-def treasurer_settings(mode: str = Form(...), start: str = Form(""), arrears_weeks: int = Form(4), certificate_years: int = Form(2),
+def treasurer_settings(mode: str = Form(...), start: str = Form(""), arrears_periods: int = Form(4), certificate_years: int = Form(2),
                        alerts: int = Form(0), mid: str = Depends(treasurer_only)):
-    return money_change(lambda s: treasurer.set_general(s, mid, mode, start, arrears_weeks, certificate_years, bool(alerts)), "settings")
+    return money_change(lambda s: treasurer.set_general(s, mid, mode, start, arrears_periods, certificate_years, bool(alerts)), "settings")
 
 
 @app.post("/treasurer/settings/rate")
 def treasurer_rate(kind: str = Form(...), start: str = Form(...), amount: str = Form(""), remove: int = Form(0),
-                   mid: str = Depends(treasurer_only)):
-    return money_change(lambda s: treasurer.remove_rate(s, mid, kind, start) if remove else treasurer.add_rate(s, mid, kind, start, amount),
-                        "settings")
+                   period: str = Form("week"), due_month: int = Form(0), due_day: int = Form(0), mid: str = Depends(treasurer_only)):
+    due = f"{due_month:02d}-{due_day:02d}" if due_month and due_day else ""
+    return money_change(lambda s: treasurer.remove_rate(s, mid, kind, start) if remove
+                        else treasurer.add_rate(s, mid, kind, start, amount, period, due), "settings")
 
 
 @app.post("/treasurer/settings/account")

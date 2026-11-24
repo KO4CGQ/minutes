@@ -84,16 +84,16 @@ Only if the club has the chow module (an admin turns it on under Admin → Site 
 
 - **Tracking:** Off, **Preview** (officers see everything, members nothing, no emails: for checking the figures first) or **On** (members see their own figures on Home).
 - **Start date:** nothing is owed before it. Older balances go in as adjustments on that date.
-- **Amounts:** dues per meeting night, initiation fee, the bond, a missed chow night. Each change has a date it takes effect, so earlier weeks keep the old amount.
-- **Arrears:** how many weeks behind counts (4 by default), and whether the Treasurer and Board get an email when someone gets there.
+- **Amounts:** dues, initiation fee, the bond, a missed chow night. Each change has a date it takes effect, so earlier charges keep the old amount. Dues come **a week, a month or a year** at a time: pick the period with the amount and its date (for a year, also the month and day it falls due, e.g. July 1; not February 29). The period fields are for dues only and ignored for the other amounts. A club that changes from weekly to yearly dues on a date is charged weekly before it and yearly after.
+- **Arrears:** how many periods behind counts (4 by default; weeks, months or years, whichever the dues are now), and whether the Treasurer and Board get an email when someone gets there.
 - **Accounts, funds** and **spending categories** (up to 8, each keeps its chart colour).
 
 ![Treasurer → Settings](screenshots/treasurer-settings.png)
 
-🧾 **Who owes what** is worked out, never typed: dues for every meeting night (holidays too; 52 × $3.50 is $182 a year), initiation, missed chow nights and adjustments, less payments. Members may pay weekly, monthly or yearly; paying ahead shows as "paid through" a date. Members in arrears show in red.
+🧾 **Who owes what** is worked out, never typed: dues for each due date (weekly dues fall due on every meeting night, holidays too: 52 × $3.50 is $182 a year; monthly dues on the 1st of each month; yearly dues on the day you picked), counted from the first due date on or after tracking started or the member joined (someone who joins mid-month starts with the next 1st), initiation, missed chow nights and adjustments, less payments. Members may pay weekly, monthly or yearly; paying ahead shows as "paid through" the day before the first due date the payment doesn't cover. Members in arrears show in red.
 
 > [!NOTE]
-> **An example:** dues are $3.50 a meeting night and tracking started 26 weeks ago, so a long-time member owes $91.00 so far. Pat has paid $66.50: Pat owes **$24.50**, 7 weeks, in red (4 weeks or more). Max joined 8 weeks ago: the $25.00 initiation fee plus 8 nights ($28.00), less what he's paid.
+> **An example:** dues are $3.50 a meeting night and tracking started 26 weeks ago, so a long-time member owes $91.00 so far. Pat has paid $66.50: Pat owes **$24.50**, about 7 weeks, in red (4 weeks or more). Max joined 8 weeks ago: the $25.00 initiation fee plus 8 nights ($28.00), less what he's paid.
 
 ![Who owes what](screenshots/treasurer.png)
 

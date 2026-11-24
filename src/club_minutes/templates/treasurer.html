@@ -17,11 +17,11 @@
       <label>Amount<input name="amount" inputmode="decimal" required value="{{ '%d'|format(rate(cfg, 'certificate', '2000-01-01') // 100) }}"></label></div>
     <label>Note<input name="note" maxlength="300" placeholder="e.g. from the old ledger"></label>
     <div class="formrow"><button class="btn small">Record the {{ cert().short }}</button></div></form></details>{% endif %}
-<p class="hint">Dues are {{ money(rate(cfg, 'dues_weekly', today)) }} a meeting night{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {% if module('chow') %}{{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and {% endif %}the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_weeks }} weeks or more behind is in red.</p>
+<p class="hint">Dues are {{ dues_text(rate_step(cfg, 'dues', today), true) }}{% if cfg.start %} since {{ fmt(cfg.start) }} (or since joining){% endif %}, plus {% if module('chow') %}{{ money(rate(cfg, 'missed_chow', today)) }} for each missed chow night and {% endif %}the {{ money(rate(cfg, 'initiation', today)) }} initiation fee for new members. {{ cfg.arrears_periods }} {{ rate_step(cfg, 'dues', today).period }}s or more behind is in red.</p>
 <nav class="tabs small"><a href="/treasurer?tab=standing" class="{{ 'on' if not everyone }}">Owe something ({{ owing }})</a><a href="/treasurer?tab=standing&everyone=1" class="{{ 'on' if everyone }}">Everyone ({{ standings|length }})</a></nav>
-<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">Weeks</th>{% if module('chow') %}<th class="n opt">Missed chow</th>{% endif %}{% if cert() %}<th>{{ cert().short|capitalize }}</th>{% endif %}</tr></thead>
+<table class="list"><thead><tr><th>Member</th><th class="n">Owes</th><th class="n">{{ rate_step(cfg, 'dues', today).period|capitalize }}s</th>{% if module('chow') %}<th class="n opt">Missed chow</th>{% endif %}{% if cert() %}<th>{{ cert().short|capitalize }}</th>{% endif %}</tr></thead>
 <tbody>{% for x in standings if everyone or x.owed > 0 or x.certificate_late %}<tr{% if x.behind %} class="late"{% endif %}><td><a href="/members/{{ x.member }}?from=treasurer">{{ club.name(x.member) }}</a>{% if x.suspended %} <span class="chip late">suspended</span>{% endif %}</td>
-  <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.weeks_behind or '' }}</td>
+  <td class="n" data-sort="{{ x.owed }}">{% if x.owed > 0 %}{{ money(x.owed) }}{% elif x.paid_through %}<span class="muted small">paid through {{ fmt(x.paid_through) }}</span>{% else %}—{% endif %}</td><td class="n">{{ x.periods_behind or '' }}</td>
   {% if module('chow') %}<td class="n opt">{{ x.missed_chow|length or '' }}</td>{% endif %}
   {% if cert() %}<td>{% if x.certificate %}bought {{ x.certificate_bought[:4] }}{% elif x.certificate_due %}<span class="{{ 'late' if x.certificate_late }}">due {{ fmt(x.certificate_due) }}</span>{% else %}not bought{% endif %}</td>{% endif %}</tr>
 {% else %}<tr><td colspan="5" class="muted">{{ 'No one yet.' if everyone else 'Nobody owes anything.' }}</td></tr>{% endfor %}</tbody></table>
@@ -111,10 +111,10 @@
   {% for k, v in modes.items() %}<label class="check"><input type="radio" name="mode" value="{{ k }}" {{ 'checked' if cfg.mode == k }} {{ ro }}> {{ v }}</label>{% endfor %}
   <div class="formrow">
     <label>Tracking starts<input type="date" name="start" value="{{ cfg.start or '' }}" {{ ro }}></label>
-    <label>Behind after (weeks)<input type="number" name="arrears_weeks" min="1" max="52" value="{{ cfg.arrears_weeks }}" {{ ro }}></label>
+    <label>Behind after ({{ rate_step(cfg, 'dues', today).period }}s)<input type="number" name="arrears_periods" min="1" max="52" value="{{ cfg.arrears_periods }}" {{ ro }}></label>
     {% if cert() %}<label>Years to buy the {{ cert().short }}<input type="number" name="certificate_years" min="0" max="10" value="{{ cfg.certificate_years }}" {{ ro }}></label>{% else %}<input type="hidden" name="certificate_years" value="{{ cfg.certificate_years }}">{% endif %}
   </div>
-  <label class="check"><input type="checkbox" name="alerts" value="1" {{ 'checked' if cfg.alerts }} {{ ro }}> Email the Treasurer and the Board when a member reaches that many weeks behind (only when On; the app never suspends anyone)</label>
+  <label class="check"><input type="checkbox" name="alerts" value="1" {{ 'checked' if cfg.alerts }} {{ ro }}> Email the Treasurer and the Board when a member reaches that many {{ rate_step(cfg, 'dues', today).period }}s behind (only when On; the app never suspends anyone)</label>
   <p class="hint">Nothing is owed before the start date: enter older balances as adjustments. Preview is for checking the figures: officers see everything, members see nothing, and no emails go out.</p>
   {% if edit %}<div class="formrow"><button class="btn small">Save</button></div>{% endif %}
 </form>
@@ -122,14 +122,18 @@
 <div class="card"><h2>Amounts</h2>
   <p class="hint">The club's amounts{{ cite('dues') }}. When they change, add the new amount with the date it takes effect: earlier weeks keep the old one{% if cert() %}, and the {{ cert().short }}'s price is the one in effect when a member joined{% endif %}.</p>
   <table class="list"><thead><tr><th>What</th><th>From</th><th class="n">Amount</th>{% if edit %}<th></th>{% endif %}</tr></thead><tbody>
-  {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ money(x.cents) }}</td>
+  {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ dues_text(x) if k == 'dues' else money(x.cents) }}</td>
     {% if edit %}<td>{% if cfg.rates[k]|length > 1 %}<form method="post" action="/treasurer/settings/rate" class="inline" data-confirm="Remove the {{ label|lower }} amount of {{ money(x.cents) }} from {{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}?"><input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="start" value="{{ x['from'] }}"><input type="hidden" name="remove" value="1"><button class="linkbtn" aria-label="Remove the {{ label|lower }} amount from {{ fmt(x['from']) }}">Remove</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}{% endfor %}
   </tbody></table>
   {% if edit %}<form method="post" action="/treasurer/settings/rate" class="modern"><div class="formrow">
     <label>What<select name="kind">{% for k, label in rates.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
     <label>Takes effect<input type="date" name="start" required></label>
     <label>Amount<input name="amount" inputmode="decimal" required placeholder="4.00"></label>
-    <button class="btn small">Add the change</button></div></form>{% endif %}
+    <label>Dues period<select name="period"><option value="week">week</option><option value="month">month</option><option value="year">year</option></select></label>
+    <label>Yearly dues are due in<select name="due_month"><option value="0">month…</option>{% for n in range(1, 13) %}<option value="{{ n }}">{{ ['January','February','March','April','May','June','July','August','September','October','November','December'][n - 1] }}</option>{% endfor %}</select></label>
+    <label>Day<input type="number" name="due_day" min="1" max="31" placeholder="1"></label>
+    <button class="btn small">Add the change</button></div>
+    <p class="hint">The week, month and day are for dues only (a week's dues fall due on each meeting night, a month's on the 1st, a year's on the day picked) and are ignored for the other amounts.</p></form>{% endif %}
 </div>
 
 <div class="card"><h2>Accounts</h2>
