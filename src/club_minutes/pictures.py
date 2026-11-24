@@ -51,9 +51,19 @@ def exists(pid: str) -> bool:
     return bool(ID.fullmatch(pid or "")) and path(pid).exists()
 
 
-def ids(values) -> list[str]:
-    """The picture ids a form or the console sent: real ones only, each once, at most MAX_EACH."""
-    out = [p for p in dict.fromkeys(str(v) for v in (values or []) if isinstance(v, str)) if exists(p)]
+def owner(pid: str) -> str:
+    """Who uploaded a picture ("" for one from before this was recorded)."""
+    try:
+        return path(pid).with_suffix(".by").read_text()
+    except (OSError, ValueError):
+        return ""
+
+
+def ids(values, by: str = "", attached=()) -> list[str]:
+    """The picture ids a form or the console sent: real ones only, each once, at most MAX_EACH. Another member's picture
+    is left out unless `attached` (the thing being saved) already has it: knowing an id isn't enough to take a picture."""
+    out = [p for p in dict.fromkeys(str(v) for v in (values or []) if isinstance(v, str))
+           if exists(p) and (p in attached or owner(p) in ("", by))]
     return out[:MAX_EACH]
 
 
@@ -83,6 +93,7 @@ def take(mid: str, n: int, club) -> None:
 def delete(pid: str) -> None:
     for small in (False, True):
         path(pid, small).unlink(missing_ok=True)
+    path(pid).with_suffix(".by").unlink(missing_ok=True)
 
 
 def unused(archive, pids) -> list[str]:
@@ -120,6 +131,8 @@ def _prune(archive) -> int:
         m = re.fullmatch(r"([0-9a-f]{16})(-s)?\.jpg", f.name)
         young = time.time() - f.stat().st_mtime < 86400
         if not m:
+            if f.suffix == ".by" and f.with_suffix(".jpg").exists():
+                continue  # a picture's uploader record
             if not young:
                 f.unlink(missing_ok=True)  # .tmp from a crash, or anything else that isn't a picture
         elif young:
@@ -135,9 +148,14 @@ def _prune(archive) -> int:
 _decoding = threading.Semaphore(2)  # a small file can decode to hundreds of MB: two at a time
 
 
-def save(data: bytes) -> str:
+def save(data: bytes, by: str = "") -> str:
     with _decoding:
-        return _save(data)
+        pid = _save(data)
+    if by:
+        tmp = path(pid).with_name(pid + ".by.tmp")  # a crash leaves only a stray .tmp, which _prune clears
+        tmp.write_text(by)
+        tmp.replace(path(pid).with_suffix(".by"))
+    return pid
 
 
 def _save(data: bytes) -> str:

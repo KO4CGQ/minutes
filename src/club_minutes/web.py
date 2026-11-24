@@ -735,8 +735,8 @@ def business_motion(request: Request, mover: str = Form(""), seconder: str = For
         _unrecorded(what)
         x = business.add_motion(s, archive.club, mid, owner_id(mover), owner_id(seconder), what, result,
                                 opened=meeting or date or None, past=not meeting)
-        if pictures.ids(pics):
-            business.add_pictures(s, x["id"], pictures.ids(pics))
+        if got := pictures.ids(pics, mid):
+            business.add_pictures(s, x["id"], got)
     return business_change(request, run, meeting, back="/business?tab=motions&note=Recorded." if not meeting else "/business")
 
 
@@ -773,7 +773,7 @@ async def _uploads(mid: str, files: list[UploadFile] | None) -> list[str]:
     pictures.take(mid, len(files), archive.club)
     out = []
     for f in files:
-        out.append(await run_in_threadpool(pictures.save, await f.read(limits.max_upload() + 1)))
+        out.append(await run_in_threadpool(pictures.save, await f.read(limits.max_upload() + 1), mid))
     return out
 
 
@@ -874,7 +874,7 @@ async def picture_upload(request: Request, file: Annotated[UploadFile, File()], 
     """The console: a picture for a community report, stored now; it shows once the report is saved with it."""
     try:
         pictures.take(mid, 1, archive.club)
-        return {"id": await run_in_threadpool(pictures.save, await file.read(limits.max_upload() + 1))}
+        return {"id": await run_in_threadpool(pictures.save, await file.read(limits.max_upload() + 1), mid)}
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
@@ -4028,7 +4028,7 @@ async def console_save(request: Request, slug: str, mid: str = Depends(leader)):
     else:
         _held_by_other(slug, None, mid)  # a console from before this version (no tab): only someone else's hold stops it
     try:
-        console.apply(archive, slug, data)
+        console.apply(archive, slug, data, mid)
     except console.Unreadable:
         raise HTTPException(400, "That request wasn't readable.") from None
     except console.Unrecorded as e:  # not 409: the console reads that as someone else taking over

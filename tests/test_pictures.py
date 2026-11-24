@@ -357,3 +357,22 @@ def test_preview_renders_like_the_page_for_signed_in_members_only(env):
     assert member.post("/api/preview", data={"text": "x" * 5001}).status_code == 400
     assert as_(None).post("/api/preview", data={"text": "x"}, follow_redirects=False).status_code in (303, 401)
     assert member.post("/api/preview", data={"text": "x"}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+
+
+def test_a_picture_id_only_attaches_for_its_uploader_or_where_it_already_is(env):
+    import datetime as dt
+
+    from club_minutes import console
+    from club_minutes.meeting import Item, Meeting
+    mine, theirs, old = pictures.save(photo(), "pres"), pictures.save(photo(), "w0demo"), pictures.save(photo())
+    assert pictures.ids([mine, theirs, old], "pres") == [mine, old]  # no uploader recorded (older picture): still attachable
+    assert pictures.ids([theirs], "pres", attached=[theirs]) == [theirs]
+    sec = "Community Reports"
+    Meeting(date=dt.date(2026, 10, 15), status="draft", sections={sec: [Item("Antenna", "n0call", pictures=[theirs])]}).save(web.archive.root)
+    web.archive.reload()
+    page = lambda *p: {"meeting": {"sections": {sec: [{"text": "Antenna", "member": "n0call", "pictures": list(p)}]}}}
+    # a different leader re-saves the draft: its own picture stays, another member's unattached one is left out
+    got = console.apply(web.archive, "2026-10-15", page(theirs, mine, pictures.save(photo(), "n0call")), "pres")
+    assert got.items(sec)[0].pictures == [theirs, mine]
+    pictures.delete(mine)
+    assert not pictures.path(mine).with_suffix(".by").exists()

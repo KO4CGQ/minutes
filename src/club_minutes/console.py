@@ -314,11 +314,12 @@ class Unreadable(Exception):
     """A console save that isn't the shape the console sends (a 400)."""
 
 
-def apply(archive: Archive, slug: str, data: dict) -> Meeting:
+def apply(archive: Archive, slug: str, data: dict, by: str = "") -> Meeting:
     """Save the console's full meeting state (last write wins)."""
     m = archive.by_slug[slug]
     _draft(m)
     d, club = data["meeting"], archive.club
+    had = {p for items in m.sections.values() for i in items for p in i.pictures}  # already on these minutes: any leader may re-save them
 
     def members(v) -> list[str]:  # roster ids only, any status; an old callsign becomes the current one
         return [x for x in dict.fromkeys(club.canonical(x) for x in v if isinstance(x, str)) if x in club.members]
@@ -340,7 +341,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
             raise TypeError
         sec = d.get("sections") or {}
         sections = {s: [Item(text(i["text"], True), i.get("member") if isinstance(i.get("member"), str) and i.get("member") else None, *_span(i.get("when"), i.get("until")),
-                             i.get("cal") if i.get("cal") in ("community", "planning") else None, pictures.ids(i.get("pictures")))
+                             i.get("cal") if i.get("cal") in ("community", "planning") else None, pictures.ids(i.get("pictures"), by, had))
                         for i in sec.get(s) or [] if text(i.get("text", ""), True)]
                     for s in m.section_order(club.sections())}  # only sections these minutes have: no others from the browser
     except (TypeError, AttributeError, KeyError):
