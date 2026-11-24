@@ -180,8 +180,11 @@ def main() -> None:
                 except Exception as e:  # noqa: BLE001
                     print(f"couldn't prune {name}: {e}")
             try:
-                if n := prefs.purge_removed():
+                n, purged = prefs.purge_removed()
+                if n:
                     print(f"dropped the settings and sign-ins of {n} member(s) now Inactive, a Silent Key or off the roster")
+                if purged:
+                    print(f"deleted the personal details of {purged} member(s) who left {prefs.PURGE_DAYS} days ago")
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't drop the settings of members who left: {e}")
             try:

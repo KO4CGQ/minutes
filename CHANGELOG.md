@@ -14,6 +14,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - **Dues by the week, the month or the year:** the Treasurer sets the period with the amount (a yearly club picks the day dues fall due), and "behind after" counts in that period. Meetings, cancellations and schedule changes never change what anyone owes. A weekly club's dues stay the same.
 
 ### Changed
+- **When a member leaves**, their email, phone, address, birthday, photo and calendar feed link are deleted 90 days after they're made Inactive or a Silent Key (or taken off the roster). Their name, callsign, years of membership and offices are kept. Made Active again within the 90 days, nothing is lost; roster keepers see the date on the member's page.
 - In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.
 - In the leader console, members' comments on a business item show their first two lines, formatted and ending in …, with **Show more** for the rest.
 - The leader console's **Submit minutes** buttons show only once the finished minutes are on screen, so they're never submitted unseen.

@@ -108,6 +108,39 @@ def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | No
 
 
 @roster_locked
+def forget_member(club: Club, mid: str) -> bool:
+    """A leaver's personal details gone (the daily job, 90 days after they left): their lines out of the change log, their
+    photo and calendar feed, and their roster row's email, phone, address, birthday and sharing blanked. Each step can be run
+    again. False, with nothing done, if the roster now shows them back (a roster keeper may have changed it since the job
+    read it). Raises roster.SheetError if the sheet can't be written."""
+    from . import avatars, calview
+    rows = json.loads(ROSTER_CACHE.read_text()) if ROSTER_CACHE.exists() else []
+    now = next((r for r in rows if r.get("id") == mid), None)
+    if now and str(now.get("status") or "Active").lower() not in ("inactive", "silent key"):
+        return False
+    p = log_path()
+    if p.exists():
+        lines = p.read_text().splitlines()
+        keep = [x for x in lines if _entry_member(x) != mid]
+        if len(keep) != len(lines):
+            auth._rewrite_email_log(p, keep)  # atomic, owner-only; the same as the other logs' trims
+    avatars.remove(mid)
+    calview.forget_feed(mid)
+    if mid in club.members:  # off the roster entirely: no row
+        blank = {f: "" for f in EDITABLE}
+        Sheet().update_member(mid, {COLUMNS[f]: v for f, v in blank.items()})
+        _apply_locally(club, mid, blank)
+    return True
+
+
+def _entry_member(line: str):
+    try:
+        return json.loads(line).get("member")
+    except (ValueError, AttributeError):
+        return None  # torn: kept, not ours to drop
+
+
+@roster_locked
 def undo(club: Club, change_id: str, by: str, sheet: Sheet | None = None, url: str = "") -> dict:
     """Put back the old values of a change, unless the member has changed those fields again since."""
     e = next((x for x in history(10_000) if x["id"] == change_id), None)

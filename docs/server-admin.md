@@ -41,7 +41,7 @@ In admin mode, the name menu's **Admin** lists the admin tools, each with a line
 - 💾 **Backups:** the last one.
 - ⬆️ **Updates:** what's running and what's available.
 - 🎨 **Site:** the club's settings.
-- ✉️ **Email log:** anything held back this week; every email is kept 90 days (at most the last 1,000). When a member becomes Inactive or a Silent Key, or leaves the roster, the daily job also takes their address out of it.
+- ✉️ **Email log:** anything held back this week; every email is kept 90 days (at most the last 1,000). When a member becomes Inactive or a Silent Key, or leaves the roster, the daily job also takes their address out of it. 90 days after it first sees a member gone (noted in `removed.json`), it also blanks their roster row's email, phone, address, birthday and sharing, and deletes their photo, calendar feed link and `profile-changes.jsonl` lines; backups made before then keep them until they age out.
 - 🧪 **Stage sync**, on a staging server only.
 
 ## 🎨 Site settings
