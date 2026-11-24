@@ -70,8 +70,9 @@ def release(slug: str, tab: str) -> None:
             del _holds[slug]
 
 
-def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None = None) -> Meeting:
-    """Start the minutes of a meeting, or open them if that date's draft is already there. Only one meeting is open at a
+def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None = None, online: bool = False) -> Meeting:
+    """Start the minutes of a meeting, or open them if that date's draft is already there. A new meeting has its recorder
+    present: online when `online`, else in person (they can change it in Attendance). Only one meeting is open at a
     time: with another still in progress (say, last week's never submitted), it has to be submitted or discarded first.
     Minutes already in the archive (submitted or imported) never reopen here: they're corrected on their page."""
     with _starting:
@@ -86,11 +87,13 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
         if (open_ := [m for m in archive.meetings if m.status == "draft"]):
             raise ValueError(f"The minutes of {show_date(open_[0].date, 'long')} are still open: continue them, or discard them, "
                              "before starting another meeting.")
-        return _start(archive, date, leader, recorder)
+        return _start(archive, date, leader, recorder, online)
 
 
-def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None) -> Meeting:
+def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None, online: bool = False) -> Meeting:
     m = Meeting(date=date, status="draft", leader=leader, recorder=recorder)
+    if recorder:
+        (m.remote if online else m.in_person).append(recorder)
     prev = previous(archive, date)
     for sec in archive.club.sections():  # the club's agenda, in its order
         m.sections[sec] = []

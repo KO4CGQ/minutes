@@ -10,9 +10,19 @@ import datetime as dt
 import json
 import logging
 import re
+import secrets
+import string
 
 from . import auth, branding, chow, prefs, profile
-from .club import ROSTER_CACHE, Club, one_line, roster_locked, show_date, valid_email
+from .club import (
+    CALLSIGN,
+    ROSTER_CACHE,
+    Club,
+    one_line,
+    roster_locked,
+    show_date,
+    valid_email,
+)
 from .roster import Sheet, SheetError
 
 log = logging.getLogger("club_minutes.membership")
@@ -53,6 +63,14 @@ def clean(form: dict) -> dict:
     return f
 
 
+def new_id(club: Club) -> str:
+    """A random member id, "m" and six letters or digits: no one's current or former id, and never one that reads as a callsign."""
+    while True:
+        mid = "m" + "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(6))
+        if club.resolve(mid) is None and not CALLSIGN.match(mid):
+            return mid
+
+
 @roster_locked
 def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url: str = "") -> str:
     """Add a member to the roster sheet and the app. Returns their id. Raises ValueError or SheetError."""
@@ -63,8 +81,11 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
             raise ValueError(f"{f['callsign']} is already on the roster ({m.name}).")
         if not f["callsign"] and m.name.lower() == name.lower():
             raise ValueError(f"{name} is already on the roster.")
+    if f["callsign"] and (other := club.resolve(f["callsign"])):  # someone's earlier call, or an id: it would point at them
+        raise ValueError(f"{f['callsign']} was {club.name(other)}'s callsign, so it can't be given to someone new here.")
     sheet = sheet or Sheet()
-    sheet.add_row({"callsign": f["callsign"], "full_name": name, "email": f["email"], "phone": f["phone"],
+    mid = new_id(club)
+    sheet.add_row({"id": mid, "callsign": f["callsign"], "full_name": name, "email": f["email"], "phone": f["phone"],
                    "address": f["address"], "class": f["license_class"], "status": "Active"},
                   optional=("phone", "address", "class"))
     try:
@@ -74,7 +95,6 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
     except SheetError as e:  # the roster row is the part that matters
         log.warning("new member %s: Membership Log not written: %s", name, e)
 
-    mid = f["callsign"].lower() or re.sub(r"[^a-z]+", "-", name.lower()).strip("-")
     rows = json.loads(ROSTER_CACHE.read_text()) if ROSTER_CACHE.exists() else []
     rows.append({"id": mid, "first": f["first"], "last": f["last"], "callsign": f["callsign"] or None,
                  "email": f["email"] or None, "role": None, "officer": False, "board": False,
@@ -103,7 +123,7 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
             auth.send_email(to, f"New member: {name}",
                             f"{club.name(by)} added {name}{f' ({f['callsign']})' if f['callsign'] else ''} to the roster, "
                             f"joined {show_date(f['joined'], 'document')}. The roster sheet and its Membership Log have a new row.\n\n"
-                            f"{url}/members/{mid}\n\nYou get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())
+                            f"{url}{club.member_url(mid)}\n\nYou get these because you keep the roster. To stop them: {url}/profile/email\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())
         except Exception:
             log.exception("couldn't email the Secretary about new member %s", mid)
     return mid

@@ -80,7 +80,7 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 
 **Removing a test meeting:** `club-minutes delete-meeting 2026-12-31`, then `systemctl restart club-minutes`.
 
-**A callsign change that stopped partway** (the app's log says so, for example a full disk): the roster already has the new callsign. Stop the service, run `club-minutes rename-id OLD NEW` (the ids the log names; safe to run again), then start it.
+**A rename that stopped partway** (only from before 1.2, when a callsign change renamed the member everywhere; the app's log says so): the roster already has the new callsign. Stop the service, run `club-minutes rename-id OLD NEW` (the ids the log names; safe to run again), then start it.
 
 ## 🛡️ Admin mode
 Admins get **Turn on admin mode** in the name menu. For an hour (or until turned off) they can see and do what officers can, with a red banner showing. Each switch is logged. Turning it on asks you to confirm it's you: with a passkey that checks your PIN, fingerprint or face (a security key that only takes a tap isn't enough here, though it still signs you in), or with a link emailed to you.

@@ -44,6 +44,8 @@ today = dt.date.today()
 club = Club()
 sheet = roster.LocalSheet(roster._local())
 sheet.save({"Member Roster": [roster.PreviewSheet.HEADER], "Membership Log": [roster.PreviewSheet.LOG_HEADER]})
+readable = iter(c.lower() for c, *_ in PEOPLE)
+membership.new_id = lambda club: next(readable)  # the demo keeps readable ids (n0jane...), which its checks and screenshots name
 for i, (call, first, last, cls, _) in enumerate(PEOPLE):
     joined = today - dt.timedelta(weeks=8 if call == "K0MAXX" else 400 // 7 + i)  # Max is new: he owes the initiation fee
     membership.add_member(club, {"callsign": call, "first": first, "last": last, "email": f"{first.lower()}.{last.lower()}@example.org",

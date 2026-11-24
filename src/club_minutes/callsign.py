@@ -1,15 +1,11 @@
-"""A member's new callsign (a vanity call, an upgrade with a new call): their id in every record follows.
+"""A member's new callsign (a vanity call, an upgrade with a new call).
 
-A member's id is their callsign in lowercase, and it's stored all over the data folder: the chow schedule,
-business items, calendars, email choices, the minutes (attendance, leader, report tags), sign-ins and passkeys,
-their picture. A change:
+A member's id is stored in the roster's id column and never changes, so a new callsign touches nothing else: `change`
+writes it to the roster sheet, adds the old one to aliases (so old links and club.yaml still find the member:
+Club.canonical), and adds a "Callsign Change" row to the Membership Log.
 
-1. takes a backup first (so it needs the backup passphrase), kept on the server;
-2. writes the new callsign to the roster sheet, adds the old one to aliases (so old links and anything missed
-   still find the member: Club.canonical), and adds a "Callsign Change" row to the Membership Log;
-3. renames the id in the data folder: current state only. Logs (chow, calendar, profile changes, sign-in
-   history apart from the tables below) keep the old id as history, and show the member's name through
-   the alias.
+`rename_id` is for the old way, when the id was the callsign: it finishes a rename that stopped partway (the
+`rename-id` command) by renaming the id in the data folder's current state. Logs keep the old id as history.
 """
 from __future__ import annotations
 
@@ -23,7 +19,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from . import backup, profile
+from . import profile
 from .club import CALLSIGN, DATA, ROSTER_CACHE, Club, inside, one_line, roster_locked
 from .meeting import split_front
 from .membership import LOG_TAB
@@ -96,33 +92,22 @@ def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
 
 
 @roster_locked
-def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet | None = None) -> str:
-    """Give a member a new callsign. Returns their new id. Raises ValueError, backup.BackupError or
-    roster.SheetError before anything is renamed."""
+def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet | None = None) -> None:
+    """Give a member a new callsign. Their id stays as it is, so no record changes. Raises ValueError or roster.SheetError."""
     m = club.members.get(mid)
     if not m:
         raise ValueError("No such member.")
     new_call = callsign.strip().upper()
     if not CALLSIGN.match(new_call):
         raise ValueError(f"{new_call or 'That'} doesn't look like a callsign.")
-    new = new_call.lower()
     if new_call == (m.callsign or ""):
         raise ValueError(f"{m.first}'s callsign is already {new_call}.")
-    if new in club.members or club.former_ids.get(new, mid) != mid:
+    if club.resolve(new_call) not in (None, mid):
         raise ValueError(f"{new_call} belongs to another member, now or before.")
     try:
         date = dt.date.fromisoformat(date).isoformat()
     except ValueError:
         raise ValueError("Give the date of the change.")
-
-    name, blob, _ = backup.make()  # needs the passphrase: no renaming without a way back
-    d = DATA / "backups"
-    try:
-        keep = inside(d, name.replace(".tar.gz.enc", f"-before-{new}.tar.gz.enc"))
-        blob.replace(keep)
-    except BaseException:
-        blob.unlink(missing_ok=True)
-        raise
 
     # The roster rows as stored: Club._load moves callsign aliases (earlier calls) out of Member.aliases.
     rows = json.loads(ROSTER_CACHE.read_text()) if ROSTER_CACHE.exists() else [asdict(x) for x in club.members.values()]
@@ -133,19 +118,11 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
     sheet.update_member(old_call, m.name, {"callsign": new_call, "aliases": ", ".join(aliases)})
     sheet.add_row({"callsign": new_call, "full_name": m.name, "date": date, "event": "Callsign Change",
                    "note": f"{old_call or '(none)'} to {new_call}"}, tab=LOG_TAB, optional=("note",))
-
-    try:
-        done = rename_id(mid, new)
-    except Exception:  # the sheet already has the new callsign: say how to finish (rename_id can run again safely)
-        log.exception("callsign change %s -> %s stopped partway; with the service stopped, finish it with "
-                      "`club-minutes rename-id %s %s`, then start the service", one_line(mid), one_line(new), one_line(mid), one_line(new))
-        raise
     event = {"date": date, "event": "Callsign Change", "note": f"{old_call or '(none)'} to {new_call}"}
-    row.update(id=new, callsign=new_call, aliases=aliases, events=list(row.get("events") or []) + [event])
+    row.update(callsign=new_call, aliases=aliases, events=list(row.get("events") or []) + [event])
     if ROSTER_CACHE.exists():
         _write(ROSTER_CACHE, json.dumps(rows, indent=1))
     club._load(rows)
-    profile._append({"id": secrets.token_hex(6), "at": int(time.time()), "member": new, "by": by,
+    profile._append({"id": secrets.token_hex(6), "at": int(time.time()), "member": mid, "by": by,
                      "logged": True, "old": {}, "new": {"callsign": f"{old_call or '(none)'} to {new_call}"}})
-    log.info("callsign change %s -> %s by %s (backup %s): %s", one_line(mid), one_line(new), one_line(by), one_line(keep.name), done)
-    return new
+    log.info("callsign change %s: %s -> %s by %s", one_line(mid), one_line(old_call or ""), one_line(new_call), one_line(by))

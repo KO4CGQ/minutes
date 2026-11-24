@@ -16,3 +16,4 @@ club.yaml
 .env
 *.docx
 bylaws.md
+.claude/

@@ -101,6 +101,9 @@ class Names:  # what a Club or a snapshot View offers a mention
     def known_name(self, mid):
         return {"n0call": "Jane D"}.get(mid)
 
+    def member_url(self, mid):
+        return f"/members/{mid}"
+
 
 def test_a_mention_is_a_name_pill_and_nothing_else_becomes_a_link():
     n = Names()
