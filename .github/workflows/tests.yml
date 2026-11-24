@@ -13,6 +13,8 @@ permissions:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    env:  # the screenshots must be current only for a release: pull requests to main, main itself, the Monday run
+      CHECK_SCREENSHOTS: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && '1' || '' }}
     timeout-minutes: 45  # a few minutes as a rule, 25 when Ubuntu's mirror is slow; a real hang fails here, not after 6 hours
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

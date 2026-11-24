@@ -1,5 +1,6 @@
 """Checks on the repo itself: the screenshots match the pages they show, the docs' links lead somewhere, and nothing
 that looks like a real person's contact details is in a tracked file (the repo is public)."""
+import os
 import re
 import subprocess
 import sys
@@ -18,11 +19,16 @@ sys.path.insert(0, str(ROOT / "demo"))
 import manifest
 
 
+@pytest.mark.skipif(not os.environ.get("CHECK_SCREENSHOTS"), reason="only for a release: at the freeze and on pull requests to main")
 def test_screenshots_are_up_to_date():
-    """A template, CSS or script a screenshot's page uses has changed since the pictures were taken."""
+    """A template, CSS or script a screenshot's page uses has changed since the pictures were taken. Items don't retake
+    them as they go (each one would, then the next item would again): the release does, once."""
     stale = manifest.stale()
     assert not stale, ("out of date, retake with `uv run python demo/screenshots.py`: "
                        + "; ".join(f"{n}.png ({', '.join(f)})" for n, f in stale.items()))
+
+
+def test_every_screenshot_is_listed():
     import json
     listed = set(json.loads(manifest.MANIFEST.read_text())["shots"])
     assert listed == {p.stem for p in SHOTS.glob("*.png")}, "a picture isn't in demo/screenshots.py, or one is missing"
