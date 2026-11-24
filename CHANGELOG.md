@@ -30,6 +30,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 ### Security
 - Someone signed out can no longer tell which video rooms are for members only.
 - Someone who knows a member's email address can no longer stop them signing in with an emailed link for an hour.
+- An automatic ban no longer shows whether an email address is a member's.
 
 ## 1.2.0 (2026-11-22)
 

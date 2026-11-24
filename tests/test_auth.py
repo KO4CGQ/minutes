@@ -1,3 +1,4 @@
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -165,6 +166,23 @@ def test_email_links_ignore_forged_host(monkeypatch):
     assert sent[-1] == "http://testserver"  # the address the connection really reached
     for h in ("Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "X-Robots-Tag"):
         assert h in r.headers
+
+
+def test_a_ban_cant_tell_a_members_address_from_an_unknown_one(a, monkeypatch):
+    monkeypatch.setattr(auth_mod, "REPEAT_SECONDS", 0)  # a script waits out the double-click guard
+    for _ in range(auth_mod.BAN_AFTER * 3):  # well past the member's link cap: the extra asks hit link_limit
+        a.send_link("jane@example.org", ip="9.9.9.8")
+        a.send_link("stranger@example.org", ip="9.9.9.9")
+    assert a.db.execute("select count(*) from events where kind='link_limit'").fetchone()[0]  # the cap was reached
+    assert not a.banned("9.9.9.8") and not a.banned("9.9.9.9")
+
+
+def test_one_address_cant_mail_the_whole_roster(a, monkeypatch):
+    monkeypatch.setattr(auth_mod, "REPEAT_SECONDS", 0)
+    for i in range(auth_mod.IP_LINKS_PER_HOUR + 5):  # a fresh member each time: no per-member cap applies
+        a.club.members[f"member-{i}"] = dataclasses.replace(a.club.members["n0aaaa"], id=f"member-{i}", email=f"x{i}@example.org")
+        a.send_link(f"x{i}@example.org", ip="9.9.9.7")
+    assert len(a.sent) == auth_mod.IP_LINKS_PER_HOUR and not a.banned("9.9.9.7")
 
 
 def test_failed_attempts_ban_internet_addresses_only(a):
