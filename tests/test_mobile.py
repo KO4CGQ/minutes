@@ -697,6 +697,7 @@ def test_typing_an_at_sign_picks_a_member(engine):
         box.click()
         box.type("Thanks @ja")
         assert page.get_by_role("option").count() == 1
+        assert page.get_by_role("option").inner_text() == "Jane Doe · N0CALL"  # the full name and callsign, no short name
         box.press("Enter")
         assert box.input_value() == "Thanks @[Jane D](n0call) "
         assert page.get_by_role("listbox").is_hidden()

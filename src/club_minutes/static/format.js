@@ -201,8 +201,7 @@
     from = t.selectionStart - q.length - 1; at = 0;
     menu.replaceChildren(...shown.map((p, i) => {
       const li = document.createElement("li");
-      li.id = `mention-${i}`; li.setAttribute("role", "option"); li.textContent = p.short || p.name;
-      if (p.name !== p.short || p.callsign) { const s = document.createElement("span"); s.textContent = [p.name !== p.short && p.name, p.callsign].filter(Boolean).join(" · "); li.append(s); }
+      li.id = `mention-${i}`; li.setAttribute("role", "option"); li.textContent = [p.name || p.short, p.callsign].filter(Boolean).join(" · ");  // "Jane Doe · N0CALL", no short name repeated
       li.addEventListener("mousedown", (e) => { e.preventDefault(); choose(p); });  // keeps the box's focus, also on a tap
       return li;
     }));
