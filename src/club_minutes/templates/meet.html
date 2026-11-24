@@ -1,7 +1,5 @@
 {% extends "base.html" %}{% block title %}Video meeting{% endblock %}{% block body %}
-{% if members_only %}<h1>Members only</h1>
-<p>This room is for members only. <a href="/login?next=/meet/{{ room|urlencode }}">Sign in to join.</a></p>
-{% elif guest %}<h1>{{ guest.name }}</h1>
+{% if guest %}<h1>{{ guest.name }}</h1>
 <div class="cards rooms choice"><div class="card room"><h2>Members</h2><p>Sign in, and you join as you.</p>
 <p><a class="btn" href="/login?next=/meet/{{ guest.slug|urlencode }}">Sign in</a></p></div>
 <div class="card room"><h2>Guests</h2><p>Join with just your name, then wait in the lobby until a host lets you in.</p>

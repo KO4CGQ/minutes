@@ -303,10 +303,6 @@ async def require_login(request: Request, call_next):
                       one_line(path))
     if request.state.member or path.startswith(PUBLIC_PATHS):
         return await call_next(request)
-    if request.method == "GET" and path.startswith("/meet/") and meet.members_only(archive.club, path[6:].lower()):
-        refused = page(request, "meet.html", members_only=True, room=path[6:].lower())
-        refused.status_code = 403
-        return refused
     if request.method == "GET" and path.startswith("/meet/") and (g := meet.guest_room(archive.club, path[6:].lower())):
         return page(request, "meet.html", guest=g, domain=meet.settings(archive.club)["domain"])  # sign in, or join as a guest
     if request.method == "GET" and not path.startswith("/api/"):
