@@ -195,6 +195,19 @@ def test_recorded_by_shows_only_when_someone_else_led(tmp_path, monkeypatch):
     assert msg["Reply-To"] == "sam@example.org" and "led by Jane Doe, recorded by Sam Kim" in msg.get_body(("plain",)).get_content()
 
 
+def test_the_recorder_starts_present_in_person_or_online(tmp_path):
+    from club_minutes.web import lan
+    a = archive_with_prev(tmp_path)
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim")
+    assert (m.in_person, m.remote) == (["kim"], [])
+    m = console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim", online=True)  # reopened: left as it is
+    assert (m.in_person, m.remote) == (["kim"], [])
+    a = archive_with_prev(tmp_path / "b")
+    assert console.start(a, dt.date(2026, 11, 12), "doe", recorder="kim", online=True).remote == ["kim"]
+    assert [lan(ip) for ip in ("192.168.1.5", "127.0.0.1", "100.101.1.2", "fd7a:115c:a1e0::1", "8.8.8.8", None)] == \
+        [True, True, False, False, False, False]  # the room's LAN, this machine; the tailnet and the internet are away
+
+
 def test_one_meeting_open_at_a_time(tmp_path):
     a = archive_with_prev(tmp_path)
     m = console.start(a, dt.date(2026, 11, 12), "doe")

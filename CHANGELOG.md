@@ -17,6 +17,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 - The leader console's **Submit minutes** buttons show only once the finished minutes are on screen, so they're never submitted unseen.
 - The treasurer's **Delete** asks about the entry by its amount, date and member, and the leader console's Other reports show a character count, as the other boxes do.
 - In the leader console's Community Reports, **Nothing new** shows only while the report box is empty.
+- Starting a meeting in the leader console marks you present: in person on the meeting place's network, online from anywhere else.
 
 ### Fixed
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.

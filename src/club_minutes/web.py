@@ -2685,6 +2685,16 @@ def device(agent: str | None) -> str:
     return " on ".join(x for x in (br, os_) if x) or (a[:40] or "unknown")
 
 
+def lan(ip: str | None) -> bool:
+    """A LAN (or this machine's) address: someone in the room. The tailnet and the internet count as away."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip or "")
+    except ValueError:
+        return False
+    return a.is_private and a not in ipaddress.ip_network("fd7a:115c:a1e0::/48")  # Tailscale's IPv6 range is private too
+
+
 def where(ip: str | None) -> str:
     """LAN, tailnet or internet, so an admin can tell at a glance."""
     import ipaddress
@@ -3932,13 +3942,13 @@ def console_home(request: Request, error: str = "", mid: str = Depends(leader)):
 
 
 @app.post("/console/start")
-def console_start(date: str = Form(...), leader_id: str = Form("", alias="leader"), mid: str = Depends(leader)):
+def console_start(request: Request, date: str = Form(...), leader_id: str = Form("", alias="leader"), mid: str = Depends(leader)):
     try:
         day = dt.date.fromisoformat(date)
     except ValueError:
         return RedirectResponse("/console?error=" + quote("Pick the meeting's date."), status_code=303)
     try:
-        m = console.start(archive, day, leader_id or mid, recorder=mid)
+        m = console.start(archive, day, leader_id or mid, recorder=mid, online=not lan(client_ip(request)))
     except ValueError as e:  # another meeting is still open (only one at a time)
         return RedirectResponse("/console?error=" + quote(str(e)), status_code=303)
     return RedirectResponse(f"/console/{m.slug}", status_code=303)
