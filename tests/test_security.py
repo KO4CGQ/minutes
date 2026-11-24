@@ -1,6 +1,7 @@
 """Whole-app security checks: every route for a signed-out visitor, officer pages for a member, members' own-only actions,
 post-sign-in redirects, and bad input that used to be a server error."""
 import re
+import shutil
 import urllib.parse
 from pathlib import Path
 
@@ -172,6 +173,16 @@ def test_an_admin_in_admin_mode_sets_the_upload_limit(tmp_path, monkeypatch):
     r = t.post("/admin/security/limits", data={"upload_mb": "25"})
     assert r.status_code == 200 and "Uploads up to 25 MB." in r.text and limits.upload_mb() == 25
     assert 'value="25"' in t.get("/admin/security/uploads").text
+    from club_minutes import pictures
+    monkeypatch.setattr(pictures, "DATA", tmp_path)
+    (tmp_path / "pictures").mkdir(exist_ok=True)
+    (tmp_path / "pictures" / "a.jpg").write_bytes(b"x" * 3_000_000)
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: shutil._ntuple_diskusage(10**11, 0, 41 * 10**9))
+    page = t.get("/admin/security/uploads").text
+    assert "Pictures take 3 MB. The disk has 41.0 GB free." in page and "nearly full" not in page
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: shutil._ntuple_diskusage(10**10, 9 * 10**9, 5 * 10**8))
+    page = t.get("/admin/security/uploads").text
+    assert "The disk has 500 MB free." in page and "nearly full" in page
 
 
 def test_roster_changes_wait_for_the_nightly_sync_in_another_process(tmp_path, monkeypatch):

@@ -65,10 +65,35 @@ def _v4(data: Path) -> None:
             m.write(p)
 
 
+def _v5(data: Path) -> None:
+    """5: the Treasurer's dues are a week, a month or a year at a time: settings.rates.dues_weekly becomes rates.dues with
+    period "week" on every step, and settings.arrears_weeks becomes arrears_periods. Same amounts; nothing else changes.
+    No file, or no settings in it (the defaults apply): left alone."""
+    import json
+    import os
+    p = data / "treasurer.json"
+    if not p.exists():
+        return
+    s = json.loads(p.read_text())
+    st = s.get("settings")
+    if not st:
+        return
+    rates = st.get("rates") or {}
+    if "dues_weekly" in rates:
+        rates["dues"] = [{**x, "period": "week"} for x in rates.pop("dues_weekly")]
+    if "arrears_weeks" in st:
+        st["arrears_periods"] = st.pop("arrears_weeks")
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(s, indent=1, sort_keys=True))
+    os.chmod(tmp, 0o600)
+    tmp.replace(p)
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
     (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
     (4, "published minutes keep their names, agenda order, heading and links from when they were made (snapshot.py): 1.1 can't tell", _v4),
+    (5, "the Treasurer's dues can be a week, a month or a year at a time (rates.dues with a period, arrears_periods): 1.2.0 can't read it", _v5),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"

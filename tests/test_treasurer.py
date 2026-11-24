@@ -48,7 +48,7 @@ def test_standing_dues_by_the_week_chow_fees_and_payments(club):
     nights = {"2026-11-19": {"member": "amy", "status": "missed"}, "2026-10-01": {"member": "amy", "status": "missed"}}
     amy = treasurer.standing(club, s, "amy", today, nights)
     assert amy["owed"] == 5 * 350 + 3500 and amy["missed_chow"] == ["2026-11-19"]  # October's was before tracking
-    assert amy["behind"] and amy["weeks_behind"] == 15
+    assert amy["behind"] and amy["periods_behind"] == 15 and amy["period"] == "week"
     treasurer.record(club, s, "tre", "dues", "17.50", "2026-12-03", "Cash", "amy")
     treasurer.record(club, s, "tre", "chow", "35", "2026-12-03", "Cash", "amy")
     amy = treasurer.standing(club, s, "amy", today, nights)
@@ -74,7 +74,7 @@ def test_off_until_the_treasurer_turns_it_on(club):
 
 def test_amounts_that_change_on_a_date_and_paying_ahead(club):
     s, today = started(), dt.date(2026, 12, 3)
-    treasurer.add_rate(s, "tre", "dues_weekly", "2026-11-19", "4")
+    treasurer.add_rate(s, "tre", "dues", "2026-11-19", "4")
     treasurer.add_rate(s, "tre", "certificate", "2026-11-10", "150")
     amy = treasurer.standing(club, s, "amy", today, {})
     assert amy["owed"] == 2 * 350 + 3 * 400  # Nov 5 and 12 at the old rate, Nov 19 on at the new
@@ -82,13 +82,13 @@ def test_amounts_that_change_on_a_date_and_paying_ahead(club):
     treasurer.record(club, s, "tre", "dues", "19", "2026-12-03", "Cash", "amy")
     treasurer.record(club, s, "tre", "dues", "50", "2026-12-03", "Cash", "amy")  # a few months ahead
     amy = treasurer.standing(club, s, "amy", today, {})
-    assert amy["certificate"] and amy["owed"] == -5000 and amy["paid_through"] == "2027-02-25"  # 12 nights of $4: Dec 10 … Feb 25
+    assert amy["certificate"] and amy["owed"] == -5000 and amy["paid_through"] == "2027-03-03"  # 12 nights of $4 (Dec 10 … Feb 25): the day before Mar 4
     assert treasurer.standing(club, s, "bob", today, {})["certificate_due"] == "2028-11-12"  # joined after the rise: owes $150
     c = treasurer.config(s)
-    assert treasurer.rate(c, "dues_weekly", "1999-01-01") == 350  # before any change: the first amount
-    treasurer.remove_rate(s, "tre", "dues_weekly", "2026-11-19")
+    assert treasurer.rate(c, "dues", "1999-01-01") == 350  # before any change: the first amount
+    treasurer.remove_rate(s, "tre", "dues", "2026-11-19")
     with pytest.raises(ValueError):
-        treasurer.remove_rate(s, "tre", "dues_weekly", "2000-01-01")  # the last one stays
+        treasurer.remove_rate(s, "tre", "dues", "2000-01-01")  # the last one stays
 
 
 def test_accounts_the_treasurer_adds_and_removes(club):
@@ -181,7 +181,7 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
     tre, pres, amy = as_("tre"), as_("pres"), as_("amy")
     assert amy.get("/treasurer").status_code == 403
     assert "Tracking (dues, bills and spending) is off" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text
-    on = {"mode": "preview", "start": "2026-11-05", "arrears_weeks": "4", "certificate_years": "2"}
+    on = {"mode": "preview", "start": "2026-11-05", "arrears_periods": "4", "certificate_years": "2"}
     assert pres.post("/treasurer/settings", data=on).status_code == 403
     assert tre.post("/treasurer/settings", data=on, follow_redirects=False).status_code == 303
     assert "Preview:" in pres.get("/treasurer").text and "Your dues" not in amy.get("/").text  # members don't see a preview
@@ -190,7 +190,7 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
     assert tre.post("/treasurer/record", data=form, follow_redirects=False).status_code == 303
     assert treasurer.load()["entries"][0]["member"] == "amy"
     assert "Record</button>" not in pres.get("/treasurer?tab=money").text and "Amy Appleseed" in pres.get("/treasurer?tab=money").text
-    assert tre.post("/treasurer/settings/rate", data={"kind": "dues_weekly", "start": "2027-01-07", "amount": "4"}).status_code == 200
+    assert tre.post("/treasurer/settings/rate", data={"kind": "dues", "start": "2027-01-07", "amount": "4", "period": "week"}).status_code == 200
     assert tre.post("/treasurer/settings/account", data={"name": "Emergency Fund"}).status_code == 200
     assert "Emergency Fund" in tre.get("/treasurer?tab=settings").text and "$4.00" in pres.get("/treasurer?tab=settings").text
     assert "bylaws (" not in (pg := tre.get("/treasurer?tab=settings").text) and "(bylaws" not in pg  # no sections unless given
@@ -199,6 +199,11 @@ def test_pages_officers_look_the_treasurer_records_members_see_their_own(club, t
     assert "The club's amounts (bylaws VII)." in pg and "every month or year (bylaws &lt;b&gt;IV.C&lt;/b&gt;)" in pg  # escaped
     tre.post("/treasurer/settings", data={**on, "mode": "on"})
     assert "Your dues" in amy.get("/").text
+    yearly = {"kind": "dues", "start": "2030-01-01", "amount": "150", "period": "year", "due_month": "7", "due_day": "1"}
+    assert tre.post("/treasurer/settings/rate", data=yearly).status_code == 200
+    assert "$150.00 a year, due July 1" in tre.get("/treasurer?tab=settings").text
+    assert "Behind after (weeks)" in tre.get("/treasurer?tab=settings").text  # the period in effect today
+    assert "Pick the month and day" in tre.post("/treasurer/settings/rate", data={**yearly, "due_day": "0"}).text
 
 
 def test_a_funds_keepers_record_only_its_account(club, tmp_path, monkeypatch):
@@ -492,3 +497,101 @@ def test_text_from_the_minutes_and_members_is_never_run_as_html(club, tmp_path, 
         assert "<script>alert" not in html and "<img src=x" not in html, path
         if path != "/spending":  # it's on the page, as text
             assert "&lt;script&gt;alert" in html or "&lt;img src=x" in html, path
+
+
+def dues(s, *steps):
+    """Set the dues steps: (from, dollars, period, due)."""
+    for start, amt, period, due in steps:
+        treasurer.add_rate(s, "tre", "dues", start, amt, period, due)
+    return s
+
+
+def owed(club, s, who, day):
+    return treasurer.standing(club, s, who, dt.date.fromisoformat(day), {})["owed"]
+
+
+def test_monthly_dues_fall_on_the_1st_from_the_first_full_month_after_joining(club):
+    s = dues(started(), ("2000-01-01", "30", "month", ""))  # tracking starts Nov 5
+    assert owed(club, s, "amy", "2026-11-30") == 0 and owed(club, s, "amy", "2027-01-20") == 2 * 3000  # Dec 1 and Jan 1
+    assert owed(club, s, "bob", "2027-01-20") == 2 * 3000 + 2500  # joined Nov 12: starts with Dec 1
+    club.members["bob"].member_since = "2026-12-01"  # joining on a due date counts that month
+    assert owed(club, s, "bob", "2026-12-01") == 3000 + 2500
+
+
+def test_yearly_dues_fall_on_the_chosen_day_and_refuse_impossible_ones(club):
+    s = dues(started(), ("2000-01-01", "150", "year", "7-1"))
+    assert owed(club, s, "amy", "2027-06-30") == 0 and owed(club, s, "amy", "2027-07-01") == 15000
+    assert treasurer.dues_text(treasurer.step(treasurer.config(s), "dues", "2027-01-01")) == "$150.00 a year, due July 1"
+    for bad in ("02-29", "13-01", "4-31", "", "x"):
+        with pytest.raises(ValueError):
+            treasurer.add_rate(s, "tre", "dues", "2028-01-01", "150", "year", bad)
+    with pytest.raises(ValueError):
+        treasurer.add_rate(s, "tre", "dues", "2028-01-01", "150", "decade")
+
+
+def test_a_change_from_weekly_to_yearly_charges_weekly_before_and_yearly_after(club):
+    s = dues(started(), ("2000-01-01", "3.50", "week", ""), ("2027-01-01", "150", "year", "03-01"))
+    assert owed(club, s, "amy", "2026-12-31") == 9 * 350  # Thursdays Nov 5 … Dec 31
+    assert owed(club, s, "amy", "2027-02-28") == 9 * 350  # no weekly charges once the yearly step is in
+    assert owed(club, s, "amy", "2027-03-01") == 9 * 350 + 15000
+
+
+def test_behind_counts_the_clubs_current_period_and_home_rounds_to_the_nearest(club):
+    s = dues(started(), ("2000-01-01", "30", "month", ""))
+    s["settings"]["arrears_periods"] = 2
+    st = lambda day: treasurer.standing(club, s, "amy", dt.date.fromisoformat(day), {})
+    assert not st("2026-12-15")["behind"] and st("2026-12-15")["periods_behind"] == 1
+    x = st("2027-01-02")
+    assert x["behind"] and x["periods_behind"] == 2 and x["period"] == "month"
+    s = dues(started(), ("2000-01-01", "10", "month", ""))
+    treasurer.record(club, s, "tre", "adjustment", "21", "2026-12-02", "Cash", "amy")  # 10 + 21 = 3.1 months
+    assert st("2026-12-15")["periods_behind"] == 3
+    treasurer.record(club, s, "tre", "dues", "7", "2026-12-02", "Cash", "amy")  # 24 owed
+    treasurer.record(club, s, "tre", "dues", "17", "2026-12-02", "Cash", "amy")  # 7 left: 0.7 of a month
+    assert st("2026-12-15")["periods_behind"] == 1
+    treasurer.record(club, s, "tre", "dues", "3", "2026-12-02", "Cash", "amy")  # 4 left: under half
+    assert st("2026-12-15")["owed"] == 400 and st("2026-12-15")["periods_behind"] == 0
+
+
+def test_paid_through_for_a_monthly_payer_ahead_is_the_day_before_the_first_unpaid_1st(club):
+    s = dues(started(), ("2000-01-01", "30", "month", ""))
+    treasurer.record(club, s, "tre", "dues", "100", "2026-12-15", "Cash", "amy")
+    amy = treasurer.standing(club, s, "amy", dt.date(2026, 12, 15), {})
+    assert amy["owed"] == -7000 and amy["paid_through"] == "2027-02-28"  # Jan 1 and Feb 1 covered, Mar 1 not
+    treasurer.record(club, s, "tre", "dues", "1", "2026-12-15", "Cash", "bob")
+    assert treasurer.standing(club, s, "bob", dt.date(2026, 12, 15), {})["paid_through"] is None  # owes the fee: nothing ahead
+
+
+def test_spending_converts_dues_to_a_month_by_period(club):
+    for step, month in ((("2000-01-01", "3.50", "week", ""), 350 * 52 // 12), (("2000-01-01", "30", "month", ""), 3000),
+                        (("2000-01-01", "150", "year", "07-01"), 1250)):
+        s = dues(started(), step)
+        assert treasurer.spending(s, dt.date(2026, 11, 20), club=club)["dues_month"] == month
+
+
+def test_the_upgrade_renames_weekly_dues_and_arrears_and_a_weekly_clubs_figures_stay(club, tmp_path):
+    import json
+
+    from club_minutes import upgrade
+    old = {"settings": {"mode": "on", "start": "2026-11-05", "arrears_weeks": 3, "certificate_years": 2, "alerts": False,
+                        "rates": {"dues_weekly": [{"from": "2000-01-01", "cents": 350}, {"from": "2026-11-19", "cents": 400}],
+                                  "initiation": [{"from": "2000-01-01", "cents": 2500}]}},
+           "entries": [{"id": "a1", "date": "2026-12-01", "kind": "dues", "member": "amy", "cents": 20000, "account": "Cash", "note": ""}]}
+    p = tmp_path / "treasurer.json"
+    p.write_text(json.dumps(old))
+    figures = lambda: [treasurer.standing(club, treasurer.load(), m, dt.date(2026, 12, 20), {}) for m in ("amy", "bob", "tre")]
+    before = figures()
+    upgrade._v5(tmp_path)
+    st = json.loads(p.read_text())["settings"]
+    assert st["rates"]["dues"] == [{"from": "2000-01-01", "cents": 350, "period": "week"}, {"from": "2026-11-19", "cents": 400, "period": "week"}]
+    assert "dues_weekly" not in st["rates"] and st["arrears_periods"] == 3 and "arrears_weeks" not in st
+    assert st["rates"]["initiation"] == old["settings"]["rates"]["initiation"] and st["mode"] == "on"
+    assert figures() == before and before[0]["paid_through"] and before[0]["owed"] < 0
+    upgrade._v5(tmp_path)  # again: nothing changes
+    assert figures() == before
+    p.write_text(json.dumps({"entries": []}))  # no settings: left alone; no file: nothing made
+    upgrade._v5(tmp_path)
+    assert json.loads(p.read_text()) == {"entries": []}
+    p.unlink()
+    upgrade._v5(tmp_path)
+    assert not p.exists()

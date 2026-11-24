@@ -166,5 +166,8 @@
 </div>
 <p class="hint">Profile pictures, calendar .ics files and pictures on reports, business items and comments; anything bigger is turned away before it's read. A proxy in front of the app (Caddy, nginx, Traefik) needs a limit at least this big. How many pictures a member can add a day: <a href="/admin/site/features">Site → Features</a>.</p>
 </form>
+{% set used, free = pic_space %}{% macro sz(n) %}{{ '%.1f GB' % (n / 1e9) if n >= 1e9 else '%.0f MB' % (n / 1e6) }}{% endmacro %}
+<p>Pictures take {{ sz(used) }}. The disk has {{ sz(free) }} free.</p>
+{% if free < 2e9 %}<p class="msg warn">The disk is nearly full, and pictures may stop saving. Free up space on the server or move the data folder to a bigger disk.</p>{% endif %}
 {% endif %}
 {% endblock %}

@@ -64,13 +64,16 @@ LINK_MINUTES = 15
 CHALLENGE_SECONDS = 300
 EMAILS_PER_HOUR = 5            # sign-in links a member gets from one address in an hour...
 LINKS_PER_HOUR_ALL = 15        # ...and from all addresses together
+KNOWN_PER_HOUR = 3             # links an hour for a member from browsers they've signed in with (the all-addresses cap doesn't apply to these)
+KNOWN_DAYS = 400               # how long a known-browser mark lasts (the longest a browser keeps a cookie)
 REPEAT_SECONDS = 120           # the same request again this soon sends nothing and counts toward nothing
 
 SCHEMA = """
 create table if not exists sessions (token_hash text primary key, member text not null,
   created integer not null, expires integer not null, agent text);
 create table if not exists links (token_hash text primary key, member text not null,
-  expires integer not null, next text, used integer default 0, created integer not null, ip text);
+  expires integer not null, next text, used integer default 0, created integer not null, ip text, source text);
+create table if not exists known_browsers (token_hash text primary key, member text not null, expires integer not null);
 create table if not exists passkeys (id text primary key, member text not null, public_key blob not null,
   sign_count integer not null, transports text, label text, created integer not null, last_used integer,
   aaguid text);
@@ -147,6 +150,8 @@ class Auth:
             self.db.execute("alter table events add column agent text")
         if "ip" not in {r["name"] for r in self.db.execute("pragma table_info(links)")}:  # added in 1.1.0
             self.db.execute("alter table links add column ip text")
+        if "source" not in {r["name"] for r in self.db.execute("pragma table_info(links)")}:  # 1.2: web / known / cli
+            self.db.execute("alter table links add column source text")
         if "by" not in {r["name"] for r in self.db.execute("pragma table_info(email_changes)")}:  # added in 1.1.0
             self.db.execute("alter table email_changes add column by text")
         os.chmod(path, 0o600)
@@ -277,6 +282,22 @@ class Auth:
 
     def end_all_sessions(self, member: str) -> None:
         self.db.execute("delete from sessions where member=?", (member,))
+        self.db.execute("delete from known_browsers where member=?", (member,))  # a lost device stops lifting the cap too
+
+    # ---------------- known browsers ----------------
+    def is_known(self, member: str, token: str | None) -> bool:
+        """A cookie this app gave this member's browser at a sign-in. It never signs anyone in; it only lifts a cap."""
+        return bool(token) and bool(self.db.execute("select 1 from known_browsers where token_hash=? and member=? and expires>?",
+                                                    (_hash(token), member, time.time())).fetchone())
+
+    def mark_known(self, member: str, old: str | None) -> str:
+        """A new cookie value for this browser at each sign-in (its old one, if any, is dropped). Returns the value."""
+        if old:
+            self.db.execute("delete from known_browsers where token_hash=?", (_hash(old),))
+        token = secrets.token_urlsafe(32)
+        self.db.execute("insert into known_browsers (token_hash, member, expires) values (?,?,?)",
+                        (_hash(token), member, int(time.time()) + KNOWN_DAYS * 86400))
+        return token
 
     # ---------------- email links ----------------
     def member_by_email(self, email: str) -> str | None:
@@ -286,7 +307,8 @@ class Auth:
                 return m.id
         return None
 
-    def send_link(self, email: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None, agent: str = "") -> None:
+    def send_link(self, email: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None, agent: str = "",
+                  browser: str | None = None) -> None:
         """Email a one-time login link. Silent if the address isn't on the roster (no account probing)."""
         member = self.member_by_email(email)
         if not member:
@@ -295,26 +317,33 @@ class Auth:
             return
         now = int(time.time())
 
-        def count(since: int, same_ip: bool) -> int:
-            return self.db.execute("select count(*) from links where member=? and created>?" + (" and ip is ?" if same_ip else ""),
-                                   (member, now - since, *((ip,) if same_ip else ()))).fetchone()[0]
+        known = self.is_known(member, browser)
+
+        def count(since: int, same_ip: bool = False, source: str | None = None) -> int:  # CLI links count toward nothing
+            return self.db.execute("select count(*) from links where member=? and created>? and coalesce(source,'web')" + ("=?" if source else "!='cli'")
+                                   + (" and ip is ?" if same_ip else ""),
+                                   (member, now - since, *((source,) if source else ()), *((ip,) if same_ip else ()))).fetchone()[0]
         if count(REPEAT_SECONDS, True):  # a second click while the email is on its way
             return
-        if count(3600, True) >= EMAILS_PER_HOUR or count(3600, False) >= LINKS_PER_HOUR_ALL:
+        # strangers get 5 an hour per address and share 15; a known browser has its own 3 (not the address's, which a
+        # stranger on the same network could use up), so a stranger can't use up a member's
+        if (count(3600, source="known") >= KNOWN_PER_HOUR if known
+                else count(3600, True, "web") >= EMAILS_PER_HOUR or count(3600, source="web") >= LINKS_PER_HOUR_ALL):
             log.warning("login link rate limit hit for %s", member)
             self.event("link_limit", ip, member, agent=agent)
             return
-        url = self.create_link(member, next_url, base_url, ip)
+        url = self.create_link(member, next_url, base_url, ip, source="known" if known else "web")
         send_email(self.club.members[member].email, f"Your {branding.name(self.club)} sign-in link", only_to=self.club.email_only_to(), to_self=True,
                    body=f"Hi {self.club.members[member].first},\n\n"
                    f"Use this link to sign in to {branding.name(self.club)}. It works once, for {LINK_MINUTES} minutes:\n\n"
                    f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n73,\n{branding.name(self.club)}")
 
-    def create_link(self, member: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None) -> str:
+    def create_link(self, member: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None, source: str = "cli") -> str:
+        """source: 'cli' (the login-link command: counts toward no cap), or what send_link says: 'web' or 'known'."""
         now = int(time.time())
         token = secrets.token_urlsafe(32)
-        self.db.execute("insert into links (token_hash, member, expires, next, used, created, ip) values (?,?,?,?,0,?,?)",
-                        (_hash(token), member, now + LINK_MINUTES * 60, _safe_next(next_url), now, ip))
+        self.db.execute("insert into links (token_hash, member, expires, next, used, created, ip, source) values (?,?,?,?,0,?,?,?)",
+                        (_hash(token), member, now + LINK_MINUTES * 60, _safe_next(next_url), now, ip, source))
         return f"{(base_url or self.base_url or '').rstrip('/')}/login/link?t={token}"
 
     def use_link(self, token: str) -> tuple[str, str] | None:
@@ -456,7 +485,7 @@ class Auth:
         now = time.time()
         old = now - days * 86400
         gone = sum(self.db.execute(f"delete from {t} where {c}<?", (now,)).rowcount
-                   for t, c in (("sessions", "expires"), ("email_changes", "expires"), ("bans", "until")))  # a ban with no end stays
+                   for t, c in (("sessions", "expires"), ("known_browsers", "expires"), ("email_changes", "expires"), ("bans", "until")))  # a ban with no end stays
         gone += sum(self.db.execute(f"delete from {t} where {c}<?", (old,)).rowcount
                     for t, c in (("links", "created"), ("events", "at"), ("challenges", "expires")))
         return gone + self.db.execute(
@@ -465,14 +494,14 @@ class Auth:
 
     def known_ids(self) -> set[str]:
         """Every member forget_removed looks at (anyone with sign-in data)."""
-        return {r[0] for t in ("passkeys", "sessions", "links", "challenges", "email_changes", "signins")
+        return {r[0] for t in ("passkeys", "sessions", "known_browsers", "links", "challenges", "email_changes", "signins")
                 for r in self.db.execute(f"select distinct member from {t} where member is not null")}
 
     def forget_removed(self, keep: set[str]) -> set[str]:
         """A member not in `keep` (Inactive, a Silent Key, or off the roster): their passkeys, sessions, sign-in links, address changes and sign-in records go
         (the daily job, inside prefs.locked() so a callsign change isn't taken for leaving). Security events stay their 90 days."""
         gone: set[str] = set()
-        for t in ("passkeys", "sessions", "links", "challenges", "email_changes", "signins"):
+        for t in ("passkeys", "sessions", "known_browsers", "links", "challenges", "email_changes", "signins"):
             ids = {r[0] for r in self.db.execute(f"select distinct member from {t} where member is not null")} - keep
             for mid in ids:
                 self.db.execute(f"delete from {t} where member=?", (mid,))

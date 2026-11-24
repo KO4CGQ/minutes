@@ -155,14 +155,6 @@ def adhoc(club: Club) -> dict | None:
     return rules(a) | {"p2p": a.get("p2p", True) is not False} if a.get("on") else None
 
 
-def members_only(club: Club, room: str) -> bool:
-    """Whether this room lets no guests in (a guest reaching /meet/<room> is told so instead of sent on to Jitsi)."""
-    if not settings(club) or not ROOM.match(room):
-        return False
-    r = next((r for r in rooms(club) if r["slug"] == room), None) or adhoc(club)
-    return bool(r) and not r["guests"]
-
-
 def guest_room(club: Club, room: str) -> dict | None:
     """The room a signed-out visitor may join as a guest, for /meet/<room>'s "Sign in or join as a guest" page: one of
     the club's rooms that lets guests in, or a member's own room while it's current (and own rooms let guests in)."""

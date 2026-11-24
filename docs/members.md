@@ -3,7 +3,7 @@
 For every member: what the app does for you, and where to find it. It's in the app too: **Help**, in the menu under your name.
 
 ## 🔑 Signing in
-Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or ask for a one-time link by email to the address the club has for you. After an emailed link, the app offers to add a passkey on your device, unless you already have one there (or add one any time under Profile → Sign-in & passkeys), so next time is one tap.
+Sign in with a passkey (your phone or computer's fingerprint, face or PIN), or ask for a one-time link by email to the address the club has for you. After an emailed link, the app offers to add a passkey on your device, unless you already have one there (or add one any time under Profile → Sign-in & passkeys), so next time is one tap. Sign-in links are limited to a few an hour (a passkey always works); on a browser you've signed in with before, a stranger asking for links in your name can't use them up.
 
 > [!TIP]
 > Stuck signing in? Ask an admin.
@@ -37,7 +37,7 @@ Published minutes don't change when the club's settings or roster change (member
 **Chow** shows the schedule and your nights, 16 to a page. Can't make yours? Ask another member to swap; they approve or decline from their Home page. Not bringing chow and not arranging a swap can cost a fee, if the club sets one.
 
 ## 📌 Business
-**Business** lists the club's open items; tap one to see its comments and history. Anyone can comment; if an item is yours, update it or mark it done. An item, a comment or a note takes up to 5,000 characters; the count is under the box. Add up to four pictures to an item of yours, or to a comment (the **Picture** button above the box): a quote, a photo of the tower. Tap a picture to see it full size. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting), with pictures if you like, and the leader reads it out; it goes in the minutes with its pictures.
+**Business** lists the club's open items; tap one to see its comments and history. Anyone can comment (the meeting's leader may pick a comment to go in the minutes, which every member gets); if an item is yours, update it or mark it done. An item, a comment or a note takes up to 5,000 characters; the count is under the box. Add up to four pictures to an item of yours, or to a comment (the **Picture** button above the box): a quote, a photo of the tower. Tap a picture to see it full size. Can't make a meeting, or have news? Leave a note (Business → Notes for the next meeting), with pictures if you like, and the leader reads it out; it goes in the minutes with its pictures.
 
 ![Business: the club's open items](screenshots/business.png)
 
@@ -63,12 +63,12 @@ The app's money pages (your dues here, and Spending below) start when the Treasu
 Once tracking is on, Home shows what you owe (or that you're paid up, and through which date) and, if your club has a certificate each member buys once (some clubs call it a bond), whether you still need to buy it. 🔒 Only you and the officers see your figures. Pay the Treasurer at a meeting.
 
 > [!NOTE]
-> **An example:** with dues of $3.50 a meeting night, someone who's paid for all but the last 7 meeting nights sees **You owe $24.50**, "about 7 weeks of dues". Paid ahead? Home says which date you're paid through instead.
+> **An example:** with dues of $3.50 a week, someone who's paid for all but the last 7 meeting nights sees **You owe $24.50**, "about 7 weeks of dues" (months or years, if the club's dues are monthly or yearly; under half a period reads "less than a week's dues"). Paid ahead? Home says which date you're paid through instead.
 
 ![Home, for a member 7 weeks behind on dues](screenshots/home-dues.png)
 
 ## 📊 Where the club's money goes
-With tracking on (the same switch as your dues, above), **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in.
+With tracking on (the same switch as your dues, above), **Spending** in the menu shows what the club paid over the last 12 months, by category (utilities, insurance, internet, food, equipment) and by month. Nobody's dues are shown there. It also shows what running the club costs per member each month, next to what dues bring in (weekly or yearly dues converted to a month).
 
 ![Where the club's money goes: a year of spending by category](screenshots/spending.png)
 
@@ -80,4 +80,4 @@ With tracking on (the same switch as your dues, above), **Spending** in the menu
 - **Video meetings:** joining sends your name and callsign to the club's video server.
 - **Admin recovery:** if the officers ever have to recover admin access, every member is emailed at each step.
 - **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both.
-- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night, and your address leaves the Email log. Made Active again, you sign in with an emailed link and add a passkey again.
+- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night, and your address leaves the Email log. Made Active again, you sign in with an emailed link and add a passkey again. Minutes already published keep your name where they recorded it (attendance, reports, motions).

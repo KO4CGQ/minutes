@@ -122,6 +122,7 @@ if not _log.handlers:
     _log.propagate = False
 
 COOKIE = "club_minutes_session"
+KNOWN_COOKIE = "club_minutes_known"  # marks a browser a member has signed in with; never signs anyone in, outlives sign-out
 CHALLENGE_COOKIE = "club_minutes_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico", "/email/confirm",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
@@ -303,10 +304,6 @@ async def require_login(request: Request, call_next):
                       one_line(path))
     if request.state.member or path.startswith(PUBLIC_PATHS):
         return await call_next(request)
-    if request.method == "GET" and path.startswith("/meet/") and meet.members_only(archive.club, path[6:].lower()):
-        refused = page(request, "meet.html", members_only=True, room=path[6:].lower())
-        refused.status_code = 403
-        return refused
     if request.method == "GET" and path.startswith("/meet/") and (g := meet.guest_room(archive.club, path[6:].lower())):
         return page(request, "meet.html", guest=g, domain=meet.settings(archive.club)["domain"])  # sign in, or join as a guest
     if request.method == "GET" and not path.startswith("/api/"):
@@ -514,6 +511,8 @@ def start_session(request: Request, response: Response, member: str, method: str
     token = authn.new_session(member, request.headers.get("user-agent", ""), client_ip(request), method)
     response.set_cookie(COOKIE, token, max_age=authn.session_days * 86400, httponly=True, samesite="lax",
                         secure=is_https(request))
+    response.set_cookie(KNOWN_COOKIE, authn.mark_known(member, request.cookies.get(KNOWN_COOKIE)), max_age=authmod.KNOWN_DAYS * 86400,
+                        httponly=True, samesite="lax", secure=is_https(request))
     return response
 
 
@@ -578,7 +577,7 @@ LOGIN_NOTES = {"email": "Your email has changed, and you're signed out everywher
 def login_email(request: Request, background: BackgroundTasks, email: str = Form(...), next: str = Form("/")):
     # After the reply: a member's address (an email to send) and anyone else's must answer alike, or the time tells
     background.add_task(authn.send_link, email, next, base_url=base_url(request), ip=client_ip(request),
-                        agent=request.headers.get("user-agent", ""))
+                        agent=request.headers.get("user-agent", ""), browser=request.cookies.get(KNOWN_COOKIE))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
@@ -1138,7 +1137,7 @@ def treasurer_page(request: Request, tab: str = "standing", error: str = "", eve
                 show=show if show in ("waiting", "paid", "dismissed", "all") else "waiting", regular=treasurer.regular_due(s, dt.date.today()),
                 regular_all=s["regular"], every=treasurer.EVERY, cats=treasurer.categories(s), guess=lambda t: treasurer.guess(t, s), modes=treasurer.MODES, rates=rates,
                 labels=treasurer.labels(club), kinds=[k for k in (treasurer.KINDS if edit else treasurer.NO_MEMBER) if (k != "chow" or chow_on) and (k != "certificate" or club.certificate)], accounts=c["accounts"] if edit else kept,
-                rate=treasurer.rate, admins=' or '.join(sorted(club.name(a) for a in club.all_admins)),
+                rate=treasurer.rate, rate_step=treasurer.step, dues_text=treasurer.dues_text, admins=' or '.join(sorted(club.name(a) for a in club.all_admins)),
                 money=treasurer.money, today=dt.date.today().isoformat(), fmt=lambda d: show_date(d, "day_year"))
 
 
@@ -1224,16 +1223,17 @@ def treasurer_regular_remove(rid: str, mid: str = Depends(treasurer_only)):
 
 
 @app.post("/treasurer/settings")
-def treasurer_settings(mode: str = Form(...), start: str = Form(""), arrears_weeks: int = Form(4), certificate_years: int = Form(2),
+def treasurer_settings(mode: str = Form(...), start: str = Form(""), arrears_periods: int = Form(4), certificate_years: int = Form(2),
                        alerts: int = Form(0), mid: str = Depends(treasurer_only)):
-    return money_change(lambda s: treasurer.set_general(s, mid, mode, start, arrears_weeks, certificate_years, bool(alerts)), "settings")
+    return money_change(lambda s: treasurer.set_general(s, mid, mode, start, arrears_periods, certificate_years, bool(alerts)), "settings")
 
 
 @app.post("/treasurer/settings/rate")
 def treasurer_rate(kind: str = Form(...), start: str = Form(...), amount: str = Form(""), remove: int = Form(0),
-                   mid: str = Depends(treasurer_only)):
-    return money_change(lambda s: treasurer.remove_rate(s, mid, kind, start) if remove else treasurer.add_rate(s, mid, kind, start, amount),
-                        "settings")
+                   period: str = Form("week"), due_month: int = Form(0), due_day: int = Form(0), mid: str = Depends(treasurer_only)):
+    due = f"{due_month:02d}-{due_day:02d}" if due_month and due_day else ""
+    return money_change(lambda s: treasurer.remove_rate(s, mid, kind, start) if remove
+                        else treasurer.add_rate(s, mid, kind, start, amount, period, due), "settings")
 
 
 @app.post("/treasurer/settings/account")
@@ -2814,7 +2814,8 @@ def security_page(request: Request, tab: str = "signins", member: str = "", erro
                 sessions=authn.all_sessions(), who=member, admin_log=admin_log,
                 add=request.query_params.get("add", ""), event_names=authmod.EVENT_NAMES,
                 my_ip=client_ip(request), session_days=authn.session_days, ban_after=authmod.BAN_AFTER, ban_hours=authmod.BAN_HOURS,
-                upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB))
+                upload_mb=limits.upload_mb(), upload_range=(limits.MIN_MB, limits.MAX_MB),
+                pic_space=pictures.space() if tab == "uploads" else (0, 0))
 
 
 @app.post("/admin/security/limits")
