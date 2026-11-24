@@ -122,6 +122,7 @@ if not _log.handlers:
     _log.propagate = False
 
 COOKIE = "club_minutes_session"
+KNOWN_COOKIE = "club_minutes_known"  # marks a browser a member has signed in with; never signs anyone in, outlives sign-out
 CHALLENGE_COOKIE = "club_minutes_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico", "/email/confirm",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
@@ -510,6 +511,8 @@ def start_session(request: Request, response: Response, member: str, method: str
     token = authn.new_session(member, request.headers.get("user-agent", ""), client_ip(request), method)
     response.set_cookie(COOKIE, token, max_age=authn.session_days * 86400, httponly=True, samesite="lax",
                         secure=is_https(request))
+    response.set_cookie(KNOWN_COOKIE, authn.mark_known(member, request.cookies.get(KNOWN_COOKIE)), max_age=authmod.KNOWN_DAYS * 86400,
+                        httponly=True, samesite="lax", secure=is_https(request))
     return response
 
 
@@ -574,7 +577,7 @@ LOGIN_NOTES = {"email": "Your email has changed, and you're signed out everywher
 def login_email(request: Request, background: BackgroundTasks, email: str = Form(...), next: str = Form("/")):
     # After the reply: a member's address (an email to send) and anyone else's must answer alike, or the time tells
     background.add_task(authn.send_link, email, next, base_url=base_url(request), ip=client_ip(request),
-                        agent=request.headers.get("user-agent", ""))
+                        agent=request.headers.get("user-agent", ""), browser=request.cookies.get(KNOWN_COOKIE))
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 

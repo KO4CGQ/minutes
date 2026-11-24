@@ -21,6 +21,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ### Security
 - Someone signed out can no longer tell which video rooms are for members only.
+- Someone who knows a member's email address can no longer stop them signing in with an emailed link for an hour.
 
 ## 1.2.0 (2026-11-22)
 

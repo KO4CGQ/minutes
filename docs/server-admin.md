@@ -70,7 +70,8 @@ Members sign in with a passkey, or with a one-time link emailed to their roster 
 
 - **Passkeys** only work at the HTTPS address in club.yaml (`auth.rp_id`).
 - **Email** needs `CLUB_MINUTES_SMTP_USER` and `CLUB_MINUTES_SMTP_PASSWORD` (a Gmail app password) in `/etc/club-minutes/env`. Without them, links go to the server log instead.
-- **Locked out?** On the server: `club-minutes login-link N0CALL` prints a one-time link for any member.
+- **Locked out?** On the server: `club-minutes login-link N0CALL` prints a one-time link for any member. These links count toward no limit.
+- **Link limits:** a member gets at most 5 emailed sign-in links an hour per internet address, and 15 an hour from all addresses together, so a stranger who knows someone's email can't flood them. Requests from a browser that member has signed in with before (a long-lived cookie, set at any sign-in and kept after signing out; it never signs anyone in) don't count toward either: they have their own 3 an hour, so a stranger can't lock the member out of email sign-in. **Sign out everywhere** and an email change make every browser a stranger again until it signs in. A passkey always works. The sign-in page answers the same for every address.
 
 **Emailing the minutes:** when a leader submits them, every member with an email address (except Inactive and Silent Key) gets their own copy: the PDF, or a link, as each chose on their profile (or nothing, if they turned it off). Replies go to whoever took the minutes and whoever led the meeting, each only if they share their email with members, otherwise to the club's address. Each meeting is emailed once, and leaders see the outcome on the minutes page. If it doesn't go out (an email server problem, or a restart while sending), the minutes page shows **Send it now**, and the daily job tries again overnight (and drops the note of an email still unsent after 90 days); corrected minutes work the same way.
 

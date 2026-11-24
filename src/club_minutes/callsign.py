@@ -34,7 +34,8 @@ log = logging.getLogger("club_minutes.callsign")
 STATE_FILES = ("chow.json", "business.json", "events.json", "calendar-feeds.json", "ask-about.json", "email-prefs.json",
                "settings.json", "treasurer.json", "admins.json", "roles.json", "admins-suspended.json", "recovery.json", "meet-rooms.json")
 AUTH_COLUMNS = {"sessions": ("member", "view_as"), "links": ("member",), "passkeys": ("member",), "challenges": ("member",),
-                "email_changes": ("member", "by"), "signins": ("member",), "events": ("member",)}
+                "email_changes": ("member", "by"), "signins": ("member",), "events": ("member",),
+                "known_browsers": ("member",)}
 
 
 def _swap(x, old: str, new: str):
