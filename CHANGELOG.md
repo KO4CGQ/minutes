@@ -2,7 +2,7 @@
 
 What changed in each version of Club Minutes. Ideas and requests: the repository's [Issues](https://github.com/KO4CGQ/minutes/issues). Security fixes are summed up here; their details are in the repository's [security advisories](https://github.com/KO4CGQ/minutes/security/advisories), once the fix is out.
 
-Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
+The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Versions follow [semantic versioning](https://semver.org): the first number goes up for a change to settings, folders or command names that a club has to act on (a 2.0), the middle for new features, the last for fixes. Each version is a git tag (`v1.0.0`), and the app's footer shows the version that's running.
 
 ## Unreleased
 
