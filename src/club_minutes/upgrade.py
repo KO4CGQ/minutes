@@ -121,12 +121,53 @@ def _v6(data: Path) -> None:
     tmp.replace(p)
 
 
+def _v7(data: Path) -> None:
+    """7 (1.3.0): a meeting's cancelled night is a record on its series (meetings.py): a date deleted from a meeting series
+    (its `skip` list) and a single Club events entry titled "No meeting…" on a meeting date become `changes[date] =
+    {"cancelled": True, "reason": …}` (the entry's title after "No meeting" is the reason, and the entry goes); the
+    app reads nothing else as a cancelled night from now on. Anything else stays. Run again, it finds nothing to do.
+    1.2 would show the cancelled nights again, so it must refuse this data."""
+    import datetime as dt
+    import json
+    import re
+
+    from . import events
+    p = data / "events.json"
+    if not p.exists():
+        return
+    evs = json.loads(p.read_text())["events"]
+    series = [e for e in evs if e.get("meeting")]
+    for e in series:
+        e.setdefault("changes", {})
+        for d in e.get("skip", []):
+            e["changes"][d] = {"cancelled": True, "reason": ""}
+        e["skip"] = []
+    gone = []
+    for x in evs:
+        if x.get("meeting") or x.get("cal") != "events" or x.get("repeat") or not x["title"].strip().lower().startswith("no meeting"):
+            continue
+        day = dt.datetime.fromisoformat(x["start"]).date()
+        hit = False
+        for e in series:
+            pad = events.reach(e)
+            for d in events.dates(e, day - pad, day + pad):
+                if dt.datetime.fromisoformat(events.occurrence(e, d)["start"]).date() == day and not e["changes"].get(d.isoformat(), {}).get("cancelled"):
+                    e["changes"][d.isoformat()] = {"cancelled": True, "reason": re.sub(r"^no meeting\W*", "", x["title"].strip(), flags=re.IGNORECASE).strip(" ()")}
+                    hit = True
+        gone += [x] if hit else []
+    evs = [x for x in evs if not any(x is g for g in gone)]
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"events": evs}, indent=1))
+    tmp.replace(p)
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
     (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
     (4, "published minutes keep their names, agenda order, heading and links from when they were made (snapshot.py): 1.1 can't tell", _v4),
     (5, "the Treasurer's dues can be a week, a month or a year at a time (rates.dues with a period, arrears_periods): 1.2.0 can't read it", _v5),
     (6, "each member's id is stored in the roster's id column, so a callsign change keeps it: 1.2 would misread a changed callsign", _v6),
+    (7, "a cancelled or rescheduled meeting is a record on its calendar series, not a deleted date or a \"No meeting\" entry: 1.2 can't read it", _v7),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"

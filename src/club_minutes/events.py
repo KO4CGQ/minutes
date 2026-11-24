@@ -9,7 +9,9 @@ events.json in the data folder: {"events": [event, ...]}. An event:
     skip: [dates taken out of a repeating event], changes: {date: {title, where, notes, start, end}} (one date changed),
     tz: the IANA time zone start/end are in (timed events), when not the club's (club.yaml timezone), e.g. "UTC",
     uid: the .ics UID it was imported from, if any,
-    quiet: left out of the leader console's "From the calendar" list (default: only the weekly meeting).
+    quiet: left out of the leader console's "From the calendar" list (default: only the weekly meeting),
+    meeting: True on a Club events series that is a club meeting (meetings.py: its dates are the meeting nights, and
+    `changes` can hold a date's cancel or move record), chow: chow goes with that meeting (default True).
 """
 from __future__ import annotations
 
@@ -129,21 +131,6 @@ def move_meeting(club, since: dt.date, where: str | None, online: str | None, by
     return first
 
 
-def cancelled(evs: list[dict], lo: dt.date, hi: dt.date) -> set[dt.date]:
-    """Meeting nights in lo..hi called off (Jim, 2026-11-22: either step alone does it): a date deleted from the weekly
-    meeting, or a "No meeting" entry (title starting so, any case) on the Club events calendar."""
-    out = set()
-    for e in evs:
-        if e.get("meeting"):
-            out |= {d for s in e.get("skip", []) if lo <= (d := dt.date.fromisoformat(s)) <= hi}
-        elif e.get("cal") == "events":
-            for d in dates(e, lo - reach(e), hi + reach(e)):
-                o = occurrence(e, d)
-                if o["title"].strip().lower().startswith("no meeting") and lo <= (day := _dt(o["start"]).date()) <= hi:
-                    out.add(day)
-    return out
-
-
 def quiet(e: dict) -> bool:
     """Left out of the console's read-out: ticked on the event, or the weekly meeting unless unticked."""
     return e.get("quiet", bool(e.get("meeting")))
@@ -238,7 +225,7 @@ def reach(e: dict) -> dt.timedelta:
     """How far a date of this event can sit from its original date: a day (another time zone) plus the
     furthest any one date was moved. Look that much either side of a range, then keep what lands in it."""
     return dt.timedelta(days=1 + max((abs((_dt(c["start"]).date() - dt.date.fromisoformat(d)).days)
-                                      for d, c in e.get("changes", {}).items()), default=0))
+                                      for d, c in e.get("changes", {}).items() if "start" in c), default=0))  # a cancel record has no start
 
 
 def occurrence(e: dict, d: dt.date) -> dict:
@@ -324,7 +311,8 @@ def form_values(e: dict, d: str | None) -> dict:
     end = o.get("end") or ""
     return {"title": o["title"], "where": o.get("where", ""), "online": o.get("online", ""), "notes": o.get("notes", ""), "cal": e["cal"],
             "date": o["start"][:10], "time": o["start"][11:16], "end_date": end[:10] if end[:10] != o["start"][:10] else "",
-            "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or "", "quiet": quiet(e), **weeks}
+            "end_time": end[11:16], "repeat": rep, "tz": e.get("tz") or "", "repeat_until": (r or {}).get("until") or "", "quiet": quiet(e),
+            "meeting": bool(e.get("meeting")), "chow": e.get("chow", True) if e.get("meeting") else False, **weeks}
 
 
 def add(evs: list[dict], cal: str, v: dict, by: str) -> dict:
@@ -350,6 +338,7 @@ def change(evs: list[dict], eid: str, d: str | None, cal: str, v: dict, scope: s
             raise ValueError("To change how it repeats, choose This and following dates or Every date.")
         e["changes"][d] = {k: v[k] for k in FIELDS if k in v}
         e["quiet"] = v.get("quiet", quiet(e))  # the whole series: it's about the event, not one date
+        e.update({k: v[k] for k in ("meeting", "chow") if k in v})
         return
     # every date (or following from the first date): the series moves by as much as this date moved
     was = _dt(occurrence(e, dt.date.fromisoformat(d))["start"])

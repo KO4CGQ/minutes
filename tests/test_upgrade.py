@@ -150,3 +150,27 @@ def test_step_5_stores_each_members_id_as_it_is_today_and_nothing_else(tmp_path)
     upgrade._v6(tmp_path)
     assert json.loads((tmp_path / "roster-sheet.json").read_text()) == tabs and (tmp_path / "chow.json").read_text() == '{"order": ["n0aaaa"]}'
     upgrade._v6(tmp_path / "empty")  # no roster yet: nothing to do
+
+
+def test_step_7_turns_deleted_dates_and_no_meeting_entries_into_cancel_records(tmp_path):
+    """A skipped date of a meeting series, and a single "No meeting" entry on a meeting date (its title the reason), become
+    cancel records; anything else stays; running again changes nothing."""
+    from club_minutes import events
+    weekly = {"freq": "weekly", "interval": 1, "until": None}
+    evs = []
+    meet = events.add(evs, "events", {"title": "Club meeting", "start": "2026-11-05T19:30", "end": None, "repeat": weekly}, "x")
+    meet["meeting"], meet["skip"] = True, ["2026-11-12"]
+    events.add(evs, "events", {"title": "No meeting (Thanksgiving)", "start": "2026-11-26", "end": None}, "x")
+    events.add(evs, "events", {"title": "No meeting for the net", "start": "2026-11-27", "end": None}, "x")  # not a meeting date
+    other = events.add(evs, "events", {"title": "Fox hunt", "start": "2026-11-14", "end": None, "repeat": weekly}, "x")
+    other["skip"] = ["2026-11-21"]  # not a meeting series: stays a skipped date
+    (tmp_path / "events.json").write_text(json.dumps({"events": evs}))
+    upgrade._v7(tmp_path)
+    got = json.loads((tmp_path / "events.json").read_text())["events"]
+    assert [e["title"] for e in got] == ["Club meeting", "No meeting for the net", "Fox hunt"]
+    assert got[0]["skip"] == [] and got[0]["changes"] == {"2026-11-12": {"cancelled": True, "reason": ""},
+                                                          "2026-11-26": {"cancelled": True, "reason": "Thanksgiving"}}
+    assert got[2]["skip"] == ["2026-11-21"]
+    upgrade._v7(tmp_path)
+    assert json.loads((tmp_path / "events.json").read_text())["events"] == got
+    upgrade._v7(tmp_path / "empty")  # no calendar yet: nothing to do

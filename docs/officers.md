@@ -44,13 +44,16 @@ What a member may do comes from their **roles**. A role is given by the offices 
 - **Repeats**: daily, weekly, every 2 weeks, monthly (2nd Tuesday, last Tuesday, 1st and 3rd Tuesday, or a date), yearly.
 - Change or delete a repeating event for **this date only**, **this and following dates**, or **every date**.
 - Look-alike events on the same day are marked **possible duplicate**; delete one if they're the same.
+- **Club meeting** and **Chow at this meeting** (Meeting nights come from the calendar, below).
 - **Leave out of the leader console's Upcoming Events**: tick it for things not worth reading out (the weekly meeting is ticked already).
 - **Who changed what** (officers) lists every change.
 
-> [!TIP]
-> To cancel a meeting night, do either: delete that one date of the weekly meeting, or add a Club events entry on that date whose title starts with **No meeting** (for example "No meeting (Thanksgiving)"), which also tells members why; the weekly meeting then doesn't show that night. Either way the night is off Home's next meeting, the business notes' meeting list and the chow schedule's new nights. Nights already in the chow schedule stay as they are.
+**Meeting nights come from the calendar.** On a repeating Club events entry, tick **Club meeting**: its dates are then the club's meeting nights, for Home's next meeting, the business notes' meeting list, the meeting-day email, the leader console and the Start meeting button. Any schedule the repeat menu can say works (every 2 weeks, the 1st and 3rd Tuesday); a club that meets twice a week adds a second entry. With the chow module on, **Chow at this meeting** says whether the chow schedule has a night for each of its dates (ticked for the club's usual meeting, unticked for a second entry until you tick it).
 
-**The weekly meeting** is on Club events. To change its day, time, place or online link, an admin uses **Admin → Site → Club** and picks the date it starts; earlier meetings stay as they were.
+> [!TIP]
+> To call off a meeting, tap it on the calendar and choose **Cancel this meeting** (with a reason, if you like), or **Reschedule** to hold it on another day or time. The calendar then shows "No meeting (reason)" on that date, or the meeting on its new date, and every member who gets club email is emailed once. **Put the meeting back as planned** undoes either (members aren't emailed again). With chow on, a cancelled night becomes a no-chow night noted "No meeting", the member who had it is emailed and is first in line for the next night (**Fill** the schedule again to give it); a rescheduled night moves to the new date with its member, who is emailed (not onto a night someone already has: move that one by hand).
+
+**The weekly meeting** is on Club events (the app adds it once, from the club's meeting day and time). To change its day, time, place or online link, an admin uses **Admin → Site → Club** and picks the date it starts; earlier meetings stay as they were.
 
 📥 **Import .ics** (Calendar → Import .ics): events from Google Calendar, Outlook or Apple. In Google Calendar: Settings → Import & export → Export. Importing the same file again updates rather than doubles. Anything it can't bring in is listed, to add by hand.
 

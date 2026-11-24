@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 
-from . import auth, business, chow, pictures, prefs, snapshot
+from . import auth, business, chow, meetings, pictures, prefs, snapshot
 from .club import show_date
 from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
@@ -260,8 +260,7 @@ def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
             "when": f"{e.starts:%Y-%m-%dT%H:%M}" if e.starts else e.start.isoformat(),
             "until": f"{e.ends:%Y-%m-%dT%H:%M}" if e.ends else (e.end.isoformat() if e.end > e.start else None)} for e in items
            if e.kind in READ_OUT and not e.from_minutes and e.id not in quiet and not (e.id or "").startswith("due-")]
-    after = [d for e in evs if e.get("meeting") for d in store.dates(e, date + dt.timedelta(days=1), date + dt.timedelta(days=60))]
-    after = [d for d in after if d not in store.cancelled(evs, date, date + dt.timedelta(days=60))]  # No meeting entries
+    after = meetings.nights(archive.club, date + dt.timedelta(days=1), date + dt.timedelta(days=60))
     return {"calendar": out, "next_meeting": min(after, default=date + dt.timedelta(days=7)).isoformat()}
 
 

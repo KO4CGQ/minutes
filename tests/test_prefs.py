@@ -63,6 +63,7 @@ def test_meeting_day_email(tmp_path, monkeypatch):
     Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Upcoming Events": [Item("Hamfest in the spring")]}).save(tmp_path)
     with events.locked():
         evs = []
+        events.add(evs, "events", events.from_form({"title": "Club meeting", "date": "2026-01-01", "time": "19:30", "repeat": "weekly"}), "x")["meeting"] = True
         events.add(evs, "events", events.from_form({"title": "VE testing", "date": "2026-11-14", "time": "10:00"}), "x")
         events.add(evs, "events", events.from_form({"title": "Next month", "date": "2026-12-14"}), "x")
         events.save(evs)

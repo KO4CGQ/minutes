@@ -35,6 +35,8 @@ class Entry:
     occ: str | None = None  # a repeating event's original date (which date to edit)
     notes: str = ""
     zone: str = ""  # an event kept in another time zone: its times there ("Sat Jun 27 18:00 – Sun Jun 28 20:59 UTC")
+    meeting: bool = False  # a date of a club meeting series: it can be cancelled or rescheduled
+    change: str = ""  # that date's record: "cancelled" or "moved"
     dup: str = ""  # another entry the same day that looks like the same event (a hint; nothing is hidden)
 
     def days(self, lo: dt.date, hi: dt.date) -> list[dt.date]:
@@ -139,17 +141,18 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     kinds = public_kinds(club) if public else list(store.CALS)
     tz = club.timezone
     evs = store.load()
-    off = store.cancelled(evs, lo - dt.timedelta(days=7), hi + dt.timedelta(days=7))  # the weekly meeting on a "No meeting" night
     for e in evs:
         if e["cal"] not in kinds:
             continue
         pad = store.reach(e)  # a date moved to another day, or another zone's date, can land in the range from outside it
         for d in store.dates(e, lo - pad, hi + pad):
-            if e.get("meeting") and d in off:
-                continue
             o = store.occurrence(e, d)
+            rec = e.get("changes", {}).get(d.isoformat(), {}) if e.get("meeting") else {}
+            if rec.get("cancelled"):  # a cancelled meeting stays on its date, as "No meeting"
+                o = {**o, "title": "No meeting" + (f" ({rec['reason']})" if rec.get("reason") else "")}
             x = _entry(store.in_zone(o, e.get("tz"), tz), e["cal"], id=e["id"], repeats=bool(e.get("repeat")),
-                       occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz))
+                       occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz),
+                       meeting=bool(e.get("meeting")), change="cancelled" if rec.get("cancelled") else "moved" if rec.get("moved") else "")
             if x.end >= lo and x.start <= hi:
                 out.append(x)
     minutes = []  # the minutes' dated Upcoming Events, on the calendar the leader picked (Club events by default)

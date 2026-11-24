@@ -36,6 +36,10 @@ picks.addEventListener("click", (e) => { const b = e.target.closest("button[data
 <label>Notes <textarea name="notes" rows="3" maxlength="2000">{{ f.notes }}</textarea></label>
 <label class="check"><input type="checkbox" name="quiet" value="1" {{ 'checked' if f.quiet }}> Leave out of the leader console's Upcoming Events</label>
 <p class="muted small">The console lists what's on the calendar until the next meeting, for the leader to read out. Tick this for something that needn't be announced (the weekly meeting is left out unless you untick it there).</p>
+<label class="check"><input type="checkbox" name="meeting" value="1" {{ 'checked' if f.meeting }}> Club meeting</label>
+<p class="muted small">For a repeating Club events entry: its dates are the club's meeting nights (Home, the meeting-day email, the leader console), and each can be cancelled or rescheduled from the calendar.</p>
+{% if club.has('chow') %}<label class="check"><input type="checkbox" name="chow" value="1" {{ 'checked' if f.chow }}> Chow at this meeting</label>
+<p class="muted small">Only for a club meeting: the chow schedule has a night for each of its dates.</p>{% endif %}
 <p class="row"><button class="btn">Save</button> <a class="btn ghost" href="/calendar{% if f.date %}?start={{ f.date }}{% endif %}">Cancel</a>
 {% if id %}<button class="btn ghost" formaction="/calendar/delete" formnovalidate data-confirm="Delete this event from the calendar?">Delete</button>{% endif %}</p>
 </form>

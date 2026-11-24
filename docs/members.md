@@ -52,7 +52,7 @@ If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists 
 If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its address, and you host it until a day passes with no one joining it here. Its card stays on the Video meeting page for you until then. A calendar event can link to one of the club's rooms.
 
 ## 📅 Calendar
-**Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
+**Calendar** shows the club's events, chow nights, shared birthdays and holidays; a meeting that's called off shows as "No meeting" with the reason, and a rescheduled one on its new date (you're emailed either way). "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
 
 > [!TIP]
 > Keep your subscription link to yourself: anyone with it can see the club's calendar. Lost track of who has it? **Make a new link**, and the old one stops working.

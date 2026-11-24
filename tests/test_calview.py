@@ -601,3 +601,39 @@ def test_holidays_and_elections_are_none_unless_club_yaml_picks_a_region(tmp_pat
     cfg.write_text("club: {name: T}\ncalendar: {elections: us-ohio}\n")
     with pytest.raises(ValueError, match="us-ohio"):  # a misspelled region stops the app at start, saying which
         Club(cfg, roster=[])
+
+
+def test_cancel_and_reschedule_a_meeting_from_the_calendar(tmp_path, monkeypatch):
+    t, c, _ = signed_in(tmp_path, monkeypatch, "n0bbbb")
+    with events.locked():
+        evs, meet = net(title="W0TEST meeting", date="2026-11-12", time="19:30", end_time="21:30")
+        meet["meeting"] = True
+        events.save(evs)
+    form_ = {"id": meet["id"], "d": "2026-11-19"}
+    for what, extra in (("cancel", {"reason": "Holiday"}), ("move", {"date": "2026-11-20", "time": "18:00"}), ("restore", {})):
+        r = t.post(f"/calendar/meeting/{what}", data={**form_, **extra}, follow_redirects=False)
+        assert r.status_code == 403 and events.load()[0]["changes"] == {}, what  # a member who isn't a calendar editor
+    c.members["n0bbbb"].calendar_editor = True
+    t.post("/calendar/meeting/cancel", data={**form_, "reason": "Holiday"})
+    page = t.get("/calendar?start=2026-11-19").text
+    assert "No meeting (Holiday)" in page and "Put the meeting back as planned" in page
+    assert events.load()[0]["changes"] == {"2026-11-19": {"cancelled": True, "reason": "Holiday"}}
+    t.post("/calendar/meeting/move", data={**form_, "date": "2026-11-20", "time": "18:00", "reason": "Hall booked"})
+    assert events.load()[0]["changes"]["2026-11-19"] == {"moved": True, "start": "2026-11-20T18:00", "end": "2026-11-20T20:00", "reason": "Hall booked"}
+    r = t.post("/calendar/meeting/move", data={**form_, "date": "nonsense"}, follow_redirects=False)
+    assert "error=" in r.headers["location"] and "2026-11-20T18:00" in str(events.load()[0]["changes"])
+    t.post("/calendar/meeting/restore", data=form_)
+    assert events.load()[0]["changes"] == {}
+    assert t.post("/calendar/meeting/cancel", data={"id": meet["id"], "d": "2026-11-20"}, follow_redirects=False).headers["location"].startswith("/calendar?error=")  # not a date of the series
+    assert "Cancel this meeting" in t.get("/calendar?start=2026-11-19").text
+
+
+def test_a_repeating_club_events_entry_can_be_ticked_as_a_club_meeting(tmp_path, monkeypatch):
+    t, c, _ = signed_in(tmp_path, monkeypatch, "n0aaaa")
+    c.modules["chow"] = True
+    t.post("/calendar/save", data={"cal": "events", "title": "Tuesday meeting", "date": "2026-11-10", "time": "19:00", "repeat": "weekly",
+                                   "meeting": "1"})
+    t.post("/calendar/save", data={"cal": "events", "title": "Yard sale", "date": "2026-11-14", "meeting": "1", "chow": "1"})  # doesn't repeat: not a meeting
+    meet, sale = events.load()
+    assert meet["meeting"] is True and meet["chow"] is False and not sale.get("meeting") and "chow" not in sale
+    assert "Chow at this meeting" in t.get(f"/calendar/edit?id={meet['id']}&d=2026-11-17").text
