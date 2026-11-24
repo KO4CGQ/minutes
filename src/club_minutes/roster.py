@@ -80,19 +80,18 @@ class Sheet:
                 "data": [{"range": f"'{tab or self.tab}'!{a1}", "values": [[v]]} for a1, v in cells.items()]}
         self.s.post(self._url(":batchUpdate"), json=body).raise_for_status()
 
-    def update_member(self, callsign: str | None, full_name: str, changes: dict[str, str]) -> dict[str, str]:
-        """Write `changes` (field -> new value) into the member's row. Returns the old values."""
+    def update_member(self, mid: str, changes: dict[str, str]) -> dict[str, str]:
+        """Write `changes` (field -> new value) into member `mid`'s row. Returns the old values."""
         values = self.read()
         header = [h.strip().lower() for h in values[0]]
         missing = [f for f in changes if f not in header]
         if missing:
             raise SheetError(f"The roster has no {', '.join(missing)} column yet.")
-        key = header.index("callsign") if callsign else header.index("full_name")
-        want = (callsign or full_name).strip().upper()
-        rows = [i for i, row in enumerate(values[1:], start=2)
-                if len(row) > key and row[key].strip().upper() == want]
+        rows = [i for i, row in enumerate(values[1:], start=2)  # the same id the sync gives the row (to_members)
+                if (r := dict(zip(header, row))).get("full_name", "").strip()
+                and (r.get("id", "").strip().lower() or derived_id(r["full_name"], r.get("callsign", ""))) == mid]
         if len(rows) != 1:
-            raise SheetError(f"Couldn't find exactly one roster row for {callsign or full_name}.")
+            raise SheetError(f"Couldn't find exactly one roster row for member id {mid}.")
         row = values[rows[0] - 1] + [""] * len(header)
         old = {f: row[header.index(f)] for f in changes}
         self.write({f"{_col(header.index(f))}{rows[0]}": v for f, v in changes.items() if old[f] != v})

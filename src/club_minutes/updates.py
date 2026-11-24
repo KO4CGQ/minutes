@@ -261,7 +261,7 @@ def _tell_admins(club, subject: str, body: str) -> None:
     to = [m.email for mid, m in club.members.items() if club.is_admin(mid) and m.email]
     if to:
         try:
-            auth.send_email(to, f"{branding.name(club)}: {subject}", body + f"\n\n73,\n{branding.name(club)}")
+            auth.send_email(to, f"{branding.name(club)}: {subject}", body + f"\n\n{club.sign_off}\n{branding.name(club)}")
         except Exception:
             log.exception("couldn't email the admins about an automatic update")
 

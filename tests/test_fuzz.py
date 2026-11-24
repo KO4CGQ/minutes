@@ -104,7 +104,7 @@ def test_roster_file_keeps_every_value_exactly(tmp_path, monkeypatch):
     sheet = roster.Sheet()
     for _ in range(300):
         new = {f: junk(6) for f in R.sample(["email", "phone", "address", "aliases", "title(s)"], 2)}
-        sheet.update_member("N0AAAA", "Amy Appleseed", new)
+        sheet.update_member("n0aaaa", new)
         row = dict(zip([h.lower() for h in sheet.read()[0]], sheet.read()[1]))
         assert all(row[f] == v for f, v in new.items())  # as typed: "=1+1" stays text, nothing is parsed
     json.loads((tmp_path / "roster-sheet.json").read_text())  # still valid after every write

@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block title %}Edit {{ member.name }}{% endblock %}{% block crumb %}{{ crumb(club.member_url(member.id), member.name) }}{% endblock %}{% block body %}
-<h1>Edit {{ member.name }}{% if member.callsign %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
+<h1>Edit {{ member.name }}{% if member.callsign and club.ham %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
 <p class="muted">Saved changes go to the roster and are emailed to the Secretary and to {{ member.first }}; an officer can undo them on <a href="/roster/changes">Roster changes</a>. {{ member.first }} sets their own birthday and sharing on their profile.</p>
 {% if saved and not error %}<p class="msg ok">Saved. The roster is updated.</p>{% endif %}
 {% if email_sent and not error %}<p class="msg ok">If <b>{{ email_sent }}</b> can receive mail, a confirmation link is on its way, and {{ member.first }}'s old address was told. The email changes only when the link is opened{{ '' if email_ready() else " (this server can't send email yet: the link is in its log)" }}.</p>{% endif %}
@@ -12,10 +12,10 @@
     <label>First name <input name="first" value="{{ member.first }}" required></label>
     <label>Last name <input name="last" value="{{ member.last }}" required></label>
   </div>
-  <label>Callsign <input value="{{ member.callsign or '' }}" readonly tabindex="-1" class="cs">
-    <span class="hint">Changed on the <a href="{{ club.member_url(member.id) }}/edit?tab=callsign">New callsign</a> tab.</span></label>
+  {% if club.ham %}<label>Callsign <input value="{{ member.callsign or '' }}" readonly tabindex="-1" class="cs">
+    <span class="hint">{{ 'Changed' if member.callsign else 'Added' }} on the <a href="{{ club.member_url(member.id) }}/edit?tab=callsign">New callsign</a> tab.</span></label>{% endif %}
   <div class="fixedrow">
-    <label>License class <select name="license_class"><option value="">(none)</option>{% if member.license_class and member.license_class not in classes %}<option selected>{{ member.license_class }}</option>{% endif %}{% for c in classes %}<option {{ 'selected' if member.license_class == c }}>{{ c }}</option>{% endfor %}</select></label>
+    {% if club.ham %}<label>License class <select name="license_class"><option value="">(none)</option>{% if member.license_class and member.license_class not in classes %}<option selected>{{ member.license_class }}</option>{% endif %}{% for c in classes %}<option {{ 'selected' if member.license_class == c }}>{{ c }}</option>{% endfor %}</select></label>{% endif %}
     <label>Status <select name="status"{{ ' disabled' if no_status }}>{% for s in statuses %}<option {{ 'selected' if member.status == s }}>{{ s }}</option>{% endfor %}</select>{% if no_status %}<span class="hint">{{ no_status }}</span>{% endif %}</label>
   </div>
   <label>Email <input type="email" name="email" value="{{ member.email or '' }}"{{ ' disabled' if no_email }}><span class="hint">{{ no_email or member.first ~ " signs in with this address too. A new one changes only when " ~ member.first ~ " opens the link sent to it; the old address is told at once, and the change signs them out everywhere." }}</span></label>

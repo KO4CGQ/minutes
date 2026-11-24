@@ -13,18 +13,18 @@
 <div class="membergrid">{% for m, since in pg.rows %}<a class="membercard" href="{{ club.member_url(m.id) }}?from=roster">
   {{ avatar(m.id, 'lg') }}
   <div class="mc-name">{{ m.name }}</div>
-  {% if m.callsign %}<div class="cs mc-call">{{ m.callsign }}</div>{% endif %}
-  <div class="mc-meta">{% if m.license_class %}<span class="chip">{{ m.license_class }}</span>{% endif %}{% if m.role %}<span class="chip ok">{{ m.role }}</span>{% endif %}{% if m.status != 'Active' %}<span class="chip warn">{{ m.status }}</span>{% endif %}</div>
+  {% if m.callsign and club.ham %}<div class="cs mc-call">{{ m.callsign }}</div>{% endif %}
+  <div class="mc-meta">{% if m.license_class and club.ham %}<span class="chip">{{ m.license_class }}</span>{% endif %}{% if m.role %}<span class="chip ok">{{ m.role }}</span>{% endif %}{% if m.status != 'Active' %}<span class="chip warn">{{ m.status }}</span>{% endif %}</div>
   {% if since %}<div class="muted small">Member since {{ since|listdate }}</div>{% endif %}
 </a>{% else %}<p class="muted">Nobody with that status.</p>{% endfor %}</div>
 {% else %}
-<table class="list"><thead><tr><th>Name</th><th>Callsign</th><th class="opt">License</th><th class="opt">Office</th><th>Status</th><th class="opt">Member since</th></tr></thead>
+<table class="list"><thead><tr><th>Name</th>{% if club.ham %}<th>Callsign</th><th class="opt">License</th>{% endif %}<th class="opt">Office</th><th>Status</th><th class="opt">Member since</th></tr></thead>
 <tbody>{% for m, since in pg.rows %}<tr>
-<td data-sort="{{ m.last|lower }} {{ m.first|lower }}"><a href="{{ club.member_url(m.id) }}?from=roster" class="withavatar">{{ avatar(m.id, 'sm') }}{{ m.name }}</a></td><td class="cs">{{ m.callsign or '' }}</td>
-<td class="opt">{{ m.license_class or '' }}</td><td class="opt">{{ m.role or '' }}</td>
+<td data-sort="{{ m.last|lower }} {{ m.first|lower }}"><a href="{{ club.member_url(m.id) }}?from=roster" class="withavatar">{{ avatar(m.id, 'sm') }}{{ m.name }}</a></td>{% if club.ham %}<td class="cs">{{ m.callsign or '' }}</td>
+<td class="opt">{{ m.license_class or '' }}</td>{% endif %}<td class="opt">{{ m.role or '' }}</td>
 <td>{% if m.status != 'Active' %}<span class="badge">{{ m.status }}</span>{% else %}Active{% endif %}</td>
 <td class="opt" data-sort="{{ since or '' }}">{{ since|listdate if since }}</td>
-</tr>{% else %}<tr><td colspan="6" class="muted">Nobody with that status.</td></tr>{% endfor %}</tbody></table>
+</tr>{% else %}<tr><td colspan="{{ 6 if club.ham else 4 }}" class="muted">Nobody with that status.</td></tr>{% endfor %}</tbody></table>
 {% endif %}
 {{ pager.links(pg, request) }}
 {% endblock %}

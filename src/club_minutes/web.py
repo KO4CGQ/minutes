@@ -1261,7 +1261,7 @@ def treasurer_fund(name: str = Form(...), account: str = Form(""), keepers: str 
             return treasurer.remove_fund(s, mid, name)
         ids = [owner_id(k) for k in keepers.split(",") if k.strip()]
         if None in ids or not ids:
-            raise ValueError("List the keepers by name or callsign, separated by commas.")
+            raise ValueError("List the keepers by name" + (" or callsign" if archive.club.ham else "") + ", separated by commas.")
         treasurer.set_fund(s, mid, name, account, ids)
     return money_change(run, "settings")
 
@@ -1430,7 +1430,7 @@ def admin_confirm_email(request: Request, next: str = Form("/"), mid: str = Depe
     # Only ever to the admin themself, so test mode (email.only_to) doesn't apply.
     authmod.send_email(m.email, "Turn on admin mode", f"Hi {m.first},\n\nSomeone signed in as you asked to turn on admin mode "
                f"in {branding.name(archive.club)}. If that was you, open this link in the same browser within 5 minutes:\n\n{url}\n\n"
-               f"If it wasn't you, don't open it, and sign out your other sessions on your profile page.\n\n73,\n{branding.name(archive.club)}")
+               f"If it wasn't you, don't open it, and sign out your other sessions on your profile page.\n\n{archive.club.sign_off}\n{branding.name(archive.club)}")
     _admin_log(request, step_up_email=True)
     return RedirectResponse("/admin/confirm?sent=1&next=" + quote(_safe_next(next)), status_code=303)
 
@@ -1608,7 +1608,7 @@ def recover_confirm_email(request: Request, mid: str = Depends(real_me)):
     authmod.send_email(m.email, "Confirm it's you", f"Hi {m.first},\n\nSomeone signed in as you asked to confirm it's you, to "
                        f"act on a recovery of admin access in {branding.name(archive.club)}. If that was you, open this link in the "
                        f"same browser within 5 minutes:\n\n{url}\n\nIf it wasn't you, don't open it, and sign out your other "
-                       f"sessions on your profile page.\n\n73,\n{branding.name(archive.club)}")
+                       f"sessions on your profile page.\n\n{archive.club.sign_off}\n{branding.name(archive.club)}")
     return RedirectResponse("/recover/confirm?sent=1", status_code=303)
 
 
@@ -2302,9 +2302,9 @@ def _search_lists(q: str) -> dict:
         return {"members": [], "guests": [], "items": [], "nights": []}
     club = archive.club
     gone = ("inactive", "silent key")
-    members = sorted((m for m in club.members.values() if _has(q, m.name, m.short, m.callsign, *m.aliases)),
+    members = sorted((m for m in club.members.values() if _has(q, m.name, m.short, m.callsign if club.ham else "", *m.aliases)),
                      key=lambda m: (m.status.lower() in gone, m.last, m.first))
-    guests = [g for g in archive.guests() if not g["member"] and _has(q, g["name"], g["callsign"])]
+    guests = [g for g in archive.guests() if not g["member"] and _has(q, g["name"], g["callsign"] if club.ham else "")]
     items = [business.view(club, x, dt.date.today().isoformat()) for x in console.business_state(archive)["items"]]
     items = sorted((x for x in items if _has(q, x["text"], x["owner_name"])), key=lambda x: (x["status"] != "open", x["opened"]))
     nights = [(dt.date.fromisoformat(d), club.name(x["member"])) for d, x in chow.upcoming(chow.load(), n=60)
@@ -2361,11 +2361,12 @@ def member_edit_page(request: Request, who: str, error: str = "", saved: int = 0
     held = [t for t in offices.titles(m.role) if t in office_titles]  # shown, changed only on the Offices page
     in_use = {t for x in club.members.values() for t in offices.titles(x.role)} - office_titles
     return page(request, "member_edit.html", member=m, error=error, saved=saved, email_sent=email_sent[:200], classes=membership.CLASSES,
-                tab=tab if tab in EDIT_TABS else "details", tabs=EDIT_TABS, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
+                tab=tab if tab in EDIT_TABS and (club.ham or tab != "callsign") else "details",
+                tabs={t: n for t, n in EDIT_TABS.items() if club.ham or t != "callsign"}, held=held, mine=[t for t in offices.titles(m.role) if t not in office_titles], choices=sorted(in_use, key=str.lower),
                 statuses=list(STATUSES) + ([m.status] if m.status not in STATUSES else []),
                 no_email=may_change(request, who, "emails", "email"), no_status=may_change(request, who, "status", "status"),
                 no_callsign=may_change(request, who, "members", "callsign"),
-                events=membership.EVENTS, today=dt.date.today().isoformat(), member_roles=club.role_names(who))
+                events=[e for e in membership.EVENTS if club.ham or e != "Callsign Change"], today=dt.date.today().isoformat(), member_roles=club.role_names(who))
 
 
 @app.post("/members/{who}/edit")
@@ -2388,8 +2389,8 @@ async def member_edit(request: Request, background: BackgroundTasks, who: str, m
         if not first or not last or " " in first:
             raise ValueError("First and last name are both needed; put a middle name with the last name.")
         # a class typed some other way in the roster ("Extra") may stay as it is
-        if f.get("license_class") not in ("", *membership.CLASSES, m.license_class) or status not in (*STATUSES, m.status):
-            raise ValueError("Pick a license class and status from the lists.")
+        if archive.club.ham and f.get("license_class") not in ("", *membership.CLASSES, m.license_class) or status not in (*STATUSES, m.status):
+            raise ValueError("Pick a license class and status from the lists." if archive.club.ham else "Pick a status from the list.")
         if new_email and not valid_email(email):
             raise ValueError(f"{email} doesn't look like an email address.")
         for a in (x.strip() for x in f.get("aliases", "").split(",")):
@@ -2400,9 +2401,11 @@ async def member_edit(request: Request, background: BackgroundTasks, who: str, m
                 raise ValueError(err)
         if status.lower() != "active" and not archive.club.active_admins - {who} and who in archive.club.active_admins:
             raise ValueError(f"{m.first} is the last active admin: add another admin first, so the club isn't locked out.")
-        new = {"name": f"{first} {last}", "license_class": f.get("license_class", ""), "status": status,
+        new = {"name": f"{first} {last}", "status": status,
                "aliases": ", ".join(a.strip() for a in f.get("aliases", "").split(",") if a.strip()),
                "phone": f.get("phone", "").strip()[:40], "address": clean_address(f.get("address", ""))}
+        if archive.club.ham:  # not on the form otherwise: the roster keeps what it has
+            new["license_class"] = f.get("license_class", "")
         if new["address"] == clean_address(m.address or ""):  # untouched: keep the sheet's own spacing
             new["address"] = m.address or ""
         await run_in_threadpool(profile.change, archive.club, who, new, by=mid, url=base_url(request), allowed=KEEPER_FIELDS)
@@ -2462,6 +2465,8 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
     """A new callsign: the roster sheet only; the member's id stays (callsign.py). Like email
     and status, never for someone who holds an office or can do more than you (an admin in admin mode may)."""
     who = _member_or_404(who)
+    if not archive.club.ham:
+        raise HTTPException(404)
     try:
         if err := may_change(request, who, "members", "callsign"):
             raise ValueError(err)
@@ -2848,7 +2853,7 @@ def _tell_admins(request: Request, before: set[str], subject: str, what: str) ->
           if a != request.state.real_member and a in club.members and club.members[a].email]
     if to:
         authmod.send_email(to, subject, f"{what}\n\nEvery admin change is in the admin log: {base_url(request)}/admin/security/admin"
-                           f"\n\n73,\n{branding.name(club)}", only_to=club.email_only_to())
+                           f"\n\n{club.sign_off}\n{branding.name(club)}", only_to=club.email_only_to())
 
 
 @app.post("/admin/security/admins/add")
@@ -2983,7 +2988,7 @@ FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", 
                 ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"),
                 ("club", "pictures_per_day"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
-CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone", "names")
+CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone", "names", "ham")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
                 "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
 
@@ -3007,6 +3012,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
                 codes={c: sample.strftime(c) for c in ["%%"] + [f"%{d}{x}" for d in ("", "-") for x in string.ascii_letters]},
+                ham_count=sum(1 for m in club.members.values() if m.callsign),
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
                 agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), roles_stamp=_roles_stamp(), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
@@ -3434,11 +3440,11 @@ async def site_club(request: Request):
     if form.get("back"):
         values = dict.fromkeys(CLUB_KEYS)
     else:
-        name, call = " ".join((form.get("name") or "").split())[:80], (form.get("callsign") or "").strip().upper()
+        name, call = " ".join((form.get("name") or "").split())[:80], (form.get("callsign", club.info.get("callsign")) or "").strip().upper()  # no field (the box was off): the saved one is kept
         try:
             if not name:
                 raise ValueError("Give the club's name.")
-            if not re.fullmatch(r"[A-Z0-9/]{3,12}", call):
+            if call and not re.fullmatch(r"[A-Z0-9/]{3,12}", call):
                 raise ValueError("The callsign is letters and digits, like N0CALL.")
         except ValueError as e:
             return RedirectResponse("/admin/site/club?error=" + quote(str(e)), status_code=303)
@@ -3451,6 +3457,8 @@ async def site_club(request: Request):
         base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone(),
                                                                     "names": str(yc.get("names") or "short")}
         values = {k: None if v.lower() == base[k].lower() else v for k, v in typed.items()}  # only what differs is kept
+        ham, yaml_ham = form.get("ham") == "1", yc.get("ham")
+        values["ham"] = None if ham == (bool(yaml_ham) if yaml_ham is not None else bool(call)) else ham  # the default follows the callsign saved now
     try:
         club.save_site_settings({("club", k): v for k, v in values.items()})
     except ValueError as e:  # the start-up checks' words, for this page

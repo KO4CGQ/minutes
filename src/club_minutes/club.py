@@ -253,7 +253,7 @@ def _quorum(raw) -> dict | None:
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins or email test mode: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
-                                    "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day", "names")} | {
+                                    "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day", "names", "ham")} | {
     ("meeting", "sections"), ("meeting", "quorum"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
     ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc"), ("modules", "jitsi"),
@@ -421,10 +421,20 @@ class Club:
         return f" (bylaws {ref})" if ref else ""
 
     @property
+    def ham(self) -> bool:
+        """An amateur radio club: callsigns and license classes are shown and asked for. Unset: on when the club has a callsign."""
+        return bool(self.info["ham"]) if self.info.get("ham") is not None else bool(self.info.get("callsign"))
+
+    @property
     def label(self) -> str:
-        """What the club is called in subjects, titles and sign-offs: its callsign, else its name, else "Club"
-        (a new server before Site is filled in)."""
-        return " ".join(str(self.info.get("callsign") or self.info.get("name") or "Club").split())
+        """What the club is called in subjects, titles and sign-offs: its callsign (an amateur radio club), else its name,
+        else "Club" (a new server before Site is filled in)."""
+        return " ".join(str((self.ham and self.info.get("callsign")) or self.info.get("name") or "Club").split())
+
+    @property
+    def sign_off(self) -> str:
+        """How emails end, before the app's name."""
+        return "73," if self.ham else "Thanks,"
 
     def has(self, module: str) -> bool:
         """Whether an optional part of the app is turned on in club.yaml (`modules:`)."""
@@ -499,9 +509,9 @@ class Club:
         return w if w in self.members else None
 
     def member_url(self, mid: str) -> str:
-        """The address of a member's page: their lowercase callsign, else their id."""
+        """The address of a member's page: their lowercase callsign (an amateur radio club), else their id."""
         m = self.members.get(self.canonical(mid))
-        return "/members/" + quote(m.callsign.lower() if m and m.callsign else m.id if m else mid, safe="")
+        return "/members/" + quote(m.callsign.lower() if m and m.callsign and self.ham else m.id if m else mid, safe="")
 
     def _auto_short_names(self) -> None:
         """A member's short name is their first name, plus as much of their last name as tells them apart from others
@@ -768,7 +778,7 @@ class Club:
 
     def mentionable(self) -> list[dict]:
         """Who the @ picker offers: the Active members, as the page's JSON (static/format.js)."""
-        return [{"id": m.id, "name": m.name, "short": self.shown_name(m.id), "callsign": m.callsign}
+        return [{"id": m.id, "name": m.name, "short": self.shown_name(m.id), "callsign": m.callsign if self.ham else None}
                 for m in self.members.values() if m.status.lower() == "active" and self.known_name(m.id)]
 
     def unnamed(self, text: str, mid: str | None) -> str:

@@ -10,7 +10,7 @@
 {% macro guest(i, g, label, new=false) %}<fieldset class="guest"><legend>{{ label }}</legend>
   <div class="formrow">
     <label>Name <input name="g{{ i }}-name" value="{{ v('g' ~ i ~ '-name', g.name or '') }}" maxlength="120"></label>
-    <label>Callsign <input name="g{{ i }}-callsign" value="{{ v('g' ~ i ~ '-callsign', g.callsign or '') }}" class="cs" size="8" maxlength="12"></label>
+    {% if club.ham %}<label>Callsign <input name="g{{ i }}-callsign" value="{{ v('g' ~ i ~ '-callsign', g.callsign or '') }}" class="cs" size="8" maxlength="12"></label>{% endif %}
     <label class="check"><input type="checkbox" name="g{{ i }}-online" value="1" {{ on('g' ~ i ~ '-online', g.online) }}> Online</label>
   </div>
   <label>Notes <input name="g{{ i }}-notes" value="{{ v('g' ~ i ~ '-notes', g.notes or '') }}" maxlength="200"></label>

@@ -235,4 +235,4 @@ def _tell(club: Club, subject: str, what: str, r: dict, url: str, first: bool = 
     to = sorted({m.email for m in club.members.values() if m.email and m.status.lower() not in ("inactive", "silent key")
                  and (m.status.lower() == "active" or m.id in r["suspend"])})
     auth.send_email(to, f"{club.label}: {subject}", f"{what}{how}{motion}\n\nWhere it stands, and who has approved: "
-                    f"{url}/recover\n\n{SAFETY_NET if first else ''}73,\n{branding.name(club)}", only_to=club.email_only_to())
+                    f"{url}/recover\n\n{SAFETY_NET if first else ''}{club.sign_off}\n{branding.name(club)}", only_to=club.email_only_to())

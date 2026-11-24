@@ -99,7 +99,7 @@ def change(club: Club, title: str, out_mid: str | None, in_mid: str | None, date
         m = club.members[mid]
         ts = [t for t in titles(m.role) if t != title] + ([title] if took else [])
         officer, board = _flags(club, ts)
-        old = sheet.update_member(m.callsign, m.name, {"title(s)": ", ".join(ts), "is_officer": officer, "is_board": board})
+        old = sheet.update_member(m.id, {"title(s)": ", ".join(ts), "is_officer": officer, "is_board": board})
         sheet.add_row({"callsign": m.callsign or "", "full_name": m.name, "date": date, "event": TOOK if took else LEFT,
                        "note": title}, tab=LOG_TAB, optional=("callsign",))
         changed[mid] = (old.get("title(s)", m.role or ""), ", ".join(ts) or None, officer, board, TOOK if took else LEFT)
@@ -166,7 +166,7 @@ def _tell(club: Club, title: str, out_mid: str | None, in_mid: str | None, date:
     try:
         auth.send_email(to, f"{club.label} offices: {what}",
                         f"{what}, as of {day}. {club.name(by)} recorded it in the app; the roster sheet and its "
-                        f"Membership Log are updated.\n\nThe offices: {url}/offices\n\n73,\n{branding.name(club)}",
+                        f"Membership Log are updated.\n\nThe offices: {url}/offices\n\n{club.sign_off}\n{branding.name(club)}",
                         only_to=club.email_only_to())
     except Exception:
         log.exception("couldn't email the officers about %s", title)

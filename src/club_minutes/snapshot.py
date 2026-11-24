@@ -38,7 +38,7 @@ def take(club, m) -> dict:
 
 
 def heading(club) -> str:
-    return " · ".join(x for x in (club.info.get("callsign"), club.info.get("name")) if x) or club.label
+    return " · ".join(x for x in (club.info.get("callsign") if club.ham else None, club.info.get("name")) if x) or club.label
 
 
 def names(club, ids) -> dict:

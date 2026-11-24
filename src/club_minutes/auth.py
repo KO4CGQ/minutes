@@ -336,7 +336,7 @@ class Auth:
         send_email(self.club.members[member].email, f"Your {branding.name(self.club)} sign-in link", only_to=self.club.email_only_to(), to_self=True,
                    body=f"Hi {self.club.members[member].first},\n\n"
                    f"Use this link to sign in to {branding.name(self.club)}. It works once, for {LINK_MINUTES} minutes:\n\n"
-                   f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n73,\n{branding.name(self.club)}")
+                   f"{url}\n\nIf you didn't ask for this, you can ignore this email.\n\n{self.club.sign_off}\n{branding.name(self.club)}")
 
     def create_link(self, member: str, next_url: str = "/", base_url: str | None = None, ip: str | None = None, source: str = "cli") -> str:
         """source: 'cli' (the login-link command: counts toward no cap), or what send_link says: 'web' or 'known'."""
@@ -385,7 +385,7 @@ class Auth:
             later(send_email, email, f"Confirm your new {app} email", only_to=self.club.email_only_to(), to_self=by == member,
                        body=f"Hello,\n\nSomeone asked to use this address for a {app} account. If that's you, open this "
                        f"link within {LINK_MINUTES} minutes:\n\n{base}/email/confirm?t={token}\n\n"
-                       f"If you don't know what this is, ignore this email and nothing changes.\n\n73,\n{app}")
+                       f"If you don't know what this is, ignore this email and nothing changes.\n\n{self.club.sign_off}\n{app}")
         if by == member:
             return None
         who = self.club.name(by)
@@ -393,7 +393,7 @@ class Auth:
             later(send_email, m.email, f"Your {app} email is being changed", only_to=self.club.email_only_to(),
                        body=f"Hi {m.first},\n\n{who} asked to change your email on the club roster from this address to "
                        f"{email}. It changes only when that address confirms it, and then you're signed out everywhere.\n\n"
-                       f"If that's wrong, tell an officer or reply to this email.\n\n73,\n{app}")
+                       f"If that's wrong, tell an officer or reply to this email.\n\n{self.club.sign_off}\n{app}")
         return None
 
     def email_change(self, token: str) -> tuple[str, str, str] | None:
@@ -436,7 +436,7 @@ class Auth:
                     for r in self.db.execute("select id from passkeys where member=?", (member,))]
         opts = generate_registration_options(
             rp_id=self.rp_id, rp_name=self._rp_name or branding.name(self.club),
-            user_id=member.encode(), user_name=m.callsign or m.email or m.name, user_display_name=m.name,
+            user_id=member.encode(), user_name=(m.callsign if self.club.ham else None) or m.email or m.name, user_display_name=m.name,
             exclude_credentials=existing,
             authenticator_selection=AuthenticatorSelectionCriteria(
                 resident_key=ResidentKeyRequirement.REQUIRED,  # so sign-in needs no username

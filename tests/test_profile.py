@@ -253,7 +253,7 @@ def test_preview_mode_never_sends_or_touches_the_real_sheet(tmp_path, monkeypatc
     monkeypatch.setattr(roster, "CACHE", tmp_path / "roster.json")
     (tmp_path / "roster.json").write_text(json.dumps([{"id": "n0cccc", "first": "Bob", "last": "Member", "callsign": "N0CCCC"}]))
     sheet = Sheet()
-    assert sheet.update_member("N0CCCC", "Bob Member", {"phone": "419-555-0111"}) == {"phone": ""}
+    assert sheet.update_member("n0cccc", {"phone": "419-555-0111"}) == {"phone": ""}
     assert "419-555-0111" in (tmp_path / "preview-sheet.json").read_text()
 
 

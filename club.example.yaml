@@ -3,8 +3,10 @@
 
 club:
   name: Example Radio Club
-  callsign: W0CLUB
-  # app_name: Example Club Minutes   # the app's name in pages and emails; default "<callsign> Minutes" (Admin → Site sets it too)
+  callsign: W0CLUB          # the club's own call; optional (Admin → Site sets it too)
+  # ham: true               # an amateur radio club: members' callsigns and license classes are shown and may be added. false hides them everywhere
+  #                         # (kept in the roster). Left out: true when the club has a callsign above, else false (Admin → Site sets it too)
+  # app_name: Example Club Minutes   # the app's name in pages and emails; default "<callsign> Minutes", or "<name> Minutes" without a callsign (Admin → Site sets it too)
   meeting_day: Thursday     # required, with meeting_time
   meeting_time: "19:30"     # 24-hour; the "Start meeting" button pulses from 30 minutes before
   invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit

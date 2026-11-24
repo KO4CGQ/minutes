@@ -124,7 +124,7 @@ def emailable(club: Club) -> list:
 
 
 def _sign(club: Club) -> str:
-    return f"73,\n{branding.name(club)}"
+    return f"{club.sign_off}\n{branding.name(club)}"
 
 
 def chow_reminders(club: Club, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:

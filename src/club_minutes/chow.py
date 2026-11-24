@@ -451,7 +451,7 @@ def email_list(club: Club, s: dict, pdf: tuple[str, bytes], to: list[str], by: s
     sent, so the Chow page can tell when it has changed."""
     callsign = club.label
     rest = (f"Can't make your night? Ask someone to swap on the chow page: {url}/chow\n\nTo change or stop getting the "
-            f"chow list: {url}/profile/email\n\n73,\n{branding.name(club)}")
+            f"chow list: {url}/profile/email\n\n{club.sign_off}\n{branding.name(club)}")
     sent = auth.send_email(to, f"{callsign} chow list", f"The chow list as of {show_date(dt.date.today(), 'document')} is attached: "
                            f"who brings chow on each meeting night still to come.\n\n{rest}",
                            attachments=[(pdf[0], pdf[1], "application/pdf")], only_to=club.email_only_to()) if to else 0
@@ -477,7 +477,7 @@ def _tell(club: Club, members: list[str | None], subject: str, text: str, url: s
     if not to:
         return
     try:
-        auth.send_email(to, subject, f"{text}\n\nThe chow schedule: {url}/chow\n\n73,\n{branding.name(club)}",
+        auth.send_email(to, subject, f"{text}\n\nThe chow schedule: {url}/chow\n\n{club.sign_off}\n{branding.name(club)}",
                         only_to=club.email_only_to())
     except Exception:
         log.exception("couldn't send %r (chow change %s)", subject, e["id"])

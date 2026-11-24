@@ -5,7 +5,7 @@
   <header class="mh">
     <img src="{{ brand(pdf=True) }}" alt="{{ club.label }} logo">
     <div>
-      <div class="club">{{ [club.info.callsign, club.info.name]|select|join(' · ') or club.label }}</div>
+      <div class="club">{{ [club.info.callsign if club.ham, club.info.name]|select|join(' · ') or club.label }}</div>
       <h1>Chow List</h1>
       <div class="date">As of {{ today|longdate }}</div>
     </div>

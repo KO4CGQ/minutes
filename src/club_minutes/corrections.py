@@ -232,7 +232,7 @@ def email_notice(archive: Archive, slug: str, what_changed: list[str], make_pdf,
     changed = "\n".join(f"- {x}" for x in what_changed[:30]) + (f"\n- and {len(what_changed) - 30} more" if len(what_changed) > 30 else "")
     body = (f"The minutes of {date} have been corrected (version {m.version}) by {who.name if who else 'an officer'}:\n"
             f"{c['reason']}\n\nWhat changed:\n{changed}\n\nThe corrected minutes: {url} (the PDF is attached)\n\n"
-            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n73,\n{club.label}")
+            f"To get a link instead of the PDF, or stop these emails: {url.split('/meetings/')[0]}/profile/email\n\n{club.sign_off}\n{club.label}")
     return send_to_members(archive, slug, f"{club.label} meeting minutes, {date} (corrected)", body, " (the PDF is attached)",
                            make_pdf, reply_address(who), name)
 

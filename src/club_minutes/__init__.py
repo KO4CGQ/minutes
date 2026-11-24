@@ -22,14 +22,14 @@ def main() -> None:
     ic.add_argument("--on", type=dt_date, help="YYYY-MM-DD they were really corrected (the footer's date); default today")
     sub.add_parser("roster", help="rebuild the roster cache (roster.json) from the roster (roster-sheet.json)")
     lk = sub.add_parser("login-link", help="print a one-time sign-in link for a member (admin recovery)")
-    lk.add_argument("who", help="callsign, or the member's email")
+    lk.add_argument("who", help="callsign, member id, or the member's email")
     lk.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
     fm = sub.add_parser("first-member", help="a new club, once: start the roster with its first member (an admin) and print their sign-in link")
-    fm.add_argument("callsign")
+    fm.add_argument("callsign", nargs="?", default="", help="optional (none for a club that isn't amateur radio)")
     fm.add_argument("--first", required=True)
     fm.add_argument("--last", required=True)
     fm.add_argument("--email", required=True, help="their sign-in links go here")
-    fm.add_argument("--class", dest="license_class", required=True, help="license class: Technician, General or \"Amateur Extra\"")
+    fm.add_argument("--class", dest="license_class", default="", help="license class: Technician, General or \"Amateur Extra\" (optional)")
     fm.add_argument("--base-url", help="defaults to https://<auth.rp_id>")
     rn = sub.add_parser("rename-id", help="finish a callsign change that stopped partway (the log says so): with the service stopped")
     rn.add_argument("old", help="the old id: the old callsign in lowercase")
@@ -125,9 +125,9 @@ def main() -> None:
         except Exception as e:  # noqa: BLE001
             sheet.path.unlink(missing_ok=True)  # as if never run: fix the details and run it again
             raise SystemExit(str(e)) if isinstance(e, ValueError) else e
-        print(f"Started the roster with {club.name(mid)} ({club.members[mid].callsign}).")
+        print(f"Started the roster with {club.name(mid)} ({club.members[mid].callsign or mid}).")
         if not club.is_admin(mid):
-            print(f"Note: {club.members[mid].callsign} isn't under admins: in club.yaml, so they can't turn on admin mode yet. "
+            print(f"Note: {club.members[mid].callsign or mid} isn't under admins: in club.yaml, so they can't turn on admin mode yet. "
                   "Add it there, then restart the app.")
         print("Their sign-in link (one use, 15 minutes), then add a passkey and the other members in the app:")
         print(Auth(club).create_link(mid, base_url=a.base_url))

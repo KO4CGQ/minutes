@@ -23,7 +23,7 @@ def test_reads_and_writes_the_local_roster(env):
     roster.LocalSheet(env / "roster-sheet.json").save({"Member Roster": ROSTER, "Membership Log": LOG})
     ms = roster.sync()
     assert [m["id"] for m in ms] == ["n0aaaa", "n0bbbb"] and ms[0]["officer"] and ms[0]["member_since"] == "2020-03-05"
-    roster.Sheet().update_member("N0BBBB", "Bob Bloggs", {"email": "bobby@example.org"})
+    roster.Sheet().update_member("n0bbbb", {"email": "bobby@example.org"})
     assert next(m for m in roster.sync() if m["id"] == "n0bbbb")["email"] == "bobby@example.org"
     assert stat.S_IMODE((env / "roster-sheet.json").stat().st_mode) == 0o600  # the only copy: the app's alone
 
@@ -31,3 +31,11 @@ def test_reads_and_writes_the_local_roster(env):
 def test_missing_roster_is_an_error(env):
     with pytest.raises(roster.SheetError, match="restore it from a backup"):
         roster.sync()
+
+
+def test_update_finds_the_row_by_id_not_name(env):
+    header = ["id", "callsign", "full_name", "email"]
+    roster.LocalSheet(env / "roster-sheet.json").save({"Member Roster": [header, ["m1aaaa", "", "Jane Doe", ""], ["m2bbbb", "", "Jane Doe", ""]],
+                                                       "Membership Log": LOG})
+    roster.Sheet().update_member("m2bbbb", {"email": "jane2@example.org"})
+    assert [m["email"] for m in roster.sync()] == [None, "jane2@example.org"]

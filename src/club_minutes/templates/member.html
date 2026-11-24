@@ -1,8 +1,8 @@
 {% extends "base.html" %}{% from "_avatar.html" import avatar %}{% from "_lock.html" import lock %}{% block crumb %}{{ back('/roster', 'Roster') }}{% endblock %}{% block body %}
 <div class="memberhead">{{ avatar(member.id, 'xl') }}
-<div><h1>{{ member.name or member.last }}{% if member.callsign %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
+<div><h1>{{ member.name or member.last }}{% if member.callsign and club.ham %} <span class="cs">{{ member.callsign }}</span>{% endif %}</h1>
 {% if request.query_params.get('added') %}<p class="msg ok">Added to the roster.{% if module('chow') %} They've joined the chow rotation at the end of the current round, so everyone else takes a turn first.{% endif %}</p>{% endif %}
-<p class="muted">{{ [member.license_class, member.role, member.status if member.status != 'Active']|select|join(' · ') }}</p>
+<p class="muted">{{ [member.license_class if club.ham, member.role, member.status if member.status != 'Active']|select|join(' · ') }}</p>
 {% if member_roles %}<p class="small">Roles: {% for r in member_roles %}<span class="chip">{{ r }}</span> {% endfor %}</p>{% endif %}</div></div>
 {% if can_moderate and avatar_url(member.id) and member.id != me.id %}<form method="post" action="{{ club.member_url(member.id) }}/photo/remove" class="inline" data-confirm="Remove {{ member.first }}'s picture?"><button class="linkbtn">Remove picture</button></form>{% endif %}
 {% if can_edit_roster %}<a class="btn small ghost" href="{{ club.member_url(member.id) }}/edit">Edit roster details</a>{% endif %}
