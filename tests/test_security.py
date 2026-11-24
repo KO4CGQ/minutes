@@ -873,3 +873,14 @@ def test_no_token_or_address_in_a_url_without_a_reason():
     unknown = {k: v for k, v in found.items() if k not in URL_SECRETS_OK}
     assert not unknown, f"a token or address in a URL: add a reason to URL_SECRETS_OK, or hide it: {unknown}"
     assert web.app.router and 'Referrer-Policy"] = "no-referrer"' in Path(web.__file__).read_text()  # the jwt redirect's reason holds
+
+
+def test_access_log_hides_tokens():
+    import logging
+    rec = lambda path: logging.LogRecord("uvicorn.access", 20, "", 0, '%s - "%s %s HTTP/%s" %d', ("10.0.0.1:5", "GET", path, "1.1", 200), None)
+    for path, shown in (("/calendar/feed/AbC_d-9xYz.ics?show=chow", "/calendar/feed/….ics?show=chow"),
+                        ("/login/link?t=s3cr3t-tok_en", "/login/link?t=…"), ("/admin/confirm/link?next=/x&t=abc", "/admin/confirm/link?next=/x&t=…"),
+                        ("/login?next=%2Fadmin%2Fconfirm%2Flink%3Ft%3DAb-9_x", "/login?next=%2Fadmin%2Fconfirm%2Flink%3Ft%3D…"),
+                        ("/minutes?tab=open", "/minutes?tab=open")):
+        r = rec(path)
+        assert web._hide_tokens(r) and r.getMessage() == f'10.0.0.1:5 - "GET {shown} HTTP/1.1" 200', path

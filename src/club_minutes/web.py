@@ -121,6 +121,19 @@ if not _log.handlers:
     _log.setLevel(logging.INFO)
     _log.propagate = False
 
+_SECRET_IN_PATH = re.compile(r"(/calendar/feed/)[^/?.]+|((?:[?&]|%3[Ff]|%26)t(?:=|%3[Dd]))[\w-]+")  # also inside a ?next= the sign-in redirect adds
+
+
+def _hide_tokens(record: logging.LogRecord) -> bool:
+    """The access log keeps no secret tokens: a calendar feed's (long-lived) and a sign-in or confirm link's `t=`."""
+    a = record.args
+    if isinstance(a, tuple) and len(a) == 5 and isinstance(a[2], str):  # uvicorn's (client, method, path, version, status)
+        record.args = (*a[:2], _SECRET_IN_PATH.sub(lambda m: (m[1] or m[2]) + "…", a[2]), *a[3:])
+    return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_hide_tokens)
+
 COOKIE = "club_minutes_session"
 KNOWN_COOKIE = "club_minutes_known"  # marks a browser a member has signed in with; never signs anyone in, outlives sign-out
 CHALLENGE_COOKIE = "club_minutes_pk"

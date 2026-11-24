@@ -28,6 +28,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - Minutes from before 1.2 no longer show a line between community reports: they look as they did when they were made.
 
 ### Security
+- Fixes the server's log keeping members' calendar feed addresses and sign-in link tokens.
 - Someone signed out can no longer tell which video rooms are for members only.
 - Someone who knows a member's email address can no longer stop them signing in with an emailed link for an hour.
 
