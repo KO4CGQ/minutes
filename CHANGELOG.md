@@ -8,6 +8,7 @@ Versions follow [semantic versioning](https://semver.org): the first number goes
 
 ### Added
 - **Cancelling a meeting night:** delete that date of the weekly meeting, or add a "No meeting" entry on the club's calendar (the meeting then drops off the calendar that night). Either one takes the night off Home, the business notes and the leader console, and the next week's meeting shows instead.
+- **Dues by the week, the month or the year:** the Treasurer sets the period with the amount (a yearly club picks the day dues fall due), and "behind after" counts in that period. Meetings, cancellations and schedule changes never change what anyone owes. A weekly club's dues stay the same.
 
 ### Changed
 - In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.

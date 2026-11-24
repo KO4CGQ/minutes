@@ -3,7 +3,7 @@
 <p class="muted">What the Treasurer recorded as paid over the last 12 months, by category. Members' dues are never shown here.</p>
 {% if preview %}<p class="msg ok">Preview: only officers see this page until the Treasurer turns tracking on.</p>{% endif %}
 {% if sp.total %}{% set ks = cats.keys()|list %}
-{% if sp.per_member_month %}<p><b>{{ money(sp.per_member_month) }}</b> a month per member <span class="muted">to run the club, on average over 12 months ({{ sp.members }} member{{ "s" if sp.members != 1 }}). Dues bring in {{ money(sp.dues_month) }} a month per member ({{ money(sp.dues_week) }} a week × 52 weeks ÷ 12 months).</span></p>{% endif %}
+{% if sp.per_member_month %}<p><b>{{ money(sp.per_member_month) }}</b> a month per member <span class="muted">to run the club, on average over 12 months ({{ sp.members }} member{{ "s" if sp.members != 1 }}). Dues bring in {{ money(sp.dues_month) }} a month per member {% if sp.dues.period == 'week' %}({{ money(sp.dues.cents) }} a week × 52 weeks ÷ 12 months){% elif sp.dues.period == 'year' %}({{ money(sp.dues.cents) }} a year ÷ 12 months){% endif %}.</span></p>{% endif %}
 {% set step = [((sp.top / 100 / 4) // 50 + 1) * 50, 50]|max|int %}{% set ymax = step * 4 %}
 <figure class="chart wide-axis" role="img" aria-label="Spending per month over the last 12 months, as stacked bars by category. The same numbers are in the table below.">
   <div class="legend">{% for k in ks %}<span><i class="k{{ colour[k] }}"></i>{{ cats[k] }}</span>{% endfor %}</div>

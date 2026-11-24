@@ -109,7 +109,7 @@ def test_the_upgrade_snapshots_old_minutes_and_their_versions_once_and_undoes(tm
     Meeting(date=dt.date(2026, 11, 5), status="draft", in_person=["kim"]).save(tmp_path / "meetings")
     (tmp_path / "data-version").write_text("3\n")
     assert "shown" not in (d / "minutes.md").read_text()
-    assert upgrade.run(tmp_path) == [upgrade.STEPS[-1][1]]
+    assert upgrade.run(tmp_path) == [what for v, what, _s in upgrade.STEPS if v > 3]
     for p in (d / "minutes.md", d / "minutes.v1.md", tmp_path / "meetings" / "2025-10-23" / "minutes.md"):
         assert Meeting.load(p).shown["names"]
     assert Meeting.load(tmp_path / "meetings" / "2026-11-05" / "minutes.md").shown == {}  # drafts stay live
@@ -135,7 +135,7 @@ def test_a_crash_mid_upgrade_keeps_the_clean_copy_and_a_rerun_finishes(tmp_path,
     assert upgrade.version(tmp_path) == 3 and (tmp_path / upgrade.STARTED).exists()
     monkeypatch.setattr(Meeting, "write", real)
     assert upgrade.run(tmp_path)
-    assert upgrade.version(tmp_path) == 4 and not (tmp_path / upgrade.STARTED).exists()
+    assert upgrade.version(tmp_path) == upgrade.CURRENT and not (tmp_path / upgrade.STARTED).exists()
     assert not any("shown:" in p.read_text() for p in (tmp_path / upgrade.COPY).rglob("minutes*.md"))
 
 
