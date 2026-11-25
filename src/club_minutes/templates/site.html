@@ -41,7 +41,7 @@
 </form>
 {% if set_here %}<form method="post" action="/admin/site/club" data-confirm="Go back to club.yaml's name, callsign, names, meeting day and time and time zone?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'agenda' %}
-<p class="muted">The meeting's sections, in order, as the leader console and the minutes show them, and two reminders. Each change is in the admin log. Changes here win over club.yaml on the server. Published minutes keep the sections and order they had.</p>
+<p class="muted">The meeting's sections, in order, as the leader console and the minutes show them, and a reminder and the quorum. Each change is in the admin log. Changes here win over club.yaml on the server. Published minutes keep the sections and order they had.</p>
 <form method="post" action="/admin/site/agenda" class="profile siteagenda">
 <input type="hidden" name="rows" value="{{ agenda|length }}">
 <div class="card sitesec"><h2>Sections {{ origin('sections') }}</h2>
@@ -59,10 +59,9 @@
 </div></div>
 <div class="card sitesec"><h2>Reminders</h2>
 <div class="fmtgrid">
-<label for="a-inv">Invite a guest to apply after</label><span><input id="a-inv" type="number" name="invite_after_visits" min="1" max="50" value="{{ club.info.get('invite_after_visits', 3) }}" required> visits</span>{{ origin('club.invite_after_visits') }}
 <label for="a-rem">Remind owners of business items</label><span><input id="a-rem" type="number" name="remind_days_before" min="0" max="60" value="{{ club.info.get('remind_days_before', 3) }}" required> days before the due date</span>{{ origin('club.remind_days_before') }}
 </div>
-<p class="hint">The leader console reminds the leader when a guest reaches that many visits; item owners get an email that many days before the due date (and once if it's overdue).</p>
+<p class="hint">Item owners get an email that many days before the due date (and once if it's overdue).</p>
 </div>
 <div class="card sitesec"><h2>Quorum</h2>
 {% set q = club.quorum or {} %}
@@ -74,7 +73,7 @@
 </div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
-{% if here_keys|select('in', ['meeting.quorum', 'meeting.sections', 'club.invite_after_visits', 'club.remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda, reminders and quorum?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['meeting.quorum', 'meeting.sections', 'club.remind_days_before'])|list %}<form method="post" action="/admin/site/agenda" data-confirm="Go back to club.yaml's agenda, reminders and quorum?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'roles' %}
 <p class="muted">A role is a set of things a member may do. Officers get theirs from their office.</p>
 <details class="muted"><summary>More about roles</summary>
@@ -138,6 +137,49 @@
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if 'privacy.never_record' in here_keys %}<form method="post" action="/admin/site/privacy" data-confirm="Go back to club.yaml's list of names never recorded?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'membership' %}
+<p class="muted">When a guest may apply to join, what happens to the application, and what it asks. Each change is in the admin log. Changes here win over club.yaml on the server. Who receives the applications is the "Receives membership applications" permission, under Roles.</p>
+{% set m = club.membership %}
+<form method="post" action="/admin/site/membership" class="profile sitemembership">
+<input type="hidden" name="rows" value="{{ m.questions|length }}">
+<div class="card sitesec"><h2>Applying</h2>
+<div class="fmtgrid">
+<label for="m-inv">Visits before a guest may apply</label><span><input id="m-inv" type="number" name="invite_after_visits" min="1" max="50" value="{{ club.info.get('invite_after_visits', 3) }}" required> visits</span>{{ origin('club.invite_after_visits') }}
+<label for="m-link">Days the application link works</label><span><input id="m-link" type="number" name="link_days" min="1" max="365" value="{{ m.link_days }}" required> days</span>{{ origin('membership.link_days') }}
+<label for="m-again">Months before someone turned down may apply again</label><span><input id="m-again" type="number" name="reapply_months" min="0" max="120" value="{{ m.reapply_months }}" required> months</span>{{ origin('membership.reapply_months') }}
+<label for="m-keep">Days an application is kept</label><span><input id="m-keep" type="number" name="keep_days" min="1" max="3650" value="{{ m.keep_days }}" required> days</span>{{ origin('membership.keep_days') }}
+</div>
+<p class="hint">The leader console reminds the leader when a guest reaches that many visits, and the Guests page then offers to email them the application. An application is deleted, answers and all, that many days after its link ran out unused, after the sponsor said no, or after it was withdrawn; one the club turned down keeps only the name and email until the months are up, so they can't apply again sooner.</p></div>
+<div class="card sitesec"><h2>The vote</h2>
+<div class="fmtgrid">
+<label for="m-listed">Days a candidate is listed in the minutes before the vote</label><span><input id="m-listed" type="number" name="listed_days" min="0" max="365" value="{{ m.listed_days }}" required> days</span>{{ origin('membership.listed_days') }}
+<label for="m-vote">A vote</label><label class="check"><input id="m-vote" type="checkbox" name="vote" value="1"{{ ' checked' if m.vote }}> <span>Members vote on each candidate (unticked: the officers accept the application)</span></label>{{ origin('membership.vote') }}
+<label for="m-pass">What passes</label><select id="m-pass" name="vote_passes">{% for k, label in vote_passes.items() %}<option value="{{ k }}"{{ ' selected' if m.vote_passes == k }}>{{ label }}</option>{% endfor %}</select>{{ origin('membership.vote_passes') }}
+</div>
+<p class="hint">0 days: the vote is at the next meeting after they apply.</p></div>
+<div class="card sitesec"><h2>The club's statement {{ origin('membership.statement') }}</h2>
+<label class="sr" for="m-stmt">The club's statement</label><textarea id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
+<p class="hint">Plain text, shown above the signature: what the club is and the conditions of membership. May be empty.</p></div>
+<div class="card sitesec"><h2>The club's own questions {{ origin('membership.questions') }}</h2>
+<p class="hint">Asked after the core details (name, address, phone, email, occupation{% if club.ham %}, callsign and license{% endif %}). The number sets the order (lowest first). To remove one, tick Remove or clear its words.</p>
+{% macro q_row(i, q, new=False) %}
+<details class="role"{{ ' open' if new }}><summary><span class="sr">Question: </span><b>{{ q.label or 'A new question' }}</b><br><span class="muted small">{{ question_types[q.type] }}</span></summary>
+  <div class="pair"><label class="small">Place <input name="place{{ i }}" value="{{ '' if new else i + 1 }}" inputmode="decimal" size="3"></label>
+  <label class="small">Type <select name="type{{ i }}">{% for k, label in question_types.items() %}<option value="{{ k }}"{{ ' selected' if q.type == k }}>{{ label }}</option>{% endfor %}</select></label></div>
+  <label class="small">The question <input name="label{{ i }}" value="{{ q.label }}" maxlength="200"></label>
+  <label class="small">Choices, one a line <span class="muted">(pick several)</span> <textarea name="options{{ i }}" rows="3">{{ (q.options or [])|join('\n') }}</textarea></label>
+  <div class="pair"><label class="small">Rows, one a line <span class="muted">(grid)</span> <textarea name="qrows{{ i }}" rows="3">{{ (q.rows or [])|join('\n') }}</textarea></label>
+  <label class="small">Columns, one a line <span class="muted">(grid; each cell is a tick)</span> <textarea name="qcols{{ i }}" rows="3">{{ (q.cols or [])|join('\n') }}</textarea></label></div>
+  <p>{% if new %}<button type="button" class="btn small ghost" data-drop>Delete this new question</button>{% else %}<label class="check small"><input type="checkbox" name="remove{{ i }}" value="1"> Remove this question</label>{% endif %}</p>
+</details>
+{% endmacro %}
+<div class="rolelist" id="qlist">{% for q in m.questions %}{{ q_row(loop.index0, q) }}{% endfor %}</div>
+<template id="t-question">{{ q_row('__i__', {'label': '', 'type': 'short'}, True) }}</template>
+<p><button type="button" class="btn small" data-add="t-question" data-into="qlist" data-focus="label" data-next="{{ m.questions|length }}" hidden>+ Add a question</button></p>
+</div>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
+</form>
+{% if membership_here %}<form method="post" action="/admin/site/membership" data-confirm="Go back to club.yaml's membership settings?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'features' %}
 <p class="muted">Parts of the app the club uses, and what anyone can see without signing in. Each change is in the admin log; changes here win over club.yaml on the server. Turning a part off keeps its data.</p>
 <form method="post" action="/admin/site/features" class="profile sitewide">
@@ -451,7 +493,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("click", (e) => { if (e.target.matches("[data-drop]")) { const f = e.target.form; e.target.closest("details").remove(); check(f); } });
 </script>
-{% if tab in ('roles', 'video') %}<script nonce="{{ csp_nonce }}">
+{% if tab in ('roles', 'video', 'membership') %}<script nonce="{{ csp_nonce }}">
 // + Add an office or a room: a row from the <template>, numbered after the others, and the row count the server reads raised
 for (const b of document.querySelectorAll("[data-add]")) {
   b.hidden = false;

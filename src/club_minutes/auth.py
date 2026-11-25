@@ -562,9 +562,9 @@ LOG_DAYS = 90  # admin-log.jsonl and api-log.jsonl
 
 
 def hide_tokens(text: str) -> str:
-    """A sign-in, email-confirm or admin-mode link with its one-time token blanked (`t=[hidden]`), for the copies an
+    """A sign-in, email-confirm, admin-mode or application link with its one-time token blanked (`t=[hidden]`), for the copies an
     admin or the server's log can read: the email itself still carries the working link."""
-    return re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text)
+    return re.sub(r"(/apply/)[\w-]+", r"\1[hidden]", re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text))
 
 
 def read_log(p: Path, last: int | None = None) -> list[dict]:

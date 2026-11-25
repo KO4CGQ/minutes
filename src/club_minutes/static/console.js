@@ -405,6 +405,7 @@
     if (sec === "Upcoming Chow") return chowSection();
     if (sec === "Old Business" || sec === "New Business") return businessSection(sec);
     if (sec === "Upcoming Events") return eventsSection();
+    if (sec === "Membership Applications") return applicationsSection();
     const arr = (M.sections[sec] || []).map((i) => i.text);
     const set = (a) => { M.sections[sec] = a.map((t) => ({ text: t, member: null })); };
     const rows = itemRows(arr, set);
@@ -415,6 +416,39 @@
       h("ul", {}, paid.map((t) => h("li", {}, t))),
       h("button", { class: "btn small ghost", onclick: () => { set(arr.concat(paid)); render(); save(); } }, "Add to tonight's bills")) : null;
     return h("div", {}, h("h2", {}, sec), shint(hint), treasurer, rows);
+  }
+
+  // ---------- membership applications: the candidates, and the vote from the paper ballot (applications.py) ----------
+  function applicationsSection() {
+    const sec = "Membership Applications", box = h("div", {});
+    const send = async (id, data) => {
+      const r = await fetch(`/api/meetings/${M.slug}/vote`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ id, ...data }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return; }
+      D.applicants = j; draw(); save();
+    };
+    const draw = () => {
+      const A = D.applicants, here = M.in_person.length + M.remote.length;
+      M.sections[sec] = A.lines.map((t) => ({ text: t, member: null }));
+      box.replaceChildren(...A.people.map((p, i) => {
+        const b = p.ballot;
+        const yes = h("input", { type: "number", min: 0, max: 9999, value: b && !b.accepted ? b.yes : "", size: 4, id: `yes${i}` });
+        const no = h("input", { type: "number", min: 0, max: 9999, value: b && !b.accepted ? b.no : "", size: 4, id: `no${i}` });
+        const count = () => ({ yes: yes.value === "" ? null : +yes.value, no: no.value === "" ? null : +no.value });
+        const status = b ? h("p", { class: "msg ok", role: "status" }, b.accepted ? "Accepted." : `${b.yes}\u2013${b.no}: ${b.passed ? "passed" : "not passed"}. The minutes say so; submitting them ${b.passed ? "records it" : "turns the application down"}.`) : null;
+        return h("div", { class: "card" }, h("h3", {}, p.name), h("p", { class: "hint" }, `Sponsored by ${p.sponsor}.`),
+          !p.can_vote ? h("p", { class: "hint" }, `Not up for a vote yet: it can be recorded from ${p.due}.`)
+            : A.vote ? h("div", { class: "row" },
+              h("label", { for: `yes${i}` }, "Yes"), yes, h("label", { for: `no${i}` }, "No"), no,
+              h("span", { class: "hint" }, `${here} members present. Passes under: ${A.rule}.`),
+              h("button", { class: "btn small", onclick: () => send(p.id, count()) }, b ? "Replace the count" : "Record the vote"))
+              : h("div", { class: "row" }, h("button", { class: "btn small", onclick: () => send(p.id, {}) }, b ? "Accepted" : "Accept them")),
+          status);
+      }));
+    };
+    draw();
+    return h("div", {}, h("h2", {}, sec), shint("Each candidate is listed in the minutes until the vote. Only the counts go in the minutes, never who voted how."), box);
   }
 
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------

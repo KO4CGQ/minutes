@@ -11,6 +11,7 @@
 
 <h2>New member</h2>
 <form method="post" action="/roster/add" class="profile">
+  {% if f.application %}<input type="hidden" name="application" value="{{ f.application }}">{% endif %}
   <label>First name <input name="first" value="{{ f.first or '' }}" required></label>
   <label>Last name <input name="last" value="{{ f.last or '' }}" required></label>
   {% if club.ham %}<label>Callsign <input name="callsign" value="{{ f.callsign or '' }}" size="8" autocapitalize="characters"><span class="hint">Optional: a member without one is shown by name.</span></label>

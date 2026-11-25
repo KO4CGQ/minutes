@@ -7,6 +7,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 ## Unreleased
 
 ### Added
+- **Guests apply to join online:** from the Guests page, an officer emails a regular guest a private link to the club's membership application: their details, the club's own questions (set on the new **Membership** tab of Admin → Site) and a typed signature, with a sponsor if they know one. The sponsor confirms in the app, the candidate is listed in the minutes, the leader records the paper ballot's count in the console, and **Add as a member** fills in the new member's details from the application. How many visits, how long the link works, the vote (unanimous, two-thirds or a majority, or none), the wait before reapplying and how long applications are kept are all settings.
 - **Clubs that aren't amateur radio clubs:** a new **Amateur radio club** setting on Admin → Site. Unticked, callsigns and license classes aren't shown or asked for anywhere, and emails end "Thanks," instead of "73,". Clubs that have a callsign keep it ticked. Turning it off hides callsigns without deleting them.
 - Members no longer need a callsign or license class to join the roster: someone without one is shown by name.
 - **Cancelling a meeting night:** delete that date of the weekly meeting, or add a "No meeting" entry on the club's calendar (the meeting then drops off the calendar that night). Either one takes the night off Home, the business notes and the leader console, and the next week's meeting shows instead.
