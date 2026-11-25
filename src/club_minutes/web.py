@@ -3843,19 +3843,20 @@ def calendar_meeting(request: Request, what: str, id: str = Form(...), d: str = 
     _calendar_editor(request)
     if what not in ("cancel", "move", "restore"):
         raise HTTPException(404)
-    club, url = archive.club, base_url(request)
+    club, url, notes = archive.club, base_url(request), []
     try:
         if what == "cancel":
             meetings.cancel(club, id, d, reason, mid, url)
         elif what == "move":
-            meetings.move(club, id, d, date, time, reason, mid, url)
+            meetings.move(club, id, d, date, time, reason, mid, url, notes)
         else:
-            meetings.restore(club, id, d, mid)
+            meetings.restore(club, id, d, mid, url, notes)
     except KeyError:
         raise HTTPException(404, "That event isn't on the calendar any more.")
     except ValueError as x:
         return RedirectResponse(f"/calendar?error={quote(str(x))}", status_code=303)
-    return RedirectResponse(f"/calendar?start={dt.date.fromisoformat(d)}", status_code=303)  # d is a real date: checked above
+    note = f"&note={quote(' '.join(notes))}" if notes else ""
+    return RedirectResponse(f"/calendar?start={dt.date.fromisoformat(d)}{note}", status_code=303)  # d is a real date: checked above
 
 
 @app.get("/calendar/import", response_class=HTMLResponse)

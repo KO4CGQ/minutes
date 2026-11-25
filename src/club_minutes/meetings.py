@@ -9,8 +9,10 @@ A series has `chow` (default True when absent: the club's first series) to say w
 
 Core fires, others react: `on(name, fn)` registers, `fire(name, **kw)` calls. Names (the plugin API's first hooks):
     meeting_cancelled(club, date, reason, by, url, chow)
-    meeting_moved(club, date, to (a datetime), reason, by, url, chow)
-`date` is the original date. chow.py registers for both."""
+    meeting_moved(club, date, to (a datetime), reason, by, url, chow, notes)
+    meeting_restored(club, date, was (the move's datetime, None for a cancel), by, url, chow, notes)
+`date` is the original date. A listener may append a sentence to `notes` for the leader who made the change.
+chow.py registers for all three."""
 from __future__ import annotations
 
 import datetime as dt
@@ -63,9 +65,9 @@ def time_on(club: Club, day: dt.date) -> str:
 
 # ---------------- cancel, reschedule, put back ----------------
 
-def _record(club: Club, eid: str, d: str, by: str, url: str, make) -> bool:
+def _record(club: Club, eid: str, d: str, by: str, url: str, make, notes: list | None = None) -> bool:
     """Change the record of date d of series eid: make(e, old) returns the new record (None: remove it), or raises
-    ValueError. Saves, logs, then fires and notifies. False if nothing changed. KeyError: no such event."""
+    ValueError. Saves, logs, then fires and notifies; listeners' notes for the leader go in `notes`. False if nothing changed. KeyError: no such event."""
     day = dt.date.fromisoformat(d)  # ValueError for the route
     with events.locked():
         evs = events.load()
@@ -84,9 +86,15 @@ def _record(club: Club, eid: str, d: str, by: str, url: str, make) -> bool:
         events.save(evs)
     what = "restored one date of" if new is None else "cancelled one date of" if new.get("cancelled") else "moved one date of"
     events.log(by, what, {**e, "start": f"{d}{e['start'][10:]}"})
-    if new is None:
+    notes = [] if notes is None else notes
+    kw = {"club": club, "date": day, "by": by, "url": url, "chow": e.get("chow", True), "notes": notes}
+    if new is None:  # put back: members who read "No meeting" or the move are told it's as it was
+        was = dt.datetime.fromisoformat(old["start"]) if old and old.get("moved") else None
+        fire("meeting_restored", was=was, **kw)
+        _notify(club, day, f"{club.label}: Meeting back on {show_date(day, 'weekday')}",
+                f"The club meeting on {show_date(day, 'weekday')} is back on" + (", at its usual date and time." if was else "."), "", url)
         return True
-    kw = {"club": club, "date": day, "reason": new.get("reason", ""), "by": by, "url": url, "chow": e.get("chow", True)}
+    kw["reason"] = new.get("reason", "")
     if new.get("cancelled"):
         fire("meeting_cancelled", **kw)
         _notify(club, day, f"{club.label}: No meeting on {show_date(day, 'weekday')}",
@@ -108,7 +116,7 @@ def cancel(club: Club, eid: str, d: str, reason: str, by: str, url: str = "") ->
     return _record(club, eid, d, by, url, lambda e, old: {"cancelled": True, "reason": _reason(reason)})
 
 
-def move(club: Club, eid: str, d: str, day: str, at: str, reason: str, by: str, url: str = "") -> bool:
+def move(club: Club, eid: str, d: str, day: str, at: str, reason: str, by: str, url: str = "", notes: list | None = None) -> bool:
     """Hold date d on another day (and time: the meeting's own if empty)."""
     def make(e, old):
         try:
@@ -125,12 +133,12 @@ def move(club: Club, eid: str, d: str, day: str, at: str, reason: str, by: str, 
             raise ValueError("Pick another date or time: that's when it already is.")
         end = events._iso(began + events.length(e), timed) if e.get("end") else None
         return {**{k: v for k, v in old.items() if k != "cancelled"}, "moved": True, "start": start, "end": end, "reason": _reason(reason)}
-    return _record(club, eid, d, by, url, make)
+    return _record(club, eid, d, by, url, make, notes)
 
 
-def restore(club: Club, eid: str, d: str, by: str) -> bool:
-    """Undo a cancel or a move. Chow isn't touched: the leader can Fill again."""
-    return _record(club, eid, d, by, "", lambda e, old: None)
+def restore(club: Club, eid: str, d: str, by: str, url: str = "", notes: list | None = None) -> bool:
+    """Undo a cancel or a move. A move takes its chow back; a cancel's chow isn't touched: the leader can Fill again."""
+    return _record(club, eid, d, by, url, lambda e, old: None, notes)
 
 
 def _notify(club: Club, day: dt.date, subject: str, line: str, reason: str, url: str) -> None:

@@ -439,3 +439,26 @@ def test_home_shows_the_chow_of_the_next_meeting_night_only(env, monkeypatch, tm
     monkeypatch.setattr(web.authn, "member_for", lambda token: "amy")
     card = TestClient(web.app).get("/").text.split("Next meeting", 1)[1].split("</section>", 1)[0]
     assert "Holiday" not in card and f"Chow: {club.name('bob')}" in card
+
+
+def test_chow_goes_with_a_move_and_back_with_the_put_back_and_members_are_told(env, monkeypatch):
+    from club_minutes import auth, meetings
+    club, s, _ = env
+    club.modules["chow"] = True
+    nxt, last = THU + dt.timedelta(days=7), THU + dt.timedelta(days=14)
+    s["nights"] = {d.isoformat(): {"member": m, "status": "scheduled"} for d, m in ((nxt, "bob"), (last, "cal"))}
+    chow.save(s)
+    mail = []
+    monkeypatch.setattr(auth, "send_email", lambda to, subject, body, **kw: mail.append(subject))
+    monkeypatch.setattr(meetings.dt, "date", type("D", (dt.date,), {"today": classmethod(lambda c: THU - dt.timedelta(days=3))}))
+    e, to, notes = _meeting(club), nxt + dt.timedelta(days=2), []
+    meetings.move(club, e["id"], nxt.isoformat(), to.isoformat(), "", "", "sec", "", notes)
+    assert chow.load()["nights"][to.isoformat()]["member"] == "bob" and nxt.isoformat() not in chow.load()["nights"] and not notes
+    meetings.restore(club, e["id"], nxt.isoformat(), "sec", "", notes)
+    assert chow.load()["nights"][nxt.isoformat()]["member"] == "bob" and to.isoformat() not in chow.load()["nights"]
+    assert any("back on" in m for m in mail) and not notes
+    meetings.move(club, e["id"], nxt.isoformat(), last.isoformat(), "", "", "sec", "", notes)  # Cal has that night
+    assert chow.load()["nights"][nxt.isoformat()]["member"] == "bob" and "Chow page" in notes[0]
+    mail.clear()
+    meetings.restore(club, e["id"], nxt.isoformat(), "sec")
+    assert any("back on" in m for m in mail)

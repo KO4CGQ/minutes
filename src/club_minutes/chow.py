@@ -495,22 +495,36 @@ def _on_cancelled(club: Club, date: dt.date, reason: str, by: str, url: str, cho
               secretary=False)
 
 
-def _on_moved(club: Club, date: dt.date, to: dt.datetime, reason: str, by: str, url: str, chow: bool, **_) -> None:
-    """The night moves to the new date with its member, who is told. Not onto a night that has someone already."""
-    d, new = date.isoformat(), to.date().isoformat()
+def _carry(club: Club, src: dt.date, dst: dt.date, by: str, url: str, notes: list, what: str) -> None:
+    """Move the scheduled chow night of date src to dst with its member, who is told. Not onto a night that has someone
+    already: both stay as they were and `notes` says to fix it on the Chow page."""
+    a, b = src.isoformat(), dst.isoformat()
     with lock:
         s = load()
-        x = s["nights"].get(d) or {}
-        if not (club.has("chow") and chow and x.get("status") == "scheduled" and d != new
-                and not (s["nights"].get(new) or {}).get("member")):
+        x = s["nights"].get(a) or {}
+        if not (club.has("chow") and x.get("status") == "scheduled" and a != b):
             return
-        del s["nights"][d]
-        s["nights"][new] = x
-        e = _log("assign", by, date=new, old=None, new=x.get("member"))
+        if (s["nights"].get(b) or {}).get("member"):
+            notes.append(f"Chow was already set for {_day(b)}, so {_day(a)}'s chow stays where it was. Fix it on the Chow page.")
+            return
+        del s["nights"][a]
+        s["nights"][b] = x
+        e = _log("assign", by, date=b, old=None, new=x.get("member"))
         save(s)
-    _tell(club, [x.get("member")], f"Meeting moved: your chow night is now {_day(new)}",
-          f"The club meeting on {_day(d)} has moved to {_day(new)}, and so has your chow night.", url, e, secretary=False)
+    _tell(club, [x.get("member")], f"Meeting {what}: your chow night is now {_day(b)}",
+          f"The club meeting on {_day(a)} {what}, and so has your chow night: it's now {_day(b)}.", url, e, secretary=False)
+
+
+def _on_moved(club: Club, date: dt.date, to: dt.datetime, by: str, url: str, chow: bool, notes: list, **_) -> None:
+    if chow:
+        _carry(club, date, to.date(), by, url, notes, "has moved")
+
+
+def _on_restored(club: Club, date: dt.date, was: dt.datetime | None, by: str, url: str, chow: bool, notes: list, **_) -> None:
+    if chow and was:
+        _carry(club, was.date(), date, by, url, notes, "has moved back")
 
 
 meetings.on("meeting_cancelled", _on_cancelled)
 meetings.on("meeting_moved", _on_moved)
+meetings.on("meeting_restored", _on_restored)
