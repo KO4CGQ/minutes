@@ -855,6 +855,24 @@ def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path
         pop.value.wait_for_load_state()
         assert pop.value.is_visible("text=20 m") and pop.value.is_disabled("button:has-text('Send my application')")
         pop.value.close()
+        page.click("text=+ Add a question")
+        page.fill("input[name=label1]", "Licensed?"); page.select_option("select[name=type1]", "yesno")
+        page.click("[aria-label='Move the new question up']")  # ▲: before Bands
+        with page.expect_navigation():
+            page.click("main form.sitemembership button.btn >> text=Save")
+        assert [q["label"] for q in club.membership["questions"]] == ["Licensed?", "Bands"]
+        page.click("[aria-label='Remove Licensed?']")  # ✕: gone from the page, and on Save
+        assert page.locator("#qlist .qrow").count() == 1
+        with page.expect_navigation():
+            page.click("main form.sitemembership button.btn >> text=Save")
+        assert [q["label"] for q in club.membership["questions"]] == ["Bands"]
+        page.goto("http://testserver/admin/site/agenda")
+        first = page.locator(".agrow").first.locator("[data-move='1']")
+        name = page.locator(".agrow").first.locator("[name^=name]").input_value()
+        first.click()  # ▼: the first section one place down
+        with page.expect_navigation():
+            page.click("main form.siteagenda button.btn >> text=Save")
+        assert club.sections()[1] == name, (name, club.sections())  # it was first
         c.cookies.clear()  # the guest is nobody
         applications.send(club, "Pat Visitor", "pat@example.org", "http://testserver")
         with applications.edit() as items:
