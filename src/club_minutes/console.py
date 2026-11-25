@@ -13,7 +13,17 @@ import shutil
 import threading
 import time
 
-from . import applications, auth, business, chow, meetings, pictures, plugins, prefs, snapshot
+from . import (
+    applications,
+    auth,
+    business,
+    chow,
+    meetings,
+    pictures,
+    plugins,
+    prefs,
+    snapshot,
+)
 from .club import show_date
 from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
