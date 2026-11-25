@@ -30,6 +30,8 @@ main() {
   install_app() {  # $1 "newest": plugins move to their newest releases; otherwise they go back in at the ones they had
     if [ -n "$handed" ]; then rm -rf "$APP/.venv"; handed=""; fi  # rebuilt just below, with root's Python
     # root's own uv cache and Python (readable by 'minutes', writable only by root)
+    # what this version needs from Debian (deploy/system-packages), by its own script: a new need arrives with the update
+    if [ -x "$APP/deploy/after-update.sh" ]; then env APP="$APP" "$APP/deploy/after-update.sh"; fi
     retry env UV_CACHE_DIR=/var/cache/club-minutes-uv UV_PYTHON_INSTALL_DIR="$APP/.uv-python" uv sync -q --frozen --no-dev
     # uv sync leaves only the app's own packages: the plugins installed with deploy/plugin.sh go back in
     if [ -x "$APP/deploy/plugin.sh" ]; then "$APP/deploy/plugin.sh" install "${1:-}"; fi

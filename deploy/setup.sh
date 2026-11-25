@@ -13,8 +13,9 @@ if [ -n "${TZ_NAME:-}" ]; then
 fi
 
 apt-get update -qq
-# git/curl: deploy; sudo: the admin command runs the app as its user; pango + fonts: PDF rendering (WeasyPrint)
-apt-get install -y -qq git curl sudo ca-certificates libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core fonts-liberation >/dev/null
+# git/curl: deploy; sudo: the admin command runs the app as its user. What the app itself needs (PDF libraries, fonts)
+# is in deploy/system-packages, installed by update.sh (run at the end) through deploy/after-update.sh.
+apt-get install -y -qq git curl sudo ca-certificates >/dev/null
 
 id minutes >/dev/null 2>&1 || useradd --system --create-home --home-dir /var/lib/club-minutes-home --shell /usr/sbin/nologin minutes
 install -d -o minutes -g minutes -m 750 "$DATA"
