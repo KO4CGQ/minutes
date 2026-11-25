@@ -54,7 +54,7 @@ What a member may do comes from their **roles**. A role is given by the offices 
 
 📥 **Import .ics** (Calendar → Import .ics): events from Google Calendar, Outlook or Apple. In Google Calendar: Settings → Import & export → Export. Importing the same file again updates rather than doubles. Anything it can't bring in is listed, to add by hand.
 
-📲 **Subscribing:** every member gets a private link under **Subscribe in your calendar app**, for their phone or calendar app. **Make a new link** if it's been shared by mistake. An admin can also make some calendars public (Admin → Site → Features); chow, birthdays and due dates are never public.
+📲 **Subscribing:** every member gets a private link under **Subscribe in your calendar app**, for their phone or calendar app. **Make a new link** if it's been shared by mistake. An admin can also make some calendars public (Admin → Site → Calendar); chow, birthdays and due dates are never public.
 
 ## 🎙️ At the meeting
 Whoever starts the meeting in the console is marked present: in person when they're on the meeting place's network, online otherwise. Tap their name in Attendance to change it.

@@ -318,6 +318,7 @@ def test_help_pages_show_the_guides(monkeypatch):
     off = c.get("/help/officers").text  # every guide is public anyway; the link to the next stays in the app
     assert 'href="/help/members"' in off and "Server admin</a>" not in off
     admin = c.get("/help/server-admin").text
+    assert 'class="crumb"' not in admin and c.get("/help/server-admin?from=admin").text.count('<a href="/admin">‹ Admin</a>') == 1  # from the Admin page: back to it
     assert "<pre><code" in admin and "Server admin</a>" in admin
     assert 'popovertarget="shot1"' in admin and '<div popover id="shot1"' in admin and "<p><button" not in admin  # pictures open full size
     assert c.get("/help/developers").status_code == 404 and c.get("/help/..%2Fsecrets").status_code == 404

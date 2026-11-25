@@ -48,7 +48,7 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
   - label: Constitution and Bylaws   # a page of this app: /page, shown in full in the minutes and their PDF
     url: /bylaws
 
-# Holidays and election days on the calendars, by region. None by default. Also on Admin → Site → Features.
+# Holidays and election days on the calendars, by region. None by default. Also on Admin → Site → Calendar.
 # calendar:
 #   holidays: us        # a country, or a state or region in it: us, us-oh, fr, de-by, gb-sct… (from python-holidays)
 #   extra_holidays:     # the club's own: a date, or a weekday rule (nth 1-4 or -1 for the last), + days after
