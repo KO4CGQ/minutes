@@ -103,7 +103,7 @@ document.addEventListener("submit", (e) => {
   };
 })();
 </script>{% endif %}
-<main>{% block crumb %}{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% else %}{{ back(None, None) }}{% endif %}{% endblock %}{% block body %}{% endblock %}</main>
+<main>{% block crumb %}{% if is_admin and admin_until and (here.startswith('/admin/') or here.split('/')[2:3] == ['admin']) and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% else %}{{ back(None, None) }}{% endif %}{% endblock %}{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
 <script src="/static/fields.js?v={{ ASSETS }}"></script>
 <script src="/static/format.js?v={{ ASSETS }}"></script>

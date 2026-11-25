@@ -2929,6 +2929,7 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
+templates.env.globals["site_tabs"] = lambda: [(f"/admin/site/{t}", label) for t, label in SITE_TABS] + plugins.site_tabs(archive.club)
 SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("bylaws", "Bylaws"),
              ("dates", "Dates"), ("privacy", "Privacy"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
@@ -2953,7 +2954,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     club = archive.club
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
-    return page(request, "site.html", tab=tab, tabs=SITE_TABS, error=error, note=note,
+    return page(request, "site.html", tab=tab, error=error, note=note,
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
