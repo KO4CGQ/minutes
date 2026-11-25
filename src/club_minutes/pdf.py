@@ -52,7 +52,7 @@ def application(club, rec: dict, rp_id: str | None = None) -> bytes:
     def when(t):
         return dt.datetime.fromtimestamp(t).strftime(DATES["list"] + ", %-I:%M %p") if t else ""
     html = _env(club, rp_id).get_template("application_doc.html").render(
-        a=rec, sponsor=club.name((rec.get("sponsor") or {}).get("id")), when=when, fees=applications.fees(rec))
+        a=rec, statement=richtext.render(rec.get("statement") or "", True), sponsor=club.name((rec.get("sponsor") or {}).get("id")), when=when, fees=applications.fees(rec))
     return HTML(string=html, base_url=str(HERE)).write_pdf()
 
 
