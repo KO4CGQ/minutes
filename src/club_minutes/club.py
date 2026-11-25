@@ -318,7 +318,7 @@ class Club:
         """Set Site page settings together ({(section, key): value}; None: back to club.yaml's). Checked as the app
         checks club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
         with _site_lock:  # two admins saving at once: one after the other, neither lost
-            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS]:
+            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS and not (s == "plugins" and re.fullmatch(r"[a-z0-9]+", k))]:
                 raise ValueError(f"{', '.join(bad)} can't be changed here.")
             site = self.site_settings
             for (section, key), value in values.items():
@@ -370,6 +370,7 @@ class Club:
         for k in ("holidays", "elections"):
             regions.check(k, self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
         regions.parse_extra(self.calendar.get("extra_holidays"))
+        self.plugins_on = {k for k, v in (cfg.get("plugins") or {}).items() if v}  # installed plugins an admin ticked (plugins.py)
         self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
 
     @property
@@ -440,6 +441,9 @@ class Club:
     def has(self, module: str) -> bool:
         """Whether an optional part of the app is turned on in club.yaml (`modules:`)."""
         return self.modules.get(module, False)
+
+    def plugin_on(self, name: str) -> bool:
+        return name in self.plugins_on
 
     @property
     def links(self) -> list[dict]:
@@ -621,7 +625,7 @@ class Club:
             out[k] = {"name": name, "perms": [p for p in PERMISSIONS if p in perms],
                       "offices": [offs[o.lower()] for o in r.get("offices", []) if o.lower() in offs],
                       "members": sorted({self.canonical(i) for i in r.get("members", []) if self.canonical(i) in self.members})}
-        if lost := [PERMISSIONS[p] for p in PERMISSIONS if not any(p in r["perms"] for r in out.values())]:
+        if lost := [PERMISSIONS[p] for p in PERMISSIONS if "." not in p and not any(p in r["perms"] for r in out.values())]:
             raise ValueError(f"No role would be allowed to {lost[0]}: give it to at least one role.")
         rj = {k: r["members"] for k, r in out.items()}
         rj["table"] = {k: {"name": r["name"], "perms": r["perms"], "offices": r["offices"]} for k, r in out.items()
