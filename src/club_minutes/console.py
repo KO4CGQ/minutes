@@ -153,6 +153,11 @@ def vote(archive: Archive, slug: str, aid: str, yes, no) -> None:
     """Record the paper ballot's count (or the acceptance) for a candidate at this meeting; ValueError says why not."""
     m = archive.by_slug[slug]
     _draft(m)
+    if m.date > dt.date.today():
+        raise ValueError("You can record the vote at the meeting, not before.")
+    here = len(m.in_person) + len(m.remote)  # 0: attendance not taken yet, so nothing to compare with
+    if here and all(type(n) is int for n in (yes, no)) and yes + no > here:
+        raise ValueError(f"The yes and no counts add up to more than the {here} members present.")
     applications.record_vote(archive.club, aid, slug, [x.date for x in archive.meetings], yes, no)
     sync_applications(archive, m)
     m.save(archive.root)

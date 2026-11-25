@@ -44,7 +44,6 @@ SHOWN = {"sent": "Application sent", "submitted": "Waiting for the sponsor", "de
 MONTH = 30.4375 * 86400
 OWN_COPY_SECONDS = 3600  # the applicant may download their own PDF from the thank-you page this long after sending it
 SECTION = "Membership Applications"  # the minutes' section for candidates, made by the console
-PERSONAL = ("form", "answers", "statement", "signed", "sponsor", "token_hash")
 
 
 def _path():
@@ -350,10 +349,29 @@ def _since(a: dict) -> float:
     return dt.datetime.fromisoformat(voted).timestamp() if voted else a["sponsor"]["at"]
 
 
+def _purge_one(a: dict, items: list[dict], now: float, keep: float, window: float) -> int:
+    """Delete or trim one application as `purge` says; 1 if it changed."""
+    s = a["state"]
+    if s == "turned_down":
+        if a["ended"] + max(window, keep) < now:
+            items.remove(a)
+        elif a["ended"] + keep < now and "form" in a:
+            for k in ("form", "answers", "statement", "signed", "sponsor", "club", "token_hash"):
+                a.pop(k, None)
+        else:
+            return 0
+    elif s == "member" and a["updated"] + keep < now or s == "candidate" and _since(a) + keep < now or (s == "sent" and a["expires"] + keep < now) \
+            or (s in ("submitted", "declined") and a["updated"] + keep < now) or (s == "withdrawn" and a["ended"] + keep < now):
+        items.remove(a)
+    else:
+        return 0
+    return 1
+
+
 def purge(club: Club, now: float | None = None) -> int:
     """The daily job: delete what's kept too long, `keep_days` after the link ran out unused, after the sponsor said no or
     never answered, or after a withdrawal; a turn-down loses its answers and keeps only name and email until the
-    reapply period ends, so the refusal can still be checked; a new member loses everything personal `keep_days`
+    reapply period ends, so the refusal can still be checked; a new member's item is deleted `keep_days`
     after joining (the roster holds their details); a candidate never added as a member goes `keep_days` after the
     vote passed, or after becoming a candidate if no vote passed. Returns how many items were changed or deleted."""
     now = now or time.time()
@@ -361,24 +379,10 @@ def purge(club: Club, now: float | None = None) -> int:
     n = 0
     with edit() as items:
         for a in list(items):
-            s = a["state"]
-            if s == "turned_down":
-                if a["ended"] + max(window, keep) < now:
-                    items.remove(a)
-                elif a["ended"] + keep < now and "form" in a:
-                    for k in ("form", "answers", "statement", "signed", "sponsor", "club", "token_hash"):
-                        a.pop(k, None)
-                else:
-                    continue
-            elif s == "member" and "form" in a and a["updated"] + keep < now:
-                for k in (*PERSONAL, "email"):
-                    a.pop(k, None)
-            elif s == "candidate" and _since(a) + keep < now or (s == "sent" and a["expires"] + keep < now) or (s in ("submitted", "declined") and a["updated"] + keep < now) \
-                    or (s == "withdrawn" and a["ended"] + keep < now):
-                items.remove(a)
-            else:
-                continue
-            n += 1
+            try:  # one damaged item must not stop the rest
+                n += _purge_one(a, items, now, keep, window)
+            except Exception:
+                log.exception("Purge skipped application %s", a.get("id") if isinstance(a, dict) else "?")
     return n
 
 

@@ -3,7 +3,7 @@
 <h1>Guests</h1>
 <p class="muted">Visits are grouped {% if club.ham %}by callsign, or by name if there's no callsign{% else %}by name{% endif %}. Guests who later join move to "Became members" below.</p>
 {% if error %}<p class="msg err" role="alert">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
-<table class="list"><thead><tr><th>Guest</th>{% if club.ham %}<th>Callsign</th>{% endif %}<th class="n">Visits</th><th class="opt">First visit</th><th>Last visit</th><th></th>{% if sends %}<th>Application</th>{% endif %}</tr></thead>
+<table class="list{{ ' wide' if sends }}"><thead><tr><th>Guest</th>{% if club.ham %}<th>Callsign</th>{% endif %}<th class="n">Visits</th><th class="opt">First visit</th><th>Last visit</th><th></th>{% if sends %}<th>Application</th>{% endif %}</tr></thead>
 <tbody>{% for g in current %}<tr>
 <td>{{ g.name }}</td>{% if club.ham %}<td class="cs">{{ g.callsign or '' }}</td>{% endif %}<td class="n">{{ g.visits|length }}</td>
 <td class="opt nw" data-sort="{{ g.visits[0][0] }}"><a href="/meetings/{{ g.visits[0][0] }}?from=guests">{{ g.visits[0][0]|listdate }}</a></td><td class="nw" data-sort="{{ g.visits[-1][0] }}"><a href="/meetings/{{ g.visits[-1][0] }}?from=guests">{{ g.visits[-1][0]|listdate }}</a></td>

@@ -84,8 +84,32 @@ def test_a_passed_vote_then_add_as_a_member_marks_it_and_the_fees_come_from_the_
     assert applications.fees(item) == ("2026-11-20", "")
     now = time.time()
     assert applications.purge(club, now + 89 * 86400) == 0 and applications.purge(club, now + 91 * 86400) == 1
-    kept = applications.load()["items"][0]
-    assert set(kept) >= {"id", "guest", "state", "member", "club"} and not {"form", "answers", "signed", "sponsor", "email"} & set(kept)
+    assert applications.load()["items"] == []  # the whole item goes, nothing reads it after that
+
+
+def test_one_malformed_item_does_not_stop_the_purge(with_env, caplog):
+    club, _, _aid, _a = candidate(with_env)
+    since = applications.load()["items"][0]["sponsor"]["at"]
+    with applications.edit() as items:
+        items.insert(0, {"id": "abad", "state": "sent", "expires": None, "updated": 0})  # None where a time belongs
+        items.insert(0, {"id": "bbad"})  # no state
+    assert applications.purge(club, since + 91 * 86400) == 1  # the good candidate still goes
+    assert [x["id"] for x in applications.load()["items"]] == ["bbad", "abad"]
+    assert "abad" in caplog.text and "bbad" in caplog.text
+
+
+def test_a_vote_is_refused_before_the_meeting_and_above_the_members_present(with_env):
+    _club, _, aid, a = candidate(with_env)
+    m = meeting(a, "2026-11-12")
+    m.in_person, m.remote = ["n0aaaa", "n0bbbb"], ["n0cccc"]
+    with pytest.raises(ValueError, match="more than the 3 members present"):
+        console.vote(a, "2026-11-12", aid, 3, 1)
+    console.vote(a, "2026-11-12", aid, 2, 1)
+    console.submit(a, "2026-11-12")
+    future = (dt.date.today() + dt.timedelta(days=7)).isoformat()
+    meeting(a, future)
+    with pytest.raises(ValueError, match="at the meeting, not before"):
+        console.vote(a, future, aid, 1, 0)
 
 
 def test_a_candidate_never_added_is_deleted_after_keep_days(with_env):

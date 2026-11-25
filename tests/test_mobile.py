@@ -10,12 +10,14 @@ import re
 from pathlib import Path
 
 import pytest
+import test_applications as ta
 
 from club_minutes import auth as authmod
 from club_minutes.auth import Auth
 from club_minutes.club import Club
 from club_minutes.web import SITE_TABS
 
+phone_env = ta.env  # the applications tests' club, sign-ins and data folder
 FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
 EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "uploads")] + ["/help/officers", "/help/server-admin"]
@@ -928,12 +930,53 @@ def test_the_console_records_a_candidates_vote(tmp_path, monkeypatch, engine):
         page.goto(f"http://testserver/console/{m.slug}")
         page.get_by_role("button", name=re.compile("Membership Applications")).click()
         sync_api.expect(page.get_by_role("heading", name="Pat Visitor")).to_be_visible()
-        page.get_by_label("Yes").fill("12")
+        page.get_by_label("Yes").fill("1")
         page.get_by_label("No", exact=True).fill("0")
         page.get_by_role("button", name="Record the vote").click()
-        sync_api.expect(page.get_by_text("12–0: passed")).to_be_visible()
-        shots = Path.home() / "project-notes/w8lbz/test-shots/2026-11-24-onboarding"
-        shots.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(shots / f"console-vote-{engine}.png"))
+        sync_api.expect(page.get_by_text("1–0: passed")).to_be_visible()
         browser.close()
-    assert [i.text for i in web.archive.by_slug[m.slug].items("Membership Applications")] == ["Pat Visitor's application was voted on: passed (12–0)."]
+    assert [i.text for i in web.archive.by_slug[m.slug].items("Membership Applications")] == ["Pat Visitor's application was voted on: passed (1–0)."]
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_the_application_pages_fit_a_phone_and_read_left_aligned(phone_env, engine):
+    """The public form, its thank-you page, the sponsor's page and Guests (with application forms in its rows) at 390px."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+
+    from club_minutes import applications
+    club, as_, sent, _ = phone_env
+    _, token = ta.send_link(as_, sent)
+    form = ta.good(club, token) | {"sponsor": "Nobody Known"}
+    done = as_(None).post(f"/apply/{token}", data=form)
+    aid = applications.find(token)["id"]
+    with applications.edit() as items:  # a second guest with a link out, so Guests shows both kinds of form
+        items.append({"id": "a2", "guest": "New Face", "email": "new@example.org", "state": "sent", "sent": 1, "used": None,
+                      "token_hash": applications._hash("tok2"), "expires": 4102444800, "club": {}})
+    c = as_("n0aaaa")
+    c.get("/guests")  # warm up
+
+    def serve(route):
+        if route.request.url.endswith("/thanks"):  # the thank-you page is the POST's own answer
+            return route.fulfill(status=200, content_type="text/html", body=done.text)
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), follow_redirects=False)
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page(viewport={"width": 390, "height": 800})
+        page.route("http://testserver/**", serve)
+        wide = {}
+        for path in ("/guests", f"/applications/{aid}/sponsor", "/apply/tok2"):
+            page.goto("http://testserver" + path)
+            wide[path] = page.evaluate("document.documentElement.scrollWidth")
+        page.goto("http://testserver/thanks")
+        wide["thanks"] = page.evaluate("document.documentElement.scrollWidth")
+        assert "Thank you" in page.content()
+        page.goto("http://testserver/apply/tok2")
+        aligned = page.evaluate("[...document.querySelectorAll('.login.apply form label, .login.apply .muted p')].map(e => getComputedStyle(e).textAlign)")
+        assert set(aligned) <= {"left", "start"} and aligned, aligned
+        assert all(w <= 390 for w in wide.values()), wide
+        browser.close()
