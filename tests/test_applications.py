@@ -235,6 +235,11 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
                      (form | {"type0": "grid", "qcols0": ""}, "give cols"),
                      (form | {"invite": "Hello {guest}"}, "needs {link}"), (form | {"invite": "{link} {name}"}, "not {name}")):
         assert why in admin.post("/admin/site/membership", data=bad).text and club.site_settings == before, why
+    preview = admin.post("/admin/site/membership/preview", data=form | {"label2": "Favorite band?", "type2": "short", "rows": "3", "welcome": "**Hi** there"})
+    assert "Favorite band?" in preview.text and "<strong>Hi</strong>" in preview.text and "Preview:" in preview.text and " disabled>Send my application" in preview.text
+    assert club.site_settings == before  # nothing saved
+    assert "from 1 to 365" in admin.post("/admin/site/membership/preview", data=form | {"link_days": "0"}).text
+    assert as_("n0cccc").post("/admin/site/membership/preview", data=form).status_code == 404
     assert "Back to club.yaml" in admin.get("/admin/site/membership").text
     admin.post("/admin/site/membership", data={"back": "1"})
     assert club.site_settings == {} and club.membership == clubmod.MEMBERSHIP_DEFAULTS

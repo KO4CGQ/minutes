@@ -3282,6 +3282,45 @@ def _lines(text) -> list[str]:
     return [" ".join(x.split()) for x in str(text or "").splitlines() if x.strip()]
 
 
+def _membership_form(form, club) -> dict:
+    """The Membership tab's settings as typed (ValueError says what's wrong): for Save, and for Preview the form."""
+    v = {}
+    for k, label, lo, hi in (("invite_after_visits", "Visits before a guest may apply", 1, 50), ("link_days", "Days the application link works", 1, 365),
+                             ("listed_days", "Days a candidate is listed", 0, 365), ("reapply_months", "Months before applying again", 0, 120),
+                             ("keep_days", "Days an application is kept", 1, 3650)):
+        n = num(form.get(k))
+        if n is None or not lo <= n <= hi:
+            raise ValueError(f"{label}: a whole number from {lo} to {hi}.")
+        v[k] = n
+    v["vote"] = bool(form.get("vote"))
+    v["vote_passes"] = form.get("vote_passes") or ""
+    if v["vote_passes"] not in VOTE_PASSES:
+        raise ValueError("What passes: pick one from the list.")
+    v["statement"] = "\n".join(x.rstrip() for x in str(form.get("statement") or "").splitlines()).strip()
+    if len(v["statement"]) > 5000:
+        raise ValueError("The statement is too long (5000 characters at most).")
+    v["welcome"] = "\n".join(x.rstrip() for x in str(form.get("welcome") or "").splitlines()).strip()
+    if len(v["welcome"]) > 5000:
+        raise ValueError("The welcome text is too long (5000 characters at most).")
+    v["invite"] = "\n".join(x.rstrip() for x in str(form.get("invite") or "").splitlines()).strip()
+    check_invite(v["invite"])
+    v["fields"] = {k: form.get("field_" + k) or club.membership["fields"][k] for k in FIELD_DEFAULTS}  # a non-ham club's page has no ham selects
+    if set(v["fields"].values()) - set(FIELD_MODES):
+        raise ValueError("Application fields: pick one from each list.")
+    qs = []
+    for i in range(min(num(form.get("rows")) or 0, 60)):
+        label = " ".join((form.get(f"label{i}") or "").split())
+        if label and not form.get(f"remove{i}"):  # a question with no words is removed
+            try:
+                place = float(form.get(f"place{i}") or 999)
+            except ValueError:
+                raise ValueError(f"The place for {label} isn't a number.") from None
+            qs.append((place, i, {"label": label, "type": form.get(f"type{i}"), "options": _lines(form.get(f"options{i}")),
+                                  "rows": _lines(form.get(f"qrows{i}")), "cols": _lines(form.get(f"qcols{i}"))}))
+    v["questions"] = clean_questions([q for *_, q in sorted(qs, key=lambda t: t[:2])])
+    return v
+
+
 @app.post("/admin/site/membership")
 async def site_membership(request: Request):
     """Membership tab: when a guest may apply, how an application is handled and kept, the club's statement and its own
@@ -3292,40 +3331,7 @@ async def site_membership(request: Request):
         if form.get("back"):
             values = dict.fromkeys(keys)
         else:
-            v = {}
-            for k, label, lo, hi in (("invite_after_visits", "Visits before a guest may apply", 1, 50), ("link_days", "Days the application link works", 1, 365),
-                                     ("listed_days", "Days a candidate is listed", 0, 365), ("reapply_months", "Months before applying again", 0, 120),
-                                     ("keep_days", "Days an application is kept", 1, 3650)):
-                n = num(form.get(k))
-                if n is None or not lo <= n <= hi:
-                    raise ValueError(f"{label}: a whole number from {lo} to {hi}.")
-                v[k] = n
-            v["vote"] = bool(form.get("vote"))
-            v["vote_passes"] = form.get("vote_passes") or ""
-            if v["vote_passes"] not in VOTE_PASSES:
-                raise ValueError("What passes: pick one from the list.")
-            v["statement"] = "\n".join(x.rstrip() for x in str(form.get("statement") or "").splitlines()).strip()
-            if len(v["statement"]) > 5000:
-                raise ValueError("The statement is too long (5000 characters at most).")
-            v["welcome"] = "\n".join(x.rstrip() for x in str(form.get("welcome") or "").splitlines()).strip()
-            if len(v["welcome"]) > 5000:
-                raise ValueError("The welcome text is too long (5000 characters at most).")
-            v["invite"] = "\n".join(x.rstrip() for x in str(form.get("invite") or "").splitlines()).strip()
-            check_invite(v["invite"])
-            v["fields"] = {k: form.get("field_" + k) or club.membership["fields"][k] for k in FIELD_DEFAULTS}  # a non-ham club's page has no ham selects
-            if set(v["fields"].values()) - set(FIELD_MODES):
-                raise ValueError("Application fields: pick one from each list.")
-            qs = []
-            for i in range(min(num(form.get("rows")) or 0, 60)):
-                label = " ".join((form.get(f"label{i}") or "").split())
-                if label and not form.get(f"remove{i}"):  # a question with no words is removed
-                    try:
-                        place = float(form.get(f"place{i}") or 999)
-                    except ValueError:
-                        raise ValueError(f"The place for {label} isn't a number.") from None
-                    qs.append((place, i, {"label": label, "type": form.get(f"type{i}"), "options": _lines(form.get(f"options{i}")),
-                                          "rows": _lines(form.get(f"qrows{i}")), "cols": _lines(form.get(f"qcols{i}"))}))
-            v["questions"] = clean_questions([q for *_, q in sorted(qs, key=lambda t: t[:2])])
+            v = _membership_form(form, club)
             base, yc = _membership(club.yaml.get("membership")), club.yaml.get("club") or {}
             inv = v.pop("invite_after_visits")
             values = {("club", "invite_after_visits"): None if inv == int(yc.get("invite_after_visits") or 3) else inv,
@@ -3335,6 +3341,19 @@ async def site_membership(request: Request):
         return RedirectResponse("/admin/site/membership?error=" + quote(str(e).removeprefix("club.yaml membership: ")), status_code=303)
     _admin_log(request, site_membership="club.yaml" if form.get("back") else ", ".join(k for (_, k), x in values.items() if x is not None) or "club.yaml")
     return RedirectResponse("/admin/site/membership?note=" + quote("Saved."), status_code=303)
+
+
+@app.post("/admin/site/membership/preview", response_class=HTMLResponse)
+async def site_membership_preview(request: Request):
+    """Preview the form: the application form as a guest sees it, with the settings as typed on the tab; nothing saved or sendable."""
+    _site_admin(request)
+    try:
+        v = _membership_form(await request.form(), archive.club)
+    except ValueError as e:
+        return page(request, "apply.html", a=None, preview=True, error=str(e).removeprefix("club.yaml membership: "), form={})
+    return page(request, "apply.html", a={"guest": ""}, preview=True, form={}, error="", token="", classes=applications.CLASSES + (applications.NO_LICENSE,),
+                qh="", statement=richtext.render(v["statement"]), welcome=richtext.render(v["welcome"]), has_bylaws=(DATA / "bylaws.md").exists(),
+                fields=v["fields"], questions=v["questions"], today=dt.date.today())
 
 
 def _roles_stamp() -> str:

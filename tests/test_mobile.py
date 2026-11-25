@@ -831,7 +831,7 @@ def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_page()
-        page.route("http://testserver/**", serve)
+        page.context.route("http://testserver/**", serve)  # the preview opens in a new tab
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: errors.append(m.text) if "Content Security Policy" in m.text else None)
@@ -848,6 +848,11 @@ def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path
         with page.expect_navigation():
             page.click("main form.sitemembership button.btn >> text=Save")
         assert club.membership["questions"] == [{"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Mobile"]}]
+        with page.expect_popup() as pop:
+            page.click("text=Preview the form")
+        pop.value.wait_for_load_state()
+        assert pop.value.is_visible("text=20 m") and pop.value.is_disabled("button:has-text('Send my application')")
+        pop.value.close()
         c.cookies.clear()  # the guest is nobody
         applications.send(club, "Pat Visitor", "pat@example.org", "http://testserver")
         with applications.edit() as items:
