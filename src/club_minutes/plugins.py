@@ -9,9 +9,12 @@ import logging
 import re
 import tempfile
 import threading
+import time
 from importlib.metadata import entry_points
 from pathlib import Path
+from urllib.parse import urlsplit
 
+import httpx
 from jinja2 import ChoiceLoader, FileSystemLoader, PrefixLoader
 from starlette.routing import compile_path
 
@@ -25,6 +28,13 @@ LOADED: dict[str, Plugin] = {}
 PROBLEMS: dict[str, str] = {}  # entry point name -> why it isn't running
 APP_PREFIXES: set[str] = set()  # the app's own first address parts, never blocked for a failed plugin of that name
 _app_loader = None
+# What a plugin may declare in DATA (module level), and who it's about. Each kind gates the api calls named; "visitors"
+# gates none: it is for what a plugin collects itself from signed-out people (a typed name, say).
+KINDS = {"names": "Members' names", "email": "Members' email addresses", "roles": "Members' roles",
+         "attendance": "Who is at the meeting (and marking them present)", "ip": "The network address a request comes from",
+         "visitors": "What visitors type or give it"}
+ABOUT = {"visitors": "visitors (people not signed in)", "members": "members", "admins": "admins"}
+CALLS_LOG = "plugin-calls.jsonl"  # one line per api.send; trimmed with the other logs (auth.prune_old_lines)
 
 
 def _entry_points():
@@ -72,13 +82,19 @@ class Storage:
 
 
 class Api:
-    """All a plugin gets: members' names, the permission check, email addresses if it declared NEEDS, its own
-    storage, and who is asking. No Club, no sign-in internals, no other plugin's storage."""
+    """All a plugin gets: member data it declared in DATA, the permission check, outgoing requests to the hosts it
+    declared in SHARES, its own storage, and who is asking. No Club, no sign-in internals, no other plugin's storage."""
     def __init__(self, plugin: Plugin, club, who, admin_mode, page):
         self._p, self._club, self.who, self.admin_mode, self._page = plugin, club, who, admin_mode, page
         self.storage = Storage(plugin.name)
 
+    def _uses(self, kind: str) -> None:
+        if kind not in self._p.data:
+            raise PermissionError(f"{self._p.name} didn't declare {kind!r}: add it to DATA, "
+                                  f"e.g. DATA = {{{kind!r}: {{'why': '...', 'about': 'members'}}}}")
+
     def member(self, id: str) -> dict | None:
+        self._uses("names")
         m = self._club().members.get(id)
         return {"id": m.id, "name": m.name, "active": m.status.lower() not in ("inactive", "silent key")} if m else None
 
@@ -93,6 +109,7 @@ class Api:
 
     def members(self) -> dict[str, str]:
         """Every member on the roster, former ones too: {id: name}."""
+        self._uses("names")
         return {i: m.name for i, m in self._club().members.items()}
 
     def today(self):
@@ -103,10 +120,12 @@ class Api:
 
     def roles(self, id: str) -> list[str]:
         """The role keys the member holds (Site → Roles; admin isn't one)."""
+        self._uses("roles")
         return self._club().roles(id)
 
     def role_labels(self) -> dict[str, str]:
         """Every role's key and name, for a settings page that picks roles."""
+        self._uses("roles")
         return {k: r["name"] for k, r in self._club().role_table().items()}
 
     def base_url(self, request) -> str:
@@ -117,6 +136,7 @@ class Api:
     def meeting(self) -> dict | None:
         """The meeting open in the leader console now: {"date": "YYYY-MM-DD", "opened": unix seconds the console opened
         it, "online": that night's Online link on the calendar ('' if none), "present": ids in its attendance}; else None."""
+        self._uses("attendance")
         from . import console
         from .web import archive
         return console.open_meeting(archive)
@@ -124,20 +144,39 @@ class Api:
     def mark_present(self, id: str, in_person: bool = False) -> bool:
         """Mark that member present (online, or in person) in the open console meeting unless they're in its
         attendance already. True if it did. Everyone's view of the meeting picks it up like any attendance change."""
+        self._uses("attendance")
         from . import console
         from .web import archive
         return console.mark_present(archive, id, f"plugin:{self._p.name}", in_person)
 
     def client_ip(self, request) -> str | None:
         """The visitor's real address (through the app's proxy, as sign-in bans see it)."""
+        self._uses("ip")
         from .web import client_ip
         return client_ip(request)
 
     def email(self, id: str) -> str | None:
-        if not self._p.needs_email:
-            raise PermissionError(f"{self._p.name} didn't declare NEEDS = {{'email'}}")
+        self._uses("email")
         m = self._club().members.get(id)
         return m.email if m else None
+
+    def send(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """An outgoing request (httpx.request), only to https and a host named in SHARES; 10 seconds at most, redirects
+        not followed. Each call is logged in plugin-calls.jsonl (time, plugin, method, host, path, status; never the
+        query or a body). Raises PermissionError for any other host or a plain http address."""
+        u = urlsplit(url)
+        if u.scheme != "https" or (u.hostname or "").lower() not in {s["host"].lower() for s in self._p.shares if s.get("host")}:
+            raise PermissionError(f"{self._p.name} may only send to https addresses of a host named in SHARES (not {u.hostname or url!r})")
+        status = "error"
+        try:
+            r = httpx.request(method, url, timeout=10, follow_redirects=False, **kwargs)
+            status = r.status_code
+            return r
+        finally:
+            with (clubmod.DATA / CALLS_LOG).open("a") as f:
+                f.write(json.dumps({"at": int(time.time()), "plugin": self._p.name, "method": method.upper(),
+                                    "host": u.hostname.lower(), "path": u.path, "status": status}) + "\n")
+            (clubmod.DATA / CALLS_LOG).chmod(0o600)
 
     def fresh(self, request, next: str):
         """Before a sensitive change: None if the admin confirmed it's them (passkey or emailed link) in the last few
@@ -151,6 +190,21 @@ class Api:
         return self._page(request, f"{self._p.name}/{template}", site_head=is_admin_path(self._p, request.url.path), **ctx)
 
 
+def _declared(d, where: str, keys: tuple) -> dict:
+    """One DATA or SHARES entry, checked: each of `keys` a non-empty string, `about` one of ABOUT."""
+    if not isinstance(d, dict) or not all(isinstance(d.get(k), str) and d[k].strip() for k in keys):
+        raise ValueError(f"{where} needs {', '.join(keys)}, each a non-empty string")
+    if d["about"] not in ABOUT:
+        raise ValueError(f"{where}: about is one of {', '.join(ABOUT)}, not {d['about']!r}")
+    return {k: d[k].strip() for k in keys}
+
+
+def _host(h) -> str:
+    if not isinstance(h, str) or not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", h):
+        raise ValueError(f"SHARES: host is a plain host name like meet.example.org, not {h!r}")
+    return h
+
+
 class Plugin:
     def __init__(self, mod, entry_name: str):
         if getattr(mod, "API", None) != PLUGIN_API:
@@ -159,7 +213,11 @@ class Plugin:
         if not isinstance(self.name, str) or not re.fullmatch(r"[a-z0-9]+", self.name) or self.name != entry_name:
             raise ValueError("NAME must be lowercase letters and digits, the same as its entry point's name")
         self.title, self.description = str(mod.TITLE), str(mod.DESCRIPTION)
-        self.needs_email = "email" in getattr(mod, "NEEDS", ())
+        if unknown := set(getattr(mod, "DATA", None) or {}) - KINDS.keys():
+            raise ValueError(f"DATA names an unknown kind {min(unknown)!r} (one of {', '.join(KINDS)})")
+        self.data = {k: _declared(d, f"DATA {k!r}", ("why", "about")) for k, d in (getattr(mod, "DATA", None) or {}).items()}
+        self.shares = [_declared(d, "SHARES", ("with", "what", "why", "about")) | ({"host": _host(d.get("host"))} if d.get("host") else {})
+                       for d in getattr(mod, "SHARES", None) or []]
         self.public = set(getattr(mod, "PUBLIC", ()))
         self.permissions = {f"{self.name}.{k}": f"{v} ({self.title})" for k, v in getattr(mod, "PERMISSIONS", {}).items()}
         self.nav = list(getattr(mod, "NAV", ()))
@@ -352,7 +410,30 @@ def guides(club) -> dict[str, str]:
 
 def rows(club) -> list[dict]:
     """Site → Features: every installed plugin, running or not, and why not."""
-    out = [{"name": p.name, "title": p.title, "description": p.description, "needs_email": p.needs_email,
+    out = [{"name": p.name, "title": p.title, "description": p.description, "uses": uses(p), "shares": shares(p),
             "on": club.plugin_on(p.name), "hold": p.name in club.plugins_hold, "problem": "", "admin": f"/{p.name}/admin" if p.has_admin else ""} for p in LOADED.values()]
-    return out + [{"name": n, "title": n, "description": "", "needs_email": False, "on": club.plugin_on(n),
+    return out + [{"name": n, "title": n, "description": "", "uses": [], "shares": [], "on": club.plugin_on(n),
                    "hold": n in club.plugins_hold, "problem": why, "admin": ""} for n, why in PROBLEMS.items()]
+
+
+def uses(p: Plugin) -> list[dict]:
+    """What a plugin says it uses, ready to show: {kind, about, why}, `about` in words."""
+    return [{"kind": KINDS[k], "about": ABOUT[d["about"]], "why": d["why"], "audience": d["about"]} for k, d in p.data.items()]
+
+
+def shares(p: Plugin) -> list[dict]:
+    return [d | {"about_text": ABOUT[d["about"]]} for d in p.shares]
+
+
+def disclosure(club, signed_in: bool) -> dict[str, list[dict]]:
+    """The privacy page's Plugins part: {audience: [{plugin, text, why}]} for the plugins that are on; signed out, only what's
+    about visitors."""
+    out: dict[str, list[dict]] = {}
+    for p in LOADED.values():
+        if not club.plugin_on(p.name):
+            continue
+        for u in uses(p):
+            out.setdefault(u["audience"], []).append({"plugin": p.title, "text": u["kind"], "why": u["why"]})
+        for s in shares(p):
+            out.setdefault(s["about"], []).append({"plugin": p.title, "text": f"Shares {s['what']} with {s['with']}", "why": s["why"]})
+    return {a: out[a] for a in ABOUT if a in out and (signed_in or a == "visitors")}

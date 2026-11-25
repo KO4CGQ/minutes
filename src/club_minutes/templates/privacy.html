@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}Privacy{% endblock %}{% block body %}
+<h1>Privacy</h1>
+{# shortcut: only the plugins' part so far, and not linked from anywhere until the app's own sections are written (#68 on the board) #}
+<h2>Plugins</h2>
+<p class="muted">Plugins are add-ons this club has turned on. Each says what of your data it uses and why. A plugin is code running inside the app, so this is what it declares, not a guarantee.</p>
+{% for a, items in groups.items() %}<div class="card"><h3>About {{ about[a] }}</h3><ul>{% for i in items %}<li><b>{{ i.plugin }}:</b> {{ i.text }}: {{ i.why }}.</li>{% endfor %}</ul></div>
+{% else %}<p>No plugin that uses {{ 'your' if me else 'visitors\'' }} data is turned on.</p>{% endfor %}
+{% endblock %}

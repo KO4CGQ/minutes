@@ -17,7 +17,7 @@ PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "email": "amy@ex
           {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"},
           {"id": "n0offc", "first": "Ola", "last": "Officer", "role": "President", "officer": True, "email": "o@example.org"}]
 PUBLIC_GET = {"/login", "/email/confirm", "/favicon.ico", "/brand/theme.css", "/calendar/public", "/calendar/public.ics", "/calendar/feed/x.ics", "/api/roster", "/login/link",
-              "/healthz"}
+              "/healthz", "/privacy"}  # /privacy: the privacy page (signed out: only what is about visitors)
 
 
 @pytest.fixture

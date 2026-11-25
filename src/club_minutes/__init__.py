@@ -182,7 +182,7 @@ def main() -> None:
                 auth.prune_email_log()  # a quiet site sends no email to trigger it
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't prune the Email log: {e}")
-            for name in ("admin-log.jsonl", "api-log.jsonl"):
+            for name in ("admin-log.jsonl", "api-log.jsonl", "plugin-calls.jsonl"):
                 try:
                     auth.prune_old_lines(name)
                 except Exception as e:  # noqa: BLE001
