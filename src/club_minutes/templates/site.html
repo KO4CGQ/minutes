@@ -148,6 +148,10 @@
 <label for="m-pass">What passes</label><select id="m-pass" name="vote_passes">{% for k, label in vote_passes.items() %}<option value="{{ k }}"{{ ' selected' if m.vote_passes == k }}>{{ label }}</option>{% endfor %}</select>{{ origin('membership.vote_passes') }}
 </div>
 <p class="hint">0 days: the vote is at the next meeting after they apply.</p></div>
+<div class="card sitesec"><h2>The invitation email {{ origin('membership.invite') }}</h2>
+<label class="sr" for="m-invite">The invitation email</label><textarea id="m-invite" name="invite" rows="8" maxlength="5000" required>{{ m.invite }}</textarea>
+<p class="hint">Plain text, sent when a guest is sent the application; the club's sign-off follows it. These are filled in:
+{% for w, what in invite_words.items() %}<code>{{ '{' ~ w ~ '}' }}</code> {{ what }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p></div>
 <div class="card sitesec"><h2>The club's statement {{ origin('membership.statement') }}</h2>
 <label class="sr" for="m-stmt">The club's statement</label><textarea id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
 <p class="hint">Plain text, shown above the signature: what the club is and the conditions of membership. May be empty.</p></div>

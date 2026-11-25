@@ -127,10 +127,10 @@ def send(club: Club, guest: str, email: str, url: str, now: float | None = None)
         a.update(email=email, state="sent", token_hash=_hash(token), sent=int(now), used=None, updated=int(now),
                  expires=int(now + club.membership["link_days"] * 86400))
     days = club.membership["link_days"]
-    auth.send_email(email, f"Your application to {club_name(club)}", only_to=club.email_only_to(), to_self=True, body=(
-        f"Hello {guest},\n\nThank you for visiting {club_name(club)}. Here is your membership application:\n\n{url}/apply/{token}\n\n"
-        f"It's yours alone, so please don't share it. It works for {days} day{'s' * (days != 1)} and until you send it in.\n\n"
-        f"{club.sign_off}\n{branding.name(club)}"))
+    words = {"guest": guest, "club": club_name(club), "link": f"{url}/apply/{token}", "days": f"{days} day{'s' * (days != 1)}"}
+    body = re.sub(r"\{(guest|club|link|days)\}", lambda m: words[m[1]], club.membership["invite"])  # one pass: a name with {link} in it stays as typed
+    auth.send_email(email, f"Your application to {club_name(club)}", only_to=club.email_only_to(), to_self=True,
+                    body=f"{body}\n\n{club.sign_off}\n{branding.name(club)}")
 
 
 def sponsor_match(club: Club, typed: str) -> str | None:

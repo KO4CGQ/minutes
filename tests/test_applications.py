@@ -220,7 +220,7 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     assert "Changed here" not in page and "Back to club.yaml" not in page and "By signing, you confirm" in page
     assert as_("n0cccc").get("/admin/site/membership").status_code == 404
     form = {"rows": "2", "invite_after_visits": "3", "link_days": "30", "listed_days": "0", "vote": "1", "vote_passes": "unanimous",
-            "reapply_months": "24", "keep_days": "90", "statement": club.membership["statement"],
+            "reapply_months": "24", "keep_days": "90", "statement": club.membership["statement"], "invite": club.membership["invite"],
             "label0": "Bands", "type0": "grid", "qrows0": "20 m\n2 m", "qcols0": "Fixed\nMobile", "place0": "2",
             "label1": "Licensed?", "type1": "yesno", "place1": "1"}
     assert "Saved" in admin.post("/admin/site/membership", data=form).text and club.site_settings["membership"] == {
@@ -232,7 +232,8 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     assert club.membership["vote_passes"] == "two_thirds" and club.membership["statement"] == "" and [q["label"] for q in club.membership["questions"]] == ["Bands"]
     before = club.site_settings
     for bad, why in ((form | {"link_days": "0"}, "from 1 to 365"), (form | {"vote_passes": "coin"}, "pick one"),
-                     (form | {"type0": "grid", "qcols0": ""}, "give cols")):
+                     (form | {"type0": "grid", "qcols0": ""}, "give cols"),
+                     (form | {"invite": "Hello {guest}"}, "needs {link}"), (form | {"invite": "{link} {name}"}, "not {name}")):
         assert why in admin.post("/admin/site/membership", data=bad).text and club.site_settings == before, why
     assert "Back to club.yaml" in admin.get("/admin/site/membership").text
     admin.post("/admin/site/membership", data={"back": "1"})
@@ -310,3 +311,14 @@ def test_a_cross_site_request_for_a_made_up_link_isnt_counted_toward_a_ban(tmp_p
     assert seen == []
     anon.get("/apply/not-a-link")
     assert seen == ["bad_link"]
+
+
+def test_the_invitation_email_uses_the_clubs_words(env):
+    club, as_, sent, _ = env
+    _, token = send_link(as_, sent)
+    assert sent[-1]["body"].startswith("Hello Pat Visitor,") and "works for 30 days" in sent[-1]["body"]  # the default
+    club.save_site_settings({("membership", "invite"): "Hi {guest}! Join {club} here: {link} ({days}). {link}"})
+    _, token = send_link(as_, sent)
+    body = sent[-1]["body"]
+    assert body.startswith(f"Hi Pat Visitor! Join {applications.club_name(club)} here: ") and body.count(f"/apply/{token}") == 2
+    assert "(30 days)" in body and club.sign_off in body

@@ -85,6 +85,7 @@ from .club import (
     DATES,
     FIELD_DEFAULTS,
     FIELD_MODES,
+    INVITE_WORDS,
     MEMBERSHIP_DEFAULTS,
     PERMISSIONS,
     PREVIEW,
@@ -95,6 +96,7 @@ from .club import (
     _agenda,
     _membership,
     _server_timezone,
+    check_invite,
     clean_questions,
     num,
     office_list,
@@ -3015,7 +3017,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
     return page(request, "site.html", tab=tab, error=error, note=note,
-                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, field_modes=FIELD_MODES, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
+                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, field_modes=FIELD_MODES, invite_words=INVITE_WORDS, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -3303,6 +3305,8 @@ async def site_membership(request: Request):
             v["welcome"] = "\n".join(x.rstrip() for x in str(form.get("welcome") or "").splitlines()).strip()
             if len(v["welcome"]) > 5000:
                 raise ValueError("The welcome text is too long (5000 characters at most).")
+            v["invite"] = "\n".join(x.rstrip() for x in str(form.get("invite") or "").splitlines()).strip()
+            check_invite(v["invite"])
             v["fields"] = {k: form.get("field_" + k) or club.membership["fields"][k] for k in FIELD_DEFAULTS}  # a non-ham club's page has no ham selects
             if set(v["fields"].values()) - set(FIELD_MODES):
                 raise ValueError("Application fields: pick one from each list.")
