@@ -227,7 +227,7 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     form = {"rows": "2", "invite_after_visits": "3", "link_days": "30", "listed_days": "0", "vote": "1", "vote_passes": "unanimous",
             "reapply_months": "24", "keep_days": "90", "statement": club.membership["statement"], "invite": club.membership["invite"],
             "label0": "Bands", "type0": "grid", "qrows0": "20 m\n2 m", "qcols0": "Fixed\nMobile", "place0": "2",
-            "label1": "Licensed?", "type1": "yesno", "place1": "1"}
+            "label1": "Licensed?", "type1": "yesno", "place1": "1", "required1": "1"}  # yes or no starts ticked
     assert "Saved" in admin.post("/admin/site/membership", data=form).text and club.site_settings["membership"] == {
         "questions": [{"label": "Licensed?", "type": "yesno"}, {"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Mobile"]}]}
     assert "invite_after_visits" not in club.site_settings.get("club", {})  # unchanged values aren't kept
@@ -240,7 +240,7 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
                      (form | {"type0": "grid", "qcols0": ""}, "give cols"), (form | {"type1": "one"}, "give options"),
                      (form | {"invite": "Hello {guest}"}, "needs {link}"), (form | {"invite": "{link} {name}"}, "not {name}")):
         assert why in admin.post("/admin/site/membership", data=bad).text and club.site_settings == before, why
-    preview = admin.post("/admin/site/membership/preview", data=form | {"label2": "Favorite band?", "type2": "one", "options2": "20 m\n40 m", "rows": "3", "welcome": "**Hi** there"})
+    preview = admin.post("/admin/site/membership/preview", data=form | {"label2": "Favorite band?", "type2": "one", "options2": "20 m\n40 m", "required2": "1", "rows": "3", "welcome": "**Hi** there"})
     assert 'type="radio" name="q2" value="20 m" required' in preview.text and 'type="radio" name="q2" value="40 m">' in preview.text  # Pick one: round buttons
     assert "Favorite band?" in preview.text and "<strong>Hi</strong>" in preview.text and "Preview:" in preview.text and " disabled>Send my application" in preview.text
     assert club.site_settings == before  # nothing saved
@@ -364,3 +364,25 @@ def test_more_words_in_the_email_and_the_bylaws_for_an_applicant(env):
     assert "<script>alert(1)" not in page and "&lt;script&gt;" in page and "<strong>hi</strong>" in page
     assert anon.post(f"/apply/{token}", data=good(club, token)).status_code == 200
     assert anon.get(f"/apply/{token}/bylaws").status_code == 404  # used
+
+
+def test_must_be_answered_per_question(env):
+    club, as_, sent, _ = env
+    assert clubmod.clean_questions([{"label": "A", "type": "yesno", "required": True}, {"label": "B", "type": "short", "required": False},
+                                    {"label": "C", "type": "yesno", "required": False}, {"label": "D", "type": "grid", "rows": ["r"], "cols": ["c"], "required": True}]) == [
+        {"label": "A", "type": "yesno"}, {"label": "B", "type": "short"},  # the type's default isn't stored
+        {"label": "C", "type": "yesno", "required": False}, {"label": "D", "type": "grid", "rows": ["r"], "cols": ["c"], "required": True}]
+    qs = [dict(q) for q in QUESTIONS]
+    qs[0]["required"] = False  # yes or no, optional
+    for q in qs[1:5]:
+        q["required"] = True  # several, short, long, grid
+    club.save_site_settings({("membership", "questions"): qs})
+    _, token = send_link(as_, sent)
+    anon = as_(None)
+    form = as_("n0aaaa").get(f"/apply/{token}").text
+    assert 'value="Yes" required' not in form and "(optional)" in form and "(tick at least one)" in form
+    for over, label in (({"q1": []}, "Which modes?"), ({"q2": ""}, "Why join?"), ({"q3": " "}, "Tell us more"), ({"q4": []}, "Bands")):
+        r = anon.post(f"/apply/{token}", data=good(club, token, **over))
+        assert r.status_code == 400 and f"Please answer: {label}" in r.text, label
+    assert anon.post(f"/apply/{token}", data=good(club, token, q0="")).status_code == 200  # the optional yes or no left empty
+    assert applications.find(token)["answers"][0]["value"] == ""

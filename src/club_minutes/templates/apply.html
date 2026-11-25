@@ -31,19 +31,21 @@
   <label>Email <input name="email" type="email" value="{{ got('email') }}" required maxlength="254" autocomplete="email"></label>
   {% if fields.occupation != 'hidden' %}<label>Occupation <input name="occupation" value="{{ got('occupation') }}"{{ req('occupation') }} maxlength="100"></label>{% endif %}
 
-  {% for q in questions %}{% set i = loop.index0 %}{% set have = form.getlist('q' ~ i) if form.getlist is defined else [] %}
-  {% if q.type == 'yesno' %}<fieldset><legend>{{ q.label }}</legend>
-    <label class="check"><input type="radio" name="q{{ i }}" value="Yes" required{{ ' checked' if 'Yes' in have }}> <span>Yes</span></label>
+  {% macro optional(must) %}{% if not must %} <span class="muted">(optional)</span>{% endif %}{% endmacro %}
+  {% for q in questions %}{% set i = loop.index0 %}{% set must = q.required if q.required is defined else q.type in ('yesno', 'one') %}
+{% set have = form.getlist('q' ~ i) if form.getlist is defined else [] %}
+  {% if q.type == 'yesno' %}<fieldset><legend>{{ q.label }}{{ optional(must) }}</legend>
+    <label class="check"><input type="radio" name="q{{ i }}" value="Yes"{{ ' required' if must }}{{ ' checked' if 'Yes' in have }}> <span>Yes</span></label>
     <label class="check"><input type="radio" name="q{{ i }}" value="No"{{ ' checked' if 'No' in have }}> <span>No</span></label></fieldset>
-  {% elif q.type == 'one' %}<fieldset><legend>{{ q.label }}</legend>
-    {% for o in q.options %}<label class="check"><input type="radio" name="q{{ i }}" value="{{ o }}"{{ ' required' if loop.first }}{{ ' checked' if o in have }}> <span>{{ o }}</span></label>{% endfor %}</fieldset>
-  {% elif q.type == 'several' %}<fieldset><legend>{{ q.label }}</legend>
+  {% elif q.type == 'one' %}<fieldset><legend>{{ q.label }}{{ optional(must) }}</legend>
+    {% for o in q.options %}<label class="check"><input type="radio" name="q{{ i }}" value="{{ o }}"{{ ' required' if must and loop.first }}{{ ' checked' if o in have }}> <span>{{ o }}</span></label>{% endfor %}</fieldset>
+  {% elif q.type == 'several' %}<fieldset><legend>{{ q.label }}{{ optional(must) }}{% if must %} <span class="muted">(tick at least one)</span>{% endif %}</legend>
     {% for o in q.options %}<label class="check"><input type="checkbox" name="q{{ i }}" value="{{ o }}"{{ ' checked' if o in have }}> <span>{{ o }}</span></label>{% endfor %}</fieldset>
-  {% elif q.type == 'grid' %}<fieldset><legend>{{ q.label }}</legend>
+  {% elif q.type == 'grid' %}<fieldset><legend>{{ q.label }}{{ optional(must) }}{% if must %} <span class="muted">(tick at least one)</span>{% endif %}</legend>
     <table class="list"><thead><tr><th></th>{% for c in q.cols %}<th>{{ c }}</th>{% endfor %}</tr></thead><tbody>
     {% for r in q.rows %}{% set ri = loop.index0 %}<tr><th scope="row">{{ r }}</th>{% for c in q.cols %}<td><input type="checkbox" name="q{{ i }}" value="{{ ri }}.{{ loop.index0 }}" aria-label="{{ r }}: {{ c }}"{{ ' checked' if (ri ~ '.' ~ loop.index0) in have }}></td>{% endfor %}</tr>{% endfor %}</tbody></table></fieldset>
-  {% elif q.type == 'long' %}<label>{{ q.label }} <textarea name="q{{ i }}" rows="4" maxlength="3000">{{ have[0] if have }}</textarea><span class="hint">Only what you're happy for the club's officers to read.</span></label>
-  {% else %}<label>{{ q.label }} <input name="q{{ i }}" value="{{ have[0] if have }}" maxlength="200"></label>{% endif %}
+  {% elif q.type == 'long' %}<label>{{ q.label }}{{ optional(must) }} <textarea name="q{{ i }}" rows="4" maxlength="3000"{{ ' required' if must }}>{{ have[0] if have }}</textarea><span class="hint">Only what you're happy for the club's officers to read.</span></label>
+  {% else %}<label>{{ q.label }}{{ optional(must) }} <input name="q{{ i }}" value="{{ have[0] if have }}" maxlength="200"{{ ' required' if must }}></label>{% endif %}
   {% endfor %}
 
   <label>Your sponsor (optional) <input name="sponsor" value="{{ got('sponsor') }}" maxlength="100" autocomplete="off">

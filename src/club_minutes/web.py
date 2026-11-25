@@ -3316,7 +3316,8 @@ def _membership_form(form, club) -> dict:
             except ValueError:
                 raise ValueError(f"The place for {label} isn't a number.") from None
             qs.append((place, i, {"label": label, "type": form.get(f"type{i}"), "options": _lines(form.get(f"options{i}")),
-                                  "rows": _lines(form.get(f"qrows{i}")), "cols": _lines(form.get(f"qcols{i}"))}))
+                                  "rows": _lines(form.get(f"qrows{i}")), "cols": _lines(form.get(f"qcols{i}")),
+                                  "required": bool(form.get(f"required{i}"))}))
     v["questions"] = clean_questions([q for *_, q in sorted(qs, key=lambda t: t[:2])])
     return v
 

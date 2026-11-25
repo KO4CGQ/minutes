@@ -272,6 +272,11 @@ QUESTION_TYPES = {"yesno": "Yes or no", "one": "Pick one", "several": "Pick seve
 _MEMBERSHIP_RANGES = {"link_days": (1, 365), "listed_days": (0, 365), "reapply_months": (0, 120), "keep_days": (1, 3650)}
 
 
+def must_answer(q: dict) -> bool:
+    """A question that must be answered: its "required", else yes or no and pick one (as before the tick existed)."""
+    return bool(q.get("required", q["type"] in ("yesno", "one")))
+
+
 def clean_questions(raw) -> list[dict]:
     """The club's own application questions, checked: each {label, type} plus options (one, several) or rows and cols (grid),
     lists of distinct non-empty lines. Raises ValueError saying which is wrong."""
@@ -285,6 +290,8 @@ def clean_questions(raw) -> list[dict]:
         if not label:
             raise ValueError("Every question needs its words.")
         item = {"label": label, "type": q["type"]}
+        if "required" in q and bool(q["required"]) != must_answer(item):
+            item["required"] = bool(q["required"])  # kept only when it differs from the type's default
         for key, need in (("options", ("one", "several")), ("rows", ("grid",)), ("cols", ("grid",))):
             if q["type"] in need:
                 lines = list(dict.fromkeys(" ".join(str(x).split())[:100] for x in q.get(key) or [] if str(x).strip()))

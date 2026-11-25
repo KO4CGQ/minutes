@@ -35,7 +35,15 @@ import unicodedata
 from zoneinfo import ZoneInfo
 
 from . import auth, branding, meetings, richtext
-from .club import DATA, INVITE_WORDS, VOTE_PASSES, Club, show_date, valid_email
+from .club import (
+    DATA,
+    INVITE_WORDS,
+    VOTE_PASSES,
+    Club,
+    must_answer,
+    show_date,
+    valid_email,
+)
 from .membership import CLASSES, split_name
 
 log = logging.getLogger("club_minutes.applications")
@@ -181,12 +189,10 @@ def _text(form, key: str, label: str, size: int, need: bool = True) -> str:
 def _answers(club: Club, form) -> list[dict]:
     out = []
     for i, q in enumerate(club.membership["questions"]):
-        got = form.getlist(f"q{i}")
-        if q["type"] == "yesno":
-            if (value := got[0] if got else "") not in ("Yes", "No"):
-                raise ValueError(f"Please answer: {q['label']}")
-        elif q["type"] == "one":
-            if (value := got[0] if got else "") not in q["options"]:
+        got, must = form.getlist(f"q{i}"), must_answer(q)
+        if q["type"] in ("yesno", "one"):
+            value = got[0] if got else ""
+            if value not in (("Yes", "No") if q["type"] == "yesno" else q["options"]) and (must or value):
                 raise ValueError(f"Please answer: {q['label']}")
         elif q["type"] == "several":
             if bad := [g for g in got if g not in q["options"]]:
@@ -202,6 +208,8 @@ def _answers(club: Club, form) -> list[dict]:
             value = _clean(str(got[0]).replace("\r\n", "\n"), True).strip() if got else ""
             if len(value) > (200 if q["type"] == "short" else 3000):
                 raise ValueError(f"{q['label']} is too long.")
+        if must and not (any(value["rows"].values()) if q["type"] == "grid" else value):
+            raise ValueError(f"Please answer: {q['label']}")
         out.append({"label": q["label"], "type": q["type"], "value": value})
     return out
 
