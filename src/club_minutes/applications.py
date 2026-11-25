@@ -32,9 +32,10 @@ import re
 import secrets
 import time
 import unicodedata
+from zoneinfo import ZoneInfo
 
-from . import auth, branding, richtext
-from .club import DATA, VOTE_PASSES, Club, show_date, valid_email
+from . import auth, branding, meetings, richtext
+from .club import DATA, INVITE_WORDS, VOTE_PASSES, Club, show_date, valid_email
 from .membership import CLASSES, split_name
 
 log = logging.getLogger("club_minutes.applications")
@@ -107,7 +108,17 @@ def club_name(club: Club) -> str:
     return " ".join(str(club.info.get("name") or club.label).split())
 
 
-def send(club: Club, guest: str, email: str, url: str, now: float | None = None) -> None:
+def next_meeting(club: Club, now: float) -> str:
+    """"Thursday, December 3 at 7:30 PM": the next club meeting not yet started, in the club's time zone; empty if none."""
+    here = dt.datetime.fromtimestamp(now, ZoneInfo(club.timezone)).replace(tzinfo=None)
+    for d in meetings.nights(club, here.date(), here.date() + dt.timedelta(days=60)):
+        at = dt.datetime.combine(d, dt.time.fromisoformat(meetings.time_on(club, d)))
+        if at > here:
+            return f"{show_date(d, 'weekday')} at {at:%-I:%M %p}"
+    return ""
+
+
+def send(club: Club, guest: str, email: str, url: str, now: float | None = None, visits: int = 0) -> None:
     """Email the guest their application link, replacing an unused or declined one. ValueError says why not."""
     now = now or time.time()
     email = " ".join(email.split())
@@ -127,8 +138,10 @@ def send(club: Club, guest: str, email: str, url: str, now: float | None = None)
         a.update(email=email, state="sent", token_hash=_hash(token), sent=int(now), used=None, updated=int(now),
                  expires=int(now + club.membership["link_days"] * 86400))
     days = club.membership["link_days"]
-    words = {"guest": guest, "club": club_name(club), "link": f"{url}/apply/{token}", "days": f"{days} day{'s' * (days != 1)}"}
-    body = re.sub(r"\{(guest|club|link|days)\}", lambda m: words[m[1]], club.membership["invite"])  # one pass: a name with {link} in it stays as typed
+    words = {"guest": guest, "first_name": split_name(guest)[0], "club": club_name(club), "short": club.label, "link": f"{url}/apply/{token}",
+             "days": f"{days} day{'s' * (days != 1)}", "until": show_date(dt.datetime.fromtimestamp(now + days * 86400).date(), "document"),
+             "next_meeting": next_meeting(club, now), "visits": str(visits), "bylaws": f"{url}/apply/{token}/bylaws"}
+    body = re.sub(r"\{(" + "|".join(INVITE_WORDS) + r")\}", lambda m: words[m[1]], club.membership["invite"])  # one pass: a name with {link} in it stays as typed
     auth.send_email(email, f"Your application to {club_name(club)}", only_to=club.email_only_to(), to_self=True,
                     body=f"{body}\n\n{club.sign_off}\n{branding.name(club)}")
 

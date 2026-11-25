@@ -322,3 +322,25 @@ def test_the_invitation_email_uses_the_clubs_words(env):
     body = sent[-1]["body"]
     assert body.startswith(f"Hi Pat Visitor! Join {applications.club_name(club)} here: ") and body.count(f"/apply/{token}") == 2
     assert "(30 days)" in body and club.sign_off in body
+
+
+def test_more_words_in_the_email_and_the_bylaws_for_an_applicant(env):
+    club, as_, sent, tmp = env
+    club.save_site_settings({("membership", "invite"): "{first_name}|{short}|{visits}|{until}|{bylaws}|{next_meeting}|{link}"})
+    _, token = send_link(as_, sent)
+    first, short, visits, until, bylaws, nxt, link = sent[-1]["body"].split("\n")[0].split("|")
+    assert (first, short, visits) == ("Pat", club.label, "3") and bylaws == link + "/bylaws" and until[-4:].isdigit()
+    assert nxt == "" or " at " in nxt
+    anon = as_(None)
+    assert "hasn't put its bylaws here" in anon.get(f"/apply/{token}/bylaws").text
+    assert "Read the club" not in anon.get(f"/apply/{token}").text
+    (tmp / "bylaws.md").write_text("# Bylaws\n\nArticle one.")
+    r = anon.get(f"/apply/{token}/bylaws")
+    assert r.status_code == 200 and "Article one." in r.text and r.headers["cache-control"] == "no-store"
+    assert f"/apply/{token}/bylaws" in anon.get(f"/apply/{token}").text
+    assert anon.get("/apply/not-a-link/bylaws").status_code == 404
+    club.save_site_settings({("membership", "welcome"): "<script>alert(1)</script> **hi**"})
+    page = anon.get(f"/apply/{token}").text
+    assert "<script>alert(1)" not in page and "&lt;script&gt;" in page and "<strong>hi</strong>" in page
+    assert anon.post(f"/apply/{token}", data=good(club, token)).status_code == 200
+    assert anon.get(f"/apply/{token}/bylaws").status_code == 404  # used

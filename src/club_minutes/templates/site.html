@@ -153,11 +153,11 @@
 <p class="hint">Plain text, sent when a guest is sent the application; the club's sign-off follows it. These are filled in:
 {% for w, what in invite_words.items() %}<code>{{ '{' ~ w ~ '}' }}</code> {{ what }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p></div>
 <div class="card sitesec"><h2>The club's statement {{ origin('membership.statement') }}</h2>
-<label class="sr" for="m-stmt">The club's statement</label><textarea id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
-<p class="hint">Plain text, shown above the signature: what the club is and the conditions of membership. May be empty.</p></div>
+<label class="sr" for="m-stmt">The club's statement</label><textarea data-format id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
+<p class="hint">Shown above the signature: what the club is and the conditions of membership. Bold, lists and links are allowed. May be empty.</p></div>
 <div class="card sitesec"><h2>The form's welcome text {{ origin('membership.welcome') }}</h2>
-<label class="sr" for="m-welcome">The form's welcome text</label><textarea id="m-welcome" name="welcome" rows="4" maxlength="5000">{{ m.welcome }}</textarea>
-<p class="hint">Plain text under the form's heading. Empty: a short thank-you is shown.</p></div>
+<label class="sr" for="m-welcome">The form's welcome text</label><textarea data-format id="m-welcome" name="welcome" rows="4" maxlength="5000">{{ m.welcome }}</textarea>
+<p class="hint">Under the form's heading. Bold, lists and links are allowed. Empty: a short thank-you is shown.</p></div>
 <div class="card sitesec"><h2>Details the form asks for {{ origin('membership.fields') }}</h2>
 <p class="hint">Name, email and the signature are always required.</p>
 <div class="fmtgrid">

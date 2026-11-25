@@ -7,7 +7,7 @@
 <p>It has expired, was already used, or was mistyped. Ask the club to send you a new one.</p>
 {% else %}
 <h1>Apply to join {{ club.info.get('name') or club.label }}</h1>
-<p style="white-space: pre-wrap">{{ welcome or "Thank you for your interest in joining " ~ (club.info.get('name') or club.label) ~ ". Please fill in the form below; the club will be in touch." }}</p>
+{% if welcome %}<div>{{ welcome }}</div>{% else %}<p>Thank you for your interest in joining {{ club.info.get('name') or club.label }}. Please fill in the form below; the club will be in touch.</p>{% endif %}
 {% if error %}<p class="msg err" role="alert">{{ error }}</p>{% endif %}
 <form method="post" action="/apply/{{ token }}" class="profile">
   <input type="hidden" name="qh" value="{{ qh }}">
@@ -43,7 +43,7 @@
   <label>Your sponsor (optional) <input name="sponsor" value="{{ got('sponsor') }}" maxlength="100" autocomplete="off">
     <span class="hint">Type the name{% if club.ham %} or callsign{% endif %} of a member who knows you; they get an email asking them to confirm. If you don't know a member yet, leave it empty: the club will find you a sponsor.</span></label>
 
-  {% if statement %}<h2>The club's statement</h2><p style="white-space: pre-wrap">{{ statement }}</p>{% endif %}
+  {% if statement %}<h2>The club's statement</h2><div>{{ statement }}</div>{% if has_bylaws %}<p><a href="/apply/{{ token }}/bylaws" target="_blank" rel="noopener">Read the club's bylaws</a></p>{% endif %}{% endif %}
   <label class="check"><input type="checkbox" name="accept" value="1" required{{ ' checked' if form.get('accept') }}> <span>I accept these conditions, and understand my name will be listed in the club's minutes.</span></label>
   <label>Type your full name to sign <input name="signature" value="{{ got('signature') }}" required maxlength="100" autocomplete="off"></label>
   <p><button class="btn big">Send my application</button></p>

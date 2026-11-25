@@ -13,7 +13,7 @@ th { width: 32%; font-weight: 600; }
 table.grid th, table.grid td { border: 0.5pt solid #999; padding: 2pt 5pt; text-align: center; width: auto; }
 table.grid th:first-child { text-align: left; }
 .q { margin: 6pt 0 0; font-weight: 600; } .a { margin: 0; white-space: pre-wrap; }
-.statement { white-space: pre-wrap; } .blank { border-bottom: 0.5pt solid #666; height: 13pt; }
+.blank { border-bottom: 0.5pt solid #666; height: 13pt; }
 </style></head>
 <body>
 <header><img src="{{ brand("logo", True) }}" alt="">
@@ -34,7 +34,7 @@ table.grid th:first-child { text-align: left; }
 {% elif q.type == 'several' %}<p class="a">{{ q.value|join(', ') or 'None' }}</p>
 {% else %}<p class="a">{{ q.value or '(no answer)' }}</p>{% endif %}{% endfor %}{% endif %}
 
-{% if a.statement %}<h2>Statement</h2><p class="statement">{{ a.statement }}</p>{% endif %}
+{% if a.statement %}<h2>Statement</h2><div class="statement">{{ statement }}</div>{% endif %}
 <p><b>Signed electronically by {{ a.signed.name }} on {{ when(a.signed.at) }}.</b></p>
 
 <h2>Sponsor</h2>

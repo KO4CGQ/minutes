@@ -258,8 +258,11 @@ FIELD_DEFAULTS = {"callsign": "optional", "first_licensed": "optional", "license
                   "street": "required", "city": "required", "state": "required", "zip": "required", "phone": "optional", "occupation": "optional"}
 DEFAULT_INVITE = ("Hello {guest},\n\nThank you for visiting {club}. Here is your membership application:\n\n{link}\n\n"
                   "It's yours alone, so please don't share it. It works for {days} and until you send it in.")
-INVITE_WORDS = {"guest": "the guest's name", "club": "the club's name", "link": "their application link (required)",
-                "days": "how long the link works, e.g. 30 days"}
+INVITE_WORDS = {"guest": "the guest's name", "first_name": "the guest's first name", "club": "the club's name",
+                "short": "the club's callsign (or its name, for a club without one)", "link": "their application link (required)",
+                "days": "how long the link works, e.g. 30 days", "until": "the last day it works, e.g. December 5, 2026",
+                "next_meeting": "the next club meeting, e.g. Thursday, December 3 at 7:30 PM (empty if none)",
+                "visits": "how many times they have visited", "bylaws": "a link to the club's bylaws, which they can read without signing in"}
 MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
                        "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": [], "welcome": "", "fields": FIELD_DEFAULTS,
                        "invite": DEFAULT_INVITE}

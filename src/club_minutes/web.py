@@ -2503,10 +2503,15 @@ def roster(request: Request, status: str = "Active", p: str = Query("1", alias="
 @app.get("/bylaws", response_class=HTMLResponse)
 def bylaws(request: Request):
     """The club's constitution and bylaws, from bylaws.md in the data directory (not in this public repo)."""
+    return _bylaws_page(request)
+
+
+def _bylaws_page(request: Request, public: bool = False) -> HTMLResponse:
+    """`public`: shown to an applicant (their link), who isn't told where an admin puts the file."""
     import markdown
     p = DATA / "bylaws.md"
     html = Markup(markdown.markdown(p.read_text())) if p.exists() else None
-    return page(request, "bylaws.html", html=html)
+    return page(request, "bylaws.html", html=html, public=public)
 
 
 LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"), ("mailto:", "mail"),
@@ -3989,11 +3994,13 @@ async def guests_apply(request: Request):
         raise HTTPException(403, "Only those who keep the roster or receive applications can send one.")
     form, club = await request.form(), archive.club
     guest = str(form.get("guest") or "")
-    ready = {g["name"] for g in membership.ready_guests(archive.guests(), int(club.info.get("invite_after_visits", 3)))}
+    gs = archive.guests()
+    ready = {g["name"] for g in membership.ready_guests(gs, int(club.info.get("invite_after_visits", 3)))}
     try:
         if guest not in ready:
             raise ValueError("That guest hasn't visited enough yet.")
-        await run_in_threadpool(applications.send, club, guest, str(form.get("email") or ""), base_url(request))
+        visits = next(len(g["visits"]) for g in gs if g["name"] == guest)
+        await run_in_threadpool(applications.send, club, guest, str(form.get("email") or ""), base_url(request), visits=visits)
     except ValueError as e:
         return RedirectResponse("/guests?error=" + quote(str(e)), status_code=303)
     except Exception:  # noqa: BLE001
@@ -4040,7 +4047,8 @@ async def sponsor_answer(request: Request, aid: str, background: BackgroundTasks
 
 def _apply_page(request: Request, token: str, a: dict | None, form=None, error: str = "", status: int = 200) -> HTMLResponse:
     r = page(request, "apply.html", a=a, form=form or {}, error=error, token=token, classes=applications.CLASSES + (applications.NO_LICENSE,),
-             qh=applications.qhash(archive.club), statement=archive.club.membership["statement"], welcome=archive.club.membership["welcome"], fields=archive.club.membership["fields"],
+             qh=applications.qhash(archive.club), statement=richtext.render(archive.club.membership["statement"]),  # no names: a public page
+             welcome=richtext.render(archive.club.membership["welcome"]), has_bylaws=(DATA / "bylaws.md").exists(), fields=archive.club.membership["fields"],
              questions=archive.club.membership["questions"], today=dt.date.today())
     r.status_code = status
     r.headers["Cache-Control"] = "no-store"
@@ -4054,6 +4062,19 @@ def apply_form(request: Request, token: str):
         _bad_link(request, "application link")
     ok = a if applications.usable(a) else None
     return _apply_page(request, token, ok, {"name": ok["guest"], "email": ok["email"]} if ok else None, status=200 if ok else 404)
+
+
+@app.get("/apply/{token}/bylaws", response_class=HTMLResponse)
+def apply_bylaws(request: Request, token: str):
+    """The bylaws for an applicant, while their link works (members-only otherwise); a bad link is a bad link."""
+    a = applications.find(token)
+    if not a:
+        _bad_link(request, "application link")
+    if not applications.usable(a):
+        return _apply_page(request, token, None, status=404)
+    r = _bylaws_page(request, public=True)
+    r.headers["Cache-Control"] = "no-store"
+    return r
 
 
 @app.get("/apply/{token}/pdf")
