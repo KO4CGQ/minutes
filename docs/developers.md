@@ -204,7 +204,7 @@ def test_books(tmp_path, monkeypatch):
 The plugin is ticked on (`on=False` to start it off: every address is then a 404); `app.api` is its `api`, `app.club` the club. Everything is put back when the test ends. Experimental, like the API.
 
 ## Election days for another state
-Election days are worked out from a state's rules in a small file in `src/club_minutes/regions/`, named for its code: `us_oh.py` is `us-oh`. A file there is listed on Admin → Site → Features by itself; nothing else needs changing. It has:
+Election days are worked out from a state's rules in a small file in `src/club_minutes/regions/`, named for its code: `us_oh.py` is `us-oh`. A file there is listed on Admin → Site → Calendar by itself; nothing else needs changing. It has:
 - `NAME`: how the list shows it, e.g. `"Ohio: primaries and general election"`.
 - `elections(lo, hi)`: every election day from `lo` to `hi` (dates) as `[(date, name, notes)]`; `notes` is shown with the event (polling hours, where to find your ballot).
 - A docstring citing the law the rules come from, and a `shortcut:` line with the year they were checked.

@@ -2723,6 +2723,7 @@ def admin_action(e: dict) -> str:
              "site_club": lambda v: "Club settings back to club.yaml's" if v == "club.yaml" else f"Club settings: {v.replace('_', ' ')}",
              "site_agenda": lambda v: "Agenda back to club.yaml's" if v == "club.yaml" else f"Agenda: {v.replace('_', ' ')}",
              "site_features": lambda v: "Features back to club.yaml's" if v == "club.yaml" else f"Features: {v.replace('_', ' ')}",
+             "site_calendar": lambda v: "Calendar settings back to club.yaml's" if v == "club.yaml" else f"Calendar: {v.replace('_', ' ')}",
              "site_offices": lambda v: "Offices back to club.yaml's" if v == "club.yaml" else f"Offices: {v.replace('_', ' ')}",
              "site_roles": lambda v: f"Roles: {v}",
              "site_privacy": lambda v: "Never-recorded names back to club.yaml's" if v == "club.yaml" else "Changed the never-recorded names",
@@ -2967,7 +2968,7 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
 templates.env.globals["site_tabs"] = lambda: [(f"/admin/site/{t}", label) for t, label in SITE_TABS] + plugins.site_tabs(archive.club)
-SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("connections", "Connections"), ("bylaws", "Bylaws"),
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("calendar", "Calendar"), ("connections", "Connections"), ("bylaws", "Bylaws"),
              ("dates", "Dates"), ("privacy", "Privacy"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
@@ -2975,6 +2976,7 @@ REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regu
 FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
                 ("club", "supports_app"),
                 ("club", "pictures_per_day"))
+CALENDAR_KEYS = (("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
 CLUB_KEYS = ("name", "callsign", "timezone", "names", "ham")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
@@ -3060,7 +3062,7 @@ def _keep_changes(club, values: dict) -> dict:
 
 
 def _own_holidays(form) -> list[dict]:
-    """The Features tab's rows of the club's own holidays (one ticked Remove, or with no name, is left out).
+    """The Calendar tab's rows of the club's own holidays (one ticked Remove, or with no name, is left out).
     Day is "d24" (a date) or "w3:4" (weekday, Monday 0, and which one; -1 the last)."""
     out = []
     for i in range(min(num(form.get("hol_rows")) or 0, 60)):
@@ -3078,33 +3080,48 @@ def _own_holidays(form) -> list[dict]:
 
 @app.post("/admin/site/features")
 async def site_features(request: Request):
-    """Features tab: chow on or off, the public calendars, holiday and election regions."""
+    """Features tab: chow, plugins, pictures a day, supporting the app."""
     _mid, form, club = _site_admin(request), await request.form(), archive.club
-    regs = regions.choices()
     try:
         if form.get("back"):
             values = dict.fromkeys(FEATURE_KEYS)
         else:
-            typed, ele = " ".join((form.get("holidays") or "").split()), form.get("elections") or ""
-            hol = next((code for code, name in regs["holidays"].items() if typed.lower() in (code, name.lower())), typed.lower())  # a name or a code
-            if hol and hol not in regs["holidays"] or ele and ele not in regs["elections"]:
-                raise ValueError("Pick a region from the list.")
             per_day = num(form.get("pictures_per_day")) if form.get("pictures_per_day") else pictures.per_day(club)
             if per_day is None or not 1 <= per_day <= pictures.MAX_PER_DAY:
                 raise ValueError(f"Pictures: a member can add 1 to {pictures.MAX_PER_DAY} a day.")
             values = _keep_changes(club, {("club", "pictures_per_day"): per_day,
-                                          ("modules", "chow"): bool(form.get("chow")), ("club", "supports_app"): bool(form.get("supports_app")),
-                                          ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
-                                          ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
-                                          ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})
+                                          ("modules", "chow"): bool(form.get("chow")), ("club", "supports_app"): bool(form.get("supports_app"))})
             names = [n for n in (*plugins.LOADED, *plugins.PROBLEMS) if re.fullmatch(r"[a-z0-9]+", n)]  # a misnamed one can't be ticked
             values |= {("plugins", n): bool(form.get(f"plugin_{n}")) for n in names}
             values |= {("plugin_hold", n): True if form.get(f"plugin_hold_{n}") else None for n in names}  # unticked: the default
         club.save_site_settings(values)
     except ValueError as e:
-        return RedirectResponse("/admin/site/features?error=" + quote("The club's own holidays: each needs a name, a month and a day." if "extra_holidays" in str(e) else str(e)), status_code=303)
+        return RedirectResponse("/admin/site/features?error=" + quote(str(e)), status_code=303)
     _admin_log(request, site_features="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
     return RedirectResponse("/admin/site/features?note=" + quote("Saved."), status_code=303)
+
+
+@app.post("/admin/site/calendar")
+async def site_calendar(request: Request):
+    """Calendar tab: the public calendars, holiday and election regions, the club's own holidays."""
+    _mid, form, club = _site_admin(request), await request.form(), archive.club
+    regs = regions.choices()
+    try:
+        if form.get("back"):
+            values = dict.fromkeys(CALENDAR_KEYS)
+        else:
+            typed, ele = " ".join((form.get("holidays") or "").split()), form.get("elections") or ""
+            hol = next((code for code, name in regs["holidays"].items() if typed.lower() in (code, name.lower())), typed.lower())  # a name or a code
+            if hol and hol not in regs["holidays"] or ele and ele not in regs["elections"]:
+                raise ValueError("Pick a region from the list.")
+            values = _keep_changes(club, {("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
+                                          ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
+                                          ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})
+        club.save_site_settings(values)
+    except ValueError as e:
+        return RedirectResponse("/admin/site/calendar?error=" + quote("The club's own holidays: each needs a name, a month and a day." if "extra_holidays" in str(e) else str(e)), status_code=303)
+    _admin_log(request, site_calendar="club.yaml" if form.get("back") else ", ".join(k for (_, k), v in values.items() if v is not None) or "club.yaml")
+    return RedirectResponse("/admin/site/calendar?note=" + quote("Saved."), status_code=303)
 
 
 @app.post("/admin/site/webhooks")

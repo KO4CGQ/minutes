@@ -442,51 +442,53 @@ def test_site_features_and_bylaws_tabs(app, tmp_path, monkeypatch):
     c = web.archive.club
     c.save_app_admins({"n0offc"})
     admin, member = app("n0offc"), app("n0bbbb")
-    feats = {"chow": "1", "holidays": "us", "elections": "us-oh"}  # as the test club.yaml has them
+    feats, cal = {"chow": "1"}, {"holidays": "us", "elections": "us-oh"}  # as the test club.yaml has them
     cert = {"cert_on": "1", "cert_name": "Bond (Certificate of Indebtedness)", "cert_short": "bond", "cert_note": "Each member buys one."}
-    for tab, data in (("features", feats), ("bylaws", cert)):
+    for tab, data in (("features", feats), ("calendar", cal), ("bylaws", cert)):
         assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data=data).status_code == 404
         assert "Changed here" not in admin.get(f"/admin/site/{tab}").text
         admin.post(f"/admin/site/{tab}", data=data)
         assert c.site_settings == {}, tab  # unchanged: nothing kept
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1", "public_chow": "1"})
+    admin.post("/admin/site/features", data={})
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1", "public_chow": "1"})
     assert not c.has("chow") and not c.calendar.get("holidays") and c.calendar["elections"] == "us-oh"
     assert c.info["public_calendars"] == ["events"]  # never chow, even if sent
     assert c.site_settings == {"modules": {"chow": False}, "calendar": {"holidays": ""}, "club": {"public_calendars": ["events"]}}
     before = c.site_settings
-    assert "Pick a region" in admin.post("/admin/site/features", data={"holidays": "zz"}).text and c.site_settings == before
+    assert "Pick a region" in admin.post("/admin/site/calendar", data={"holidays": "zz"}).text and c.site_settings == before
     import datetime as dt
 
     from club_minutes import chow
     rows = lambda *hs: {"hol_rows": str(len(hs) + 1)} | {f"hol_{k}{i}": v for i, h in enumerate(hs) for k, v in h.items()}
     eve = {"name": "Christmas  Eve", "month": "12", "day": "d24", "after": "0"}
     black = {"name": "Black Friday", "month": "11", "day": "w3:4", "after": "1"}  # the day after the 4th Thursday
-    admin.post("/admin/site/features", data={"holidays": "Germany: Bayern", "elections": "us-oh", "public_events": "1"} | rows(eve, black))
-    assert c.calendar["holidays"] == "de-by" and "Germany: Bayern" in admin.get("/admin/site/features").text  # a name, kept as its code
+    admin.post("/admin/site/calendar", data={"holidays": "Germany: Bayern", "elections": "us-oh", "public_events": "1"} | rows(eve, black))
+    assert c.calendar["holidays"] == "de-by" and "Germany: Bayern" in admin.get("/admin/site/calendar").text  # a name, kept as its code
     assert c.calendar["extra_holidays"] == [{"name": "Christmas Eve", "month": 12, "day": 24, "after": 0},
                                             {"name": "Black Friday", "month": 11, "weekday": 3, "nth": 4, "after": 1}]
     assert chow.holiday(c, dt.date(2026, 12, 24)) == "Christmas Eve" and chow.holiday(c, dt.date(2026, 12, 26)) == "Second Day of Christmas"
     assert chow.holiday(c, dt.date(2024, 11, 29)) == "Black Friday" and chow.holiday(c, dt.date(2024, 11, 22)) is None  # not the 4th Friday
-    tab = admin.get("/admin/site/features").text
+    tab = admin.get("/admin/site/calendar").text
     assert 'value="w3:4" selected' in tab and 'value="d24" selected' in tab
-    c.save_site_settings({k: None for k in web.FEATURE_KEYS if k != ("calendar", "extra_holidays")})
-    assert "Back to club.yaml" in admin.get("/admin/site/features").text  # its own holidays alone are something to go back from
+    c.save_site_settings({k: None for k in web.CALENDAR_KEYS if k != ("calendar", "extra_holidays")})
+    assert "Back to club.yaml" in admin.get("/admin/site/calendar").text  # its own holidays alone are something to go back from
     for bad in ({**eve, "day": "x"}, {**eve, "month": "13"}, {**eve, "day": "d30", "month": "2"}, {**black, "day": "w3:5"}):
-        r = admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh"} | rows(bad))
+        r = admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh"} | rows(bad))
         assert "The club&#39;s own holidays" in r.text and len(c.calendar["extra_holidays"]) == 2, bad
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows({**eve, "name": ""}, black))
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows({**eve, "name": ""}, black))
     assert [h["name"] for h in c.calendar["extra_holidays"]] == ["Black Friday"]  # an emptied name removes it
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows(black, eve) | {"hol_rm0": "1"})
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows(black, eve) | {"hol_rm0": "1"})
     assert [h["name"] for h in c.calendar["extra_holidays"]] == ["Christmas Eve"]  # Remove ticked: gone on save
     assert "holiday" in __import__("club_minutes.calview", fromlist=["x"]).kinds(c)  # its own holidays alone are enough for the calendar
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"})
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1"})
     before = c.site_settings
     admin.post("/admin/site/bylaws", data={"ref_dues": "VII", "ref_arrears": "<b>VII.B</b>", "arrears_note": "Only the  Board\nmay suspend."})
     assert c.certificate is None and c.cite("dues") == " (bylaws VII)" and c.bylaws["arrears_note"] == "Only the Board may suspend."
     assert "&lt;b&gt;VII.B&lt;/b&gt;" in admin.get("/admin/site/bylaws").text
     assert "Give the certificate" in admin.post("/admin/site/bylaws", data={"cert_on": "1", "cert_name": " "}).text and c.certificate is None
-    assert "Features: chow, public calendars, holidays" in admin.get("/admin/security/admin").text
-    for tab in ("features", "bylaws"):
+    log = admin.get("/admin/security/admin").text
+    assert "Features: chow" in log and "Calendar: public calendars, holidays" in log
+    for tab in ("features", "calendar", "bylaws"):
         admin.post(f"/admin/site/{tab}", data={"back": "1"})
     assert c.site_settings == {} and c.has("chow") and c.certificate["short"] == "bond" and c.cite("dues") == ""
 

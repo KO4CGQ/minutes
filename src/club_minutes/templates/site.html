@@ -130,15 +130,11 @@
 </form>
 {% if 'privacy.never_record' in here_keys %}<form method="post" action="/admin/site/privacy" data-confirm="Go back to club.yaml's list of names never recorded?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'features' %}
-<p class="muted">Parts of the app the club uses, and what anyone can see without signing in. Each change is in the admin log; changes here win over club.yaml on the server. Turning a part off keeps its data.</p>
+<p class="muted">Parts of the app the club uses. Each change is in the admin log; changes here win over club.yaml on the server. Turning a part off keeps its data.</p>
 <form method="post" action="/admin/site/features" class="profile sitewide">
 <div class="card sitesec"><h2>Chow {{ origin('modules.chow') }}</h2>
 <label class="check"><input type="checkbox" name="chow" value="1"{{ ' checked' if module('chow') }}> <span><b>A chow rotation</b><br><span class="muted small">Members take turns bringing food to meetings: the Chow page, swaps, reminders, the console's Chow step and the minutes' Upcoming Chow, and a fee for a missed night on the Treasurer pages.</span></span></label>
 </div>
-<div class="card sitesec"><h2>Supporting Club Minutes {{ origin('club.supports_app') }}</h2>
-<label class="check"><input type="checkbox" name="supports_app" value="1"{{ ' checked' if club.info.get('supports_app') }}> <span><b>The club supports Club Minutes</b><br><span class="muted small">This club, {{ club.label }}, gives toward the maintenance and development of this app (<a href="https://github.com/sponsors/jflattery">GitHub Sponsors</a> or <a href="https://ko-fi.com/jflattery">Ko-fi</a>): the menu's Support Club Minutes link goes away for everyone, and the About page thanks the club instead.</span></span></label>
-</div>
-{% if plugin_rows %}<div class="card sitesec"><h2>Plugins (experimental)</h2>
 <p class="hint">Installed add-ons. Each is off until ticked; off, none of its pages, menu links, permissions or guide show. Read what each says it uses before ticking it.</p>
 {% for r in plugin_rows %}<details class="multi plug"{{ " open" if r.problem }}><summary><b>{{ r.title }}</b> <span class="muted small">{{ "on" if r.on else "off" }}{{ " · not running" if r.problem }}</span></summary>
 <label class="check"><input type="checkbox" name="plugin_{{ r.name }}" value="1"{{ ' checked' if r.on }}> <span><b>{{ r.title }}</b><br><span class="muted small">{{ r.description }}{% if r.on and r.admin %} <a href="{{ r.admin }}">Its settings</a>.{% endif %}</span>{% if r.uses %}<br><span class="small"><b>Uses:</b></span><ul class="small">{% for u in r.uses %}<li>{{ u.kind }}, about {{ u.about }}: {{ u.why }}</li>{% endfor %}</ul>{% endif %}{% if r.shares %}<span class="small"><b>Shares:</b></span><ul class="small">{% for s in r.shares %}<li>{{ s.what }} with {{ s.with }}{% if s.host %} ({{ s.host }}){% endif %}, about {{ s.about_text }}: {{ s.why }}</li>{% endfor %}</ul>{% endif %}{% if r.problem %}<br><span class="small"><b>Not running:</b> {{ r.problem }}</span>{% endif %}</span></label>
@@ -151,6 +147,15 @@
 </div>
 <p class="hint">On community reports, business items and comments (up to 4 on each). Each is shrunk to 1600 px when saved, so a big photo ends up small; the largest file anyone can upload is on <a href="/admin/security/uploads">Security → Uploads</a>.</p>
 </div>
+<div class="card sitesec"><h2>Supporting Club Minutes {{ origin('club.supports_app') }}</h2>
+<label class="check"><input type="checkbox" name="supports_app" value="1"{{ ' checked' if club.info.get('supports_app') }}> <span><b>The club supports Club Minutes</b><br><span class="muted small">This club, {{ club.label }}, gives toward the maintenance and development of this app (<a href="https://github.com/sponsors/jflattery">GitHub Sponsors</a> or <a href="https://ko-fi.com/jflattery">Ko-fi</a>): the menu's Support Club Minutes link goes away for everyone, and the About page thanks the club instead.</span></span></label>
+</div>
+<p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
+</form>
+{% if here_keys|select('in', ['modules.chow', 'club.supports_app', 'club.pictures_per_day'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, pictures and supporting setting?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% elif tab == 'calendar' %}
+<p class="muted">What anyone can see without signing in, and the holidays and election days on the calendar. Each change is in the admin log; changes here win over club.yaml on the server.</p>
+<form method="post" action="/admin/site/calendar" class="profile sitewide">
 <div class="card sitesec"><h2>Public calendars {{ origin('club.public_calendars') }}</h2>
 <p class="hint">Anyone can see these at /calendar/public (and subscribe), signed in or not. Chow and birthdays are never public.</p>
 {% set pub = club.info.get('public_calendars') or [] %}
@@ -189,7 +194,7 @@
 </div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
-{% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'club.supports_app', 'club.pictures_per_day'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
+{% if here_keys|select('in', ['club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections'])|list %}<form method="post" action="/admin/site/calendar" data-confirm="Go back to club.yaml's public calendars, holidays and election days?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'connections' %}
 <p class="muted">Other services the app works with. Each change is in the admin log.</p>
 <form method="post" action="/admin/site/webhooks" class="profile sitewide">

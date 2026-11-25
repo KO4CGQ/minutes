@@ -1,4 +1,4 @@
-"""Holidays and election days by region, for the calendars. club.yaml (or Admin → Site → Features) picks them, none by default:
+"""Holidays and election days by region, for the calendars. club.yaml (or Admin → Site → Calendar) picks them, none by default:
 
     calendar:
       holidays: us        # a country, or a state or region in it: us-oh, fr, de-by, gb-sct
