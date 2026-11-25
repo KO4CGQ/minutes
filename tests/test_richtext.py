@@ -160,3 +160,15 @@ def test_a_never_record_mention_and_a_mention_or_code_in_an_address():
         out = str(richtext.render(t, names=Names()))
         assert not [h for h in re.findall(r'href="([^"]*)"', out) if "<" in h or "" in h or "" in h], out
         assert "<a" not in out.replace('<a class="who"', ""), out
+
+
+def test_a_mention_by_an_old_callsign_shows_todays_member_and_links_their_page():
+    from pathlib import Path
+
+    from club_minutes.club import Club
+    club = Club(Path(__file__).parent / "fixtures" / "test-club.yaml", roster=[
+        {"id": "m1abcde", "first": "Jane", "last": "Doe", "callsign": "W0DEMO", "aliases": ["N0CALL"], "status": "Active"}])
+    assert [m["id"] for m in club.mentionable()] == ["m1abcde"]  # the picker writes the stable id
+    for typed in ("m1abcde", "n0call"):  # the stable id, and an old callsign in older text
+        out = str(richtext.render(f"@[Old Name]({typed})", names=club))
+        assert 'href="/members/w0demo"' in out and ">Jane<" in out and "Old Name" not in out, typed
