@@ -279,6 +279,11 @@ def _ready(p: Plugin) -> bool:
         return False
 
 
+def site_tabs(club) -> list[tuple[str, str]]:
+    """Admin → Site tabs for the plugins that are on and have a settings page: (address, title)."""
+    return [(f"/{p.name}/admin", p.title) for p in LOADED.values() if p.has_admin and club.plugin_on(p.name)]
+
+
 def calendar_links(club) -> list[tuple[str, str]]:
     """Buttons for the calendar event form's online link, from the plugins that are on."""
     out = []

@@ -184,3 +184,13 @@ def test_nav_ready_false_hides_the_menu_links_except_in_admin_mode(env):
         assert client(a, "m1").get("/hello/").status_code == 200  # the page itself is still there
     finally:
         helloplugin.READY[0] = True
+
+
+def test_a_plugin_with_a_settings_page_gets_a_site_tab_while_on(env):
+    club, a, _ = env
+    admin = client(a, "n0admn", admin=True)
+    assert 'href="/hello/admin"' not in admin.get("/admin/site/club").text
+    club.save_site_settings({("plugins", "hello"): True})
+    page = admin.get("/admin/site/club").text
+    assert '<a href="/hello/admin" class="">Hello board</a>' in page and 'href="/admin/site/club" class="on" aria-current="page"' in page
+    assert 'href="/admin/site/look" class="on"' in admin.get("/admin/site").text  # the bare address is Look

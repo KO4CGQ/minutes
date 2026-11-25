@@ -1,9 +1,8 @@
 {% extends "base.html" %}{% block title %}Site{% endblock %}{% block body %}
-<h1>Site</h1>
+{% include "_site_head.html" %}
 {# a setting an admin changed here (it now wins over the server's club.yaml); nothing for the rest #}
 {# always a cell, empty unless changed here: the form grids (.fmtgrid) count on it, or every row after shifts #}
 {% macro origin(k) %}<span class="muted small">{% if k in set_here or k in here_keys %}Changed here{% endif %}</span>{% endmacro %}
-<nav class="tabs" aria-label="Sections">{% for t, label in tabs %}<a href="/admin/site/{{ t }}" class="{{ 'on' if tab == t }}"{% if tab == t %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 {% if error %}<p class="msg err">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
 {% if tab == 'club' %}
 <p class="muted">The club's name, whether it's an amateur radio club (and its callsign), and its time zone. Each change is in the admin log. A value set here wins over club.yaml on the server; the rest follow club.yaml.</p>
