@@ -11,7 +11,6 @@ import os
 import re
 import secrets
 import string
-import threading
 import time
 from importlib.metadata import metadata, requires, version
 from pathlib import Path
@@ -59,6 +58,7 @@ from . import (
     events,
     limits,
     meet,
+    meetings,
     membership,
     offices,
     pictures,
@@ -462,8 +462,7 @@ def _page(request: Request, name: str, **ctx) -> HTMLResponse:
         "club": archive.club,
         "me": archive.club.members.get(mid) if mid else None,
         "can_lead": (archive.club.can_lead(mid) or admin_mode(request)) if mid else False,
-        # JS weekday (0 = Sunday) and time of the weekly meeting, for the "Start meeting" button
-        "meeting_at": f"{(archive.club.meeting_weekday + 1) % 7} {archive.club.meeting_time}",
+        "meeting_at": _meeting_at() if mid and (archive.club.can_lead(mid) or admin_mode(request)) else "",
         "is_admin": archive.club.is_admin(mid), "admin_until": getattr(request.state, "admin_until", None),
         "viewing_as": getattr(request.state, "viewing_as", None),
         "acting_as": getattr(request.state, "acting_as", False),
@@ -477,6 +476,12 @@ def _page(request: Request, name: str, **ctx) -> HTMLResponse:
         "show_support": bool(mid) and not archive.club.info.get("supports_app") and prefs.settings(mid)["support_link"] == "show",
         "pk_offer": bool(mid and request.cookies.get(PK_OFFER) and request.url.hostname == authn.rp_id and not has_passkey_here(request, mid)),
         "rp_id": authn.rp_id, "csp_nonce": getattr(request.state, "nonce", ""), **ctx})
+
+
+def _meeting_at() -> str:
+    """The coming week's meetings as "weekday time" (JS weekday, 0 = Sunday), for the Start meeting button's pulse."""
+    today = dt.date.today()
+    return ",".join(f"{(d.weekday() + 1) % 7} {meetings.time_on(archive.club, d)}" for d in meetings.nights(archive.club, today, today + dt.timedelta(days=7)))
 
 
 def _money_nav(request: Request, mid: str | None) -> dict:
@@ -975,7 +980,7 @@ def business_comment_delete(request: Request, iid: str, cid: str, back: str = Fo
 
 def upcoming_meetings(n: int = 4) -> list[dt.date]:
     today = dt.date.today()
-    return chow.meeting_nights(archive.club, today, today + dt.timedelta(days=7 * n + 56))[:n]  # +8 weeks: cancelled nights don't shorten the list
+    return meetings.nights(archive.club, today, today + dt.timedelta(days=7 * n + 56))[:n]  # +8 weeks: cancelled nights don't shorten the list
 
 
 @app.post("/business/notes")
@@ -1038,7 +1043,7 @@ def _module(name: str):
 
 
 CHOW = _module("chow")
-_chow_lock = threading.Lock()
+_chow_lock = chow.lock
 
 
 def can_edit_chow(request: Request) -> bool:
@@ -3503,8 +3508,11 @@ async def site_club(request: Request):
     if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or (where, online) != (None, None):
         first = events.move_meeting(club, since, where, online, mid)
         note = f"Saved. The weekly meeting on the calendar changes from {show_date(first, 'day_year')}; earlier dates stay as they were."
-    late = sum(1 for d in chow.load()["nights"] if d >= today.isoformat()
-               and dt.date.fromisoformat(d).weekday() != club.meeting_weekday) if club.has("chow") else 0
+    late = 0
+    if club.has("chow"):
+        ahead = [d for d in chow.load()["nights"] if d >= today.isoformat()]
+        held = {d.isoformat() for d in meetings.nights(club, today, dt.date.fromisoformat(max(ahead)), with_cancelled=True, chow=True)} if ahead else set()
+        late = sum(1 for d in ahead if d not in held)
     if late:
         note += f" {late} chow night{'s are' if late != 1 else ' is'} still on the old day: move {'them' if late != 1 else 'it'} on the Chow page."
     return RedirectResponse("/admin/site/club?note=" + quote(note), status_code=303)
@@ -3648,9 +3656,10 @@ SHOW = {"both": (True, True), "page": (True, False), "minutes": (False, True), "
 # ---------------- calendar ----------------
 
 @app.get("/calendar", response_class=HTMLResponse)
-def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: str = "8", mid: str = Depends(me)):
+def calendar_page(request: Request, view: str = "agenda", start: str = "", month: str = "", weeks: str = "8", error: str = "",
+                  mid: str = Depends(me)):
     """Agenda (from a day, 8 weeks or more) or month grid: club calendars, chow nights and birthdays."""
-    return _calendar(request, view, start, month, mid, weeks)
+    return _calendar(request, view, start, month, mid, weeks, error)
 
 
 @app.get("/calendar/public", response_class=HTMLResponse)
@@ -3664,7 +3673,7 @@ def calendar_public(request: Request, view: str = "agenda", start: str = "", mon
 AGENDA_WEEKS = {8: "8 weeks", 13: "3 months", 26: "6 months", 52: "a year"}
 
 
-def _calendar(request: Request, view: str, start: str, month: str, mid: str | None, weeks: str = "8") -> HTMLResponse:
+def _calendar(request: Request, view: str, start: str, month: str, mid: str | None, weeks: str = "8", error: str = "") -> HTMLResponse:
     weeks = num(weeks) if num(weeks) in AGENDA_WEEKS else 8
     today = dt.date.today()
     try:
@@ -3694,7 +3703,7 @@ def _calendar(request: Request, view: str, start: str, month: str, mid: str | No
                 kinds=kinds, base="/calendar/public" if public else "/calendar",
                 can_edit=not public and can_edit_calendar_now(request), can_moderate=not public and moderates(request),
                 prev_month=(first - dt.timedelta(days=1)).strftime("%Y-%m"), next_month=(first + dt.timedelta(days=32)).strftime("%Y-%m"),
-                timedelta=dt.timedelta, weeks=weeks, agenda_weeks=AGENDA_WEEKS)
+                timedelta=dt.timedelta, weeks=weeks, agenda_weeks=AGENDA_WEEKS, error=error)
 
 
 def _feed_url(request: Request, path: str) -> str:
@@ -3811,6 +3820,11 @@ async def calendar_save(request: Request, mid: str = Depends(me)):
         raise HTTPException(404)
     try:
         v = events.from_form(f, _club_tz())
+        meeting = bool(f.get("meeting")) and cal == "events" and bool(v["repeat"])  # a repeating Club events entry
+        if meeting or eid:
+            v["meeting"] = meeting
+        if meeting and archive.club.has("chow"):
+            v["chow"] = bool(f.get("chow"))
         with events.locked():
             evs = events.load()
             if eid:
@@ -3844,6 +3858,28 @@ def calendar_delete(request: Request, id: str = Form(...), d: str = Form(""), sc
     events.log(mid, "deleted" if not d else {"this": "deleted one date of", "following": "deleted this and following dates of",
                                              "all": "deleted every date of"}[scope], e)
     return RedirectResponse("/calendar", status_code=303)
+
+
+@app.post("/calendar/meeting/{what}")
+def calendar_meeting(request: Request, what: str, id: str = Form(...), d: str = Form(...), reason: str = Form(""),
+                     date: str = Form(""), time: str = Form(""), mid: str = Depends(me)):
+    """Cancel a meeting date, move it to another day and time, or put it back (what: cancel, move, restore)."""
+    _calendar_editor(request)
+    if what not in ("cancel", "move", "restore"):
+        raise HTTPException(404)
+    club, url = archive.club, base_url(request)
+    try:
+        if what == "cancel":
+            meetings.cancel(club, id, d, reason, mid, url)
+        elif what == "move":
+            meetings.move(club, id, d, date, time, reason, mid, url)
+        else:
+            meetings.restore(club, id, d, mid)
+    except KeyError:
+        raise HTTPException(404, "That event isn't on the calendar any more.")
+    except ValueError as x:
+        return RedirectResponse(f"/calendar?error={quote(str(x))}", status_code=303)
+    return RedirectResponse(f"/calendar?start={dt.date.fromisoformat(d)}", status_code=303)  # d is a real date: checked above
 
 
 @app.get("/calendar/import", response_class=HTMLResponse)

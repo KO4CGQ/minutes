@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from test_avatars import photo
 
-from club_minutes import business, pictures, web
+from club_minutes import business, events, pictures, web
 from club_minutes import club as clubmod
 from club_minutes.auth import Auth
 from club_minutes.club import Club
@@ -23,7 +23,7 @@ PEOPLE = [{"id": "pres", "first": "Jane", "last": "Doe", "role": "President", "e
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    for mod in (clubmod, pictures, business):
+    for mod in (clubmod, pictures, business, events):
         monkeypatch.setattr(mod, "DATA", tmp_path)
     monkeypatch.setattr(web, "DATA", tmp_path)
     c = Club(FIX / "test-club.yaml", roster=PEOPLE)

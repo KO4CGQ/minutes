@@ -38,7 +38,7 @@ def app(tmp_path, monkeypatch):
 def routes():
     for r in web.app.routes:
         path = r.path
-        for p in ("slug", "iid", "eid", "rid", "cid", "sid", "nid", "mid", "tab", "tid", "id", "key", "kind"):
+        for p in ("slug", "iid", "eid", "rid", "cid", "sid", "nid", "mid", "tab", "tid", "id", "key", "kind", "what"):
             path = path.replace(f"{{{p}}}", "x")
         path = path.replace("{token}.ics", "x.ics")
         if "{" not in path and not path.startswith(("/static", "/docs", "/openapi")):
@@ -351,12 +351,12 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         from club_minutes import chow
         monkeypatch.setattr(chow, "DATA", tmp_path)
         nxt_thu = dt.date.today() + dt.timedelta(days=(3 - dt.date.today().weekday()) % 7 or 7)
-        chow.save({"nights": {nxt_thu.isoformat(): {"member": "n0aaaa", "status": "scheduled"}}})
+        chow.save({"nights": {d.isoformat(): {"member": "n0aaaa", "status": "scheduled"} for d in (nxt_thu, nxt_thu + dt.timedelta(days=7))}})
         today = dt.date.today()
         assert "Starting: today" in admin.post("/admin/site/club", data={**same, "since": str(today - dt.timedelta(days=1))}).text
         before = events.load()
         assert "msg err" in admin.post("/admin/site/club", data={**same, "since": "soon"}).text and events.load() == before
-        since = nxt_thu + dt.timedelta(days=1)  # the Thursday chow night stays a meeting; the Tuesdays start after it
+        since = nxt_thu + dt.timedelta(days=1)  # the first Thursday chow night stays a meeting; the Tuesdays start after it, so the second is on the old day
         where, online = "Clubhouse, 123 Main St <b>", "https://meet.example.com/abc?pwd=x&y=1"
         for bad in ("javascript:alert(1)", 'https://x.example.com/"><b>', "meet.example.com/abc"):
             r = admin.post("/admin/site/club", data={**same, "meeting_day": "Tuesday", "since": str(since), "where": where, "online": bad})
