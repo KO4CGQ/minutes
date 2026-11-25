@@ -87,6 +87,20 @@ class Api:
         separate: `admin_mode(request)`."""
         return self._club().may(id, f"{self._p.name}.{perm}")
 
+    def allowed(self, request, perm: str) -> bool:
+        """The signed-in member has this plugin's permission `perm`, or is an admin in admin mode."""
+        return self.may(self.who(request), perm) or bool(self.admin_mode(request))
+
+    def members(self) -> dict[str, str]:
+        """Every member on the roster, former ones too: {id: name}."""
+        return {i: m.name for i, m in self._club().members.items()}
+
+    def today(self):
+        """Today's date where the club is (its time zone), not the server's."""
+        import datetime as dt
+        from zoneinfo import ZoneInfo
+        return dt.datetime.now(ZoneInfo(self._club().timezone)).date()
+
     def roles(self, id: str) -> list[str]:
         """The role keys the member holds (Site → Roles; admin isn't one)."""
         return self._club().roles(id)
@@ -132,8 +146,9 @@ class Api:
         return fresh_confirm(request, next)
 
     def page(self, request, template: str, **ctx):
-        """The app's page (its menu, styles, sign-in state) around one of the plugin's templates/."""
-        return self._page(request, f"{self._p.name}/{template}", **ctx)
+        """The app's page (its menu, styles, sign-in state) around one of the plugin's templates/. On the plugin's
+        settings pages (/<NAME>/admin…) it also puts Admin → Site's heading and tabs above the template."""
+        return self._page(request, f"{self._p.name}/{template}", site_head=is_admin_path(self._p, request.url.path), **ctx)
 
 
 class Plugin:
@@ -310,7 +325,7 @@ def calendar_links(club) -> list[tuple[str, str]]:
     for p in LOADED.values():
         if club.plugin_on(p.name) and hasattr(p.mod, "calendar_links"):
             try:
-                out += [(str(label), str(url)) for label, url in p.mod.calendar_links(p.api)]
+                out += [(str(label), f"/{p.name}{url}" if str(url).startswith("/") else str(url)) for label, url in p.mod.calendar_links(p.api)]  # "/x": the plugin's page
             except Exception:
                 log.exception("plugin %s: calendar_links failed", p.name)
     return out

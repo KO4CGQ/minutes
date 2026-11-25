@@ -601,6 +601,10 @@ class Club:
             raise ValueError(f"The built-in roles can't be removed: {', '.join(missing)}.")
         offs = {o["title"].lower(): o["title"] for o in self.office_list()}
         names, out = set(), {}
+        # a plugin's permissions stay on a role while the plugin is off or not loaded: no form shows them then
+        stored = (self._picked() or {}).get("table") or {}
+        hidden = {k: [x for x in (stored.get(k) or {}).get("perms", []) if "." in x
+                      and (x not in PERMISSIONS or not self.plugin_on(x.split(".")[0]))] for k in table}
         for k, r in table.items():
             name = " ".join(str(r.get("name") or "").split())[:40]
             if not name:
@@ -609,7 +613,8 @@ class Club:
                 raise ValueError(f"Two roles can't both be called {name}.")
             names.add(name.lower())
             perms = {p for p in r.get("perms", []) if p in PERMISSIONS} | ({"treasurer"} if "money" in r.get("perms", []) else set())
-            out[k] = {"name": name, "perms": [p for p in PERMISSIONS if p in perms],
+            perms |= {x for x in hidden[k] if x in PERMISSIONS}
+            out[k] = {"name": name, "perms": [p for p in PERMISSIONS if p in perms] + [x for x in hidden[k] if x not in PERMISSIONS],
                       "offices": [offs[o.lower()] for o in r.get("offices", []) if o.lower() in offs],
                       "members": sorted({self.canonical(i) for i in r.get("members", []) if self.canonical(i) in self.members})}
         if lost := [PERMISSIONS[p] for p in PERMISSIONS if "." not in p and not any(p in r["perms"] for r in out.values())]:
