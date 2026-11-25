@@ -2986,8 +2986,7 @@ SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles",
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
         "certificate": "The certificate (bond)", "missed_chow": "The fee for a missed chow night"}
-FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
-                ("club", "supports_app"),
+FEATURE_KEYS = (("modules", "chow"), ("club", "supports_app"),
                 ("club", "pictures_per_day"))
 CALENDAR_KEYS = (("club", "public_calendars"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
