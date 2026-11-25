@@ -104,6 +104,8 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 # Plugins (experimental) installed on the server, each off until turned on here or on Site → Features (server admin guide → Plugins):
 # plugins:
 #   hello: true     # the plugin's NAME
+# plugin_hold:      # wait for this plugin before updating the app (a release for the new version), instead of turning it off
+#   hello: true
 
 # Jitsi Meet sign-in (only with modules: jitsi). The secret is CLUB_MINUTES_JITSI_SECRET in /etc/club-minutes/env (32+ characters), the
 # same one the Jitsi server's Prosody has (server admin guide → Video meetings).

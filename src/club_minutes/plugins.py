@@ -172,6 +172,48 @@ def _tell_admins(club, failed: list[str]) -> None:
         log.exception("couldn't email the admins about the plugins that didn't start")
 
 
+def check() -> int:
+    """update.sh, after installing a new version and before starting it: each plugin that's on but won't load in it
+    is turned off, or makes the update wait (1), as its admin chose on Site → Features. Reads only club.yaml and the
+    Site settings, never the rest of the data: the old version is still running on it. 2: the check itself failed."""
+    try:
+        return _check()
+    except Exception:
+        log.exception("plugin check failed")
+        return 2  # never read as "hold": a damaged settings file mustn't stop every update
+
+
+def _check() -> int:
+    import os
+
+    import yaml
+    cfg = yaml.safe_load(Path(os.environ.get("CLUB_MINUTES_CONFIG", clubmod.ROOT / "club.yaml")).read_text()) or {}
+    p = clubmod.DATA / "site-settings.json"
+    site = json.loads(p.read_text()) if p.exists() else {}
+    cfg = clubmod._overlay(cfg, site)
+    on = {k for k, v in (cfg.get("plugins") or {}).items() if v}
+    hold = {k for k, v in (cfg.get("plugin_hold") or {}).items() if v}
+    bad = {}
+    for ep in _entry_points():
+        if ep.name in on:
+            try:
+                Plugin(ep.load(), ep.name)
+            except Exception as e:  # noqa: BLE001 - anything a plugin raises: it won't load
+                bad[ep.name] = f"{type(e).__name__}: {e}"
+    if held := [n for n in bad if n in hold]:
+        for n in held:
+            print(f"Plugin {n} has no release for this version yet ({bad[n]}), and Site → Features says to wait for it: the app stays on the version it had.")
+        return 1
+    for n, why in bad.items():
+        print(f"Plugin {n} has no release for this version yet ({why}), so it was turned off. Tick it on again on Site → Features once it has one.")
+        site.setdefault("plugins", {})[n] = False
+    if bad:
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(site, indent=1))
+        tmp.replace(p)
+    return 0
+
+
 def owner(path: str) -> Plugin | None:
     return LOADED.get(path.split("/")[1]) if path.startswith("/") else None
 
@@ -217,6 +259,6 @@ def guides(club) -> dict[str, str]:
 def rows(club) -> list[dict]:
     """Site → Features: every installed plugin, running or not, and why not."""
     out = [{"name": p.name, "title": p.title, "description": p.description, "needs_email": p.needs_email,
-            "on": club.plugin_on(p.name), "problem": "", "admin": f"/{p.name}/admin" if p.has_admin else ""} for p in LOADED.values()]
+            "on": club.plugin_on(p.name), "hold": p.name in club.plugins_hold, "problem": "", "admin": f"/{p.name}/admin" if p.has_admin else ""} for p in LOADED.values()]
     return out + [{"name": n, "title": n, "description": "", "needs_email": False, "on": club.plugin_on(n),
-                   "problem": why, "admin": ""} for n, why in PROBLEMS.items()]
+                   "hold": n in club.plugins_hold, "problem": why, "admin": ""} for n, why in PROBLEMS.items()]

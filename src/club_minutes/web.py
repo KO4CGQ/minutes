@@ -3171,7 +3171,9 @@ async def site_features(request: Request):
                                           ("club", "public_calendars"): [k for k in PUBLIC_CALS if form.get(f"public_{k}")],
                                           ("calendar", "holidays"): hol, ("calendar", "elections"): ele,
                                           ("calendar", "extra_holidays"): regions.parse_extra(_own_holidays(form))})
-            values |= {("plugins", n): bool(form.get(f"plugin_{n}")) for n in (*plugins.LOADED, *plugins.PROBLEMS) if re.fullmatch(r"[a-z0-9]+", n)}  # a misnamed one can't be ticked
+            names = [n for n in (*plugins.LOADED, *plugins.PROBLEMS) if re.fullmatch(r"[a-z0-9]+", n)]  # a misnamed one can't be ticked
+            values |= {("plugins", n): bool(form.get(f"plugin_{n}")) for n in names}
+            values |= {("plugin_hold", n): True if form.get(f"plugin_hold_{n}") else None for n in names}  # unticked: the default
         club.save_site_settings(values)
     except ValueError as e:
         return RedirectResponse("/admin/site/features?error=" + quote("The club's own holidays: each needs a name, a month and a day." if "extra_holidays" in str(e) else str(e)), status_code=303)

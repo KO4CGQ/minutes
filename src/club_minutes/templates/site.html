@@ -154,6 +154,7 @@
 {% if plugin_rows %}<div class="card sitesec"><h2>Plugins (experimental)</h2>
 <p class="hint">Installed add-ons. Each is off until ticked; off, none of its pages, menu links, permissions or guide show.</p>
 {% for r in plugin_rows %}<label class="check"><input type="checkbox" name="plugin_{{ r.name }}" value="1"{{ ' checked' if r.on }}> <span><b>{{ r.title }}</b><br><span class="muted small">{{ r.description }}{% if r.needs_email %} It needs members' email addresses.{% endif %}{% if r.on and r.admin %} <a href="{{ r.admin }}">Its settings</a>.{% endif %}</span>{% if r.problem %}<br><span class="small"><b>Not running:</b> {{ r.problem }}</span>{% endif %}</span></label>
+<label class="check plughold"><input type="checkbox" name="plugin_hold_{{ r.name }}" value="1"{{ ' checked' if r.hold }}> <span><b>Wait for {{ r.title }} before updating the app</b><br><span class="muted small">When an app update needs a newer {{ r.title }} that isn't out yet: ticked, the app stays on its current version until there is one; unticked, the app updates and {{ r.title }} is turned off until then.</span></span></label>
 {% endfor %}</div>{% endif %}
 <div class="card sitesec"><h2>Pictures</h2>
 <div class="fmtgrid">

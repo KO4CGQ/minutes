@@ -95,6 +95,8 @@ What a member may do is a **permission** (`PERMISSIONS` in `src/club_minutes/clu
 ## Writing a plugin (experimental)
 A plugin is a Python package an admin installs next to the app and ticks on at Admin → Site → Features. Experimental: the API (`PLUGIN_API = 1` in `src/club_minutes/plugins.py`) may change; a plugin written for another number is skipped and Site says so.
 
+**Releasing it.** Servers install a plugin from its Git repository with `deploy/plugin.sh` (server admin guide → Plugins), at its newest `vX.Y.Z` tag, and move it to its newest tag at every app update. So tag a release only when it works with the app's current plugin API; when the API number goes up, tag one built for the new number soon after the app's release (until then, servers turn the plugin off, or wait for it before updating, as each admin chose).
+
 **Finding it.** An entry point in the group `club_minutes.plugins`, named the same as the module's `NAME`:
 ```toml
 [project.entry-points."club_minutes.plugins"]
