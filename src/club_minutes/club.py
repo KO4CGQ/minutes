@@ -24,6 +24,7 @@ from . import regions
 from .meeting import SECTIONS
 
 log = logging.getLogger(__name__)
+MEMBER_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")  # same as callsign.py / roster.rename_id
 
 ROOT = Path(os.environ.get("CLUB_MINUTES_ROOT", Path(__file__).resolve().parents[2]))
 _site_lock = threading.Lock()
@@ -124,8 +125,7 @@ def _agenda(raw) -> list[dict]:
 
 # Optional parts of the app, each off unless club.yaml turns it on (`modules: {chow: true}`):
 # chow: a rotation of members bringing food to meetings (the Chow page, reminders, the console's step, a missed-night fee).
-# jitsi: members join the club's own Jitsi Meet server signed in from here (meet.py; needs the jitsi: block and its secret).
-MODULES = {"chow": False, "jitsi": False}
+MODULES = {"chow": False}
 CALLSIGN = re.compile(r"^[A-Z]{1,2}\d[A-Z]{1,4}$", re.IGNORECASE)  # 4 letters: some countries issue them, and examples like N0CALL can't be anyone's
 
 
@@ -207,17 +207,17 @@ PERMISSIONS = {
     "emails": "change another member's email",
     "status": "change a member's status",
     "roster_emails": "get the roster emails",
-    "meet_host": "host video meetings",
+    "applications": "receive membership applications",
 }
 # The built-in roles: key: (name, what it allows until an admin changes it). The keys are older than the names:
 # "board" is Minutes editor and "minutes_editor" is Meeting leader (roles.json and the roster's columns keep the keys).
 ROLES: dict[str, tuple[str, tuple[str, ...]]] = {
-    "officer": ("Officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer", "meet_host")),
+    "officer": ("Officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer")),
     "board": ("Minutes editor", ("correct",)),
     "treasurer": ("Treasurer", ("treasurer", "money")),
     "roster_keeper": ("Roster keeper", ("members", "emails", "status")),
-    "secretary": ("Secretary", ("roster_emails",)),
-    "minutes_editor": ("Meeting leader", ("lead", "calendar", "meet_host")),
+    "secretary": ("Secretary", ("roster_emails", "applications")),
+    "minutes_editor": ("Meeting leader", ("lead", "calendar")),
     "calendar_editor": ("Calendar editor", ("calendar",)),
 }
 PICKED = ("minutes_editor", "calendar_editor")  # built-in roles given only by hand (before roles.json: the roster's ticks)
@@ -250,14 +250,64 @@ def _quorum(raw) -> dict | None:
     return out if any(v is not None for v in out.values()) else None
 
 
+# Membership applications (Admin → Site → Membership; club.yaml `membership:`): how long the link works, the vote, how
+# long a refusal lasts, what's kept. `club: invite_after_visits` is the tab's other setting. Questions: [{label, type: yesno|several|short|long|grid, options | rows + cols}].
+DEFAULT_STATEMENT = ("By signing, you confirm that what you've written here is true, that you've read the club's bylaws "
+                     "and agree to follow them, and that you'll pay the club's dues and fees if you become a member.")
+MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
+                       "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": []}
+VOTE_PASSES = {"unanimous": "Unanimous", "two_thirds": "Two thirds", "majority": "A majority"}
+QUESTION_TYPES = {"yesno": "Yes or no", "several": "Pick several", "short": "Short text", "long": "Long text", "grid": "Grid of ticks"}
+_MEMBERSHIP_RANGES = {"link_days": (1, 365), "listed_days": (0, 365), "reapply_months": (0, 120), "keep_days": (1, 3650)}
+
+
+def clean_questions(raw) -> list[dict]:
+    """The club's own application questions, checked: each {label, type} plus options (several) or rows and cols (grid),
+    lists of distinct non-empty lines. Raises ValueError saying which is wrong."""
+    if not isinstance(raw, list) or len(raw) > 40:
+        raise ValueError("The questions are a list of at most 40.")
+    out = []
+    for q in raw:
+        if not isinstance(q, dict) or q.get("type") not in QUESTION_TYPES:
+            raise ValueError("Every question needs a type: " + ", ".join(QUESTION_TYPES) + ".")
+        label = " ".join(str(q.get("label") or "").split())[:200]
+        if not label:
+            raise ValueError("Every question needs its words.")
+        item = {"label": label, "type": q["type"]}
+        for key, need in (("options", "several"), ("rows", "grid"), ("cols", "grid")):
+            if q["type"] == need:
+                lines = list(dict.fromkeys(" ".join(str(x).split())[:100] for x in q.get(key) or [] if str(x).strip()))
+                if not lines or len(lines) > 40:
+                    raise ValueError(f"{label}: give {key} (one to 40).")
+                item[key] = lines
+        out.append(item)
+    return out
+
+
+def _membership(raw) -> dict:
+    """The membership: settings with defaults filled in. Raises ValueError for a wrong one (as for the other settings)."""
+    raw = raw or {}
+    if not isinstance(raw, dict) or set(raw) - set(MEMBERSHIP_DEFAULTS):
+        raise ValueError("club.yaml membership: has a setting the app doesn't know")
+    out = {**MEMBERSHIP_DEFAULTS, **raw}
+    for k, (lo, hi) in _MEMBERSHIP_RANGES.items():
+        if isinstance(out[k], bool) or not isinstance(out[k], int) or not lo <= out[k] <= hi:
+            raise ValueError(f"club.yaml membership: {k}: {out[k]!r} isn't a whole number from {lo} to {hi}")
+    if not isinstance(out["vote"], bool) or out["vote_passes"] not in VOTE_PASSES:
+        raise ValueError("club.yaml membership: vote is true or false, vote_passes one of " + ", ".join(VOTE_PASSES))
+    if not isinstance(out["statement"], str) or len(out["statement"]) > 5000:
+        raise ValueError("club.yaml membership: statement is text of at most 5000 characters")
+    out["questions"] = clean_questions(out["questions"])
+    return out
+
+
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins or email test mode: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                     "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day", "names", "ham")} | {
     ("meeting", "sections"), ("meeting", "quorum"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
-    ("", "offices"), ("", "roster_keepers"), ("jitsi", "rooms"), ("jitsi", "adhoc"), ("modules", "jitsi"),
-    ("jitsi", "domain"), ("jitsi", "app_id")}  # "": a top-level club.yaml setting
+    ("", "offices"), ("", "roster_keepers"), ("webhooks", "url"), ("webhooks", "kinds")} | {("membership", k) for k in MEMBERSHIP_DEFAULTS}  # "": a top-level club.yaml setting
 
 
 # club.yaml settings renamed since 1.0.0: (section, old name) -> (section, new name). The old name keeps working
@@ -317,7 +367,7 @@ class Club:
         """Set Site page settings together ({(section, key): value}; None: back to club.yaml's). Checked as the app
         checks club.yaml at start, then used at once; a ValueError says what's wrong and nothing changes."""
         with _site_lock:  # two admins saving at once: one after the other, neither lost
-            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS]:
+            if bad := [f"{s}: {k}" for s, k in values if (s, k) not in SITE_KEYS and not (s in ("plugins", "plugin_hold") and re.fullmatch(r"[a-z0-9]+", k))]:
                 raise ValueError(f"{', '.join(bad)} can't be changed here.")
             site = self.site_settings
             for (section, key), value in values.items():
@@ -343,6 +393,7 @@ class Club:
     def _configure(self, cfg: dict) -> None:
         """The settings, from club.yaml with the Site page's on top. Raises ValueError for a wrong one."""
         self.info = cfg.get("club", {})
+        self.membership = _membership(cfg.get("membership"))
         for k, lo, hi in (("invite_after_visits", 1, 50), ("remind_days_before", 0, 60)):  # read later, so checked now
             v = self.info.get(k)
             if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi):
@@ -353,7 +404,7 @@ class Club:
         self.email = cfg.get("email") or {}
         self.never_record = [" ".join(str(x).split()) for x in (cfg.get("privacy") or {}).get("never_record") or [] if str(x).strip()]
         self.redact = [_n(x) for x in self.never_record]
-        self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
+        self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (member ids or current callsigns)
         # Offices whose holders add new members to the roster (the Secretary keeps it, usually).
         self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
@@ -369,21 +420,28 @@ class Club:
         for k in ("holidays", "elections"):
             regions.check(k, self.calendar.get(k))  # a misspelled region stops the app at start, with what's wrong
         regions.parse_extra(self.calendar.get("extra_holidays"))
+        self.plugins_on = {k for k, v in (cfg.get("plugins") or {}).items() if v}  # installed plugins an admin ticked (plugins.py)
+        self.plugins_hold = {k for k, v in (cfg.get("plugin_hold") or {}).items() if v}  # an update that doesn't fit them waits
         self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
 
     @property
-    def meeting_weekday(self) -> int:
-        """The weekly meeting's day (Monday 0), from club.yaml `club: meeting_day:`. Required: no club's day is a default."""
+    def meeting_weekday(self) -> int | None:
+        """The seed's day (Monday 0), from club.yaml `club: meeting_day:`: optional, used once to make the first meeting
+        series (events.ensure_meeting). None if missing; a wrong one stops the start."""
         day = str(self.info.get("meeting_day") or "").strip().lower()
+        if not day:
+            return None
         if day not in WEEKDAYS:
             raise ValueError(f"club.yaml club: meeting_day: {self.info.get('meeting_day')!r} isn't a day of the week (e.g. Thursday)")
         return WEEKDAYS.index(day)
 
     @property
-    def meeting_time(self) -> str:
-        """The meeting's start, "HH:MM" (24-hour), from club.yaml `club: meeting_time:`. Required. Unquoted, YAML reads
-        19:30 as 1170 (minutes): taken as that time, not an error."""
+    def meeting_time(self) -> str | None:
+        """The seed's start, "HH:MM" (24-hour), from club.yaml `club: meeting_time:`: optional, like meeting_day. Unquoted,
+        YAML reads 19:30 as 1170 (minutes): taken as that time, not an error."""
         raw = self.info.get("meeting_time")
+        if raw is None or raw == "":
+            return None
         t = f"{raw // 60:02d}:{raw % 60:02d}" if isinstance(raw, int) and not isinstance(raw, bool) else str(raw or "").strip()
         if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t):
             raise ValueError(f"club.yaml club: meeting_time: {raw!r} isn't a time like \"19:30\" (24-hour, in quotes)")
@@ -440,6 +498,9 @@ class Club:
         """Whether an optional part of the app is turned on in club.yaml (`modules:`)."""
         return self.modules.get(module, False)
 
+    def plugin_on(self, name: str) -> bool:
+        return name in self.plugins_on
+
     @property
     def links(self) -> list[dict]:
         """Club links: label, url, optional icon, and where they show (page / minutes, both by default)."""
@@ -459,8 +520,16 @@ class Club:
     def _load(self, roster: list[dict]) -> None:
         known = {f.name for f in fields(Member)}
         self.members: dict[str, Member] = {}
-        for d in roster:
-            self.members[d["id"]] = Member(**{k: v for k, v in d.items() if k in known})
+        calls: set[str] = set()  # callsigns of rows kept so far: a later row can't take one as its id (the reverse is a legit reissued call)
+        for n, d in enumerate(roster, 1):
+            mid = d.get("id")
+            # A hand-edited roster must not let one row replace another member (their email decides who signs in as them).
+            if not (isinstance(mid, str) and MEMBER_ID.fullmatch(mid)) or mid in self.members or mid in calls:
+                log.warning("Roster row %d skipped: its id is malformed, repeated or another member's callsign.", n)
+                continue
+            self.members[mid] = Member(**{k: v for k, v in d.items() if k in known})
+            if d.get("callsign") and d["callsign"].lower() != mid:
+                calls.add(d["callsign"].lower())
         self._auto_short_names()
         # A former callsign (e.g. before a vanity change) listed in aliases maps to the member. Never another member's
         # current callsign, and never one two members both list: else typing an admin's callsign into your own
@@ -481,6 +550,8 @@ class Club:
                 for k in PICKED:
                     setattr(m, k, m.id in picked.get(k, []))
         self.__dict__.pop("_speaker_patterns", None)  # cached; rebuilt from the new names
+        if self.members and (stale := sorted(a for a in self.admins if self._admin_id(a) not in self.members)):
+            log.warning("admins: in club.yaml names no current member: %s (a member id or a current callsign counts; a former one doesn't)", ", ".join(stale))
 
     def refresh(self) -> bool:
         """Reload people if the roster cache changed on disk (e.g. the nightly sync). Cheap: one stat."""
@@ -590,6 +661,11 @@ class Club:
                       "offices": [offs[o.lower()] for o in t.get("offices", self._default_offices(k)) if o.lower() in offs],
                       "members": [self.canonical(i) for i in picked or [] if self.canonical(i) in self.members],
                       "builtin": k in ROLES, "edited": bool(t)}
+        for p in PERMISSIONS:  # a permission newer than the saved table (no role has it): the built-ins that ship with it
+            if not any(p in r["perms"] for r in out.values()):
+                for k, (_n, perms) in ROLES.items():
+                    if p in perms:
+                        out[k]["perms"] = [q for q in PERMISSIONS if q in out[k]["perms"] or q == p]
         return out
 
     def save_roles(self, table: dict[str, dict]) -> None:
@@ -599,6 +675,10 @@ class Club:
             raise ValueError(f"The built-in roles can't be removed: {', '.join(missing)}.")
         offs = {o["title"].lower(): o["title"] for o in self.office_list()}
         names, out = set(), {}
+        # a plugin's permissions stay on a role while the plugin is off or not loaded: no form shows them then
+        stored = (self._picked() or {}).get("table") or {}
+        hidden = {k: [x for x in (stored.get(k) or {}).get("perms", []) if "." in x
+                      and (x not in PERMISSIONS or not self.plugin_on(x.split(".")[0]))] for k in table}
         for k, r in table.items():
             name = " ".join(str(r.get("name") or "").split())[:40]
             if not name:
@@ -607,10 +687,11 @@ class Club:
                 raise ValueError(f"Two roles can't both be called {name}.")
             names.add(name.lower())
             perms = {p for p in r.get("perms", []) if p in PERMISSIONS} | ({"treasurer"} if "money" in r.get("perms", []) else set())
-            out[k] = {"name": name, "perms": [p for p in PERMISSIONS if p in perms],
+            perms |= {x for x in hidden[k] if x in PERMISSIONS}
+            out[k] = {"name": name, "perms": [p for p in PERMISSIONS if p in perms] + [x for x in hidden[k] if x not in PERMISSIONS],
                       "offices": [offs[o.lower()] for o in r.get("offices", []) if o.lower() in offs],
                       "members": sorted({self.canonical(i) for i in r.get("members", []) if self.canonical(i) in self.members})}
-        if lost := [PERMISSIONS[p] for p in PERMISSIONS if not any(p in r["perms"] for r in out.values())]:
+        if lost := [PERMISSIONS[p] for p in PERMISSIONS if "." not in p and not any(p in r["perms"] for r in out.values())]:
             raise ValueError(f"No role would be allowed to {lost[0]}: give it to at least one role.")
         rj = {k: r["members"] for k, r in out.items()}
         rj["table"] = {k: {"name": r["name"], "perms": r["perms"], "offices": r["offices"]} for k, r in out.items()
@@ -676,14 +757,19 @@ class Club:
     @property
     def all_admins(self) -> set[str]:
         """club.yaml's and the app's admins, less any suspended by the officers (recovery.py)."""
-        return {self.canonical(a) for a in self.admins | self.app_admins} - self.suspended  # club.yaml may still have an old call
+        return {self._admin_id(a) for a in self.admins | self.app_admins} - self.suspended
+
+    def _admin_id(self, a: str) -> str:
+        """A member id, or the member who now holds that callsign; never through a former callsign (an alias), which
+        anyone could list for a stale entry and so become that admin."""
+        return a if a in self.members else self._by_call.get(a, a)
 
     @property
     def suspended(self) -> set[str]:
         """Admins suspended by a recovery: their admin rights don't count, club.yaml's included; another admin lifts it."""
         p = DATA / "admins-suspended.json"
         try:
-            return {self.canonical(a) for a in json.loads(p.read_text())} if p.exists() else set()
+            return {self._admin_id(a) for a in json.loads(p.read_text())} if p.exists() else set()
         except (OSError, ValueError, TypeError):
             log.exception("%s is damaged; nobody is suspended", p)
             return set()
@@ -704,6 +790,11 @@ class Club:
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(sorted(ids)))
         tmp.replace(p)
+
+    def admin_listed(self, who: str) -> bool:
+        """Whether an id or callsign is on an admin list (club.yaml, the app's, suspended), whoever holds it now: handing
+        it to a new member would make them an admin."""
+        return who.strip().lower() in {str(a).lower() for a in self.admins | self.app_admins | self.suspended}
 
     def is_admin(self, mid: str | None) -> bool:
         """Listed under admins: in club.yaml or added in the app. Admin rights apply only while admin mode is on."""

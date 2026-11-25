@@ -144,3 +144,13 @@ def test_rename_follows_recorder_corrections_review_and_earlier_versions(tmp_pat
     for name in ("minutes.md", "minutes.v1.md"):
         out = (tmp_path / "meetings" / "2026-11-05" / name).read_text()
         assert out.count("w0amya") == 3 and "Keep n0aaaa as text" in out and "recorder: w0amya" in out
+
+
+def test_a_callsign_on_an_admins_list_cant_be_given_to_someone_else(env, monkeypatch):
+    club, _d = env
+    monkeypatch.setattr(type(club), "app_admins", property(lambda self: {"n0zzzz"}))  # a former admin's call, held by nobody now
+    with pytest.raises(ValueError, match="admins list"):
+        callsign.change(club, "n0aaaa", "N0ZZZZ", "2026-11-08", "n0bbbb")
+    with pytest.raises(ValueError, match="admins list"):
+        membership.add_member(club, {"first": "Zed", "last": "New", "callsign": "N0ZZZZ", "license_class": "General", "joined": "2026-11-05"}, by="n0bbbb")
+    callsign.change(club, "n0aaaa", "N0ZZZZ", "2026-11-08", "n0bbbb", admin_ok=True)  # an admin, in admin mode, may

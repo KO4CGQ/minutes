@@ -9,6 +9,8 @@ SRC = sorted((Path(__file__).parents[1] / "src" / "club_minutes").glob("*.py"))
 
 # JSON files in the data folder that `club-minutes rename-id` (callsign.STATE_FILES; a callsign change no longer renames) doesn't rewrite, and why.
 NO_MEMBER_IDS = {
+    "webhook-queue.json": "events waiting to be sent: dates, titles, links, never a member",
+    "webhook-failure.json": "the last failed event's kind, time and error",
     "backup-status.json": "when the last backup ran",
     "branding.json": "the club's look",
     "limits.json": "the upload limit",
@@ -24,6 +26,7 @@ NO_MEMBER_IDS = {
     "update-request.json": "an update asked for (a member id is the asker, gone once it runs)",
     "update-running.json": "that request while the updater runs it",
     "update-settings.json": "update times",
+    "meet-rooms.json": "1.3's upgrade only: moved into the meet plugin's file, then deleted",
 }
 
 
@@ -37,12 +40,16 @@ def test_every_data_file_with_member_ids_follows_a_callsign_change():
 
 # Writes that aren't a temporary file then .replace(): "not atomic yet", except the locks and markers (nothing to tear).
 NOT_ATOMIC = {
+    ("webhooks.py", 'open(clubmod.DATA / name, "w")'): "an empty lock file",
+    ("webhooks.py", "p"): "webhook-failure.json: a torn one only hides the last failure",
     ("auth.py", "p"): "the email log trimmed to its last lines",
     ("console.py", "state_path(archive, slug)"): "a console's saved state",
     ("console.py", "(archive.root / slug / name)"): "a console status file",
     ("backup.py", "(d / name)"): "a backup file being fetched",
     ("backup.py", "p"): "backup-status.json",
     ("events.py", "marker"): "a marker file",
+    ("console.py", "opened"): "when the console opened the meeting: one number, written once",
+    ("testing.py", '(_tmp / "club.yaml")'): "a throwaway club.yaml for plugins' tests, in a temp folder",
     ("events.py", '(DATA / "events-meeting-added")'): "a marker file",
     ("updates.py", "cache"): "the release check's cache",
     ("calview.py", "p"): "calendar-feeds.json",
@@ -53,6 +60,8 @@ NOT_ATOMIC = {
     ("business.py", 'open(DATA / "business.lock", "w")'): "a lock",
     ("recovery.py", 'open(DATA / "recovery.lock", "w")'): "a lock",
     ("prefs.py", 'open(DATA / "prefs.lock", "w")'): "a lock",
+    ("calview.py", 'open(DATA / "calendar-feeds.lock", "w")'): "a lock",
+    ("applications.py", 'open(DATA / "applications.lock", "w")'): "a lock",
     ("auth.py", 'open(DATA / "email-log.lock", "w")'): "a lock",
     ("corrections.py", 'open(archive.root / s / ".send.lock", "w")'): "a lock",
     ("treasurer.py", 'open(DATA / "treasurer.lock", "w")'): "a lock",

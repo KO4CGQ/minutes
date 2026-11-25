@@ -27,6 +27,8 @@ Your name menu → **Your profile**:
 ## 📝 Minutes and search
 **Minutes** lists every meeting, newest first, with a PDF of each. The search box finds minutes, members, guests, business items, chow nights, calendar events and these guides. A name also finds its common nicknames (Richard, Rich, Rick and Dick find each other, member or not), and a member's name its other spellings from the roster; a typo is caught when nothing else is found.
 
+Minutes list anyone who has applied for membership and not yet been voted on, with the member who sponsors them (name only, nothing from their application), and the vote's result with its counts, never who voted how.
+
 Published minutes don't change when the club's settings or roster change (members' names, the agenda, the club's name and links, date formats): they stay as they were the night they were made. Minutes can be corrected after the meeting, and a correction makes a new version. A corrected meeting's footer says which version it is, who corrected it, when and why, with a link to the version before; you get an email listing what changed, the same way you get the minutes. Imported minutes (from before the app) say whether someone has reviewed them.
 
 **Names:** the app shows members by a short name: the first name alone ("Jill"), or, when another member has the same first name, with as much of the last name as tells them apart ("Jill S", or "Jill Do" and "Jill Du" when both start with D). Only current members count for this, so a member who left doesn't change anyone's name; a former member's own name gets the letters it needs, so their old reports still point to them. A club can show full names everywhere instead (an admin's choice, on Admin → Site → Club).
@@ -42,9 +44,9 @@ Published minutes don't change when the club's settings or roster change (member
 ![Business: the club's open items](screenshots/business.png)
 
 ## 🎥 Video meeting
-If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists the club's rooms you can join. Each has a **Join** button that opens the meeting in a new tab, already signed in as you: no other password. Joining sends the video server your name and callsign.
+If the club has video meetings (its own Jitsi Meet server and the video meetings plugin), **Video meeting** in the menu lists the club's rooms you can join. Each has a **Join** button that opens the meeting in a new tab, already signed in as you: no other password. Joining sends the video server your name and callsign.
 
-- **Who hosts:** officers and meeting leaders.
+- **Who hosts:** the members whose roles allow it (officers and meeting leaders, usually).
 - **Rooms for certain members** (the board, say): the page says who. Other members wait in the lobby until a host lets them in, or don't see the room at all.
 - **Guests:** send them a room's address, shown on its card (the club calendar links to it too). Anyone not signed in can sign in there or join as a guest; guests wait in the lobby until a host lets them in, even if they come before anyone else. Some rooms are for members only.
 - **What guests may do:** each room says. If they must ask to unmute, turn their camera on or share their screen, a host allows it in the meeting as usual.
@@ -52,7 +54,7 @@ If the club runs its own Jitsi Meet server, **Video meeting** in the menu lists 
 If the club allows it, you can open **a room of your own**: give it a name on the Video meeting page, share its address, and you host it until a day passes with no one joining it here. Its card stays on the Video meeting page for you until then. A calendar event can link to one of the club's rooms.
 
 ## 📅 Calendar
-**Calendar** shows the club's events, chow nights, shared birthdays and holidays. "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
+**Calendar** shows the club's events, chow nights, shared birthdays and holidays; a meeting that's called off shows as "No meeting" with the reason, and a rescheduled one on its new date (you're emailed either way). "Subscribe in your calendar app" gives you a private link for your phone, Apple Calendar, Outlook or Google. An event held online too (like the weekly meeting) has a **Join online** button with its meeting link, and the link is in your calendar app as well.
 
 > [!TIP]
 > Keep your subscription link to yourself: anyone with it can see the club's calendar. Lost track of who has it? **Make a new link**, and the old one stops working.
@@ -79,5 +81,5 @@ With tracking on (the same switch as your dues, above), **Spending** in the menu
 - **Pictures:** pictures on reports, business items and comments are for members only, never public. They're shrunk and saved anew, without the hidden details a phone adds (such as where it was taken). An officer can remove one.
 - **Video meetings:** joining sends your name and callsign to the club's video server.
 - **Admin recovery:** if the officers ever have to recover admin access, every member is emailed at each step.
-- **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both.
-- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night, and your address leaves the Email log. Made Active again, you sign in with an emailed link and add a passkey again. Minutes already published keep your name where they recorded it (attendance, reports, motions).
+- **Sign-ins and email:** the app keeps sign-in records (internet address and browser) for 90 days, plus your latest sign-in, and a log of the emails it sends for 90 days. Admins can see both. Your browser also keeps a "known browser" cookie (`club_minutes_known`, 400 days): it lets you get sign-in links by email on a browser you've signed in with, without the hourly limit that applies to strangers. It never signs anyone in, and **Sign out everywhere** makes it stop counting.
+- **If you're made Inactive (or a Silent Key):** your email choices, settings, passkeys and sign-in records are deleted the next night (failed sign-in attempts, which are only a time and an address, age out after 90 days like everyone's), and your address leaves the Email log. Ninety days after that, your email, phone, address, birthday, photo and calendar feed link are deleted from the roster too (made Active again before then, they stay); your name, callsign and years of membership are kept. (If there's nothing of yours to delete, no countdown starts.) Backups made earlier still hold them until they age out. Made Active again, you sign in with an emailed link and add a passkey again. Minutes already published keep your name where they recorded it (attendance, reports, motions).

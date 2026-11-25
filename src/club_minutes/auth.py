@@ -64,6 +64,7 @@ LINK_MINUTES = 15
 CHALLENGE_SECONDS = 300
 EMAILS_PER_HOUR = 5            # sign-in links a member gets from one address in an hour...
 LINKS_PER_HOUR_ALL = 15        # ...and from all addresses together
+IP_LINKS_PER_HOUR = 20         # links one internet address gets sent, to all members together, in an hour (limit hits never ban, so this stops mailing the roster)
 KNOWN_PER_HOUR = 3             # links an hour for a member from browsers they've signed in with (the all-addresses cap doesn't apply to these)
 KNOWN_DAYS = 400               # how long a known-browser mark lasts (the longest a browser keeps a cookie)
 REPEAT_SECONDS = 120           # the same request again this soon sends nothing and counts toward nothing
@@ -93,7 +94,7 @@ EVENT_NAMES = {"unknown_email": "Sign-in link asked for an address not on the ro
                "cross_site": "Refused: sent from another site's page", "refused": "Refused: not allowed for this member",
                "too_big": "Refused: upload over the size limit"}
 UNKNOWN_LOGGED = 20  # requests of each NOT_COUNTED kind recorded per address an hour (the reply is the same either way)
-NOT_COUNTED = ("cross_site", "refused", "too_big", "unknown_email")  # logged, never toward a ban: a cross-site request carries the victim's address; an unknown address must count like a member's (nothing), or a ban tells them apart
+NOT_COUNTED = ("cross_site", "refused", "too_big", "unknown_email", "link_limit")  # logged, never toward a ban: a cross-site request carries the victim's address; an unknown address and a member's at its link cap must count the same (nothing), or a ban tells them apart
 
 
 def _public(ip: str) -> bool:
@@ -328,7 +329,9 @@ class Auth:
         # strangers get 5 an hour per address and share 15; a known browser has its own 3 (not the address's, which a
         # stranger on the same network could use up), so a stranger can't use up a member's
         if (count(3600, source="known") >= KNOWN_PER_HOUR if known
-                else count(3600, True, "web") >= EMAILS_PER_HOUR or count(3600, source="web") >= LINKS_PER_HOUR_ALL):
+                else count(3600, True, "web") >= EMAILS_PER_HOUR or count(3600, source="web") >= LINKS_PER_HOUR_ALL
+                or ip and self.db.execute("select count(*) from links where ip is ? and created>? and source='web'",
+                                          (ip, now - 3600)).fetchone()[0] >= IP_LINKS_PER_HOUR):
             log.warning("login link rate limit hit for %s", member)
             self.event("link_limit", ip, member, agent=agent)
             return
@@ -562,9 +565,9 @@ LOG_DAYS = 90  # admin-log.jsonl and api-log.jsonl
 
 
 def hide_tokens(text: str) -> str:
-    """A sign-in, email-confirm or admin-mode link with its one-time token blanked (`t=[hidden]`), for the copies an
+    """A sign-in, email-confirm, admin-mode or application link with its one-time token blanked (`t=[hidden]`), for the copies an
     admin or the server's log can read: the email itself still carries the working link."""
-    return re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text)
+    return re.sub(r"(/apply/)[\w-]+", r"\1[hidden]", re.sub(r"([?&]t=)[\w-]+", r"\1[hidden]", text))
 
 
 def read_log(p: Path, last: int | None = None) -> list[dict]:

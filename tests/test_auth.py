@@ -1,3 +1,4 @@
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -165,6 +166,23 @@ def test_email_links_ignore_forged_host(monkeypatch):
     assert sent[-1] == "http://testserver"  # the address the connection really reached
     for h in ("Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "X-Robots-Tag"):
         assert h in r.headers
+
+
+def test_a_ban_cant_tell_a_members_address_from_an_unknown_one(a, monkeypatch):
+    monkeypatch.setattr(auth_mod, "REPEAT_SECONDS", 0)  # a script waits out the double-click guard
+    for _ in range(auth_mod.BAN_AFTER * 3):  # well past the member's link cap: the extra asks hit link_limit
+        a.send_link("jane@example.org", ip="9.9.9.8")
+        a.send_link("stranger@example.org", ip="9.9.9.9")
+    assert a.db.execute("select count(*) from events where kind='link_limit'").fetchone()[0]  # the cap was reached
+    assert not a.banned("9.9.9.8") and not a.banned("9.9.9.9")
+
+
+def test_one_address_cant_mail_the_whole_roster(a, monkeypatch):
+    monkeypatch.setattr(auth_mod, "REPEAT_SECONDS", 0)
+    for i in range(auth_mod.IP_LINKS_PER_HOUR + 5):  # a fresh member each time: no per-member cap applies
+        a.club.members[f"member-{i}"] = dataclasses.replace(a.club.members["n0aaaa"], id=f"member-{i}", email=f"x{i}@example.org")
+        a.send_link(f"x{i}@example.org", ip="9.9.9.7")
+    assert len(a.sent) == auth_mod.IP_LINKS_PER_HOUR and not a.banned("9.9.9.7")
 
 
 def test_failed_attempts_ban_internet_addresses_only(a):
@@ -516,3 +534,13 @@ def test_known_cookie_survives_sign_out_and_never_signs_in(a, monkeypatch):
     assert t.cookies.get(web.KNOWN_COOKIE) == known and t.get("/login", follow_redirects=False).status_code == 200
     a.forget_removed(set())
     assert not a.is_known("n0aaaa", known)
+
+
+def test_roster_skips_duplicate_malformed_and_callsign_ids(caplog):
+    rows = [{"id": "jane", "first": "Jane", "last": "Doe", "callsign": "N0CALL"},
+            {"id": "jane", "first": "Evil", "last": "Twin", "email": "evil@example.org"},  # repeats an id
+            {"id": "Bad Id!", "first": "Bob", "last": "Roe"},  # malformed
+            {"id": "n0call", "first": "John", "last": "Doe"}]  # an earlier member's callsign
+    club = Club(FIX / "test-club.yaml", roster=rows)
+    assert list(club.members) == ["jane"] and club.members["jane"].last == "Doe"
+    assert "Roster row 2 skipped" in caplog.text and "Evil" not in caplog.text

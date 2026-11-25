@@ -7,13 +7,21 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 ## Unreleased
 
 ### Added
+- **Guests apply to join online:** from the Guests page, an officer emails a regular guest a private link to the club's membership application: their details, the club's own questions (set on the new **Membership** tab of Admin → Site) and a typed signature, with a sponsor if they know one. The sponsor confirms in the app, the candidate is listed in the minutes, the leader records the paper ballot's count in the console, and **Add as a member** fills in the new member's details from the application. How many visits, how long the link works, the vote (unanimous, two-thirds or a majority, or none), the wait before reapplying and how long applications are kept are all settings.
 - **Clubs that aren't amateur radio clubs:** a new **Amateur radio club** setting on Admin → Site. Unticked, callsigns and license classes aren't shown or asked for anywhere, and emails end "Thanks," instead of "73,". Clubs that have a callsign keep it ticked. Turning it off hides callsigns without deleting them.
 - Members no longer need a callsign or license class to join the roster: someone without one is shown by name.
+- **Meetings on any schedule, cancelled or moved with a click:** the club's meeting nights come from the calendar. Tick **Club meeting** on a repeating Club events entry: every other week, the first Tuesday of the month, twice a week (two entries). On a meeting date, **Cancel this meeting** or **Reschedule** it, with an optional reason. Members get an email, the night drops off Home, the business notes and the leader console, and the chow night follows: a moved meeting takes its chow with it, and whoever had a cancelled night is first in line for the next. Nights already called off by deleting the date or with a "No meeting" entry are carried over.
+- **Event webhooks:** the app can tell another service (a chat bot, say) when a meeting starts, is cancelled, moved or back on, and when minutes are published. An admin sets the address and picks the events on a new **Connections** tab of Admin → Site; each event is signed with a secret the app makes, and one that doesn't get through is tried again for up to a day.
 - **Cancelling a meeting night:** delete that date of the weekly meeting, or add a "No meeting" entry on the club's calendar (the meeting then drops off the calendar that night). Either one takes the night off Home, the business notes and the leader console, and the next week's meeting shows instead.
+- **Plugins (experimental):** add-ons installed on the server with one command (from a Git repository, private ones too) and kept up to date with the app's updates, each off until an admin ticks it on Admin → Site → Features, which also says what member data each uses and why, what it shares with outside services, and why one isn't running. If an app update needs a newer release of a plugin that's on and there isn't one yet, the app updates and turns that plugin off, or, if an admin ticked **Wait for it**, stays on its version until there is one.
 - **Admin → Security → Uploads** shows how much space pictures take and how much the disk has free, with a warning when it's nearly full.
 - **Dues by the week, the month or the year:** the Treasurer sets the period with the amount (a yearly club picks the day dues fall due), and "behind after" counts in that period. Meetings, cancellations and schedule changes never change what anyone owes. A weekly club's dues stay the same.
 
 ### Changed
+- **When a member leaves**, their email, phone, address, birthday, photo and calendar feed link are deleted 90 days after they're made Inactive or a Silent Key (or taken off the roster). Their name, callsign, years of membership and offices are kept. Made Active again within the 90 days, nothing is lost; roster keepers see the date on the member's page. If more than a quarter of the roster leaves in one night (a roster mistake, say), the countdown waits until an admin confirms it on the Admin page, and roster keepers get a list each Monday of who is waiting and when.
+- **Meeting nights are set only on the calendar:** Admin → Site → Club no longer has a Meetings card (its day and time moved every meeting to one weekday), and Home tells leaders when no Club meeting has a date ahead. For server admins: `meeting_day` and `meeting_time` in club.yaml are now optional; they only start a new install's first meeting.
+- **Video meetings (Jitsi) are now a plugin**, available to the app's supporters: the app no longer has them built in. A club that used them installs the plugin (server admin guide → Video meetings); the update moves its video settings, rooms and secret into it and turns it on, and existing room links (`/meet/…`) keep working. Then remove the `jitsi:` block and `modules: jitsi` from club.yaml.
+- Admin → Site has a **Calendar** tab for the public calendars, holidays and election days, so **Features** is shorter and ends with Supporting Club Minutes. The server admin guide opened from the Admin page leads back to it.
 - In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.
 - In the leader console, members' comments on a business item show their first two lines, formatted and ending in …, with **Show more** for the rest.
 - The leader console's **Submit minutes** buttons show only once the finished minutes are on screen, so they're never submitted unseen.
@@ -24,12 +32,18 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - A member's **New callsign** no longer needs the backup passphrase or moves any records: they keep everything, links to their page use the new callsign, and old links still work.
 
 ### Fixed
+- A correction to a meeting's attendance now updates the quorum line in its minutes, and the leader console checks the quorum again when a motion is added.
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.
 - Minutes from before 1.2 no longer show a line between community reports: they look as they did when they were made.
 
 ### Security
+- Fixes the server's log keeping members' calendar feed addresses and sign-in link tokens.
 - Someone signed out can no longer tell which video rooms are for members only.
 - Someone who knows a member's email address can no longer stop them signing in with an emailed link for an hour.
+- A callsign under `admins:` in club.yaml no longer makes an admin of a member who lists it as a former callsign.
+- An automatic ban no longer shows whether an email address is a member's.
+- Fixes a way a roster keeper could gain an admin's access; update soon.
+- Another website can no longer get a visitor's internet address banned.
 
 ## 1.2.0 (2026-11-22)
 

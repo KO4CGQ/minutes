@@ -63,6 +63,7 @@ def test_meeting_day_email(tmp_path, monkeypatch):
     Meeting(date=dt.date(2026, 11, 5), status="published", sections={"Upcoming Events": [Item("Hamfest in the spring")]}).save(tmp_path)
     with events.locked():
         evs = []
+        events.add(evs, "events", events.from_form({"title": "Club meeting", "date": "2026-01-01", "time": "19:30", "repeat": "weekly"}), "x")["meeting"] = True
         events.add(evs, "events", events.from_form({"title": "VE testing", "date": "2026-11-14", "time": "10:00"}), "x")
         events.add(evs, "events", events.from_form({"title": "Next month", "date": "2026-12-14"}), "x")
         events.save(evs)
@@ -172,8 +173,8 @@ def test_a_removed_members_choices_are_dropped_and_no_one_elses(tmp_path, monkey
     a.new_session("n0aaaa", "Mozilla/5.0", "192.0.2.2", "passkey")
     a.new_session("n0cccc", "Mozilla/5.0", "192.0.2.3", "passkey")
     a.new_session("n0bbbb", "Mozilla/5.0", "192.0.2.4", "passkey")
-    assert prefs.purge_removed(lambda: Club(FIX / "test-club.yaml", roster=[])) == 0  # a roster that didn't load: nothing goes
-    assert prefs.purge_removed(club) == 2 and prefs.purge_removed(club) == 0
+    assert prefs.purge_removed(lambda: Club(FIX / "test-club.yaml", roster=[]))[0] == 0  # a roster that didn't load: nothing goes
+    assert prefs.purge_removed(club)[0] == 2 and prefs.purge_removed(club)[0] == 0
     assert prefs.get("n0aaaa")["minutes"] == "link" and prefs.settings("n0cccc")["support_link"] == "show"
     assert prefs.get("n0gone")["minutes"] == "pdf" and prefs.settings("n0gone")["support_link"] == "show"
     members = {r[0] for t in ("sessions", "signins") for r in a.db.execute(f"select member from {t}")}
@@ -185,5 +186,5 @@ def test_a_roster_missing_most_members_purges_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(auth, "DATA", tmp_path)
     for m in ("n0aaaa", "n0bbbb", "n0zzzz"):
         prefs.save(m, {"minutes": "link"})
-    assert prefs.purge_removed(lambda: Club(FIX / "test-club.yaml", roster=[{"id": "n0aaaa", "first": "Amy", "last": "A"}])) == 0
+    assert prefs.purge_removed(lambda: Club(FIX / "test-club.yaml", roster=[{"id": "n0aaaa", "first": "Amy", "last": "A"}]))[0] == 0
     assert prefs.get("n0bbbb")["minutes"] == "link"

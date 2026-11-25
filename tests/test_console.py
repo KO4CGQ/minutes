@@ -1,4 +1,5 @@
 import datetime as dt
+import shutil
 from pathlib import Path
 
 import pytest
@@ -80,6 +81,15 @@ def test_discard_only_drafts(tmp_path):
         raise AssertionError("published minutes must not be discarded")
     except ValueError:
         pass
+
+
+def test_discard_a_draft_whose_folder_is_already_gone(tmp_path):
+    """Deleted on the server without a restart: Discard forgets it instead of an Internal Server Error."""
+    a = archive_with_prev(tmp_path)
+    console.start(a, dt.date(2026, 11, 12), "doe")
+    shutil.rmtree(a.root / "2026-11-12")
+    console.discard(a, "2026-11-12")
+    assert "2026-11-12" not in a.by_slug
 
 
 class FakeSMTP:

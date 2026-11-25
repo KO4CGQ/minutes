@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Sponsor an applicant{% endblock %}{% block body %}
+<h1>Sponsor {{ a.form.name }}</h1>
+{% if a.sponsor.answer == 'yes' %}<p class="msg ok">You confirmed you sponsor {{ a.form.name }}. Thank you.</p>
+{% elif a.sponsor.answer == 'no' %}<p class="msg">You said you can't sponsor {{ a.form.name }}. The club has been told.</p>
+{% elif a.state != 'submitted' %}<p>This application doesn't need your answer.</p>
+{% else %}
+<p><b>{{ a.form.name }}</b>{% if club.ham and a.form.callsign %} <span class="cs">{{ a.form.callsign }}</span>{% endif %} has applied to join the club and named you as their sponsor.</p>
+<p>By sponsoring them you say that, to your knowledge, {{ a.form.name }} is of good character, and that you will help them learn the club's ways.</p>
+<form method="post" action="/applications/{{ a.id }}/sponsor" class="row">
+  <button class="btn" name="answer" value="yes">I sponsor {{ a.form.name }}</button>
+  <button class="btn ghost" name="answer" value="no" data-confirm="Tell the club you can't sponsor {{ a.form.name }}?">I can't sponsor them</button>
+</form>
+{% endif %}
+{% endblock %}

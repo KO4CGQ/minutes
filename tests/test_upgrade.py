@@ -71,7 +71,8 @@ def test_undo_stopped_halfway_runs_again(tmp_path, steps, monkeypatch):
     real = shutil.copytree
     monkeypatch.setattr(shutil, "copytree", lambda *a, **k: (_ for _ in ()).throw(OSError("power cut")))
     with pytest.raises(OSError):
-        upgrade.undo(1, tmp_path)  # everything deleted, nothing copied back yet
+        upgrade.undo(1, tmp_path)  # the copy fails first: the data is as it was, never emptied
+    assert (tmp_path / "links.json").exists() and upgrade.version(tmp_path) == upgrade.CURRENT
     monkeypatch.setattr(shutil, "copytree", real)
     assert upgrade.undo(1, tmp_path)
     assert json.loads((tmp_path / "business.json").read_text()) == {"items": [1]} and (tmp_path / "links.json").exists()
@@ -150,3 +151,78 @@ def test_step_5_stores_each_members_id_as_it_is_today_and_nothing_else(tmp_path)
     upgrade._v6(tmp_path)
     assert json.loads((tmp_path / "roster-sheet.json").read_text()) == tabs and (tmp_path / "chow.json").read_text() == '{"order": ["n0aaaa"]}'
     upgrade._v6(tmp_path / "empty")  # no roster yet: nothing to do
+
+
+def test_step_7_turns_deleted_dates_and_no_meeting_entries_into_cancel_records(tmp_path):
+    """A skipped date of a meeting series, and a single "No meeting" entry on a meeting date (its title the reason), become
+    cancel records; anything else stays; running again changes nothing."""
+    from club_minutes import events
+    weekly = {"freq": "weekly", "interval": 1, "until": None}
+    evs = []
+    meet = events.add(evs, "events", {"title": "Club meeting", "start": "2026-11-05T19:30", "end": None, "repeat": weekly}, "x")
+    meet["meeting"], meet["skip"] = True, ["2026-11-12"]
+    events.add(evs, "events", {"title": "No meeting (Thanksgiving)", "start": "2026-11-26", "end": None}, "x")
+    events.add(evs, "events", {"title": "No meeting for the net", "start": "2026-11-27", "end": None}, "x")  # not a meeting date
+    other = events.add(evs, "events", {"title": "Fox hunt", "start": "2026-11-14", "end": None, "repeat": weekly}, "x")
+    other["skip"] = ["2026-11-21"]  # not a meeting series: stays a skipped date
+    (tmp_path / "events.json").write_text(json.dumps({"events": evs}))
+    upgrade._v7(tmp_path)
+    got = json.loads((tmp_path / "events.json").read_text())["events"]
+    assert [e["title"] for e in got] == ["Club meeting", "No meeting for the net", "Fox hunt"]
+    assert got[0]["skip"] == [] and got[0]["changes"] == {"2026-11-12": {"cancelled": True, "reason": ""},
+                                                          "2026-11-26": {"cancelled": True, "reason": "Thanksgiving"}}
+    assert got[2]["skip"] == ["2026-11-21"]
+    upgrade._v7(tmp_path)
+    assert json.loads((tmp_path / "events.json").read_text())["events"] == got
+    upgrade._v7(tmp_path / "empty")  # no calendar yet: nothing to do
+
+
+def test_step_8_moves_video_meetings_into_the_meet_plugin(tmp_path, monkeypatch):
+    """Everything Jitsi had (club.yaml's and Site's settings, own rooms, the app-made secret, the permission) lands in
+    plugins/meet.json, the plugin is ticked on, and the update can be undone; a club that never used it is left alone."""
+    import stat
+    cfg = tmp_path / "club.yaml"
+    cfg.write_text("modules: {jitsi: true}\njitsi: {domain: meet.example.org, app_id: club-minutes, room: net}\n")
+    monkeypatch.setenv("CLUB_MINUTES_CONFIG", str(cfg))
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "data-version").write_text("6\n")
+    (data / "site-settings.json").write_text(json.dumps({"club": {"name": "Test"}, "modules": {"chow": True, "jitsi": True},
+                                                         "jitsi": {"rooms": [{"slug": "board", "name": "Board"}], "adhoc": {"on": True}}}))
+    (data / "meet-rooms.json").write_text('{"room:x": {"by": "m1", "at": 1}}')
+    (data / "jitsi-secret").write_text("s" * 64 + "\n")
+    (data / "roles.json").write_text(json.dumps({"table": {"treasurer": {"perms": ["treasurer", "meet_host"]}, "mine": {"name": "Mine", "perms": ["meet_host"]}}}))
+    assert upgrade.run(data)[-1].startswith("video meetings moved")
+    plugin = json.loads((data / "plugins" / "meet.json").read_text())
+    assert plugin["domain"] == "meet.example.org" and plugin["room"] == "net" and plugin["rooms"] == [{"slug": "board", "name": "Board"}]
+    assert plugin["adhoc"] == {"on": True} and plugin["openers"] == {"room:x": {"by": "m1", "at": 1}} and plugin["secret"] == "s" * 64
+    assert stat.S_IMODE((data / "plugins" / "meet.json").stat().st_mode) == 0o600
+    assert not (data / "meet-rooms.json").exists() and not (data / "jitsi-secret").exists()
+    site = json.loads((data / "site-settings.json").read_text())
+    assert site == {"club": {"name": "Test"}, "modules": {"chow": True}, "plugins": {"meet": True}}
+    table = json.loads((data / "roles.json").read_text())["table"]
+    assert table["treasurer"]["perms"] == ["treasurer", "meet.host"] and table["mine"]["perms"] == ["meet.host"]
+    assert "meet.host" in table["officer"]["perms"] and "meet.host" in table["minutes_editor"]["perms"] and "lead" in table["officer"]["perms"]  # as shipped, plus it
+    upgrade._v8(data)  # again, as after a stop part way: nothing lost
+    assert json.loads((data / "plugins" / "meet.json").read_text())["secret"] == "s" * 64
+    assert upgrade.undo(6, data) and (data / "jitsi-secret").exists() and not (data / "plugins").exists()  # put back as it was
+    fresh = tmp_path / "other"
+    fresh.mkdir()
+    cfg.write_text("club: {}\n")
+    upgrade._v8(fresh)
+    assert not (fresh / "plugins").exists() and not (fresh / "roles.json").exists()
+
+
+def test_the_kept_copy_goes_a_week_after_a_good_update(tmp_path, steps):
+    import os
+    import time
+    (tmp_path / "business.json").write_text('{"items": [1]}')
+    upgrade.run(tmp_path)
+    copy = tmp_path / upgrade.COPY
+    assert not upgrade.forget_copy(tmp_path) and copy.is_dir()  # too soon: an undo may still need it
+    week_ago = time.time() - 8 * 86400
+    os.utime(copy / "data-version", (week_ago, week_ago))
+    (tmp_path / upgrade.STARTED).write_text("1\n")
+    assert not upgrade.forget_copy(tmp_path)  # an upgrade under way keeps it
+    (tmp_path / upgrade.STARTED).unlink()
+    assert upgrade.forget_copy(tmp_path) and not copy.exists()

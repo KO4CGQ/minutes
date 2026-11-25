@@ -10,15 +10,17 @@ import re
 from pathlib import Path
 
 import pytest
+import test_applications as ta
 
 from club_minutes import auth as authmod
 from club_minutes.auth import Auth
 from club_minutes.club import Club
 from club_minutes.web import SITE_TABS
 
+phone_env = ta.env  # the applications tests' club, sign-ins and data folder
 FIX = Path(__file__).parent / "fixtures"
 SKIP = {"/logout", "/login/link", "/healthz"}  # not pages
-EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "uploads")] + ["/help/officers", "/help/server-admin", "/help/jitsi"]
+EXTRA = ["/links?edit=1", "/calendar?view=month", "/members/n0admn/edit", "/treasurer?tab=money", "/treasurer?tab=bills", "/treasurer?tab=settings"] + [f"/admin/security/{t}" for t in ("signins", "devices", "failed", "bans", "admin", "backups", "uploads")] + ["/help/officers", "/help/server-admin"]
 EXTRA += [f"/admin/site/{t[0]}" for t in SITE_TABS if t[0] != "look"]  # every Site tab
 IPV6 = "2001:db8:85a3:1234:5678:8a2e:370:7334"  # real addresses can be this long
 ENGINES = ["chromium", "firefox", "webkit"]  # Chrome/Edge, Firefox, and Safari's engine (close to Safari, not the same)
@@ -739,20 +741,17 @@ def test_a_tap_on_a_home_items_box_opens_the_item(engine):
 
 
 @pytest.mark.parametrize("engine", ENGINES)
-def test_site_video_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, engine):
-    """Site → Video: Enter in a room's name saves (never presses a room's Delete); a change is marked and brings up
-    Discard; a room's Delete deletes it alone; leaving a Site tab with unsaved changes asks first."""
+def test_site_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, engine):
+    """Site → Club: Enter in the name saves; a change is marked and brings up Discard; Discard throws it away; leaving
+    a Site tab with unsaved changes asks first."""
     sync_api = pytest.importorskip("playwright.sync_api")
     from fastapi.testclient import TestClient
 
     from club_minutes import club as clubmod
-    from club_minutes import meet, web
+    from club_minutes import web
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True}])
-    club.modules["jitsi"] = True
-    club.yaml = {**club.yaml, "modules": {**(club.yaml.get("modules") or {}), "jitsi": True}, "jitsi": {"domain": "meet.example.org", "app_id": "club-minutes"}}
     club.save_app_admins({"n0admn"})
-    monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "x" * 40)
     a = Auth(club, tmp_path / "auth.sqlite")
     monkeypatch.setattr(web, "authn", a)
     monkeypatch.setattr(web.archive, "club", club)
@@ -760,8 +759,6 @@ def test_site_video_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, 
     a.set_admin(tok, 60)
     c = TestClient(web.app)
     c.cookies.set(web.COOKIE, tok)
-    c.post("/admin/site/video", data={"rows": "2", "name0": "Club meeting", "slug0": "club", "name1": "Board", "slug1": "board"})
-    assert [r["slug"] for r in meet.rooms(club)] == ["club", "board"]
 
     def serve(route):
         q = route.request
@@ -778,36 +775,82 @@ def test_site_video_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, 
         page.route("http://testserver/**", serve)
         asked = []
         page.on("dialog", lambda d: (asked.append(d.type), d.accept() if d.type == "confirm" else d.dismiss()))
-        page.goto("http://testserver/admin/site/video")
-        page.locator("details.role").first.evaluate("e => e.open = true")
-        page.fill("input[name=name0]", "Club night")
+        page.goto("http://testserver/admin/site/club")
+        page.fill("input[name=name]", "Club night")
         with page.expect_navigation():
-            page.press("input[name=name0]", "Enter")
-        assert [r["name"] for r in meet.rooms(club)] == ["Club night", "Board"] and not asked
-        page.locator("details.role").first.evaluate("e => e.open = true")
+            page.press("input[name=name]", "Enter")
+        assert club.info["name"] == "Club night" and not asked
         assert page.is_hidden("[data-discard]")
-        page.fill("input[name=name0]", "Not saved")
-        assert "changed" in page.get_attribute("input[name=name0]", "class") and page.is_visible("[data-discard]")
-        page.fill("input[name=name0]", "Club night")  # back as it was: nothing to save
-        assert "changed" not in page.get_attribute("input[name=name0]", "class") and page.is_hidden("[data-discard]")
-        page.fill("input[name=name0]", "Not saved")
-        page.locator("details.role").nth(1).evaluate("e => e.open = true")
-        with page.expect_navigation():
-            page.click("text=Delete Board")
-        assert [r["name"] for r in meet.rooms(club)] == ["Club night"] and asked == ["confirm"]  # Board alone; the typing discarded
-        asked.clear()
-        page.locator("details.role").first.evaluate("e => e.open = true")
-        page.fill("input[name=name0]", "Thrown away")
+        page.fill("input[name=name]", "Not saved")
+        assert "changed" in page.get_attribute("input[name=name]", "class") and page.is_visible("[data-discard]")
+        page.fill("input[name=name]", "Club night")  # back as it was: nothing to save
+        assert "changed" not in page.get_attribute("input[name=name]", "class") and page.is_hidden("[data-discard]")
+        page.fill("input[name=name]", "Thrown away")
         with page.expect_navigation():
             page.click("text=Discard changes")
-        assert page.input_value("input[name=name0]") == "Club night" and not asked
-        page.locator("details.role").first.evaluate("e => e.open = true")
-        page.fill("input[name=name0]", "Unsaved")
+        assert page.input_value("input[name=name]") == "Club night" and not asked
+        page.fill("input[name=name]", "Unsaved")
         try:
             page.goto("http://testserver/", timeout=3000)
         except Exception:  # noqa: BLE001, S110  # the dismissed "Leave site?" stops the navigation
             pass
         assert asked == ["beforeunload"]
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path, monkeypatch, engine):
+    """Site → Membership: + Add a question builds a row, Save keeps it; the guest's public form then shows it, with no script errors."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from club_minutes import applications, web
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(applications, "DATA", tmp_path)
+    monkeypatch.setattr(applications.auth, "send_email", lambda *a, **k: 0)
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True, "status": "Active"}])
+    club.save_app_admins({"n0admn"})
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tok = a.new_session("n0admn")
+    a.set_admin(tok, 60)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, tok)
+
+    def serve(route):
+        q = route.request
+        r = c.request(q.method, q.url.replace("http://testserver", ""), content=q.post_data_buffer,
+                      headers={"content-type": q.headers.get("content-type", "")}, follow_redirects=q.method == "POST")
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        page.route("http://testserver/**", serve)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda m: errors.append(m.text) if "Content Security Policy" in m.text else None)
+        page.goto("http://testserver/admin/site/membership")
+        page.click("text=+ Add a question")
+        page.fill("input[name=label0]", "Bands")
+        page.select_option("select[name=type0]", "grid")
+        page.fill("textarea[name=qrows0]", "20 m\n2 m")
+        page.fill("textarea[name=qcols0]", "Fixed\nMobile")
+        with page.expect_navigation():
+            page.click("main form.sitemembership button.btn >> text=Save")
+        assert club.membership["questions"] == [{"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Mobile"]}]
+        c.cookies.clear()  # the guest is nobody
+        applications.send(club, "Pat Visitor", "pat@example.org", "http://testserver")
+        with applications.edit() as items:
+            items[0]["token_hash"] = applications._hash("t" * 20)
+        page.goto("http://testserver/apply/" + "t" * 20)
+        assert page.locator("input[name=q0]").count() == 4 and page.is_visible("input[name=signature]")
+        assert not errors, errors
         browser.close()
 
 
@@ -851,4 +894,89 @@ def test_submit_shows_only_once_the_minutes_are_on_screen(tmp_path, monkeypatch,
         page.get_by_role("button", name=re.compile("Back")).click()
         page.get_by_role("button", name=re.compile("Review")).click()
         sync_api.expect(page.get_by_role("button", name="Submit minutes")).to_have_count(2)
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_the_console_records_a_candidates_vote(tmp_path, monkeypatch, engine):
+    """console.js Membership Applications: the candidate is listed, the paper ballot's count is recorded and its result shown."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from club_minutes import applications, console, web
+    monkeypatch.setattr(applications, "DATA", tmp_path)
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Jane", "last": "Doe", "email": "jane@example.org", "role": "President", "officer": True, "status": "Active"}])
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    with applications.edit() as items:
+        items.append({"id": "a1", "guest": "Pat Visitor", "state": "candidate", "form": {"name": "Pat Visitor"}, "sponsor": {"id": "n0admn", "at": 1}, "club": {}})
+    m = console.start(web.archive, dt.date(2026, 11, 12), "n0admn", recorder="n0admn")
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("n0admn"))
+
+    def serve(route):
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), data=route.request.post_data_buffer,
+                      headers={k: v for k, v in route.request.headers.items() if k.lower() == "content-type"}, follow_redirects=False)
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page(viewport={"width": 375, "height": 800})
+        page.route("http://testserver/**", serve)
+        page.goto(f"http://testserver/console/{m.slug}")
+        page.get_by_role("button", name=re.compile("Membership Applications")).click()
+        sync_api.expect(page.get_by_role("heading", name="Pat Visitor")).to_be_visible()
+        page.get_by_label("Yes").fill("1")
+        page.get_by_label("No", exact=True).fill("0")
+        page.get_by_role("button", name="Record the vote").click()
+        sync_api.expect(page.get_by_text("1–0: passed")).to_be_visible()
+        browser.close()
+    assert [i.text for i in web.archive.by_slug[m.slug].items("Membership Applications")] == ["Pat Visitor's application was voted on: passed (1–0)."]
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_the_application_pages_fit_a_phone_and_read_left_aligned(phone_env, engine):
+    """The public form, its thank-you page, the sponsor's page and Guests (with application forms in its rows) at 390px."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+
+    from club_minutes import applications
+    club, as_, sent, _ = phone_env
+    _, token = ta.send_link(as_, sent)
+    form = ta.good(club, token) | {"sponsor": "Nobody Known"}
+    done = as_(None).post(f"/apply/{token}", data=form)
+    aid = applications.find(token)["id"]
+    with applications.edit() as items:  # a second guest with a link out, so Guests shows both kinds of form
+        items.append({"id": "a2", "guest": "New Face", "email": "new@example.org", "state": "sent", "sent": 1, "used": None,
+                      "token_hash": applications._hash("tok2"), "expires": 4102444800, "club": {}})
+    c = as_("n0aaaa")
+    c.get("/guests")  # warm up
+
+    def serve(route):
+        if route.request.url.endswith("/thanks"):  # the thank-you page is the POST's own answer
+            return route.fulfill(status=200, content_type="text/html", body=done.text)
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), follow_redirects=False)
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page(viewport={"width": 390, "height": 800})
+        page.route("http://testserver/**", serve)
+        wide = {}
+        for path in ("/guests", f"/applications/{aid}/sponsor", "/apply/tok2"):
+            page.goto("http://testserver" + path)
+            wide[path] = page.evaluate("document.documentElement.scrollWidth")
+        page.goto("http://testserver/thanks")
+        wide["thanks"] = page.evaluate("document.documentElement.scrollWidth")
+        assert "Thank you" in page.content()
+        page.goto("http://testserver/apply/tok2")
+        aligned = page.evaluate("[...document.querySelectorAll('.login.apply form label, .login.apply .muted p')].map(e => getComputedStyle(e).textAlign)")
+        assert set(aligned) <= {"left", "start"} and aligned, aligned
+        assert all(w <= 390 for w in wide.values()), wide
         browser.close()

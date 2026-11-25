@@ -13,7 +13,17 @@ import shutil
 import threading
 import time
 
-from . import auth, business, chow, pictures, prefs, snapshot
+from . import (
+    applications,
+    auth,
+    business,
+    chow,
+    meetings,
+    pictures,
+    plugins,
+    prefs,
+    snapshot,
+)
 from .club import show_date
 from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
@@ -26,7 +36,8 @@ def _key(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
-_starting = threading.Lock()  # two leaders clicking Start at once still get one meeting
+_starting = threading.RLock()  # two leaders clicking Start at once still get one meeting
+_saving = threading.RLock()  # the console's save and a plugin's mark_present never overlap (each would undo the other's change)
 
 # Who is taking an open meeting's minutes: one console (browser tab) at a time, kept while it's open (it checks in every
 # 5 s, and on coming back to the front) and let go HOLD_SECONDS after it closes or loses its connection. Anyone else's console is read-only, with
@@ -80,7 +91,10 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
             if m.status != "draft":
                 raise ValueError(f"{show_date(date, 'long')}'s minutes are already in the archive. To fix something, "
                                  "use Correct these minutes on that page.")
-            return m
+            sync_applications(archive, m)  # a guest may have become a candidate since the minutes were started
+            m.save(archive.root)
+            archive.reload()
+            return archive.by_slug[m.slug]
         if (archive.root / date.isoformat() / "minutes.md").exists():  # on disk but not loaded: unreadable
             raise ValueError(f"{show_date(date, 'long')}'s minutes exist but can't be read, so a new draft would replace them. "
                              "Ask an admin to look at the file (see the server log).")
@@ -92,6 +106,9 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
 
 def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None, online: bool = False) -> Meeting:
     m = Meeting(date=date, status="draft", leader=leader, recorder=recorder)
+    opened = archive.root / m.slug / "opened"
+    opened.parent.mkdir(parents=True, exist_ok=True)
+    opened.write_text(str(int(time.time())))
     if recorder:
         (m.remote if online else m.in_person).append(recorder)
     prev = previous(archive, date)
@@ -107,9 +124,44 @@ def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | 
     if archive.club.has("chow"):
         later = [(d, x) for d, x in chow.upcoming(chow.load(), date + dt.timedelta(days=1), n=4)]
         m.sections["Upcoming Chow"] = [Item(chow.describe(archive.club, d, x)) for d, x in later]
+    sync_applications(archive, m)
     m.save(archive.root)
     archive.reload()
     return archive.by_slug[m.slug]
+
+
+def _applications(archive: Archive) -> list[dict]:
+    try:
+        return applications.load()["items"]
+    except ValueError:  # damaged (logged by load): the meeting goes on without the candidates
+        return []
+
+
+def sync_applications(archive: Archive, m: Meeting) -> None:
+    """The minutes' Membership Applications section: the candidates, and any vote recorded at this meeting."""
+    lines = applications.section_lines(archive.club, _applications(archive), m.slug, [x.date for x in archive.meetings])
+    m.sections.pop(applications.SECTION, None)
+    if lines:
+        m.sections[applications.SECTION] = [Item(t) for t in lines]
+
+
+def applicants(archive: Archive, slug: str) -> dict:
+    return applications.console_view(archive.club, _applications(archive), slug, [x.date for x in archive.meetings])
+
+
+def vote(archive: Archive, slug: str, aid: str, yes, no) -> None:
+    """Record the paper ballot's count (or the acceptance) for a candidate at this meeting; ValueError says why not."""
+    m = archive.by_slug[slug]
+    _draft(m)
+    if m.date > dt.date.today():
+        raise ValueError("You can record the vote at the meeting, not before.")
+    here = len(m.in_person) + len(m.remote)  # 0: attendance not taken yet, so nothing to compare with
+    if here and all(type(n) is int for n in (yes, no)) and yes + no > here:
+        raise ValueError(f"The yes and no counts add up to more than the {here} members marked present: finish Attendance first.")
+    applications.record_vote(archive.club, aid, slug, [x.date for x in archive.meetings], yes, no)
+    sync_applications(archive, m)
+    m.save(archive.root)
+    archive.reload()
 
 
 def business_state(archive: Archive) -> dict:
@@ -206,10 +258,54 @@ def context(archive: Archive, m: Meeting) -> dict:
         "email": {"roster": len(recipients(archive)), "only_to": club.email.get("only_to")},
         "chow": chow_tonight(archive, m) if club.has("chow") else None,
         "business": business_items(archive, m.slug),
+        "applicants": applicants(archive, m.slug),
         "celebrations": celebrations(club, m.date),
         "paid_since": paid_since(archive, m.date),
+        "video_guests": plugins.console_attendance(club),
         **calendar_ahead(archive, m.date),
     }
+
+
+def attendance(archive: Archive, slug: str) -> dict:
+    """The console's check-in answer: attendance as it is now (a plugin may have marked someone online since the last
+    save) and the guests plugins see in a video meeting, for the open console to show."""
+    guests = plugins.console_attendance(archive.club)
+    m = archive.by_slug[slug]
+    return {"in_person": m.in_person, "remote": m.remote, "video_guests": guests}
+
+
+def open_meeting(archive: Archive) -> dict | None:
+    """For plugins (Api.meeting): the draft open in the console, its date, when the console opened it (kept in the
+    meeting's folder as `opened`) and that night's online link from the calendar's weekly meeting ('' if none)."""
+    from . import events
+    m = next((m for m in archive.meetings if m.status == "draft"), None)
+    if not m:
+        return None
+    opened = archive.root / m.slug / "opened"
+    try:
+        when = int(opened.read_text())
+    except (OSError, ValueError):  # drafts from before this existed, or a torn write: count from now
+        when = int(time.time())
+        opened.parent.mkdir(parents=True, exist_ok=True)
+        opened.write_text(str(when))
+    online = next((events.occurrence(e, m.date)["online"] for e in events.load()
+                   if e.get("meeting") and m.date in events.dates(e, m.date, m.date)), "")
+    return {"date": m.slug, "opened": when, "online": online, "present": [*m.in_person, *m.remote]}
+
+
+def mark_present(archive: Archive, id: str, by: str, in_person: bool = False) -> bool:
+    """For plugins (Api.mark_present): tick a member present (online, or in person) in the open meeting unless they're
+    in its attendance already. The same lock and save as the console's own, so every view picks it up."""
+    with _saving:
+        m = next((m for m in archive.meetings if m.status == "draft"), None)
+        if not m or id not in archive.club.members or id in m.in_person or id in m.remote:
+            return False
+        (m.in_person if in_person else m.remote).append(id)
+        m.quorum = archive.club.quorum_record(m.in_person + m.remote)
+        m.save(archive.root)
+        archive.reload()
+    log.info("%s marked %s %s in the %s meeting", by, id, "in person" if in_person else "online", m.slug)
+    return True
 
 
 def quorum_rule(club) -> dict | None:
@@ -260,8 +356,7 @@ def calendar_ahead(archive: Archive, date: dt.date, days: int = 92) -> dict:
             "when": f"{e.starts:%Y-%m-%dT%H:%M}" if e.starts else e.start.isoformat(),
             "until": f"{e.ends:%Y-%m-%dT%H:%M}" if e.ends else (e.end.isoformat() if e.end > e.start else None)} for e in items
            if e.kind in READ_OUT and not e.from_minutes and e.id not in quiet and not (e.id or "").startswith("due-")]
-    after = [d for e in evs if e.get("meeting") for d in store.dates(e, date + dt.timedelta(days=1), date + dt.timedelta(days=60))]
-    after = [d for d in after if d not in store.cancelled(evs, date, date + dt.timedelta(days=60))]  # No meeting entries
+    after = meetings.nights(archive.club, date + dt.timedelta(days=1), date + dt.timedelta(days=60))
     return {"calendar": out, "next_meeting": min(after, default=date + dt.timedelta(days=7)).isoformat()}
 
 
@@ -316,6 +411,11 @@ class Unreadable(Exception):
 
 def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     """Save the console's full meeting state (last write wins)."""
+    with _saving:
+        return _apply(archive, slug, data)
+
+
+def _apply(archive: Archive, slug: str, data: dict) -> Meeting:
     m = archive.by_slug[slug]
     _draft(m)
     d, club = data["meeting"], archive.club
@@ -354,6 +454,7 @@ def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     m.guests = [g for g in guests if not club.is_redacted(g["name"])]
     m.sections = sections
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser
+    sync_applications(archive, m)
     m.save(archive.root)
     state_path(archive, slug).write_text(json.dumps(data.get("state") or {}))
     archive.reload()
@@ -368,15 +469,18 @@ def _draft(m: Meeting) -> None:
 
 
 def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
+    _draft(archive.by_slug[slug])
+    plugins.console_attendance(archive.club)  # plugins settle attendance (video joins) before the minutes are final
     m = archive.by_slug[slug]
-    _draft(m)
     # Upcoming Chow comes from the chow schedule as it stands now: tonight's chow, tonight's changes, what's next.
     if archive.club.has("chow"):
         m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
     m.sections.update(business_sections(archive, slug))
+    sync_applications(archive, m)
     m.status = "published"
     m.shown = snapshot.take(archive.club, m)  # the minutes keep what they show from today (snapshot.py)
     m.save(archive.root)
+    applications.settle(slug)  # a vote recorded here: passed, or turned down
     _holds.pop(slug, None)  # finished: nobody holds them now
     if by:
         closed_by[slug] = by
@@ -388,7 +492,10 @@ def discard(archive: Archive, slug: str, by: str | None = None) -> None:
     """Delete a draft (e.g. a practice run). Submitted minutes can't be discarded."""
     m = archive.by_slug[slug]
     _draft(m)
-    shutil.rmtree(archive.root / slug)
+    try:
+        shutil.rmtree(archive.root / slug)
+    except FileNotFoundError:  # already deleted on the server (delete-meeting without a restart): just forget it
+        pass
     _holds.pop(slug, None)
     if by:
         closed_by[slug] = by

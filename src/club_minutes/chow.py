@@ -18,13 +18,15 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
 from pathlib import Path
 
-from . import auth, branding, regions
+from . import auth, branding, meetings, regions
 from .club import DATA, WEEKDAYS, Club, show_date  # noqa: F401  (WEEKDAYS: others import it from here)
 
 log = logging.getLogger("club_minutes.chow")
+lock = threading.Lock()  # one change to chow.json at a time (the web app has several threads)
 STATUSES = ("scheduled", "provided", "missed", "covered", "none")
 
 
@@ -99,22 +101,6 @@ def eligible(club: Club, s: dict, mid: str, date: dt.date) -> bool:
     return not any(a <= date.isoformat() <= b for a, b in c.get("away") or [])
 
 
-def meeting_nights(club: Club, start: dt.date, until: dt.date, with_cancelled: bool = False) -> list[dt.date]:
-    """Meeting weekdays from start to until. Nights with a "No meeting" calendar entry are left out unless `with_cancelled`
-    (dues still count them). The one place a later "meetings that aren't weekly" rule goes."""
-    wd = club.meeting_weekday
-    d = start + dt.timedelta(days=(wd - start.weekday()) % 7)
-    out = []
-    while d <= until:
-        out.append(d)
-        d += dt.timedelta(days=7)
-    if with_cancelled:
-        return out
-    from . import events
-    off = events.cancelled(events.load(), start, until)
-    return [d for d in out if d not in off]
-
-
 def next_up(club: Club, s: dict) -> str | None:
     """Who the rotation continues with: set by a leader (swaps can make the last night misleading),
     else the member after whoever has the last assigned night."""
@@ -158,7 +144,7 @@ def generate(club: Club, s: dict, until: dt.date, by: str, today: dt.date | None
     waiting: list[str] = []  # skipped by a constraint, first in line for the next night they can do
     skipped: list[str] = []  # turns passed over on purpose ("skip their next turn")
     filled = []
-    for d in meeting_nights(club, start, until):
+    for d in meetings.nights(club, start, until, chow=True):
         x = s["nights"].get(d.isoformat())
         if x and (x.get("member") or x.get("status") == "none"):
             continue
@@ -344,8 +330,8 @@ def import_xlsx(club: Club, path: Path, order: list[str], by: str, year: int) ->
         if date is None:
             continue
         day = date.date() if isinstance(date, dt.datetime) else date
-        wd = club.meeting_weekday
-        if day.weekday() != wd:  # a typo'd date: use the nearest meeting night
+        wd = (meetings.first(club) or (None,))[0]
+        if wd is not None and day.weekday() != wd:  # a typo'd date: use the nearest meeting night
             fixed = day + dt.timedelta(days=(wd - day.weekday() + 3) % 7 - 3)
             problems.append(f"Row {row[0].row}: {show_date(day, 'day')} isn't a meeting night; used {show_date(fixed, 'day')}")
             day = fixed
@@ -481,3 +467,64 @@ def _tell(club: Club, members: list[str | None], subject: str, text: str, url: s
                         only_to=club.email_only_to())
     except Exception:
         log.exception("couldn't send %r (chow change %s)", subject, e["id"])
+
+
+# ---------------- when the calendar cancels or moves a meeting (meetings.py) ----------------
+
+def _on_cancelled(club: Club, date: dt.date, reason: str, by: str, url: str, chow: bool, **_) -> None:
+    """The night has no chow; whoever had it is told and is first in line for the next night (Fill, then, gives it)."""
+    d = date.isoformat()
+    with lock:
+        s = load()
+        x = s["nights"].get(d) or {}
+        if not (club.has("chow") and chow and x.get("status") == "scheduled"):
+            return
+        old = x.get("member")
+        set_none(s, d, "No meeting" + (f" ({reason})" if reason else ""), by)
+        nxt = next_up(club, s)
+        if old in s["order"] and old != nxt:  # back in line just before whoever is next, so nobody else's turn comes twice
+            order = [m for m in s["order"] if m != old]
+            order.insert(order.index(nxt) if nxt in order else len(order), old)
+            set_order(s, order, by)
+            s["next"] = old
+        save(s)
+    if old:
+        e = {"id": d}
+        _tell(club, [old], f"No meeting on {_day(d)}: your chow night is off",
+              f"There's no club meeting on {_day(d)}, so no chow that night. You're first in line for the next one.", url, e,
+              secretary=False)
+
+
+def _carry(club: Club, src: dt.date, dst: dt.date, by: str, url: str, notes: list, what: str) -> None:
+    """Move the scheduled chow night of date src to dst with its member, who is told. Not onto a night that has someone
+    already: both stay as they were and `notes` says to fix it on the Chow page."""
+    a, b = src.isoformat(), dst.isoformat()
+    with lock:
+        s = load()
+        x = s["nights"].get(a) or {}
+        if not (club.has("chow") and x.get("status") == "scheduled" and a != b):
+            return
+        if (s["nights"].get(b) or {}).get("member"):
+            notes.append(f"Chow was already set for {_day(b)}, so {_day(a)}'s chow stays where it was. Fix it on the Chow page.")
+            return
+        del s["nights"][a]
+        s["nights"][b] = x
+        e = _log("assign", by, date=b, old=None, new=x.get("member"))
+        save(s)
+    _tell(club, [x.get("member")], f"Meeting {what}: your chow night is now {_day(b)}",
+          f"The club meeting on {_day(a)} {what}, and so has your chow night: it's now {_day(b)}.", url, e, secretary=False)
+
+
+def _on_moved(club: Club, date: dt.date, to: dt.datetime, by: str, url: str, chow: bool, notes: list, **_) -> None:
+    if chow:
+        _carry(club, date, to.date(), by, url, notes, "has moved")
+
+
+def _on_restored(club: Club, date: dt.date, was: dt.datetime | None, by: str, url: str, chow: bool, notes: list, **_) -> None:
+    if chow and was:
+        _carry(club, was.date(), date, by, url, notes, "has moved back")
+
+
+meetings.on("meeting_cancelled", _on_cancelled)
+meetings.on("meeting_moved", _on_moved)
+meetings.on("meeting_restored", _on_restored)

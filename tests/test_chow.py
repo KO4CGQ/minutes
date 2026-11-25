@@ -27,6 +27,9 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(chow.auth, "send_email", lambda to, subject, body, **kw: sent.append((sorted(to), subject, body)))
     club = Club(FIX / "test-club.yaml", roster=PEOPLE)
     club.info["meeting_day"] = "Thursday"
+    from club_minutes import events
+    events.save([events.add([], "events", {"title": "Club meeting", "start": "2026-01-01T19:30", "end": "2026-01-01T21:30",
+                                           "repeat": {"freq": "weekly", "interval": 1, "until": None}}, "sec") | {"meeting": True}])
     s = chow.load()
     s["order"] = ["amy", "bob", "cal", "dee", "old"]
     return club, s, sent
@@ -348,51 +351,114 @@ def test_the_schedule_pages_through_every_upcoming_night(env, tmp_path, monkeypa
     assert "/members/amy?from=chow" in second and "Page 2 of 2" in second
 
 
-def test_no_meeting_entry_drops_the_night(env, monkeypatch, tmp_path):
-    from club_minutes import events, web
+def _meeting(club):
+    from club_minutes import events
+    return next(e for e in events.load() if e.get("meeting"))
+
+
+def test_a_cancelled_night_leaves_the_meeting_nights_and_a_moved_one_counts_on_its_new_day(env, monkeypatch, tmp_path):
+    from club_minutes import meetings, web
     club, _s, _ = env
-    monkeypatch.setattr(events, "DATA", tmp_path)
     monkeypatch.setattr(web.archive, "club", club)
     monkeypatch.setattr(web.dt, "date", type("D", (dt.date,), {"today": classmethod(lambda c: THU)}))
-    assert web.upcoming_meetings(2) == [THU, THU + dt.timedelta(days=7)]
-    evs = []
-    events.add(evs, "events", {"title": "no Meeting (Holiday)", "start": f"{THU}", "end": None}, "sec")
-    events.save(evs)
-    assert web.upcoming_meetings(2) == [THU + dt.timedelta(days=7), THU + dt.timedelta(days=14)]
-    assert chow.meeting_nights(club, THU, THU, with_cancelled=True) == [THU]  # dues still count it
+    nxt, last = THU + dt.timedelta(days=7), THU + dt.timedelta(days=14)
+    assert web.upcoming_meetings(2) == [THU, nxt]
+    e = _meeting(club)
+    assert meetings.cancel(club, e["id"], THU.isoformat(), "Holiday", "sec") is True
+    assert meetings.cancel(club, e["id"], THU.isoformat(), "Holiday", "sec") is False  # the same record again: nothing
+    assert web.upcoming_meetings(2) == [nxt, last]
+    assert meetings.nights(club, THU, THU, with_cancelled=True) == [THU]  # dues still count it
+    assert meetings.move(club, e["id"], nxt.isoformat(), (nxt + dt.timedelta(days=2)).isoformat(), "18:00", "", "sec")
+    assert meetings.nights(club, THU, last) == [nxt + dt.timedelta(days=2), last]
+    assert meetings.time_on(club, nxt + dt.timedelta(days=2)) == "18:00"
+    meetings.restore(club, e["id"], nxt.isoformat(), "sec")
+    assert meetings.nights(club, THU, last) == [nxt, last]
 
 
-def test_deleting_a_meeting_date_cancels_it_and_no_meeting_hides_the_meeting(env, monkeypatch, tmp_path):
-    """Jim, 2026-11-22: either step alone cancels a night."""
-    from club_minutes import calview, events
+def test_nights_of_a_biweekly_series_and_a_second_one(env):
+    from club_minutes import events, meetings
     club, _s, _ = env
-    monkeypatch.setattr(events, "DATA", tmp_path)
-    nxt = THU + dt.timedelta(days=7)
-    meet = events.add([], "events", {"title": "Club meeting", "start": f"{THU}T19:30", "end": f"{THU}T21:30",
-                                     "repeat": {"freq": "weekly", "interval": 1, "until": None}}, "sec") | {"meeting": True}
-    evs = [meet]
-    events.delete(evs, meet["id"], f"{THU}", "this")
-    events.add(evs, "events", {"title": "No meeting (Holiday)", "start": f"{nxt}", "end": None}, "sec")
+    evs = events.load()
+    evs[0]["repeat"] = {"freq": "weekly", "interval": 2, "until": None}  # Thursdays: Jan 1, 15, 29 ...
+    events.add(evs, "events", {"title": "Net", "start": "2026-01-06T20:00", "end": None,
+                               "repeat": {"freq": "weekly", "interval": 1, "until": None}}, "sec")["meeting"] = True
     events.save(evs)
-    assert chow.meeting_nights(club, THU, nxt) == []
-    monkeypatch.setattr(calview.store, "ensure_meeting", lambda club: None)
-    shown = [(x.start, x.title) for x in calview.entries(club, type("A", (), {"meetings": []})(), None, THU, nxt + dt.timedelta(days=7))[0]
-             if x.kind == "events"]
-    assert shown == [(nxt, "No meeting (Holiday)"), (nxt + dt.timedelta(days=7), "Club meeting")]
+    day = dt.date(2027, 1, 7)  # every second Thursday from Jan 1 2026 is Jan 14; the net is Tuesdays
+    assert meetings.nights(club, day, day + dt.timedelta(days=13)) == [dt.date(2027, 1, 12), dt.date(2027, 1, 14), dt.date(2027, 1, 19)]
+
+
+def test_chow_follows_a_cancelled_or_moved_meeting(env, monkeypatch):
+    from club_minutes import meetings
+    club, s, sent = env
+    club.modules["chow"] = True
+    nxt, last = THU + dt.timedelta(days=7), THU + dt.timedelta(days=14)
+    s["nights"] = {d.isoformat(): {"member": m, "status": "scheduled"} for d, m in ((THU, "amy"), (nxt, "bob"), (last, "cal"))}
+    s["next"] = "dee"
+    chow.save(s)
+    e = _meeting(club)
+    meetings.cancel(club, e["id"], THU.isoformat(), "Holiday", "sec", "https://example.org")
+    s = chow.load()
+    assert s["nights"][THU.isoformat()] == {"member": None, "status": "none", "note": "No meeting (Holiday)"} and s["next"] == "amy"
+    assert s["order"].index("amy") == s["order"].index("dee") - 1  # in line just before Dee: Bob's and Cal's turns aren't repeated
+    assert [(to, subj) for to, subj, _b in sent if "amy@example.org" in to and "chow" in subj]  # Amy was told
+    meetings.move(club, e["id"], nxt.isoformat(), last.isoformat(), "", "", "sec")  # onto Cal's night: stays put
+    assert chow.load()["nights"][nxt.isoformat()]["member"] == "bob"
+    to = nxt + dt.timedelta(days=2)
+    meetings.move(club, e["id"], last.isoformat(), to.isoformat(), "", "", "sec")
+    s = chow.load()
+    assert last.isoformat() not in s["nights"] and s["nights"][to.isoformat()]["member"] == "cal"
+
+
+def test_a_notice_goes_to_members_once_per_change(env, monkeypatch):
+    from club_minutes import auth, meetings
+    club, _s, _ = env
+    mail = []
+    monkeypatch.setattr(auth, "send_email", lambda to, subject, body, **kw: mail.append((sorted(to), subject, body)))
+    monkeypatch.setattr(meetings.dt, "date", type("D", (dt.date,), {"today": classmethod(lambda c: THU - dt.timedelta(days=3))}))
+    e = _meeting(club)
+    meetings.cancel(club, e["id"], THU.isoformat(), "Holiday", "sec", "https://example.org")
+    meetings.cancel(club, e["id"], THU.isoformat(), "Holiday", "sec", "https://example.org")
+    assert len(mail) == 1 and "No meeting on" in mail[0][1] and "Holiday" in mail[0][2] and "amy@example.org" in mail[0][0]
+    assert "old@example.org" not in mail[0][0] and len(mail[0][0]) == 5  # not the Silent Key
+    meetings.move(club, e["id"], (THU + dt.timedelta(days=7)).isoformat(), (THU + dt.timedelta(days=8)).isoformat(), "18:00", "", "sec")
+    assert len(mail) == 2 and "Meeting moved" in mail[1][1] and "→" in mail[1][1]
 
 
 def test_home_shows_the_chow_of_the_next_meeting_night_only(env, monkeypatch, tmp_path):
     """Jim, 2026-11-22: with this Thursday cancelled, Home's Next meeting card said "Chow Thu …: none" for it."""
     from fastapi.testclient import TestClient
 
-    from club_minutes import events, web
+    from club_minutes import web
     club, s, _ = env
-    monkeypatch.setattr(events, "DATA", tmp_path)
     monkeypatch.setattr(web.dt, "date", type("D", (dt.date,), {"today": classmethod(lambda c: THU - dt.timedelta(days=3))}))
     s["nights"] = {f"{THU}": {"status": "none", "note": "Holiday"}, f"{THU + dt.timedelta(days=7)}": {"member": "bob", "status": "scheduled"}}
     chow.save(s)
-    events.save([events.add([], "events", {"title": "No meeting (Holiday)", "start": f"{THU}", "end": None}, "sec")])
+    from club_minutes import meetings
+    meetings.cancel(club, _meeting(club)["id"], THU.isoformat(), "Holiday", "sec")
     monkeypatch.setattr(web, "archive", Archive(tmp_path, club))
     monkeypatch.setattr(web.authn, "member_for", lambda token: "amy")
     card = TestClient(web.app).get("/").text.split("Next meeting", 1)[1].split("</section>", 1)[0]
     assert "Holiday" not in card and f"Chow: {club.name('bob')}" in card
+
+
+def test_chow_goes_with_a_move_and_back_with_the_put_back_and_members_are_told(env, monkeypatch):
+    from club_minutes import auth, meetings
+    club, s, _ = env
+    club.modules["chow"] = True
+    nxt, last = THU + dt.timedelta(days=7), THU + dt.timedelta(days=14)
+    s["nights"] = {d.isoformat(): {"member": m, "status": "scheduled"} for d, m in ((nxt, "bob"), (last, "cal"))}
+    chow.save(s)
+    mail = []
+    monkeypatch.setattr(auth, "send_email", lambda to, subject, body, **kw: mail.append(subject))
+    monkeypatch.setattr(meetings.dt, "date", type("D", (dt.date,), {"today": classmethod(lambda c: THU - dt.timedelta(days=3))}))
+    e, to, notes = _meeting(club), nxt + dt.timedelta(days=2), []
+    meetings.move(club, e["id"], nxt.isoformat(), to.isoformat(), "", "", "sec", "", notes)
+    assert chow.load()["nights"][to.isoformat()]["member"] == "bob" and nxt.isoformat() not in chow.load()["nights"] and not notes
+    meetings.restore(club, e["id"], nxt.isoformat(), "sec", "", notes)
+    assert chow.load()["nights"][nxt.isoformat()]["member"] == "bob" and to.isoformat() not in chow.load()["nights"]
+    assert any("back on" in m for m in mail) and not notes
+    meetings.move(club, e["id"], nxt.isoformat(), last.isoformat(), "", "", "sec", "", notes)  # Cal has that night
+    assert chow.load()["nights"][nxt.isoformat()]["member"] == "bob" and "Chow page" in notes[0]
+    mail.clear()
+    meetings.restore(club, e["id"], nxt.isoformat(), "sec")
+    assert any("back on" in m for m in mail)

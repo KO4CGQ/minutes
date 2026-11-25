@@ -6,6 +6,7 @@
 {% if member_roles %}<p class="small">Roles: {% for r in member_roles %}<span class="chip">{{ r }}</span> {% endfor %}</p>{% endif %}</div></div>
 {% if can_moderate and avatar_url(member.id) and member.id != me.id %}<form method="post" action="{{ club.member_url(member.id) }}/photo/remove" class="inline" data-confirm="Remove {{ member.first }}'s picture?"><button class="linkbtn">Remove picture</button></form>{% endif %}
 {% if can_edit_roster %}<a class="btn small ghost" href="{{ club.member_url(member.id) }}/edit">Edit roster details</a>{% endif %}
+{% if purge_note %}<p class="muted small">{{ purge_note }}</p>{% endif %}
 {% if can_view_as %}<form method="post" action="/admin/view-as"><input type="hidden" name="member" value="{{ member.id }}"><input type="hidden" name="next" value="/">
   <button class="btn small ghost" type="submit" title="See the app exactly as {{ member.first }} does, read-only (admin mode)">View the app as {{ member.first }}</button></form>{% endif %}
 {% if can_view_as and can_act_as %}<form method="post" action="/admin/view-as"><input type="hidden" name="member" value="{{ member.id }}"><input type="hidden" name="next" value="/"><input type="hidden" name="act" value="1">

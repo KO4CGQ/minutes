@@ -318,11 +318,12 @@ def test_help_pages_show_the_guides(monkeypatch):
     off = c.get("/help/officers").text  # every guide is public anyway; the link to the next stays in the app
     assert 'href="/help/members"' in off and "Server admin</a>" not in off
     admin = c.get("/help/server-admin").text
+    assert 'class="crumb"' not in admin and c.get("/help/server-admin?from=admin").text.count('<a href="/admin">‹ Admin</a>') == 1  # from the Admin page: back to it
     assert "<pre><code" in admin and "Server admin</a>" in admin
     assert 'popovertarget="shot1"' in admin and '<div popover id="shot1"' in admin and "<p><button" not in admin  # pictures open full size
     assert c.get("/help/developers").status_code == 404 and c.get("/help/..%2Fsecrets").status_code == 404
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: True)
-    assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin", "jitsi"))
+    assert all(f'href="/help/{g}"' in c.get("/help").text for g in ("members", "officers", "server-admin"))
     found = c.get("/search", params={"q": "passphrase", "kind": "help"}).text  # the search finds guide sections
     assert 'href="/help/server-admin#backups"' in found and 'id="backups"' in c.get("/help/server-admin").text
     monkeypatch.setattr(web.archive.club, "is_admin", lambda mid: False)
@@ -398,12 +399,15 @@ def test_the_meeting_day_time_and_zone_are_the_clubs_own(tmp_path, monkeypatch):
     assert (c.meeting_weekday, c.meeting_time) == (3, "19:30")
     c.info.update(meeting_day=" tuesday ", meeting_time=1170)  # unquoted in YAML, 19:30 arrives as 1170 minutes
     assert (c.meeting_weekday, c.meeting_time) == (1, "19:30")
-    for k, bad in (("meeting_day", None), ("meeting_day", "Thurs"), ("meeting_time", None), ("meeting_time", "7:30 PM"),
+    for k, bad in (("meeting_day", "Thurs"), ("meeting_time", "7:30 PM"),
                    ("meeting_time", "24:00"), ("meeting_time", True), ("timezone", "Mars/Olympus")):
         d = Club(FIX / "test-club.yaml")
         d.info[k] = bad
         with pytest.raises(ValueError, match=f"club.yaml club: {k}"):
             _ = d.meeting_weekday, d.meeting_time, d.timezone
+    seedless = Club(FIX / "test-club.yaml")
+    del seedless.info["meeting_day"], seedless.info["meeting_time"]
+    assert (seedless.meeting_weekday, seedless.meeting_time) == (None, None)  # the seed is optional
     monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/usr/share/zoneinfo/Europe/Berlin")
     bare = Club(FIX / "test-club.yaml")
     bare.info.pop("timezone")

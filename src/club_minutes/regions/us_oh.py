@@ -6,7 +6,7 @@ import datetime as dt
 
 from . import nth_weekday
 
-NAME = "Ohio: primaries and general election"  # how Admin → Site → Features lists it
+NAME = "Ohio: primaries and general election"  # how Admin → Site → Calendar lists it
 NOTES = "Polls are open 6:30 AM to 7:30 PM. Registration closes 30 days before. Your ballot and polling place: voteohio.gov"
 
 

@@ -26,7 +26,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
 {# where a list's links say they came from (?from=..., and a business item's ?item=), so the page's crumb leads back there #}
 {% macro back(href, label) %}{% set q = request.query_params %}{% set item = q.get('item', '') if q.get('item', '').isalnum() else '' %}
 {%- set came = {'stats': ('/stats', 'Attendance'), 'treasurer': ('/treasurer', 'Treasurer'), 'offices': ('/offices', 'Offices'), 'chow': ('/chow', 'Chow'), 'guests': ('/guests', 'Guests'), 'changes': ('/roster/changes', 'Roster changes'),
-    'business': ('/business' ~ ('?tab=done' if q.get('tab') == 'done' else ''), 'Business'), 'home': ('/', 'Home'),
+    'admin': ('/admin', 'Admin'), 'business': ('/business' ~ ('?tab=done' if q.get('tab') == 'done' else ''), 'Business'), 'home': ('/', 'Home'),
     'roster': ('/roster', 'Roster'), 'minutes': ('/minutes', 'Minutes'), 'search': ('/search?q=' ~ (q.get('q', '')|urlencode), 'Search')}.get(q.get('from')) %}
 {%- if came and item %}{% set came = (came[0] ~ '#i' ~ item, came[1]) %}{% endif %}{% if came or href %}{{ crumb(*(came or (href, label))) }}{% endif %}{% endmacro %}
 {% macro navlink(href, label) %}<a href="{{ href }}" class="{{ 'on' if (here == href or (href not in ('/', '/minutes') and here.startswith(href ~ '/')) or (href == '/minutes' and here.startswith('/meetings'))) }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endmacro %}
@@ -55,7 +55,7 @@ window.emo = (ch, name) => { const w = document.createElement("span"), a = docum
     {# search only below 820px, where the bar has no room for it #}
     <form action="/search" class="dsearch"><input name="q" type="search" placeholder="Search…" value="{{ q or '' }}" aria-label="Search minutes, members, business{{ ', chow' if module('chow') }} and calendar"></form>
     {% for href, label in PAGES if href != '/chow' or module('chow') %}{% if href == '/business' %}<div class="sep"></div>{% endif %}{{ navlink(href, label) }}{% endfor %}
-    {% if club.may(me.id, 'treasurer') or admin_until or keeps_fund %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}{% if show_spending %}{{ navlink('/spending', 'Spending') }}{% endif %}{% if video_ready() %}{{ navlink('/meet', 'Video meeting') }}{% endif %}
+    {% if club.may(me.id, 'treasurer') or admin_until or keeps_fund %}{{ navlink('/treasurer', 'Treasurer') }}{% endif %}{% if show_spending %}{{ navlink('/spending', 'Spending') }}{% endif %}{% for href, label in plugin_nav %}{{ navlink(href, label) }}{% endfor %}
     {% if show_support %}<a class="kofi" href="https://ko-fi.com/jflattery" aria-label="Support Club Minutes on Ko-fi (opens in a new tab)">{{ icon('si:kofi') }} Support Club Minutes</a>{% endif %}
   </div></div>{% endif %}
 {% if viewing_as %}<div class="adminbar viewas">{% if acting_as %}Acting as <b>{{ club.name(viewing_as) }}</b>: changes you make are made as them and logged; emails reach only you.{% else %}Viewing the app as <b>{{ club.name(viewing_as) }}</b>: read-only, exactly what they see.{% endif %}
@@ -103,7 +103,7 @@ document.addEventListener("submit", (e) => {
   };
 })();
 </script>{% endif %}
-<main>{% block crumb %}{% if is_admin and admin_until and here.startswith('/admin/') and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% else %}{{ back(None, None) }}{% endif %}{% endblock %}{% block body %}{% endblock %}</main>
+<main>{% block crumb %}{% if is_admin and admin_until and (here.startswith('/admin/') or here.split('/')[2:3] == ['admin']) and not here.startswith('/admin/confirm') %}<nav class="crumb" aria-label="Back"><a href="/admin">‹ Admin</a></nav>{% else %}{{ back(None, None) }}{% endif %}{% endblock %}{% if site_head %}{% include "_site_head.html" %}{% endif %}{% block body %}{% endblock %}</main>
 <script src="/static/sort.js?v={{ ASSETS }}"></script>
 <script src="/static/fields.js?v={{ ASSETS }}"></script>
 <script src="/static/format.js?v={{ ASSETS }}"></script>
@@ -142,14 +142,14 @@ markTheme();
   btn.addEventListener("click", () => set(!document.body.classList.contains("drawer-open")));
   drawer.querySelector(".scrim").addEventListener("click", () => set(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("drawer-open")) set(false); }); })();
-// top-bar clock; "Start meeting" pulses from 30 minutes before the weekly meeting until 30 minutes after it starts
+// top-bar clock; "Start meeting" pulses from 30 minutes before the weekly meeting until 30 minutes after it starts (the week's meetings come from the calendar)
 // shortcut: uses the browser's time zone, which is the club's for members at home; pass the club's zone if that changes.
 (() => { const clock = document.querySelector("nav.top .clock"), start = document.querySelector("nav.top a.start");
-  const [day, hh, mm] = (start?.dataset.meets || "").split(/[ :]/).map(Number);
+  const slots = (start?.dataset.meets || "").split(",").filter(Boolean).map((x) => x.split(/[ :]/).map(Number));
   const tick = () => { const now = new Date();
     if (clock) clock.textContent = now.toLocaleTimeString([], {weekday: "short", hour: "numeric", minute: "2-digit"});
-    if (start) { const mins = (now.getHours() - hh) * 60 + now.getMinutes() - mm;
-      start.classList.toggle("soon", now.getDay() === day && mins >= -30 && mins <= 30); } };
+    if (start) start.classList.toggle("soon", slots.some(([day, hh, mm]) => { const mins = (now.getHours() - hh) * 60 + now.getMinutes() - mm;
+      return now.getDay() === day && mins >= -30 && mins <= 30; })); };
   tick(); setInterval(tick, 10000); })();
 // close the name menu when clicking elsewhere
 document.addEventListener("click", (e) => document.querySelectorAll("details.menu[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; }));

@@ -2,12 +2,20 @@
 {% set current = guests|rejectattr('member')|list %}{% set joined = guests|selectattr('member')|list %}
 <h1>Guests</h1>
 <p class="muted">Visits are grouped {% if club.ham %}by callsign, or by name if there's no callsign{% else %}by name{% endif %}. Guests who later join move to "Became members" below.</p>
-<table class="list"><thead><tr><th>Guest</th>{% if club.ham %}<th>Callsign</th>{% endif %}<th class="n">Visits</th><th class="opt">First visit</th><th>Last visit</th><th></th></tr></thead>
+{% if error %}<p class="msg err" role="alert">{{ error }}</p>{% endif %}{% if note %}<p class="msg ok">{{ note }}</p>{% endif %}
+<table class="list{{ ' wide' if sends }}"><thead><tr><th>Guest</th>{% if club.ham %}<th>Callsign</th>{% endif %}<th class="n">Visits</th><th class="opt">First visit</th><th>Last visit</th><th></th>{% if sends %}<th>Application</th>{% endif %}</tr></thead>
 <tbody>{% for g in current %}<tr>
 <td>{{ g.name }}</td>{% if club.ham %}<td class="cs">{{ g.callsign or '' }}</td>{% endif %}<td class="n">{{ g.visits|length }}</td>
 <td class="opt nw" data-sort="{{ g.visits[0][0] }}"><a href="/meetings/{{ g.visits[0][0] }}?from=guests">{{ g.visits[0][0]|listdate }}</a></td><td class="nw" data-sort="{{ g.visits[-1][0] }}"><a href="/meetings/{{ g.visits[-1][0] }}?from=guests">{{ g.visits[-1][0]|listdate }}</a></td>
 <td>{% if g.visits|length >= (club.info.invite_after_visits or 3) %}<span class="badge warn">regular, invite to join?</span>{% endif %}</td>
-</tr>{% else %}<tr><td colspan="{{ 6 if club.ham else 5 }}" class="muted">No guests yet.</td></tr>{% endfor %}</tbody></table>
+{% if sends %}{% set a = apps.get(g.name) %}<td>
+{% if a %}<span class="badge">{{ 'Link expired' if a.state == 'sent' and a.expires < now else app_states[a.state] }}</span>{% if sees and a.form %} <a href="/applications/{{ a.id }}/pdf">PDF</a>{% endif %}{% endif %}
+{% if a and a.state == 'submitted' and not a.sponsor.id %}<form method="post" action="/applications/{{ a.id }}/ask" class="inline"><span>{{ ('Sponsor typed: ' ~ a.sponsor.typed) if a.sponsor.typed else 'No sponsor named' }}</span> <label class="sr" for="sp-{{ loop.index }}">Member to ask</label><select id="sp-{{ loop.index }}" name="member" required><option value="">(choose a member)</option>{% for v, n in actives %}<option value="{{ v }}">{{ n }}</option>{% endfor %}</select><button class="btn small">Ask this sponsor</button></form>{% endif %}
+{% if sees and a and a.state in ('sent', 'submitted', 'declined', 'candidate') %}<form method="post" action="/applications/{{ a.id }}/withdraw" class="inline" data-confirm="Withdraw {{ g.name }}'s application?"><button class="btn small ghost">Withdraw</button></form>{% endif %}
+{% if adds and a and a.state == 'candidate' and a.club.voted %} <a class="btn small" href="/roster/add?application={{ a.id }}">Add as a member</a>{% endif %}
+{% if g.name in ready and not (a and a.state in ('submitted', 'candidate', 'member')) %}<form method="post" action="/guests/apply" class="inline"><input type="hidden" name="guest" value="{{ g.name }}"><label class="sr" for="ap-{{ loop.index }}">Their email address</label><input id="ap-{{ loop.index }}" type="email" name="email" required placeholder="Their email" autocomplete="off"><button class="btn small">{{ 'Send it again' if a and a.state in ('sent', 'declined') else 'Send the application' }}</button></form>{% endif %}
+</td>{% endif %}
+</tr>{% else %}<tr><td colspan="{{ (6 if club.ham else 5) + (1 if sends else 0) }}" class="muted">No guests yet.</td></tr>{% endfor %}</tbody></table>
 
 {% if joined %}
 <h2>Became members</h2>

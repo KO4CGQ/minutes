@@ -14,6 +14,7 @@ from __future__ import annotations
 import fcntl
 import shutil
 import sqlite3
+import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -121,12 +122,115 @@ def _v6(data: Path) -> None:
     tmp.replace(p)
 
 
+def _v7(data: Path) -> None:
+    """7 (1.3.0): a meeting's cancelled night is a record on its series (meetings.py): a date deleted from a meeting series
+    (its `skip` list) and a single Club events entry titled "No meeting…" on a meeting date become `changes[date] =
+    {"cancelled": True, "reason": …}` (the entry's title after "No meeting" is the reason, and the entry goes); the
+    app reads nothing else as a cancelled night from now on. Anything else stays. Run again, it finds nothing to do.
+    1.2 would show the cancelled nights again, so it must refuse this data."""
+    import datetime as dt
+    import json
+    import re
+
+    from . import events
+    p = data / "events.json"
+    if not p.exists():
+        return
+    evs = json.loads(p.read_text())["events"]
+    series = [e for e in evs if e.get("meeting")]
+    for e in series:
+        e.setdefault("changes", {})
+        for d in e.get("skip", []):
+            e["changes"][d] = {"cancelled": True, "reason": ""}
+        e["skip"] = []
+    gone = []
+    for x in evs:
+        if x.get("meeting") or x.get("cal") != "events" or x.get("repeat") or not x["title"].strip().lower().startswith("no meeting"):
+            continue
+        day = dt.datetime.fromisoformat(x["start"]).date()
+        hit = False
+        for e in series:
+            pad = events.reach(e)
+            for d in events.dates(e, day - pad, day + pad):
+                if dt.datetime.fromisoformat(events.occurrence(e, d)["start"]).date() == day and not e["changes"].get(d.isoformat(), {}).get("cancelled"):
+                    e["changes"][d.isoformat()] = {"cancelled": True, "reason": re.sub(r"^no meeting\W*", "", x["title"].strip(), flags=re.IGNORECASE).strip(" ()")}
+                    hit = True
+        gone += [x] if hit else []
+    evs = [x for x in evs if not any(x is g for g in gone)]
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"events": evs}, indent=1))
+    tmp.replace(p)
+
+
+def _save(p: Path, obj, mode: int | None = None) -> None:
+    import json
+    import os
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(obj, indent=1))
+    if mode:
+        os.chmod(tmp, mode)
+    tmp.replace(p)
+
+
+def _v8(data: Path) -> None:
+    """8 (1.3.0): video meetings (Jitsi) leave the app for the "meet" plugin. Its settings (club.yaml's and Site's
+    jitsi: block: domain, app_id, room, rooms, adhoc), the rooms members opened (meet-rooms.json) and the secret the
+    app made (jitsi-secret) go into the plugin's storage, plugins/meet.json; `modules: jitsi` becomes the plugin
+    ticked on; the meet_host permission becomes meet.host (the built-in Officer and Meeting leader had it by default,
+    so they are written out with it). club.yaml is root's and stays as it is: the app no longer reads its jitsi: block.
+    Nothing is done for a club that never set Jitsi up. Safe to run again: it starts from what the plugin file holds
+    and takes what's left of the old places. THIS STEP EXISTS IN 1.3 ONLY: in the release after, empty this function
+    (keep its STEPS entry: CURRENT counts STEPS, so the data version stays)."""
+    import json
+    import os
+
+    import yaml
+
+    from .club import ROOT
+    cfg = Path(os.environ.get("CLUB_MINUTES_CONFIG", ROOT / "club.yaml"))
+    yml = (yaml.safe_load(cfg.read_text()) if cfg.exists() else None) or {}
+    sp, rp, op = data / "site-settings.json", data / "meet-rooms.json", data / "jitsi-secret"
+    site = json.loads(sp.read_text()) if sp.exists() else {}
+    block = {**(yml.get("jitsi") or {}), **(site.get("jitsi") or {})}
+    on = bool({**(yml.get("modules") or {}), **(site.get("modules") or {})}.get("jitsi"))
+    if not (on or block or rp.exists() or op.exists()):
+        return
+    out = data / "plugins" / "meet.json"
+    plugin = json.loads(out.read_text()) if out.exists() else {}
+    plugin |= {k: block[k] for k in ("domain", "app_id", "room", "rooms", "adhoc") if block.get(k) is not None}
+    if rp.exists():
+        plugin["openers"] = json.loads(rp.read_text() or "{}")
+    if op.exists() and op.read_text().strip():
+        plugin |= {"secret": op.read_text().strip(), "secret_made": op.stat().st_mtime}
+    out.parent.mkdir(exist_ok=True)
+    _save(out, plugin, 0o600)  # the plugin's file first: what's left of the old places is only removed after it
+    rj = json.loads((data / "roles.json").read_text()) if (data / "roles.json").exists() else {}
+    table = rj.setdefault("table", {})
+    for k, default in (("officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer")),
+                       ("minutes_editor", ("lead", "calendar"))):
+        if "perms" not in table.get(k, {}):
+            table.setdefault(k, {})["perms"] = list(default) + ["meet_host"]  # as shipped, so with it
+    for t in table.values():
+        t["perms"] = ["meet.host" if x == "meet_host" else x for x in t.get("perms", [])]
+    _save(data / "roles.json", rj)
+    site.pop("jitsi", None)
+    mods = {k: v for k, v in (site.get("modules") or {}).items() if k != "jitsi"}
+    site = {k: v for k, v in site.items() if k != "modules"} | ({"modules": mods} if mods else {})
+    if on:
+        site.setdefault("plugins", {})["meet"] = True
+    _save(sp, site)
+    rp.unlink(missing_ok=True)
+    op.unlink(missing_ok=True)
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
     (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
     (4, "published minutes keep their names, agenda order, heading and links from when they were made (snapshot.py): 1.1 can't tell", _v4),
     (5, "the Treasurer's dues can be a week, a month or a year at a time (rates.dues with a period, arrears_periods): 1.2.0 can't read it", _v5),
     (6, "each member's id is stored in the roster's id column, so a callsign change keeps it: 1.2 would misread a changed callsign", _v6),
+    (7, "a cancelled or rescheduled meeting is a record on its calendar series, not a deleted date or a \"No meeting\" entry: 1.2 can't read it", _v7),
+    (8, "video meetings moved to the meet plugin (plugins/meet.json, the plugin ticked on, meet.host): 1.2 can't read it", _v8),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"
@@ -196,6 +300,20 @@ def run(data: Path = DATA) -> list[str]:
         return [what for _v, what, _s in todo]
 
 
+def forget_copy(data: Path = DATA, days: int = 7) -> bool:
+    """The daily job: delete the copy kept from before an upgrade once it finished and `days` have passed (it holds
+    everything the purges later delete: leavers' details, old applications). True if it went."""
+    copy = data / COPY
+    with _locked(data):
+        if not copy.is_dir() or (data / STARTED).exists() or version(data) != CURRENT:
+            return False
+        made = (copy / "data-version").stat().st_mtime if (copy / "data-version").exists() else copy.stat().st_mtime
+        if time.time() - made < days * 86400:
+            return False
+        shutil.rmtree(copy)
+        return True
+
+
 def undo(was: int, data: Path = DATA) -> bool:
     """Put back the copy taken before an upgrade from data version `was` (update.sh, when the new version didn't
     start). Only if the data has moved on from `was` since, so an old copy never replaces newer data."""
@@ -206,10 +324,19 @@ def undo(was: int, data: Path = DATA) -> bool:
     if (data / "data-version").exists() and version(data) <= was:
         return False
     with _locked(data):
-        (data / "data-version").unlink(missing_ok=True)
-        for p in data.iterdir():
-            if p.name not in SKIP and not p.name.endswith(".lock"):
-                shutil.rmtree(p) if p.is_dir() and not p.is_symlink() else p.unlink()
-        _copytree(copy, data, lambda d, _names: ["data-version"] if Path(d) == copy else [])
+        # Copy to a folder inside the data folder first (the data stays as it was if that fails), then swap by renames
+        new, old = data / ".undo-new", data / ".undo-old"
+        for d in (new, old):
+            shutil.rmtree(d, ignore_errors=True)
+        _copytree(copy, new, lambda d, _names: ["data-version"] if Path(d) == copy else [])
+        (data / "data-version").unlink(missing_ok=True)  # gone until the end: a stopped undo runs again
+        old.mkdir()
+        for p in list(data.iterdir()):
+            if p.name not in SKIP and p not in (new, old) and not p.name.endswith(".lock"):
+                p.replace(old / p.name)
+        for p in new.iterdir():
+            p.replace(data / p.name)
         shutil.copy2(copy / "data-version", data / "data-version")
+        shutil.rmtree(new)
+        shutil.rmtree(old)
     return True

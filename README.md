@@ -39,7 +39,6 @@ The [server admin guide](docs/server-admin.md#getting-started-a-new-club) walks 
 - [Members guide](docs/members.md): signing in, Home, your profile and emails, chow swaps, business, the calendar, your dues.
 - [Officers guide](docs/officers.md): the roster and profiles, calendars, the chow schedule, the Treasurer.
 - [Server admin guide](docs/server-admin.md) (a new club starts at Getting started): deploy, config, sign-in and email, admin mode, backups, hardening.
-- [Video meetings guide](docs/jitsi.md) (optional): setting up the club's own Jitsi Meet server for members to join signed in.
 - [Developer guide](docs/developers.md): running it locally, previews, releases, security checks.
 - [Security](SECURITY.md): reporting a vulnerability privately, and what's checked on every change.
 

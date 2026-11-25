@@ -17,7 +17,7 @@ PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "email": "amy@ex
           {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "email": "bob@example.org"},
           {"id": "n0offc", "first": "Ola", "last": "Officer", "role": "President", "officer": True, "email": "o@example.org"}]
 PUBLIC_GET = {"/login", "/email/confirm", "/favicon.ico", "/brand/theme.css", "/calendar/public", "/calendar/public.ics", "/calendar/feed/x.ics", "/api/roster", "/login/link",
-              "/healthz"}
+              "/healthz", "/privacy"}  # /privacy: the privacy page (signed out: only what is about visitors)
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def app(tmp_path, monkeypatch):
 def routes():
     for r in web.app.routes:
         path = r.path
-        for p in ("slug", "iid", "eid", "rid", "cid", "sid", "nid", "mid", "tab", "tid", "id", "key", "kind"):
+        for p in ("slug", "iid", "eid", "rid", "cid", "sid", "nid", "mid", "tab", "tid", "id", "key", "kind", "what"):
             path = path.replace(f"{{{p}}}", "x")
         path = path.replace("{token}.ics", "x.ics")
         if "{" not in path and not path.startswith(("/static", "/docs", "/openapi")):
@@ -219,6 +219,9 @@ def test_admin_address_members_tab_and_a_page_for_not_found(app, monkeypatch):
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     hub = admin.get("/admin").text
     assert all(f'href="/admin/{t}"' in hub for t in ("security", "updates", "site", "email")) and "failed sign-in" in hub
+    assert "purge-hold" not in hub
+    monkeypatch.setattr(web.prefs, "purge_hold", lambda: ["n0bbbb"])
+    assert 'action="/admin/purge-hold/confirm"' in admin.get("/admin").text  # the notice, with its Confirm button
     assert member.get("/admin").status_code == 404
     page_ = member.get("/no-such-page", headers={"Accept": "text/html"})
     assert page_.status_code == 404 and "Page not found" in page_.text
@@ -307,11 +310,8 @@ def test_site_dates_tab_saves_over_club_yaml_and_goes_back(app, tmp_path, monkey
 def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app, tmp_path, monkeypatch):
     """Admin → Site → Club: only what differs from club.yaml is kept; a wrong value changes nothing; a new meeting day
     moves the calendar's weekly meeting from the Starting date on (earlier dates stay) and says which chow nights aren't moved."""
-    import datetime as dt
-    from urllib.parse import unquote
 
     from club_minutes import club as clubmod
-    from club_minutes import events
     monkeypatch.setattr(clubmod, "DATA", tmp_path)
     monkeypatch.setattr(web, "DATA", tmp_path)
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
@@ -324,8 +324,7 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         assert "Changed here" not in admin.get("/admin/site/club").text  # tagged only once changed here
         admin.post("/admin/site/club", data=same)
         assert c.site_settings == {}  # nothing differs: nothing kept
-        for bad, why in (({"callsign": "W0 <b>"}, "callsign"), ({"name": "  "}, "name"), ({"timezone": "Mars/Base"}, "time zone: &#39;mars/base&#39; isn"),
-                         ({"meeting_time": "25:99"}, "start time: &#39;25:99&#39;"), ({"meeting_day": "Caturday"}, "meeting day: &#39;caturday&#39;")):
+        for bad, why in (({"callsign": "W0 <b>"}, "callsign"), ({"name": "  "}, "name"), ({"timezone": "Mars/Base"}, "time zone: &#39;mars/base&#39; isn")):
             r = admin.post("/admin/site/club", data={**same, **bad})
             assert "msg err" in r.text and why in r.text.lower() and "club.yaml club" not in r.text and c.site_settings == {}, bad
         admin.post("/admin/site/club", data={k: v for k, v in same.items() if k != "ham"} | {"callsign": ""})  # unticked, no club call
@@ -342,61 +341,13 @@ def test_site_club_tab_keeps_only_changes_checks_them_and_moves_the_meeting(app,
         admin.post("/admin/site/club", data=same)
         assert c.site_settings == {} and c.ham
         c.save_site_settings({("club", "date_formats"): {"list": "%-d %b %Y"}})
-        (tmp_path / "x").mkdir(exist_ok=True)
-        (events.DATA / "events-meeting-added").unlink()
-        events.ensure_meeting(c)
-        from club_minutes import chow
-        monkeypatch.setattr(chow, "DATA", tmp_path)
-        nxt_thu = dt.date.today() + dt.timedelta(days=(3 - dt.date.today().weekday()) % 7 or 7)
-        chow.save({"nights": {nxt_thu.isoformat(): {"member": "n0aaaa", "status": "scheduled"}}})
-        today = dt.date.today()
-        assert "Starting: today" in admin.post("/admin/site/club", data={**same, "since": str(today - dt.timedelta(days=1))}).text
-        before = events.load()
-        assert "msg err" in admin.post("/admin/site/club", data={**same, "since": "soon"}).text and events.load() == before
-        since = nxt_thu + dt.timedelta(days=1)  # the Thursday chow night stays a meeting; the Tuesdays start after it
-        where, online = "Clubhouse, 123 Main St <b>", "https://meet.example.com/abc?pwd=x&y=1"
-        for bad in ("javascript:alert(1)", 'https://x.example.com/"><b>', "meet.example.com/abc"):
-            r = admin.post("/admin/site/club", data={**same, "meeting_day": "Tuesday", "since": str(since), "where": where, "online": bad})
-            assert "starts with https://" in r.text and events.load() == before and c.meeting_weekday == 3, bad
-        r = admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since),
-                                                 "where": where, "online": online}, follow_redirects=False)
-        loc = unquote(r.headers["location"])
-        assert "weekly meeting on the calendar changes from" in loc and "1 chow night is still on the old day" in loc
-        assert c.site_settings["club"] == {"date_formats": {"list": "%-d %b %Y"}, "name": "Test Radio Club", "meeting_day": "Tuesday"}
-        assert c.meeting_weekday == 1 and c.info["name"] == "Test Radio Club"
-        old, new = sorted((e for e in events.load() if e.get("meeting")), key=lambda e: e["start"])
-        assert not events.dates(old, since, since + dt.timedelta(days=60)) and nxt_thu in events.dates(old, today, since) and old.get("where", "") == ""
-        assert new["start"].startswith(str(since + dt.timedelta(days=(1 - since.weekday()) % 7))) and new["where"] == where and new["online"] == online
+        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club"})
+        assert c.site_settings["club"] == {"date_formats": {"list": "%-d %b %Y"}, "name": "Test Radio Club"} and c.info["name"] == "Test Radio Club"
         tab = admin.get("/admin/site/club").text
-        assert tab.count("Changed here") == 2  # name and day were changed
-        assert 'value=""' in tab.split('id="c-where"')[1][:80]  # the next meeting (still the old Thursday) has no Where yet
-        cal = admin.get(f"/calendar?start={since}").text
-        assert 'href="https://meet.example.com/abc?pwd=x&amp;y=1" target="_blank" rel="noopener"' in cal and "123 Main St &lt;b&gt;" in cal
-        n = len(events.load())
-        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "since": str(since), "where": "", "online": "",
-                                             "shown_where": "", "shown_online": ""})  # as the page sends it, untouched
-        assert len(events.load()) == n  # nothing new: the calendar's left alone
-        # from today on, a new time: the Thursdays before `since` and the Tuesdays already planned both change
-        admin.post("/admin/site/club", data={**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "meeting_time": "18:00",
-                                             "since": str(today), "where": "Library <b>", "online": online})
-        occ = sorted((events.occurrence(e, d) | {"d": d} for e in events.load() if e.get("meeting")
-                     for d in events.dates(e, today, today + dt.timedelta(days=60))), key=lambda o: o["d"])
-        assert occ and all(o["start"].endswith("T18:00") and o["where"] == "Library <b>" and o["online"] == online and o["d"].weekday() == 1 for o in occ), occ
-        assert len({o["d"] for o in occ}) == len(occ)  # each Tuesday once
-        # a place planned for later stays when only the time changes from today (Where and the link untouched on the page)
-        later = today + dt.timedelta(days=21)
-        new = {**same, "name": "Test Radio Club", "meeting_day": "Tuesday", "meeting_time": "18:00", "online": online, "shown_online": online}
-        admin.post("/admin/site/club", data={**new, "since": str(later), "where": "Hall", "shown_where": "Library <b>"})
-        admin.post("/admin/site/club", data={**new, "meeting_time": "18:30", "since": str(today), "where": "Library <b>", "shown_where": "Library <b>"})
-        occ = sorted((events.occurrence(e, d) | {"d": d} for e in events.load() if e.get("meeting")
-                      for d in events.dates(e, today, today + dt.timedelta(days=60))), key=lambda o: o["d"])
-        assert [o["where"] for o in occ] == ["Library <b>" if o["d"] < later else "Hall" for o in occ] and "Hall" in [o["where"] for o in occ], occ
-        assert all(o["start"].endswith("T18:30") for o in occ) and len({o["d"] for o in occ}) == len(occ)
-        tab = admin.get("/admin/site/club").text
-        assert 'value="Library &lt;b&gt;"' in tab and 'value="https://meet.example.com/abc?pwd=x&amp;y=1"' in tab  # escaped
-        assert "Club settings: name, meeting day" in admin.get("/admin/security/admin").text
+        assert "Meeting nights are set on the" in tab and 'name="meeting_day"' not in tab and 'id="c-tz"' in tab
+        assert "Club settings: name" in admin.get("/admin/security/admin").text
         admin.post("/admin/site/club", data={"back": "1"})
-        assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}} and c.meeting_weekday == 3  # dates stay
+        assert c.site_settings == {"club": {"date_formats": {"list": "%-d %b %Y"}}}  # dates stay
         # short or full names, site-wide: full saved and used; a bad value refused; short again (club.yaml's) keeps nothing
         short = c.shown_name("n0bbbb")
         admin.post("/admin/site/club", data={**same, "names": "full"})
@@ -423,7 +374,7 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
 
     def form(change=lambda rows: rows, **extra):
         rows = change([dict(r) for r in web._agenda_rows(c)])
-        f = {"rows": str(len(rows)), "invite_after_visits": "3", "remind_days_before": "3"}
+        f = {"rows": str(len(rows)), "remind_days_before": "3"}
         for i, r in enumerate(rows):
             f |= {f"name{i}": r["name"], f"hint{i}": r["hint"], f"pos{i}": str(r.get("pos", i + 1))}
             f |= {f"was{i}": "1"} if r.get("was", bool(r["name"])) else {}
@@ -433,7 +384,7 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
     assert member.get("/admin/site/agenda").status_code == 404 and member.post("/admin/site/agenda", data=form()).status_code == 404
     page_ = admin.get("/admin/site/agenda").text
     assert "Old Business" in page_ and "Winners" in page_ and "Changed here" not in page_
-    assert 'name="remind_days_before" min="0" max="60" value="3"' in page_ and 'name="invite_after_visits" min="1" max="50" value="3"' in page_
+    assert 'name="remind_days_before" min="0" max="60" value="3"' in page_
     admin.post("/admin/site/agenda", data=form())
     assert c.site_settings == {}  # nothing changed: nothing kept
 
@@ -443,22 +394,22 @@ def test_site_agenda_tab_orders_adds_removes_and_refuses_bad_ones(app, tmp_path,
             r["use"] = r["use"] and r["name"] != "Financial Report"
         rows[-1] |= {"name": "Net Report", "hint": "Who checked in", "was": False, "pos": 2}
         return rows
-    assert "Saved" in admin.post("/admin/site/agenda", data=form(moved, invite_after_visits="5")).text
+    assert "Saved" in admin.post("/admin/site/agenda", data=form(moved, remind_days_before="5")).text
     names = c.sections()
     assert names.index("Net Report") < names.index("New Business") < names.index("Old Business") and "Financial Report" not in names
-    assert c.section_hints() == {"Net Report": "Who checked in"} and c.info["invite_after_visits"] == 5
-    assert set(c.site_settings["club"]) == {"invite_after_visits"} and "sections" in c.site_settings["meeting"]
+    assert c.section_hints() == {"Net Report": "Who checked in"} and c.info["remind_days_before"] == 5
+    assert set(c.site_settings["club"]) == {"remind_days_before"} and "sections" in c.site_settings["meeting"]
     before = c.site_settings
     for bad, why in ((form(lambda r: r[:-1] + [{**r[-1], "name": "Old Business", "was": False}]), "isn&#39;t a usable section name"),
                      (form(lambda r: r[:-1] + [{**r[-1], "name": "Attendance", "was": False}]), "isn&#39;t a usable section name"),
                      (form(lambda r: [{**r[0], "pos": "first"}] + r[1:]), "isn&#39;t a number"),
                      (form(lambda r: [{**x, "use": False} for x in r]), "at least one section"),
-                     (form(invite_after_visits="0"), "from 1 to 50"), (form(remind_days_before="soon"), "from 0 to 60")):
+                     (form(remind_days_before="61"), "from 0 to 60"), (form(remind_days_before="soon"), "from 0 to 60")):
         r = admin.post("/admin/site/agenda", data=bad)
         assert "msg err" in r.text and why in r.text and c.site_settings == before, why
-    assert "Agenda: sections, invite after visits" in admin.get("/admin/security/admin").text
+    assert "Agenda: sections, remind days before" in admin.get("/admin/security/admin").text
     admin.post("/admin/site/agenda", data={"back": "1"})
-    assert c.site_settings == {} and "Financial Report" in c.sections() and c.info.get("invite_after_visits") is None
+    assert c.site_settings == {} and "Financial Report" in c.sections() and c.info.get("remind_days_before") is None
     # a reminder changed here alone shows "Changed here" and Back to club.yaml (they looked for the wrong key)
     admin.post("/admin/site/agenda", data=form(remind_days_before="5"))
     page_ = admin.get("/admin/site/agenda").text
@@ -491,51 +442,53 @@ def test_site_features_and_bylaws_tabs(app, tmp_path, monkeypatch):
     c = web.archive.club
     c.save_app_admins({"n0offc"})
     admin, member = app("n0offc"), app("n0bbbb")
-    feats = {"chow": "1", "holidays": "us", "elections": "us-oh"}  # as the test club.yaml has them
+    feats, cal = {"chow": "1"}, {"holidays": "us", "elections": "us-oh"}  # as the test club.yaml has them
     cert = {"cert_on": "1", "cert_name": "Bond (Certificate of Indebtedness)", "cert_short": "bond", "cert_note": "Each member buys one."}
-    for tab, data in (("features", feats), ("bylaws", cert)):
+    for tab, data in (("features", feats), ("calendar", cal), ("bylaws", cert)):
         assert member.get(f"/admin/site/{tab}").status_code == 404 and member.post(f"/admin/site/{tab}", data=data).status_code == 404
         assert "Changed here" not in admin.get(f"/admin/site/{tab}").text
         admin.post(f"/admin/site/{tab}", data=data)
         assert c.site_settings == {}, tab  # unchanged: nothing kept
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1", "public_chow": "1"})
+    admin.post("/admin/site/features", data={})
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1", "public_chow": "1"})
     assert not c.has("chow") and not c.calendar.get("holidays") and c.calendar["elections"] == "us-oh"
     assert c.info["public_calendars"] == ["events"]  # never chow, even if sent
     assert c.site_settings == {"modules": {"chow": False}, "calendar": {"holidays": ""}, "club": {"public_calendars": ["events"]}}
     before = c.site_settings
-    assert "Pick a region" in admin.post("/admin/site/features", data={"holidays": "zz"}).text and c.site_settings == before
+    assert "Pick a region" in admin.post("/admin/site/calendar", data={"holidays": "zz"}).text and c.site_settings == before
     import datetime as dt
 
     from club_minutes import chow
     rows = lambda *hs: {"hol_rows": str(len(hs) + 1)} | {f"hol_{k}{i}": v for i, h in enumerate(hs) for k, v in h.items()}
     eve = {"name": "Christmas  Eve", "month": "12", "day": "d24", "after": "0"}
     black = {"name": "Black Friday", "month": "11", "day": "w3:4", "after": "1"}  # the day after the 4th Thursday
-    admin.post("/admin/site/features", data={"holidays": "Germany: Bayern", "elections": "us-oh", "public_events": "1"} | rows(eve, black))
-    assert c.calendar["holidays"] == "de-by" and "Germany: Bayern" in admin.get("/admin/site/features").text  # a name, kept as its code
+    admin.post("/admin/site/calendar", data={"holidays": "Germany: Bayern", "elections": "us-oh", "public_events": "1"} | rows(eve, black))
+    assert c.calendar["holidays"] == "de-by" and "Germany: Bayern" in admin.get("/admin/site/calendar").text  # a name, kept as its code
     assert c.calendar["extra_holidays"] == [{"name": "Christmas Eve", "month": 12, "day": 24, "after": 0},
                                             {"name": "Black Friday", "month": 11, "weekday": 3, "nth": 4, "after": 1}]
     assert chow.holiday(c, dt.date(2026, 12, 24)) == "Christmas Eve" and chow.holiday(c, dt.date(2026, 12, 26)) == "Second Day of Christmas"
     assert chow.holiday(c, dt.date(2024, 11, 29)) == "Black Friday" and chow.holiday(c, dt.date(2024, 11, 22)) is None  # not the 4th Friday
-    tab = admin.get("/admin/site/features").text
+    tab = admin.get("/admin/site/calendar").text
     assert 'value="w3:4" selected' in tab and 'value="d24" selected' in tab
-    c.save_site_settings({k: None for k in web.FEATURE_KEYS if k != ("calendar", "extra_holidays")})
-    assert "Back to club.yaml" in admin.get("/admin/site/features").text  # its own holidays alone are something to go back from
+    c.save_site_settings({k: None for k in web.CALENDAR_KEYS if k != ("calendar", "extra_holidays")})
+    assert "Back to club.yaml" in admin.get("/admin/site/calendar").text  # its own holidays alone are something to go back from
     for bad in ({**eve, "day": "x"}, {**eve, "month": "13"}, {**eve, "day": "d30", "month": "2"}, {**black, "day": "w3:5"}):
-        r = admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh"} | rows(bad))
+        r = admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh"} | rows(bad))
         assert "The club&#39;s own holidays" in r.text and len(c.calendar["extra_holidays"]) == 2, bad
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows({**eve, "name": ""}, black))
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows({**eve, "name": ""}, black))
     assert [h["name"] for h in c.calendar["extra_holidays"]] == ["Black Friday"]  # an emptied name removes it
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows(black, eve) | {"hol_rm0": "1"})
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1"} | rows(black, eve) | {"hol_rm0": "1"})
     assert [h["name"] for h in c.calendar["extra_holidays"]] == ["Christmas Eve"]  # Remove ticked: gone on save
     assert "holiday" in __import__("club_minutes.calview", fromlist=["x"]).kinds(c)  # its own holidays alone are enough for the calendar
-    admin.post("/admin/site/features", data={"holidays": "", "elections": "us-oh", "public_events": "1"})
+    admin.post("/admin/site/calendar", data={"holidays": "", "elections": "us-oh", "public_events": "1"})
     before = c.site_settings
     admin.post("/admin/site/bylaws", data={"ref_dues": "VII", "ref_arrears": "<b>VII.B</b>", "arrears_note": "Only the  Board\nmay suspend."})
     assert c.certificate is None and c.cite("dues") == " (bylaws VII)" and c.bylaws["arrears_note"] == "Only the Board may suspend."
     assert "&lt;b&gt;VII.B&lt;/b&gt;" in admin.get("/admin/site/bylaws").text
     assert "Give the certificate" in admin.post("/admin/site/bylaws", data={"cert_on": "1", "cert_name": " "}).text and c.certificate is None
-    assert "Features: chow, public calendars, holidays" in admin.get("/admin/security/admin").text
-    for tab in ("features", "bylaws"):
+    log = admin.get("/admin/security/admin").text
+    assert "Features: chow" in log and "Calendar: public calendars, holidays" in log
+    for tab in ("features", "calendar", "bylaws"):
         admin.post(f"/admin/site/{tab}", data={"back": "1"})
     assert c.site_settings == {} and c.has("chow") and c.certificate["short"] == "bond" and c.cite("dues") == ""
 
@@ -858,7 +811,6 @@ URL_SECRET = re.compile(r"[?&;](jwt|t|token|key|secret|email\w*|addr\w*)=")
 URL_SECRETS_OK = {
     ("auth.py", "?t="): "one-time sign-in and email-confirm links, emailed (and hidden in logs by hide_tokens)",
     ("web.py", "?t="): "one-time admin-mode and recovery links, emailed",
-    ("web.py", "?jwt="): "the video redirect, sent with Referrer-Policy: no-referrer",
     ("web.py", "&email_sent="): "the profile page's note: an address in our own page's URL; the default Referrer-Policy is same-origin",
 }
 
@@ -872,4 +824,15 @@ def test_no_token_or_address_in_a_url_without_a_reason():
                     found.setdefault((p.name, m.group(0)), []).append(i)
     unknown = {k: v for k, v in found.items() if k not in URL_SECRETS_OK}
     assert not unknown, f"a token or address in a URL: add a reason to URL_SECRETS_OK, or hide it: {unknown}"
-    assert web.app.router and 'Referrer-Policy"] = "no-referrer"' in Path(web.__file__).read_text()  # the jwt redirect's reason holds
+
+
+def test_access_log_hides_tokens():
+    import logging
+    rec = lambda path: logging.LogRecord("uvicorn.access", 20, "", 0, '%s - "%s %s HTTP/%s" %d', ("10.0.0.1:5", "GET", path, "1.1", 200), None)
+    for path, shown in (("/calendar/feed/AbC_d-9xYz.ics?show=chow", "/calendar/feed/….ics?show=chow"),
+                        ("/login/link?t=s3cr3t-tok_en", "/login/link?t=…"), ("/admin/confirm/link?next=/x&t=abc", "/admin/confirm/link?next=/x&t=…"),
+                        ("/login?next=%2Fadmin%2Fconfirm%2Flink%3Ft%3DAb-9_x", "/login?next=%2Fadmin%2Fconfirm%2Flink%3Ft%3D…"),
+                        ("/apply/Ab-9_xYz", "/apply/…"), ("/apply/Ab-9_xYz/pdf", "/apply/…/pdf"),
+                        ("/minutes?tab=open", "/minutes?tab=open")):
+        r = rec(path)
+        assert web._hide_tokens(r) and r.getMessage() == f'10.0.0.1:5 - "GET {shown} HTTP/1.1" 200', path

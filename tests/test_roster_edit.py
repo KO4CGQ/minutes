@@ -217,6 +217,21 @@ def test_another_members_callsign_is_never_an_other_spelling(env):
     assert Club(FIX / "test-club.yaml", roster=rows[1:]).canonical("n0oldx") == "n0bbbb"
 
 
+def test_a_former_callsign_never_makes_an_admin(caplog):
+    """A stale callsign under admins: (a lapsed call, a typo) never resolves through a former callsign someone lists:
+    only a member id or a current callsign counts. Suspensions match the same way."""
+    rows = json.loads(json.dumps(PEOPLE))
+    rows[0]["aliases"] = ["N0GONE"]  # Amy's "former callsign"
+    rows[1]["callsign"] = "N0BOBB"  # Bob's new call; his id stays n0bbbb
+    c = Club(FIX / "test-club.yaml", roster=rows)
+    c.admins = {"n0gone", "n0bobb"}
+    assert c.canonical("n0gone") == "n0aaaa"  # mentions and links still follow the alias
+    assert not c.is_admin("n0aaaa") and c.is_admin("n0bbbb") and c.all_admins == {"n0gone", "n0bbbb"}
+    with caplog.at_level("WARNING"):
+        c._load(rows)
+    assert "names no current member: n0gone" in caplog.text
+
+
 def test_a_members_own_email_change_completes(env):
     """In 1.0 the confirmation link went to /profile/email?t=…, which is the Email settings page, so a member's own
     email change never happened. Now it's /email/confirm, and it signs them out everywhere."""

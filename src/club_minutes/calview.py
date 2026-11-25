@@ -3,13 +3,14 @@ Planning, Community), the minutes' dated Upcoming Events, chow nights and shared
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import re
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
-from . import business, chow, regions
+from . import business, chow, meetings, regions
 from . import events as store
 from .club import DATA, Club, show_date
 from .richtext import plain, title
@@ -35,6 +36,8 @@ class Entry:
     occ: str | None = None  # a repeating event's original date (which date to edit)
     notes: str = ""
     zone: str = ""  # an event kept in another time zone: its times there ("Sat Jun 27 18:00 – Sun Jun 28 20:59 UTC")
+    meeting: bool = False  # a date of a club meeting series: it can be cancelled or rescheduled
+    change: str = ""  # that date's record: "cancelled" or "moved"
     dup: str = ""  # another entry the same day that looks like the same event (a hint; nothing is hidden)
 
     def days(self, lo: dt.date, hi: dt.date) -> list[dt.date]:
@@ -139,17 +142,18 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     kinds = public_kinds(club) if public else list(store.CALS)
     tz = club.timezone
     evs = store.load()
-    off = store.cancelled(evs, lo - dt.timedelta(days=7), hi + dt.timedelta(days=7))  # the weekly meeting on a "No meeting" night
     for e in evs:
         if e["cal"] not in kinds:
             continue
         pad = store.reach(e)  # a date moved to another day, or another zone's date, can land in the range from outside it
         for d in store.dates(e, lo - pad, hi + pad):
-            if e.get("meeting") and d in off:
-                continue
             o = store.occurrence(e, d)
+            rec = e.get("changes", {}).get(d.isoformat(), {}) if e.get("meeting") else {}
+            if rec.get("cancelled"):  # a cancelled meeting stays on its date, as "No meeting"
+                o = {**o, "title": "No meeting" + (f" ({rec['reason']})" if rec.get("reason") and not public else "")}
             x = _entry(store.in_zone(o, e.get("tz"), tz), e["cal"], id=e["id"], repeats=bool(e.get("repeat")),
-                       occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz))
+                       occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz),
+                       meeting=bool(e.get("meeting")), change="cancelled" if rec.get("cancelled") else "moved" if rec.get("moved") else "")
             if x.end >= lo and x.start <= hi:
                 out.append(x)
     minutes = []  # the minutes' dated Upcoming Events, on the calendar the leader picked (Club events by default)
@@ -167,7 +171,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     if "community" in kinds:
         out += elections(club, lo, hi)
     if not public:
-        at = dt.time.fromisoformat(club.meeting_time)
+        at = dt.time.fromisoformat((meetings.first(club) or (0, "00:00"))[1])
         for d, x in chow.upcoming(chow.load(), lo, n=400) if club.has("chow") else []:
             if d > hi.isoformat():
                 break
@@ -221,13 +225,33 @@ def _order(e: Entry):
 def feed_token(mid: str, reset: bool = False) -> str:
     """The secret in a member's private feed address (calendar-feeds.json). reset: a new one; the old link stops working."""
     import secrets
+    with _feeds() as tokens:
+        if reset or mid not in tokens:
+            tokens[mid] = secrets.token_urlsafe(24)
+        return tokens[mid]
+
+
+def forget_feed(mid: str) -> None:
+    """A member's feed address gone (they left): the link stops working."""
+    with _feeds() as tokens:
+        tokens.pop(mid, None)
+
+
+@contextlib.contextmanager
+def _feeds():
+    """calendar-feeds.json, read and written back under a lock: the web app and the daily job both change it."""
+    import fcntl
     p = DATA / "calendar-feeds.json"
-    tokens = json.loads(p.read_text()) if p.exists() else {}
-    if reset or mid not in tokens:
-        tokens[mid] = secrets.token_urlsafe(24)
-        p.write_text(json.dumps(tokens))
-        p.chmod(0o600)
-    return tokens[mid]
+    with open(DATA / "calendar-feeds.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        tokens = json.loads(p.read_text()) if p.exists() else {}
+        before = dict(tokens)
+        yield tokens
+        if tokens != before:
+            tmp = p.with_suffix(".tmp")
+            tmp.write_text(json.dumps(tokens))
+            tmp.chmod(0o600)
+            tmp.replace(p)
 
 
 def member_for_feed(token: str) -> str | None:

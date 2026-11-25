@@ -67,6 +67,8 @@ def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new
             raise ValueError("Nothing was changed.")
         d = archive.root / slug
         shutil.copy2(d / "minutes.md", version_path(archive, slug, m.version))
+        if m.quorum:
+            m.quorum = _requorum(archive.club, m.quorum, {*m.in_person, *m.remote}, {*new.in_person, *new.remote})
         m.in_person, m.remote, m.guests, m.visitors = new.in_person, new.remote, new.guests, new.visitors
         m.sections = new.sections
         m.version += 1
@@ -84,6 +86,18 @@ def correct(archive: Archive, slug: str, by: str, reason: str, version: int, new
         finally:
             archive.reload()  # m is the archive's own: if the save failed, back to what's on disk
         return archive.by_slug[slug]
+
+
+def _requorum(club, q: dict, old: set[str], new: set[str]) -> dict:
+    """The saved quorum record after attendance changed: the rule and the members counted that night stay (the record keeps
+    no ids, so today's roster only sorts the people who were added or removed into Active/officer); present and officers
+    move by them. shortcut: a member who left the Active list since counts as a guest here, when they're added or removed."""
+    active, officers = club.quorum_ids()
+    step = lambda ids: (sum(x in active for x in ids), sum(x in officers for x in ids))
+    (a, ao), (r, ro) = step(new - old), step(old - new)
+    q = {**q, "present": q["present"] + a - r} | ({"officers": q["officers"] + ao - ro} if "officers" in q else {})
+    q["met"] = q["present"] >= q.get("needed", 0) and q.get("officers", 0) >= q.get("officers_needed", 0)
+    return q
 
 
 def mark_reviewed(archive: Archive, slug: str, by: str) -> Meeting:

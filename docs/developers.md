@@ -92,8 +92,120 @@ CodeQL findings reviewed as false positives are listed in `dev/codeql-accepted.t
 ## Roles and permissions
 What a member may do is a **permission** (`PERMISSIONS` in `src/club_minutes/club.py`: lead, correct, calendar, chow, contacts, emails, status, oversee (Roster changes), moderate (business items, comments, pictures, the calendar log), treasurer, money, members, roster_emails), and **roles** say which permissions each gives. A new check asks `archive.club.may(member, "permission")`, plus `admin_mode(request)` (admins in admin mode may do everything); never `member.officer`, `member.role` or words in a title. `Club.role_table()` is every role: the built-ins (`ROLES`, with what they allow as they ship) and the club's own, each given by whole office titles (`Club.office_list()`; any capitals; a title that isn't an office gives nothing) and by members picked by hand. Admins edit it on Admin → Site → Roles; `data/roles.json` keeps each role's picked members under its key (1.0's shape, so a rollback still reads Meeting leader and Calendar editor) and, under `table`, each role that differs from how it ships. Two built-in keys are older than their names: `board` is Minutes editor and `minutes_editor` is Meeting leader. A save is refused if any permission would be left with no role; `money` always brings `treasurer`. Admin isn't a role: it's `admins:` and Admin → Security, with admin mode and its re-confirm. A new permission goes in `PERMISSIONS` (and in a built-in role's defaults if one should have it) and shows on Site → Roles by itself.
 
+## Writing a plugin (experimental)
+A plugin is a Python package an admin installs next to the app and ticks on at Admin → Site → Features. Experimental: the API (`PLUGIN_API = 1` in `src/club_minutes/plugins.py`) may change; a plugin written for another number is skipped and Site says so.
+
+**Releasing it.** Servers install a plugin from its Git repository with `deploy/plugin.sh` (server admin guide → Plugins), at its newest `vX.Y.Z` tag, and move it to its newest tag at every app update. So tag a release only when it works with the app's current plugin API; when the API number goes up, tag one built for the new number soon after the app's release (until then, servers turn the plugin off, or wait for it before updating, as each admin chose).
+
+**A minimal plugin.** A Git repository (or a folder in one) laid out like this:
+```
+pyproject.toml
+library_plugin/__init__.py     the module: the names below, at module level
+library_plugin/templates/books.html
+library_plugin/guide.md
+```
+```toml
+[project]
+name = "club-minutes-library"
+version = "0.1.0"
+[project.entry-points."club_minutes.plugins"]
+library = "library_plugin"          # the entry point's name is the module's NAME
+[build-system]
+requires = ["hatchling"]            # hatchling packs templates/ and guide.md with the module; with another
+build-backend = "hatchling.build"   # backend, list them as package data
+```
+```python
+from fastapi import APIRouter, Request
+API, NAME, TITLE, DESCRIPTION = 1, "library", "Library", "Members borrow the club's books."
+PERMISSIONS = {"librarian": "add and remove books"}
+NAV = [("Library", "", None)]
+GUIDE = "guide.md"
+api = None                          # the app sets it before the first request: read it inside handlers
+router = APIRouter()
+
+@router.get("")                     # /library ("/" would be /library/)
+def books(request: Request):
+    return api.page(request, "books.html", books=api.storage.load().get("books", {}))
+```
+```jinja
+{% extends "base.html" %}{% block title %}Library{% endblock %}{% block body %}
+<h1>Library</h1>...
+{% endblock %}
+```
+Tag a release (`git tag v0.1.0`): servers install the newest `vX.Y.Z` tag, nothing else.
+
+**Finding it.** The entry point in the group `club_minutes.plugins` above, named the same as the module's `NAME`.
+The module declares `API = 1`, `NAME` (lowercase letters and digits; also its address prefix, `/` and the name; refused if the app has that address already), `TITLE`, `DESCRIPTION`, and `DATA` and `SHARES` if it uses members' data (see **Declaring data**). Everything else below is optional. A plugin that raises when it loads, or has another API, is skipped and logged and the app runs on; if an admin had turned it on, the admins get one email per start.
+
+**What it may add.**
+These are all names at the module's top level (like `NAME`), not attributes of the router.
+- `router`: a FastAPI `APIRouter`, mounted at `/<NAME>`. **The app enforces access, not the plugin:** every path needs sign-in unless it is in `PUBLIC` (a set of paths on the router, route paths like `{"/open", "/door/{room}"}`; a `{part}` stands for any one part of the address, never a `/`; open to every method, not just GET); anything under `/<NAME>/admin` needs an admin in admin mode (others get "not found"). While the plugin is off every one of its addresses is a 404. Write the page's own checks (`api.may`) for permissions.
+- `PERMISSIONS`: `{"edit": "edit the board"}`. They show on Site → Roles, as `hello.edit`, while the plugin is on; no role has them until an admin gives one. Ask with `api.allowed(request, "edit")`: the signed-in member has it, or is an admin in admin mode. (`api.may(member_id, "edit")` asks about any member, admins not included.)
+- `NAV`: `[("Hello", "/", None), ("Editor", "/edit", "edit")]`: label, path on the router, and the permission needed (or `None`); shown in the menu to the members allowed (admins in admin mode see all).
+- A `templates/` folder next to the module. Its files are `"<NAME>/file.html"`; they extend `base.html` and fill its blocks `title` (the browser tab) and `body` (the page: a misnamed block renders an empty page, with no error); `crumb` is the back link above it. Render with `api.page(request, "file.html", **context)`, which gives the app's menu, styles and what `base.html` needs (`club`, `me`, `request`, `csp_nonce`). The same rules as the app's templates: no inline `on…=` handlers, a `<script>` needs `nonce="{{ csp_nonce }}"`, never `|safe` on text members typed.
+- `GUIDE`: the path of a Markdown file (relative to the module), shown under Help while the plugin is on.
+- `nav_ready(api)`: `False` hides the plugin's menu links (say, until its settings are filled in); admins in admin mode still see them, to finish setting it up. An error in it counts as `False`.
+- `calendar_links(api)`: a list of `(label, url)` buttons on the calendar event form that fill in the online link. A `url` that starts with `/` is a page of the plugin, relative to `/<NAME>` as in `NAV` (`"/club"` is `https://<the app>/<NAME>/club`); otherwise a full `https://` link.
+- `form_action(api)`: a list of origins (`["https://meet.example.org"]`, each `https://host` or `https://host:port`; anything else is dropped) that the pages' forms may end on, for a form that redirects to another site. The app adds them to the Content Security Policy's `form-action` **only** on the plugin's own addresses (`/<NAME>` and below) while it's on, never elsewhere.
+- `console_attendance(api)`: for a plugin that knows who is in the meeting (a video server, say). Returns a list of names of people there who aren't members (each cut to 100 characters, control and bidi characters removed); the leader's console shows them under Attendance as "Guests in the video: …", each with **+ Add as guest** (never added by themselves). The app calls it whenever the console renders its Attendance or checks in (every few seconds while a console is open) and just before the minutes are submitted, so it is also where a plugin does its marking: a member who stays in without any further event still gets marked at the next call. Keep it quick (it runs on each check-in); an error is logged and counts as no names.
+- A settings page at `/<NAME>/admin`: while the plugin is on it's a tab of Admin → Site, after the app's own (its TITLE), and Site → Features links to it too. `api.page` puts the Site heading and tabs (this one marked) above it by itself. The app writes every change there (any method but GET) to the admin log itself. Before a sensitive one (a new secret, say), ask for a fresh confirmation: `if again := api.fresh(request, "/<NAME>/admin"): return again` sends the admin to confirm with a passkey or emailed link, then back to that address, unless they did in the last few minutes.
+
+**What it gets.** The app sets `api` on the module before the first request (read it inside handlers, not when the module is imported):
+- `api.member(id)` (needs `DATA["names"]`): `{"id", "name", "active"}` or `None`; nothing else about a member. `api.members()`: every member on the roster, former ones too, as `{id: name}`, in one call.
+- `api.allowed(request, perm)` (see PERMISSIONS), `api.may(id, perm)`, `api.who(request)` (the signed-in member's id, or `None`), `api.admin_mode(request)`.
+- `api.today()`: today's date where the club is (its time zone), not the server's: for due dates and the like.
+- `api.roles(id)` (needs `DATA["roles"]`): the role keys the member holds; `api.role_labels()`: `{role key: its name}`, for a settings page that picks roles.
+- `api.base_url(request)`: the address members reach the app at (`https://host`), for links a page shows.
+- `api.email(id)`: only with `DATA["email"]`.
+- `api.send(method, url, **kwargs)`: an outgoing request, only with a `SHARES` entry naming the host (see below).
+- `api.storage.load()` / `.save(dict)` / `.update(change)`: one JSON file for the plugin in the data folder (`plugins/<NAME>.json`, in the backups), each call locked and saved atomically. To change what's stored, use `update(lambda d: ...)`: a `load()` then `save()` isn't one locked step, so two requests could lose each other's change.
+- `api.meeting()` (needs `DATA["attendance"]`): `None`, or the meeting open in the leader console now: `{"date": "YYYY-MM-DD", "opened": <unix seconds when the console opened it>, "online": "<that night's Online link on the calendar, or ''>", "present": [ids in its attendance, in person or online]}`.
+- `api.client_ip(request)` (needs `DATA["ip"]`): the visitor's real address (through the app's proxy), e.g. to tell a clubhouse network from elsewhere.
+- `api.viewing_as(request)` (no declaration needed): `True` while an admin is viewing the app as another member (read-only), when `api.who(request)` is that member. Show a read-only page then: `api.mark_present` and `api.send` raise `PermissionError` during View as, so a page can't join a meeting, issue a token or make a call as them.
+- `api.mark_present(id, in_person=False)` (needs `DATA["attendance"]`): ticks that member present, online (or in person), in the open console meeting, unless they are already in its attendance (in person or online) or there is no open meeting. Returns `True` if it did. It uses the console's own save, so the leader's console (at its next check-in) and members' live view show it; the log notes `plugin:<NAME>`. The leader can untick; to respect that, remember what you marked (and that you saw it ticked) and don't mark again.
+No `Club`, no sign-in internals, no other plugin's storage. The API can't create members or admins or give roles (the test helper's `admins=` and `give()` only touch its throwaway test club). Not gated: `who`, `may`, `allowed`, `admin_mode`, `viewing_as`, `fresh`, `page`, `base_url`, `today`, `storage` (the app needs them for access control).
+
+**Declaring data.** A plugin says what member data it uses, why, and about whom, at module level:
+```python
+DATA = {"names": {"why": "to show who borrowed each book", "about": "members"}}
+SHARES = [{"with": "the club's mail service", "host": "mail.example.org", "what": "a member's name", "why": "to post a reminder", "about": "members"}]
+```
+- `DATA` kinds and the calls they open: `names` (`member`, `members`), `email` (`email`), `roles` (`roles`, `role_labels`), `attendance` (`meeting`, `mark_present`), `ip` (`client_ip`). A call for a kind not declared raises `PermissionError` saying what to add. `visitors` opens no call: declare it for what the plugin collects itself from signed-out people (a typed name).
+- `about` is `"visitors"` (people not signed in, on the plugin's public pages), `"members"` or `"admins"`; `why` a non-empty sentence. An unknown kind or audience, or a missing `why`, fails the load: the plugin is skipped and Site → Features shows the reason.
+- `SHARES` lists what goes to outside services: `with`, `what`, `why`, `about`, and `host` (a plain host name, `meet.example.org`) unless it goes through the member's browser (a redirect) or the host is only known at run time. `api.send(method, url, **kwargs)` makes the request with `httpx`, only to `https` and a `host` listed in `SHARES` (else `PermissionError`), 10 seconds at most, redirects not followed, and writes one line per call to `plugin-calls.jsonl` in the data folder (time, plugin, method, host, only the first part of the path (for a chat webhook at /hooks/<secret>/x, just /hooks: such addresses hold a secret), status; no query, no bodies), kept 90 days like the other logs.
+- Site → Features shows all of it beside each plugin's tick, and its Plugins section of `/privacy` (the club's privacy page, open signed out; not linked from anywhere yet, until the app's own sections are written) shows what the plugins that are on declare: members see everything by audience, visitors only what is about visitors. A plugin named `privacy` is refused (that address is the app's). Declaration text is escaped, never `|safe`.
+- **The honest limit:** a plugin is Python code running inside the app, so a declaration can't stop deliberate misuse (it could read the data folder). It makes use visible, so an admin can read it before turning a plugin on, and catches a plugin that uses what it didn't mean to. `SHARES` can't be enforced for requests a plugin makes some other way.
+
+**Paths, in each place they're written:**
+
+| Where | Form | `""` / `"/"` mean |
+|---|---|---|
+| a route on `router`, and `NAV`, `PUBLIC` | relative to `/<NAME>` | `""` is `/<NAME>`, `"/"` is `/<NAME>/` (the other one is a redirect) |
+| `calendar_links` urls | relative to `/<NAME>` when they start with `/`; otherwise a full `https://…` link | `"/"` is `/<NAME>/` |
+| `api.fresh(request, next)` | an app path (`/<NAME>/admin`) | not relative |
+
+`NAV` entries are `(label, path, permission or None)`; `calendar_links` entries are `(label, url)`.
+
+**Sign-in, forms and members.** Signed out, a page (GET) answers with the sign-in page, which comes back after; any other method answers 401. A form on the plugin's own pages needs nothing extra: the app accepts a POST from its own pages and refuses one from another site (no token to add). In a `PUBLIC` handler `api.who(request)` may be `None`. Check permissions with `api.allowed(request, "librarian")`, which lets admins in admin mode in too; `api.may` alone doesn't, so admins couldn't use their own plugin. `api.member(id)` is `None` only for an id that isn't on the roster; former members are there, with `"active": False`. `storage.load()` is `{}` until the first save; `update(change)` returns the dict after the change. Store your own things under ids you make (`secrets.token_hex(4)`), not list positions: two members acting at once would shift the positions.
+
+**Testing it.** `club_minutes.testing.plugin_app` runs the app with your plugin loaded from its module (nothing to install), with pytest:
+```python
+from club_minutes.testing import plugin_app   # import it before anything else from club_minutes
+import library_plugin
+
+def test_books(tmp_path, monkeypatch):
+    app = plugin_app(library_plugin, [{"id": "m1", "first": "Jane", "last": "Doe"}, {"id": "a1", "first": "John", "last": "Doe"}],
+                     tmp_path, monkeypatch, admins=["a1"])
+    assert app.client("m1").get("/library").status_code == 200         # signed in as m1
+    assert app.client().get("/library", follow_redirects=False).status_code == 303  # signed out: sign in first
+    app.give("officer", "librarian")                                    # as Site → Roles does
+    assert app.client("a1", admin=True).get("/library/admin").status_code == 200  # an admin in admin mode
+    assert app.storage.load() == {}
+```
+The plugin is ticked on (`on=False` to start it off: every address is then a 404); `app.api` is its `api`, `app.club` the club. Everything is put back when the test ends. Experimental, like the API.
+
 ## Election days for another state
-Election days are worked out from a state's rules in a small file in `src/club_minutes/regions/`, named for its code: `us_oh.py` is `us-oh`. A file there is listed on Admin → Site → Features by itself; nothing else needs changing. It has:
+Election days are worked out from a state's rules in a small file in `src/club_minutes/regions/`, named for its code: `us_oh.py` is `us-oh`. A file there is listed on Admin → Site → Calendar by itself; nothing else needs changing. It has:
 - `NAME`: how the list shows it, e.g. `"Ohio: primaries and general election"`.
 - `elections(lo, hi)`: every election day from `lo` to `hi` (dates) as `[(date, name, notes)]`; `notes` is shown with the event (polling hours, where to find your ballot).
 - A docstring citing the law the rules come from, and a `shortcut:` line with the year they were checked.

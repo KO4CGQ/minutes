@@ -44,6 +44,7 @@ def main() -> None:
     ci.add_argument("--write", action="store_true", help="save it (refuses if a chow schedule already exists)")
     rem = sub.add_parser("reminders", help="daily: business item and chow reminders, and the meeting-day email")
     rem.add_argument("--dry-run", action="store_true", help="print what would be sent; send and record nothing")
+    sub.add_parser("webhooks", help="every minute: send the event webhooks that are due (and retry failed ones)")
     sub.add_parser("auto-update", help="nightly: install a newer release that needs no steps by hand, after a backup (if turned on)")
     bk = sub.add_parser("backup", help="an encrypted backup of the data folder, checked, kept and sent off the server")
     bk.add_argument("--if-due", action="store_true", help="only if the schedule on the Backups page says one is due (the hourly timer)")
@@ -52,6 +53,7 @@ def main() -> None:
     rs.add_argument("dest", type=Path)
     un = sub.add_parser("data-undo", help="put back the data folder's copy from before an upgrade (update.sh, when the new version didn't start)")
     un.add_argument("was", type=int, help="the data version before the update")
+    sub.add_parser("plugins-check", help="update.sh: turn off a plugin that has no release for this version, or make the update wait for it")
     srv = sub.add_parser("serve", help="run the web UI")
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--port", type=int, default=8000)
@@ -61,7 +63,10 @@ def main() -> None:
     if a.cmd == "data-undo":
         print("Put back the data from before the upgrade." if upgrade.undo(a.was) else "No upgrade to undo.")
         return
-    if a.cmd != "restore":
+    if a.cmd == "plugins-check":  # before the data upgrade: the version before is still running on that data
+        from . import plugins
+        raise SystemExit(plugins.check())
+    if a.cmd not in ("restore", "webhooks"):  # webhooks only reads the queue and settings: deliver() checks the version
         for what in upgrade.run():  # every command sees the data in this version's shape
             print(f"Data upgraded: {what}")
 
@@ -121,7 +126,7 @@ def main() -> None:
         sheet.save({"Member Roster": [roster.PreviewSheet.HEADER], "Membership Log": [roster.PreviewSheet.LOG_HEADER]})
         try:
             mid = membership.add_member(club, {"callsign": a.callsign, "first": a.first, "last": a.last, "email": a.email,
-                                               "license_class": a.license_class}, by="first-member")
+                                               "license_class": a.license_class}, by="first-member", admin_ok=True)
         except Exception as e:  # noqa: BLE001
             sheet.path.unlink(missing_ok=True)  # as if never run: fix the details and run it again
             raise SystemExit(str(e)) if isinstance(e, ValueError) else e
@@ -149,6 +154,9 @@ def main() -> None:
             print(f"Removed {n} business item(s) added at that meeting.")
         business.save(s)
         print(f"Deleted {d}. Restart the web service so it drops it from memory.")
+    elif a.cmd == "webhooks":
+        from . import webhooks
+        webhooks.deliver()
     elif a.cmd == "reminders":
         import datetime as dt
 
@@ -174,16 +182,30 @@ def main() -> None:
                 auth.prune_email_log()  # a quiet site sends no email to trigger it
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't prune the Email log: {e}")
-            for name in ("admin-log.jsonl", "api-log.jsonl"):
+            for name in ("admin-log.jsonl", "api-log.jsonl", "plugin-calls.jsonl"):
                 try:
                     auth.prune_old_lines(name)
                 except Exception as e:  # noqa: BLE001
                     print(f"couldn't prune {name}: {e}")
             try:
-                if n := prefs.purge_removed():
+                n, purged = prefs.purge_removed()
+                if n:
                     print(f"dropped the settings and sign-ins of {n} member(s) now Inactive, a Silent Key or off the roster")
+                if purged:
+                    print(f"deleted the personal details of {purged} member(s) who left {prefs.PURGE_DAYS} days ago")
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't drop the settings of members who left: {e}")
+            try:
+                from . import applications
+                if n := applications.purge(club):
+                    print(f"deleted or trimmed {n} old membership application(s)")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't purge old membership applications: {e}")
+            try:
+                if upgrade.forget_copy():
+                    print("deleted the copy of the data kept from before the last update (a week old)")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't delete the copy kept from before the last update: {e}")
             try:
                 from . import pictures
                 from .store import Archive
@@ -238,7 +260,7 @@ def main() -> None:
         # chow reminders and the meeting-day email, each sent once even if this runs twice
         from .club import MEETINGS
         from .store import Archive
-        extra = prefs.chow_reminders(club, today, url) + prefs.digest(club, Archive(MEETINGS, club), today, url)
+        extra = prefs.chow_reminders(club, today, url) + prefs.digest(club, Archive(MEETINGS, club), today, url) + prefs.purge_list(club, today, url)
         new, sent = prefs.unsent([k for _, k, _, _ in extra]), []
         for mid, key, subject, body in extra:
             if key not in new:

@@ -57,7 +57,7 @@ def test_settings_from_1_0_0_are_still_read_or_renamed():
     assert not sorted(had - read - renamed - REMOVED - {"privacy: never_record"}), "a 1.0.0 setting is no longer read"
 
 
-# What clubs, their members' calendar apps and the Discord bot use, as of 1.0.0.
+# What clubs, their members' calendar apps and the club's other tools (the roster API) use, as of 1.0.0.
 # Taken out on purpose: AI assistance left the app for a plugin in 1.3. A club.yaml with an ai: block still starts
 # (test_a_1_0_0_club_yaml_with_every_setting_still_starts reads one); the command and the key are simply gone.
 REMOVED = {"ai-ask-about", "ai: model", "ai: enabled", "CLUB_MINUTES_OPENROUTER_KEY"}

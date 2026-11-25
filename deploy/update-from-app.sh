@@ -10,6 +10,9 @@ main() {
   [ -f "$REQ" ] || return 0
   mv "$REQ" "$RUN"
   local LOG; LOG=$(mktemp)
+  # the service's time ran out (systemd sends TERM to update.sh too, which puts the old version back): wait for it,
+  # and still leave the outcome for the app
+  trap 'echo "The update was stopped before it finished (out of time?)." >>"$LOG"' TERM INT
   local start; start=$(date +%s)
   local ok=false
   # The release asked for, if it's a plain X.Y.Z (the app writes this file: nothing else gets through to git)

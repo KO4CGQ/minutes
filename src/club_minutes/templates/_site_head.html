@@ -1,0 +1,3 @@
+{# Admin → Site's heading and tabs: the app's own, then each plugin that's on and has a settings page (plugins.py) #}
+<h1>Site</h1>
+<nav class="tabs" aria-label="Sections">{% set at = '/admin/site/look' if request.url.path.rstrip('/') == '/admin/site' else request.url.path %}{% for href, label in site_tabs() %}<a href="{{ href }}" class="{{ 'on' if at == href }}"{% if at == href %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>

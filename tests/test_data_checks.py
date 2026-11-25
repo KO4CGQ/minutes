@@ -35,7 +35,7 @@ FAIL_LOUDLY = {"chow.json": SAVED, "business.json": SAVED, "events.json": SAVED,
                "roles.json": "who may do what: never guessed"}
 DAMAGEABLE = ("chow.json", "business.json", "events.json", "calendar-feeds.json", "ask-about.json", "email-prefs.json",
               "settings.json", "treasurer.json", "admins.json", "roles.json", "admins-suspended.json", "recovery.json",
-              "meet-rooms.json", "site-settings.json", "links.json", "branding.json", "limits.json", "update-check.json",
+              "site-settings.json", "links.json", "branding.json", "limits.json", "update-check.json",
               "update-request.json", "update-settings.json", "backup-status.json", "stage-sync-status.json",
               "reminders-sent.json", "email-log.jsonl", "chow-log.jsonl", "calendar-log.jsonl", "treasurer-log.jsonl",
               "profile-changes.jsonl", "admin-log.jsonl", "api-log.jsonl", "ai-log.jsonl")
@@ -173,7 +173,7 @@ def test_every_login_table_is_pruned_or_listed(tmp_path):
 HISTORY = {"calendar-log.jsonl": "a line per calendar change",
            "chow-log.jsonl": "a line per chow change", "profile-changes.jsonl": "a line per roster change, the undo history",
            "treasurer-log.jsonl": "the treasurer's audit trail", "preview-outbox.jsonl": "a preview's fake outbox, never a real club"}
-TRIMS = {"email-log.jsonl", "admin-log.jsonl", "api-log.jsonl"}  # the last two: 90 days, in the daily job
+TRIMS = {"email-log.jsonl", "admin-log.jsonl", "api-log.jsonl", "plugin-calls.jsonl"}  # the last three: 90 days, in the daily job
 
 
 def test_every_growing_log_is_trimmed_or_listed():
@@ -207,7 +207,7 @@ RELEASED_FILES = {"admin-log.jsonl", "admins.json", "ai-log.jsonl", "api-log.jso
                   "site-settings.json", "stage-sync-status.json", "treasurer.json", "treasurer.lock", "treasurer-log.jsonl",
                   "update-check.json", "update-request.json", "update-running.json", "update-settings.json",
                   "update-status.json", "upgrade.lock"}
-# 1.0.1's Admin → Site settings (club.SITE_KEYS), all in site-settings.json: a key added since (Site → Video's, say)
+# 1.0.1's Admin → Site settings (club.SITE_KEYS), all in site-settings.json: a key added since (a new Site tab's, say)
 # is in a file 1.0.1 reads, so it too needs the data-version step that makes 1.0.1 refuse the data.
 RELEASED_SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                              "invite_after_visits", "remind_days_before", "public_calendars")} | {

@@ -148,14 +148,22 @@
   let closedHow = null;
   async function checkIn() {
     if (closedHow) return;
-    const r = await post("hold", readOnly ? { peek: true } : PREV ? { prev: PREV } : {}).catch(() => null);
+    const r = await post("hold", readOnly ? { peek: true } : { attendance: true, ...(PREV ? { prev: PREV } : {}) }).catch(() => null);
     if (!r) return;
     PREV = null;  // only the first check-in carries on from before a reload
     if (r.status === 409) { const j = await r.json(); if (j.closed) closed(j.closed, j.by); else if (j.holder) lock(j, held && !readOnly); return; }
-    if (!readOnly && r.ok) held = true;
+    if (!readOnly && r.ok) { held = true; takeAttendance((await r.json().catch(() => ({}))).attendance); }
     if (readOnly && r.ok) {  // they've closed it: carry on (a reload brings their last changes)
       holdbar.replaceChildren("They've closed the console. ", h("button", { class: "btn small", onclick: () => location.reload() }, "Continue the minutes"));
     }
+  }
+  // A plugin may have marked someone online (video joins) since this page last saved: take what the server has, unless
+  // this page has unsaved changes or the leader is typing a name (the next check-in tries again).
+  function takeAttendance(a) {
+    if (!a || saved.classList.contains("dirty") || panel.contains(document.activeElement) && document.activeElement.matches("input, textarea")) return;
+    const was = JSON.stringify([M.in_person, M.remote, D.video_guests]);
+    M.in_person = a.in_person; M.remote = a.remote; D.video_guests = a.video_guests;
+    if (JSON.stringify([M.in_person, M.remote, D.video_guests]) !== was && S.step === 0) render();
   }
   checkIn();
   setInterval(checkIn, 5000);
@@ -280,6 +288,9 @@
           g.name, h("small", {}, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`, { inperson: "in person", online: "online" }[gwhere(g)]].filter(Boolean).join(" · ")),
           g.visits + 1 >= D.invite_after ? h("span", { class: "invite" }, "invite to join") : null)))] : null,
       datalist,
+      (() => { const seen = D.video_guests.filter((n) => !M.guests.some((x) => key(x.name) === key(n)));  // in the video, no name of ours
+        return seen.length ? h("div", { class: "row videoguests" }, h("span", {}, "Guests in the video: "), seen.map((n) => h("span", {}, n, " ",
+          h("button", { class: "btn small", onclick: () => { M.guests.push({ name: n, callsign: "", notes: "", online: true }); render(); save(); } }, "+ Add as guest")))) : null; })(),
       M.guests.map((g, i) => h("div", { class: "row" }, h("span", { style: "flex:1" }, `${g.name} ${D.ham ? g.callsign || "" : ""} ${g.notes ? "(" + g.notes + ")" : ""}`,
           inviteDue(g) ? h("span", { class: "invite" }, "invite to join") : null),
         h("button", { class: "btn small ghost", title: "Switch between in person and online",
@@ -405,6 +416,7 @@
     if (sec === "Upcoming Chow") return chowSection();
     if (sec === "Old Business" || sec === "New Business") return businessSection(sec);
     if (sec === "Upcoming Events") return eventsSection();
+    if (sec === "Membership Applications") return applicationsSection();
     const arr = (M.sections[sec] || []).map((i) => i.text);
     const set = (a) => { M.sections[sec] = a.map((t) => ({ text: t, member: null })); };
     const rows = itemRows(arr, set);
@@ -415,6 +427,39 @@
       h("ul", {}, paid.map((t) => h("li", {}, t))),
       h("button", { class: "btn small ghost", onclick: () => { set(arr.concat(paid)); render(); save(); } }, "Add to tonight's bills")) : null;
     return h("div", {}, h("h2", {}, sec), shint(hint), treasurer, rows);
+  }
+
+  // ---------- membership applications: the candidates, and the vote from the paper ballot (applications.py) ----------
+  function applicationsSection() {
+    const sec = "Membership Applications", box = h("div", {});
+    const send = async (id, data) => {
+      const r = await fetch(`/api/meetings/${M.slug}/vote`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ id, ...data }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(j.error || j.detail || "Couldn't save"); return; }
+      D.applicants = j; draw(); save();
+    };
+    const draw = () => {
+      const A = D.applicants, here = M.in_person.length + M.remote.length;
+      M.sections[sec] = A.lines.map((t) => ({ text: t, member: null }));
+      box.replaceChildren(...A.people.map((p, i) => {
+        const b = p.ballot;
+        const yes = h("input", { type: "number", min: 0, max: 9999, value: b && !b.accepted ? b.yes : "", size: 4, id: `yes${i}` });
+        const no = h("input", { type: "number", min: 0, max: 9999, value: b && !b.accepted ? b.no : "", size: 4, id: `no${i}` });
+        const count = () => ({ yes: yes.value === "" ? null : +yes.value, no: no.value === "" ? null : +no.value });
+        const status = b ? h("p", { class: "msg ok", role: "status" }, b.accepted ? "Accepted." : `${b.yes}\u2013${b.no}: ${b.passed ? "passed" : "not passed"}. The minutes say so; submitting them ${b.passed ? "records it" : "turns the application down"}.`) : null;
+        return h("div", { class: "card" }, h("h3", {}, p.name), h("p", { class: "hint" }, `Sponsored by ${p.sponsor}.`),
+          !p.can_vote ? h("p", { class: "hint" }, `Not up for a vote yet: it can be recorded from ${p.due}.`)
+            : A.vote ? h("div", { class: "row" },
+              h("label", { for: `yes${i}` }, "Yes"), yes, h("label", { for: `no${i}` }, "No"), no,
+              h("span", { class: "hint" }, `${here} members present. Passes under: ${A.rule}.`),
+              h("button", { class: "btn small", onclick: () => send(p.id, count()) }, b ? "Replace the count" : "Record the vote"))
+              : h("div", { class: "row" }, h("button", { class: "btn small", onclick: () => send(p.id, {}) }, b ? "Accepted" : "Accept them")),
+          status);
+      }));
+    };
+    draw();
+    return h("div", {}, h("h2", {}, sec), shint("Each candidate is listed in the minutes until the vote. Only the counts go in the minutes, never who voted how."), box);
   }
 
   // ---------- upcoming events: text plus a date and optional time ("when"), for the club calendar ----------
@@ -608,21 +653,33 @@
       const val = (w) => w.querySelector("input").value.trim();
       const go = async () => {
         if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
+        refresh();  // attendance may have changed since the form opened: check again now, still advisory
+        const q = quorum();
+        if (q && !q.ok && !confirm("No quorum yet: motions shouldn't be brought up until there is one. Add this motion anyway?")) return;
         if (await send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value, pics: mpics })) { mform = motionForm(); draw(); }
       };
-      const q = quorum();
-      return h("div", { class: "bizitem motion" },
-        q && !q.ok ? h("p", { class: "msg warn", role: "status" }, "No quorum yet: motions shouldn't be brought up until there is one.") :
-          q ? h("p", { class: "hint", role: "status" }, `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`) : null,
+      const note = h("p", { role: "status" });
+      const refresh = () => {  // the quorum as it is now, not as it was when the form was made
+        const q = quorum();
+        note.hidden = !q;
+        note.className = q && !q.ok ? "msg warn" : "hint";
+        note.textContent = !q ? "" : !q.ok ? "No quorum yet: motions shouldn't be brought up until there is one."
+          : `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`;
+      };
+      refresh();
+      const box = h("div", { class: "bizitem motion" },
+        note,
         h("div", { class: "row" }, mover, h("span", {}, "moved to")), what, picker, thumbs,
         h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
+      box.refresh = refresh;
+      return box;
     };
     // New Business: two cards, Items and Motions, both open, each with its box ready (Jim, 2026-11-20)
     const card = (title, rows, form) => h("details", { class: "card bizcard", open: true }, h("summary", {}, h("h3", {}, title)), ...rows, form);
     let addBox, mform;  // kept across redraws (any save redraws), so a half-typed item or motion isn't lost
     const draw = () => {
       const items = isNew ? D.business.new : D.business.old;
-      if (isNew) { addBox ??= add(); mform ??= motionForm(); }
+      if (isNew) { addBox ??= add(); mform ??= motionForm(); mform.refresh(); }
       box.replaceChildren(...(isNew ? [card("Items", items.filter((x) => !x.motion).map(row), addBox),
         card("Motions", items.filter((x) => x.motion).map(row), mform)]
         : [...(items.length ? items.map(row) : [h("p", { class: "muted" }, "No open items.")]),

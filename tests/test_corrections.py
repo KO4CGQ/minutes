@@ -547,3 +547,21 @@ def test_an_unreadable_minutes_file_is_never_replaced_and_a_bad_correction_is_re
     with pytest.raises(ValueError, match="wouldn't read back"):
         corrections.correct(a, "2026-10-15", "kim", "fix", 1, fixed, False)
     assert (tmp_path / "2026-10-15" / "minutes.md").read_text() == before
+
+
+def test_a_correction_to_attendance_recomputes_the_saved_quorum_line(tmp_path):
+    a = archive(tmp_path)
+    a.club._configure({**a.club.yaml, "meeting": {"quorum": {"percent": 50, "officers": 1}}})  # 3 of 6; one officer
+    m = a.by_slug["2026-10-15"]
+    assert m.quorum is None  # no rule that night: stays without one
+    m = corrections.correct(a, m.slug, "doe", "a guest was counted", 1, edit(m, in_person=["kim"]), notice=False)
+    assert m.quorum is None and m.quorum_text == ""
+    m.quorum = a.club.quorum_record(m.in_person + m.remote)  # a night with the rule: 1 of 6, no officer
+    m.save(tmp_path)
+    a.reload()
+    m = a.by_slug["2026-10-15"]
+    assert m.quorum_text.startswith("No quorum: 1 of 6 members; 3 needed")
+    m = corrections.correct(a, m.slug, "doe", "two more were here", 2, edit(m, in_person=["kim", "doe"], remote=["roe"]), notice=False)
+    assert m.quorum["present"] == 3 and m.quorum["officers"] == 1 and m.quorum_text.startswith("Quorum present: 3 of 6 members")
+    m = corrections.correct(a, m.slug, "doe", "Rick wasn't there", 3, edit(m, remote=[]), notice=False)
+    assert m.quorum_text.startswith("No quorum: 2 of 6 members; 3 needed; 0 officers present")
