@@ -42,3 +42,13 @@ def test_roster_api_allowlist(tmp_path, monkeypatch):
     assert bot.get("/api/roster", headers={**auth, "X-Forwarded-For": "203.0.113.9"}).status_code == 403
     assert TestClient(web.app, client=("192.168.1.52", 50000)).get("/api/roster", headers=auth).status_code == 403
     assert web.app.openapi_url is None and TestClient(web.app).get("/docs", follow_redirects=False).status_code != 200
+
+
+def test_a_member_without_a_callsign_is_sent_with_callsign_null(tmp_path, monkeypatch):
+    """Clubs that aren't amateur radio clubs (or a member without one): the bot skips such a row (it matches by callsign)."""
+    people = [*PEOPLE, {"id": "m4k2x9", "first": "Jane", "last": "Doe", "email": "jane@example.org"}]
+    monkeypatch.setattr(web, "archive", Archive(tmp_path, Club(FIX / "test-club.yaml", roster=people)))
+    monkeypatch.setattr(web, "DATA", tmp_path)
+    monkeypatch.setenv("CLUB_MINUTES_ROSTER_API_TOKEN", "s3cret")
+    r = TestClient(web.app, client=("127.0.0.1", 50000)).get("/api/roster", headers={"Authorization": "Bearer s3cret"})
+    assert {"callsign": None, "name": "Jane Doe", "email": "jane@example.org", "officer": False, "former": []} in r.json()
