@@ -10,6 +10,9 @@ PUBLIC = {"/open", "/door/{room}"}
 PERMISSIONS = {"edit": "edit the hello board"}
 NAV = [("Hello", "/", None), ("Hello editor", "/gated", "edit")]
 GUIDE = "guide.md"
+DATA = {k: {"why": "to run the hello board", "about": "members"} for k in ("names", "roles", "attendance", "ip")}
+DATA["visitors"] = {"why": "to greet <b>Pat</b> at the door", "about": "visitors"}
+SHARES = [{"with": "the example mail service", "host": "api.example.org", "what": "a member's first name", "why": "to say hello by post", "about": "members"}]
 api = None  # the app puts the plugin's api here; handlers read it when a request comes
 router = APIRouter()
 

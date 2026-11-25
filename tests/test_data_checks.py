@@ -173,7 +173,7 @@ def test_every_login_table_is_pruned_or_listed(tmp_path):
 HISTORY = {"calendar-log.jsonl": "a line per calendar change",
            "chow-log.jsonl": "a line per chow change", "profile-changes.jsonl": "a line per roster change, the undo history",
            "treasurer-log.jsonl": "the treasurer's audit trail", "preview-outbox.jsonl": "a preview's fake outbox, never a real club"}
-TRIMS = {"email-log.jsonl", "admin-log.jsonl", "api-log.jsonl"}  # the last two: 90 days, in the daily job
+TRIMS = {"email-log.jsonl", "admin-log.jsonl", "api-log.jsonl", "plugin-calls.jsonl"}  # the last three: 90 days, in the daily job
 
 
 def test_every_growing_log_is_trimmed_or_listed():

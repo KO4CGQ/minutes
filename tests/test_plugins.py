@@ -261,3 +261,45 @@ def test_a_roles_save_keeps_a_plugins_permissions_while_it_is_off_or_not_loaded(
     t["officer"]["perms"].remove("hello.edit")
     club.save_roles(t)  # while it's on, taking it off a role works as before
     assert "hello.edit" not in club.role_table()["officer"]["perms"]
+
+
+def test_undeclared_data_is_refused_and_bad_declarations_fail_to_load(env):
+    api = plugins.LOADED["hello"].api
+    assert api.member("m1")["name"] == "Jane Doe"  # declared
+    with pytest.raises(PermissionError, match="'email'"):
+        api.email("m1")
+    ok = {"why": "x", "about": "members"}
+    for bad in ({"nope": ok}, {"names": {"why": "", "about": "members"}}, {"names": {"why": "x", "about": "everyone"}}, {"names": "x"}):
+        with pytest.raises(ValueError):
+            plugins.Plugin(module("bad", DATA=bad), "bad")
+    with pytest.raises(ValueError):
+        plugins.Plugin(module("bad", SHARES=[{"with": "a", "what": "b", "why": "c", "about": "members", "host": "https://x.org/y"}]), "bad")
+    assert "privacy" in plugins.APP_PREFIXES  # /privacy is the app's: load() refuses a plugin named that
+
+
+def test_features_and_the_data_page_show_declarations_escaped_and_visitors_see_only_theirs(env):
+    club, a, _ = env
+    feat = client(a, "n0admn", admin=True).get("/admin/site/features").text
+    assert "to run the hello board" in feat and feat.count("api.example.org") >= 1 and "&lt;b&gt;Pat&lt;/b&gt;" in feat and "<b>Pat</b>" not in feat
+    assert "No plugin" in client(a).get("/privacy").text  # signed out, and nothing is on
+    club.save_site_settings({("plugins", "hello"): True})
+    mine = client(a, "m1").get("/privacy").text
+    assert "About members" in mine and "About visitors" in mine and "a member&#39;s first name" in mine
+    anon = client(a).get("/privacy")
+    assert anon.status_code == 200 and "&lt;b&gt;Pat&lt;/b&gt;" in anon.text and "to run the hello board" not in anon.text
+    assert "/privacy" not in client(a, "m1").get("/help").text  # not linked until the app's own sections are written (#68)
+
+
+def test_send_only_to_a_declared_https_host_and_logs_no_query_or_body(env, monkeypatch):
+    seen = []
+    monkeypatch.setattr(plugins.httpx, "request", lambda m, u, **kw: seen.append((m, u, kw)) or types.SimpleNamespace(status_code=204))
+    api = plugins.LOADED["hello"].api
+    for url in ("https://other.example.org/x", "http://api.example.org/x", "ftp://api.example.org/x"):
+        with pytest.raises(PermissionError):
+            api.send("POST", url)
+    assert not seen and not (clubmod.DATA / plugins.CALLS_LOG).exists()
+    assert api.send("post", "https://API.example.org/v1/hi?key=secret", json={"name": "Jane"}).status_code == 204
+    assert seen[0][2]["timeout"] == 10 and seen[0][2]["follow_redirects"] is False
+    line = (clubmod.DATA / plugins.CALLS_LOG).read_text()
+    assert '"host": "api.example.org"' in line and '"path": "/v1/hi"' in line and '"status": 204' in line
+    assert "secret" not in line and "Jane" not in line

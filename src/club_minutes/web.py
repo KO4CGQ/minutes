@@ -126,6 +126,7 @@ KNOWN_COOKIE = "club_minutes_known"  # marks a browser a member has signed in wi
 CHALLENGE_COOKIE = "club_minutes_pk"
 PUBLIC_PATHS = ("/login", "/auth/passkey/login/", "/static/", "/brand/", "/favicon.ico", "/email/confirm",
                 "/calendar/public", "/calendar/feed/",  # public calendars (if any are made public); private feeds carry their own secret
+                "/privacy",  # the club's privacy page: signed out, the public part only (not linked yet: being built)
                 "/api/roster")  # its own token, and only from the server itself
 
 def by_last_name(ids):
@@ -2578,6 +2579,13 @@ def help_page(request: Request, guide: str = "members"):
     guides = guides_for(request)
     return page(request, "help.html", guide=guide, guides=guides | ({guide: GUIDES[guide]} if guide in GUIDES and guide not in guides else {}),
                 html=Markup(html))
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy(request: Request):
+    """The privacy page; so far only its Plugins part: what the plugins that are on say they use and share, by whom it's about. Signed out: only
+    what's about visitors. A plugin can't be named "plugins": this address is the app's."""
+    return page(request, "privacy.html", groups=plugins.disclosure(archive.club, bool(request.state.member)), about=plugins.ABOUT)
 
 
 @app.get("/help/screenshots/{name}")
