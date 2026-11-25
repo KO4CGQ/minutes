@@ -41,7 +41,7 @@ In admin mode, the name menu's **Admin** lists the admin tools, each with a line
 - 💾 **Backups:** the last one.
 - ⬆️ **Updates:** what's running and what's available.
 - 🎨 **Site:** the club's settings.
-- ✉️ **Email log:** anything held back this week; every email is kept 90 days (at most the last 1,000). When a member becomes Inactive or a Silent Key, or leaves the roster, the daily job also takes their address out of it. 90 days after it first sees a member gone (noted in `removed.json`), it also blanks their roster row's email, phone, address, birthday and sharing, and deletes their photo, calendar feed link and `profile-changes.jsonl` lines; backups made before then keep them until they age out.
+- ✉️ **Email log:** anything held back this week; every email is kept 90 days (at most the last 1,000). When a member becomes Inactive or a Silent Key, or leaves the roster, the daily job also takes their address out of it. 90 days after it first sees a member gone (noted in `removed.json`), it also blanks their roster row's email, phone, address, birthday and sharing, and deletes their photo, calendar feed link and `profile-changes.jsonl` lines; backups made before then keep them until they age out. If more than a quarter of the roster is newly gone in one night, the job starts no clocks (`purge-hold.json`): the Admin page shows a notice with a **Confirm** button (admin mode; written to the admin log), which starts them that day. Members back on the roster are dropped from the hold. On Mondays the job emails the roster keepers the list of members waiting (once a week; respects `email.only_to`). On the first night after updating, every member already Inactive counts as newly gone.
 - 🧪 **Stage sync**, on a staging server only.
 
 ## 🎨 Site settings

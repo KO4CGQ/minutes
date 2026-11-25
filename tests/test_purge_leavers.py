@@ -16,7 +16,8 @@ DAY0 = dt.date(2026, 11, 1)
 PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "callsign": "N0AAAA", "email": "amy@example.org", "role": "Secretary", "officer": True},
           {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "callsign": "N0BBBB", "email": "bob@example.org", "phone": "555-0101",
            "address": "123 Main St, Anytown", "birthday": "03-04", "share": ["email"], "status": "Inactive"},
-          {"id": "n0cccc", "first": "Cal", "last": "Customer", "callsign": "N0CCCC"}]
+          {"id": "n0cccc", "first": "Cal", "last": "Customer", "callsign": "N0CCCC"}] + [
+    {"id": f"n0{c * 4}", "first": c.upper(), "last": "Member", "callsign": f"N0{c.upper() * 4}"} for c in "defg"]  # 7: one leaver is under a quarter
 
 
 @pytest.fixture
@@ -115,3 +116,67 @@ def test_a_damaged_entry_breaks_neither_the_job_nor_the_page(env):
     tmp, cache = env
     (tmp / "removed.json").write_text(json.dumps({"n0bbbb": {"date": "soon"}}))
     assert prefs.purge_removed(load(cache), DAY0) == (0, 0) and prefs.purge_note("n0bbbb") is None
+
+
+def _everyone_inactive(cache, ids):
+    people = json.loads(cache.read_text())
+    for p in people:
+        if p["id"] in ids:
+            p["status"] = "Inactive"
+    cache.write_text(json.dumps(people))
+
+
+def test_a_big_night_holds_the_clocks_until_an_admin_confirms(env):
+    tmp, cache = env
+    prefs.purge_removed(load(cache), DAY0)  # Bob alone: the clock starts
+    _everyone_inactive(cache, ["n0cccc", "n0dddd"])  # 2 more of 7 in one night: over a quarter
+    prefs.purge_removed(load(cache), DAY0 + dt.timedelta(days=1))
+    assert prefs.purge_hold() == ["n0cccc", "n0dddd"]
+    assert set(json.loads((tmp / "removed.json").read_text())) == {"n0bbbb"}
+    prefs.purge_removed(load(cache), DAY0 + dt.timedelta(days=2))  # still held, not counted as new again
+    assert prefs.purge_hold() == ["n0cccc", "n0dddd"]
+    assert prefs.confirm_hold(DAY0 + dt.timedelta(days=5)) == 2 and prefs.purge_hold() == []
+    assert json.loads((tmp / "removed.json").read_text())["n0cccc"] == {"date": "2026-11-06"}  # from the confirmation
+
+
+def test_the_roster_coming_back_drops_the_hold(env):
+    tmp, cache = env
+    _everyone_inactive(cache, ["n0cccc", "n0dddd"])
+    prefs.purge_removed(load(cache), DAY0)  # 3 of 7 at once
+    assert len(prefs.purge_hold()) == 3
+    people = json.loads(cache.read_text())
+    for p in people:
+        p["status"] = "Active"
+    cache.write_text(json.dumps(people))
+    prefs.purge_removed(load(cache), DAY0 + dt.timedelta(days=1))
+    assert prefs.purge_hold() == [] and json.loads((tmp / "removed.json").read_text()) == {}
+    assert prefs.confirm_hold() == 0
+
+
+def test_the_weekly_list_to_roster_keepers(env):
+    _, cache = env
+    club = load(cache)()
+    monday = dt.date(2026, 11, 2)
+    assert prefs.purge_list(club, monday, "https://x") == []  # nobody waiting
+    prefs.purge_removed(load(cache), DAY0)
+    assert prefs.purge_list(club, monday + dt.timedelta(days=1), "https://x") == []  # not a Monday
+    (mid, key, _, body), = prefs.purge_list(club, monday, "https://x")
+    assert mid == "n0aaaa" and key == "purge:2026-11-02:n0aaaa" and "Bob Bloggs" in body and "January 30" in body
+    assert "bob@example.org" not in body and "555-0101" not in body
+    prefs.mark_sent([key], monday)
+    assert prefs.unsent([key]) == set()  # a second run that week sends nothing
+
+
+def test_admin_confirm_starts_the_clocks(env, monkeypatch):
+    tmp, cache = env
+    club = load(cache)()
+    monkeypatch.setattr(web, "archive", Archive(tmp, club))
+    monkeypatch.setattr(web, "authn", Auth(club, tmp / "auth.sqlite"))
+    monkeypatch.setattr(web.authn, "member_for", lambda token: "n0aaaa")
+    monkeypatch.setattr(web, "DATA", tmp)
+    monkeypatch.setattr(web, "_security_admin", lambda request: "n0aaaa")
+    (tmp / "purge-hold.json").write_text(json.dumps({"n0cccc": {"date": "2026-11-01"}}))
+    c = TestClient(web.app)
+    r = c.post("/admin/purge-hold/confirm", follow_redirects=False)
+    assert r.status_code == 303 and prefs.purge_hold() == [] and "n0cccc" in json.loads((tmp / "removed.json").read_text())
+    assert "purge_hold_confirmed" in (tmp / "admin-log.jsonl").read_text()

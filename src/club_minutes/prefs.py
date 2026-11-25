@@ -226,9 +226,18 @@ def purge_removed(load_club=Club, today: dt.date | None = None) -> tuple[int, in
         forget_email_log({m.email.strip().lower() for mid in gone if (m := club.members.get(mid)) and m.email})
         # the removal date: first seen gone; active again (or a prospect) is the undo
         left = {mid: e for mid, e in _read("removed.json").items() if mid not in keep}
-        for mid in (set(club.members) - keep) | gone:
-            left.setdefault(mid, {"date": today.isoformat()})
+        hold = _read("purge-hold.json")
+        held = {mid: e for mid, e in hold.items() if mid not in keep}  # back on the roster: nothing happens to them
+        new = sorted(((set(club.members) - keep) | gone) - set(left) - set(held))
+        if new and len(new) * 4 > len(club.members):  # a bad bulk edit or import: an admin confirms before any clock starts
+            log.error("purge_removed: %d of %d members became Inactive or gone in one night; their %d-day clocks wait for an admin (Admin page)",
+                      len(new), len(club.members), PURGE_DAYS)
+            held |= {mid: {"date": today.isoformat()} for mid in new}
+        else:
+            for mid in new:
+                left[mid] = {"date": today.isoformat()}
         _write("removed.json", left)
+        _write("purge-hold.json", held)
         purged = 0
         for mid, e in sorted(left.items()):
             try:
@@ -245,6 +254,46 @@ def purge_removed(load_club=Club, today: dt.date | None = None) -> tuple[int, in
         if purged:
             log.info("purge_removed: personal details of %d member(s) deleted, %d days after they left", purged, PURGE_DAYS)
     return len(gone), purged
+
+
+def purge_hold() -> list[str]:
+    """Members whose 90-day clock waits for an admin to confirm (a big night of leavers)."""
+    return sorted(_read("purge-hold.json"))
+
+
+def confirm_hold(today: dt.date | None = None) -> int:
+    """An admin confirms the held leavers really left: their clocks start now (not that night, so they get the full
+    PURGE_DAYS, and the weekly list warns first). Returns how many; the next daily run drops any back on the roster."""
+    with locked():
+        held = purge_hold()
+        left = _read("removed.json")
+        for mid in held:
+            left.setdefault(mid, {"date": (today or dt.date.today()).isoformat()})
+        _write("removed.json", left)
+        _write("purge-hold.json", {})
+    return len(held)
+
+
+def purge_list(club: Club, today: dt.date, url: str) -> list[tuple[str, str, str, str]]:
+    """Mondays, to the roster keepers: members waiting to be purged and the date their details go (names only).
+    Keyed by the week, so a second run that week sends nothing."""
+    if today.weekday() != 0:
+        return []
+    waiting = []
+    for mid, e in _read("removed.json").items():
+        try:
+            if mid in club.members and "purged" not in e:
+                waiting.append((dt.date.fromisoformat(e["date"]) + dt.timedelta(days=PURGE_DAYS), club.name(mid)))
+        except (KeyError, TypeError, ValueError):  # a damaged entry: left out
+            continue
+    if not waiting:
+        return []
+    lines = "\n".join(f"  - {n}: {show_date(d, 'document')}" for d, n in sorted(waiting))
+    return [(m.id, f"purge:{today}:{m.id}", f"{club.label}: members whose details will be deleted",
+             (f"Hi {m.first},\n\nThese members have left. Their email, phone, address and birthday are deleted on the date shown "
+              f"(unless you make them Active again before then):\n{lines}\n\n"
+              f"You get this because you keep the roster. To stop it: {url}/profile/email\n\n{_sign(club)}"))
+            for m in emailable(club) if club.keeps_roster(m.id) and get(m.id)["roster"] == "now"]
 
 
 def unsent(keys: list[str]) -> set[str]:
