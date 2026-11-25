@@ -148,14 +148,22 @@
   let closedHow = null;
   async function checkIn() {
     if (closedHow) return;
-    const r = await post("hold", readOnly ? { peek: true } : PREV ? { prev: PREV } : {}).catch(() => null);
+    const r = await post("hold", readOnly ? { peek: true } : { attendance: true, ...(PREV ? { prev: PREV } : {}) }).catch(() => null);
     if (!r) return;
     PREV = null;  // only the first check-in carries on from before a reload
     if (r.status === 409) { const j = await r.json(); if (j.closed) closed(j.closed, j.by); else if (j.holder) lock(j, held && !readOnly); return; }
-    if (!readOnly && r.ok) held = true;
+    if (!readOnly && r.ok) { held = true; takeAttendance((await r.json().catch(() => ({}))).attendance); }
     if (readOnly && r.ok) {  // they've closed it: carry on (a reload brings their last changes)
       holdbar.replaceChildren("They've closed the console. ", h("button", { class: "btn small", onclick: () => location.reload() }, "Continue the minutes"));
     }
+  }
+  // A plugin may have marked someone online (video joins) since this page last saved: take what the server has, unless
+  // this page has unsaved changes or the leader is typing a name (the next check-in tries again).
+  function takeAttendance(a) {
+    if (!a || saved.classList.contains("dirty") || panel.contains(document.activeElement) && document.activeElement.matches("input, textarea")) return;
+    const was = JSON.stringify([M.in_person, M.remote, D.video_guests]);
+    M.in_person = a.in_person; M.remote = a.remote; D.video_guests = a.video_guests;
+    if (JSON.stringify([M.in_person, M.remote, D.video_guests]) !== was && S.step === 0) render();
   }
   checkIn();
   setInterval(checkIn, 5000);
@@ -280,6 +288,9 @@
           g.name, h("small", {}, [g.callsign, `${g.visits} visit${g.visits > 1 ? "s" : ""}`, { inperson: "in person", online: "online" }[gwhere(g)]].filter(Boolean).join(" · ")),
           g.visits + 1 >= D.invite_after ? h("span", { class: "invite" }, "invite to join") : null)))] : null,
       datalist,
+      (() => { const seen = D.video_guests.filter((n) => !M.guests.some((x) => key(x.name) === key(n)));  // in the video, no name of ours
+        return seen.length ? h("div", { class: "row videoguests" }, h("span", {}, "Guests in the video: "), seen.map((n) => h("span", {}, n, " ",
+          h("button", { class: "btn small", onclick: () => { M.guests.push({ name: n, callsign: "", notes: "", online: true }); render(); save(); } }, "+ Add as guest")))) : null; })(),
       M.guests.map((g, i) => h("div", { class: "row" }, h("span", { style: "flex:1" }, `${g.name} ${D.ham ? g.callsign || "" : ""} ${g.notes ? "(" + g.notes + ")" : ""}`,
           inviteDue(g) ? h("span", { class: "invite" }, "invite to join") : null),
         h("button", { class: "btn small ghost", title: "Switch between in person and online",

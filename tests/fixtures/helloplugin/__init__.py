@@ -72,3 +72,9 @@ READY = [True]  # tests flip it
 
 def nav_ready(api):
     return READY[0]
+
+
+def console_attendance(api):
+    if id := api.storage.load().get("mark"):  # marks that member online, as a video plugin would
+        api.mark_present(id)
+    return ["Pat Guest"]

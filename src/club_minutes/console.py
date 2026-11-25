@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 
-from . import auth, business, chow, meetings, pictures, prefs, snapshot
+from . import auth, business, chow, meetings, pictures, plugins, prefs, snapshot
 from .club import show_date
 from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
@@ -27,6 +27,7 @@ def _key(s: str) -> str:
 
 
 _starting = threading.Lock()  # two leaders clicking Start at once still get one meeting
+_saving = threading.RLock()  # the console's save and a plugin's mark_present never overlap (each would undo the other's change)
 
 # Who is taking an open meeting's minutes: one console (browser tab) at a time, kept while it's open (it checks in every
 # 5 s, and on coming back to the front) and let go HOLD_SECONDS after it closes or loses its connection. Anyone else's console is read-only, with
@@ -92,6 +93,9 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
 
 def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | None, online: bool = False) -> Meeting:
     m = Meeting(date=date, status="draft", leader=leader, recorder=recorder)
+    opened = archive.root / m.slug / "opened"
+    opened.parent.mkdir(parents=True, exist_ok=True)
+    opened.write_text(str(int(time.time())))
     if recorder:
         (m.remote if online else m.in_person).append(recorder)
     prev = previous(archive, date)
@@ -208,8 +212,48 @@ def context(archive: Archive, m: Meeting) -> dict:
         "business": business_items(archive, m.slug),
         "celebrations": celebrations(club, m.date),
         "paid_since": paid_since(archive, m.date),
+        "video_guests": plugins.console_attendance(club),
         **calendar_ahead(archive, m.date),
     }
+
+
+def attendance(archive: Archive, slug: str) -> dict:
+    """The console's check-in answer: attendance as it is now (a plugin may have marked someone online since the last
+    save) and the guests plugins see in a video meeting, for the open console to show."""
+    guests = plugins.console_attendance(archive.club)
+    m = archive.by_slug[slug]
+    return {"in_person": m.in_person, "remote": m.remote, "video_guests": guests}
+
+
+def open_meeting(archive: Archive) -> dict | None:
+    """For plugins (Api.meeting): the draft open in the console, its date, when the console opened it (kept in the
+    meeting's folder as `opened`) and that night's online link from the calendar's weekly meeting ('' if none)."""
+    from . import events
+    m = next((m for m in archive.meetings if m.status == "draft"), None)
+    if not m:
+        return None
+    opened = archive.root / m.slug / "opened"
+    if not opened.exists():  # drafts from before this existed count from now
+        opened.parent.mkdir(parents=True, exist_ok=True)
+        opened.write_text(str(int(time.time())))
+    online = next((events.occurrence(e, m.date)["online"] for e in events.load()
+                   if e.get("meeting") and m.date in events.dates(e, m.date, m.date)), "")
+    return {"date": m.slug, "opened": int(opened.read_text()), "online": online, "present": [*m.in_person, *m.remote]}
+
+
+def mark_present(archive: Archive, id: str, by: str, in_person: bool = False) -> bool:
+    """For plugins (Api.mark_present): tick a member present (online, or in person) in the open meeting unless they're
+    in its attendance already. The same lock and save as the console's own, so every view picks it up."""
+    with _saving:
+        m = next((m for m in archive.meetings if m.status == "draft"), None)
+        if not m or id not in archive.club.members or id in m.in_person or id in m.remote:
+            return False
+        (m.in_person if in_person else m.remote).append(id)
+        m.quorum = archive.club.quorum_record(m.in_person + m.remote)
+        m.save(archive.root)
+        archive.reload()
+    log.info("%s marked %s %s in the %s meeting", by, id, "in person" if in_person else "online", m.slug)
+    return True
 
 
 def quorum_rule(club) -> dict | None:
@@ -315,6 +359,11 @@ class Unreadable(Exception):
 
 def apply(archive: Archive, slug: str, data: dict) -> Meeting:
     """Save the console's full meeting state (last write wins)."""
+    with _saving:
+        return _apply(archive, slug, data)
+
+
+def _apply(archive: Archive, slug: str, data: dict) -> Meeting:
     m = archive.by_slug[slug]
     _draft(m)
     d, club = data["meeting"], archive.club
@@ -367,8 +416,9 @@ def _draft(m: Meeting) -> None:
 
 
 def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
+    _draft(archive.by_slug[slug])
+    plugins.console_attendance(archive.club)  # plugins settle attendance (video joins) before the minutes are final
     m = archive.by_slug[slug]
-    _draft(m)
     # Upcoming Chow comes from the chow schedule as it stands now: tonight's chow, tonight's changes, what's next.
     if archive.club.has("chow"):
         m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]

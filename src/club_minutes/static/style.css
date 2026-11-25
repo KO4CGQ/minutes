@@ -171,6 +171,7 @@ tr.yearrow th { text-align: left; padding: .9rem .85rem .45rem; font-size: 1rem;
 .pager { display: flex; gap: .75rem; align-items: center; color: var(--muted); }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; } @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
 .row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.videoguests { margin-top: .9rem; align-items: center; }  /* console Attendance: video guests, clear of the guest cards above */
 [hidden] { display: none !important; }  /* .btn's display: inline-flex would otherwise show hidden buttons */
 .ip { word-break: break-all; }  /* IPv6 addresses wrap instead of widening the table */
 nav.tabs { display: flex; gap: .25rem; margin: .4rem 0 1.2rem; flex-wrap: wrap; background: var(--surface-3); padding: .25rem;

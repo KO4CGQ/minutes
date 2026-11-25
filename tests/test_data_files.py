@@ -48,6 +48,7 @@ NOT_ATOMIC = {
     ("backup.py", "(d / name)"): "a backup file being fetched",
     ("backup.py", "p"): "backup-status.json",
     ("events.py", "marker"): "a marker file",
+    ("console.py", "opened"): "when the console opened the meeting: one number, written once",
     ("events.py", '(DATA / "events-meeting-added")'): "a marker file",
     ("updates.py", "cache"): "the release check's cache",
     ("calview.py", "p"): "calendar-feeds.json",

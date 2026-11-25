@@ -3919,7 +3919,8 @@ def _held_by_other(slug: str, tab: str | None, mid: str) -> None:
 @app.post("/api/meetings/{slug}/hold")
 async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
     """The console checks in every 5 s: keeps this tab's hold on the minutes, or says who has them.
-    {"take": true} takes over; {"peek": true} only asks (a read-only console waiting for them to be free)."""
+    {"take": true} takes over; {"peek": true} only asks (a read-only console waiting for them to be free); {"attendance": true}
+    also returns the attendance as it is now (plugins may have marked someone online since the console last saved)."""
     d = await _json(request)
     if not isinstance(d, dict):
         raise HTTPException(400, "That request wasn't readable.")
@@ -3934,7 +3935,7 @@ async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
     h = console.holder(slug, tab) if d.get("peek") else console.hold(archive, slug, mid, tab, bool(d.get("take")), prev)
     if h:
         return JSONResponse({"holder": archive.club.name(h["member"]), "you": h["member"] == mid, "since": int(h["since"])}, 409)
-    return {"held": not d.get("peek")}
+    return {"held": not d.get("peek")} | ({"attendance": console.attendance(archive, slug)} if d.get("attendance") and not d.get("peek") else {})
 
 
 @app.post("/api/meetings/{slug}/release")
