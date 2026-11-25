@@ -24,6 +24,7 @@ from . import regions
 from .meeting import SECTIONS
 
 log = logging.getLogger(__name__)
+MEMBER_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")  # same as callsign.py / roster.rename_id
 
 ROOT = Path(os.environ.get("CLUB_MINUTES_ROOT", Path(__file__).resolve().parents[2]))
 _site_lock = threading.Lock()
@@ -459,8 +460,16 @@ class Club:
     def _load(self, roster: list[dict]) -> None:
         known = {f.name for f in fields(Member)}
         self.members: dict[str, Member] = {}
-        for d in roster:
-            self.members[d["id"]] = Member(**{k: v for k, v in d.items() if k in known})
+        calls: set[str] = set()  # callsigns of rows kept so far: a later row can't take one as its id (the reverse is a legit reissued call)
+        for n, d in enumerate(roster, 1):
+            mid = d.get("id")
+            # A hand-edited roster must not let one row replace another member (their email decides who signs in as them).
+            if not (isinstance(mid, str) and MEMBER_ID.fullmatch(mid)) or mid in self.members or mid in calls:
+                log.warning("Roster row %d skipped: its id is malformed, repeated or another member's callsign.", n)
+                continue
+            self.members[mid] = Member(**{k: v for k, v in d.items() if k in known})
+            if d.get("callsign") and d["callsign"].lower() != mid:
+                calls.add(d["callsign"].lower())
         self._auto_short_names()
         # A former callsign (e.g. before a vanity change) listed in aliases maps to the member. Never another member's
         # current callsign, and never one two members both list: else typing an admin's callsign into your own

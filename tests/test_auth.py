@@ -534,3 +534,13 @@ def test_known_cookie_survives_sign_out_and_never_signs_in(a, monkeypatch):
     assert t.cookies.get(web.KNOWN_COOKIE) == known and t.get("/login", follow_redirects=False).status_code == 200
     a.forget_removed(set())
     assert not a.is_known("n0aaaa", known)
+
+
+def test_roster_skips_duplicate_malformed_and_callsign_ids(caplog):
+    rows = [{"id": "jane", "first": "Jane", "last": "Doe", "callsign": "N0CALL"},
+            {"id": "jane", "first": "Evil", "last": "Twin", "email": "evil@example.org"},  # repeats an id
+            {"id": "Bad Id!", "first": "Bob", "last": "Roe"},  # malformed
+            {"id": "n0call", "first": "John", "last": "Doe"}]  # an earlier member's callsign
+    club = Club(FIX / "test-club.yaml", roster=rows)
+    assert list(club.members) == ["jane"] and club.members["jane"].last == "Doe"
+    assert "Roster row 2 skipped" in caplog.text and "Evil" not in caplog.text
