@@ -148,9 +148,23 @@
 <label for="m-pass">What passes</label><select id="m-pass" name="vote_passes">{% for k, label in vote_passes.items() %}<option value="{{ k }}"{{ ' selected' if m.vote_passes == k }}>{{ label }}</option>{% endfor %}</select>{{ origin('membership.vote_passes') }}
 </div>
 <p class="hint">0 days: the vote is at the next meeting after they apply.</p></div>
+<div class="card sitesec"><h2>The invitation email {{ origin('membership.invite') }}</h2>
+<label class="sr" for="m-invite">The invitation email</label><textarea id="m-invite" name="invite" rows="8" maxlength="5000" required>{{ m.invite }}</textarea>
+<p class="hint">Plain text, sent when a guest is sent the application; the club's sign-off follows it. These are filled in:
+{% for w, what in invite_words.items() %}<code>{{ '{' ~ w ~ '}' }}</code> {{ what }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p></div>
 <div class="card sitesec"><h2>The club's statement {{ origin('membership.statement') }}</h2>
-<label class="sr" for="m-stmt">The club's statement</label><textarea id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
-<p class="hint">Plain text, shown above the signature: what the club is and the conditions of membership. May be empty.</p></div>
+<label class="sr" for="m-stmt">The club's statement</label><textarea data-format id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
+<p class="hint">Shown above the signature: what the club is and the conditions of membership. Bold, lists and links are allowed. May be empty.</p></div>
+<div class="card sitesec"><h2>The form's welcome text {{ origin('membership.welcome') }}</h2>
+<label class="sr" for="m-welcome">The form's welcome text</label><textarea data-format id="m-welcome" name="welcome" rows="4" maxlength="5000">{{ m.welcome }}</textarea>
+<p class="hint">Under the form's heading. Bold, lists and links are allowed. Empty: a short thank-you is shown.</p></div>
+<div class="card sitesec"><h2>Details the form asks for {{ origin('membership.fields') }}</h2>
+<p class="hint">Name, email and the signature are always required.</p>
+<div class="fmtgrid">
+{% for k, label in (('callsign', 'Callsign'), ('first_licensed', 'First licensed'), ('license_class', 'License class'), ('expires', 'License expires'), ('street', 'Street address'), ('city', 'City'), ('state', 'State'), ('zip', 'ZIP code'), ('phone', 'Phone'), ('occupation', 'Occupation')) if club.ham or k not in ('callsign', 'first_licensed', 'license_class', 'expires') %}
+<label for="m-f-{{ k }}">{{ label }}</label><select id="m-f-{{ k }}" name="field_{{ k }}">{% for mode, mlabel in field_modes.items() %}<option value="{{ mode }}"{{ ' selected' if m.fields[k] == mode }}>{{ mlabel }}</option>{% endfor %}</select><span></span>
+{% endfor %}
+</div></div>
 <div class="card sitesec"><h2>The club's own questions {{ origin('membership.questions') }}</h2>
 <p class="hint">Asked after the core details (name, address, phone, email, occupation{% if club.ham %}, callsign and license{% endif %}). The number sets the order (lowest first). To remove one, tick Remove or clear its words.</p>
 {% macro q_row(i, q, new=False) %}

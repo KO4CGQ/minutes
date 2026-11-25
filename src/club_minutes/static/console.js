@@ -730,6 +730,25 @@
   }
 
   // ---------- review & submit ----------
+  // Review's "Send the application": the guest gives an email in person; the server counts tonight's visit (console_invite)
+  function inviteRow(g, i) {
+    const email = h("input", { id: `inv-${i}`, type: "email", required: true, placeholder: "Their email", autocomplete: "off" });
+    const said = h("span", { class: "hint", role: "status" });
+    const send = h("button", { class: "btn small", onclick: async () => {
+      if (!email.reportValidity()) return;
+      send.disabled = true; said.textContent = "Sending…";
+      try {
+        const r = await fetch(`/api/meetings/${M.slug}/invite`, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guest: g.name, email: email.value }) });
+        const j = await r.json().catch(() => ({}));
+        said.textContent = r.ok ? j.note : (j.error || j.detail || "The email couldn't be sent. Try again.");
+        if (r.ok) send.textContent = "Send it again";
+      } catch { said.textContent = "The email couldn't be sent. Try again."; }
+      send.disabled = false;
+    } }, "Send the application");
+    return h("div", { class: "row" }, h("label", { for: `inv-${i}` }, g.name), email, send, said);
+  }
+
   function review() {
     const box = h("div", { class: "hint" }, "Loading preview…");
     const top = submit(), end = submit();  // hidden until the minutes are on screen: never submitted sight unseen (Jim, 2026-11-22)
@@ -743,7 +762,8 @@
     const invites = M.guests.filter(inviteDue);
     return h("div", {},
       h("h2", {}, "Review"),
-      invites.length ? h("div", { class: "invitebox" }, `Before closing: invite ${invites.map((g) => `${g.name} (${ordinal(visitNo(g))} visit)`).join(", ")} to apply for membership.`) : null,
+      invites.length ? h("div", { class: "invitebox" }, `Before closing: invite ${invites.map((g) => `${g.name} (${ordinal(visitNo(g))} visit)`).join(", ")} to apply for membership.`,
+        invites.map(inviteRow)) : null,
       missing.length ? h("p", { class: "hint" }, `No report recorded for: ${missing.map(label).join(", ")}.`) : null,
       top,
       box,
