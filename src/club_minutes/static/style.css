@@ -789,3 +789,4 @@ dialog.fmtlink .err { color: var(--danger-text); margin: .3rem 0 0; } dialog.fmt
 .itemtext .who, .ctext .who { white-space: nowrap; font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }  /* a mention on the Business page, like the minutes' name pill */
 
 @media (pointer: coarse) { form.correct .rm, form.correct input[type=radio] { min-height: 44px; } form.correct .rm { display: inline-flex; align-items: center; } form.correct input[type=radio] { min-width: 44px; } }  /* a finger-sized tap */
+.paper { margin: .3rem 0; } .paper form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-top: .3rem; }  /* Guests: paper application received */

@@ -15,6 +15,8 @@ Kept in applications.json in the data folder ({"items": [...]}, mode 0600), read
                                       vote recorded in a meeting's console {meeting, yes, no, passed} or {meeting, accepted,
                                       passed}, settled when those minutes are submitted (`settle`)
   ended, member                       when it was turned down or withdrawn; the member id it led to
+  paper, paper_by                     True for one handed in on paper and recorded on the Guests page (`record_paper`), and
+                                      the member who recorded it: no link, no email, the form holding only the name
 state: sent (link out), submitted (waiting for the sponsor), declined (the sponsor said no; the applicant may be sent a
 new link to pick another), candidate (sponsored: for the club to vote on), turned_down, withdrawn, member.
 Part of this is personal: `purge` (the daily job) deletes what the settings say, and nothing here is logged.
@@ -102,14 +104,14 @@ def usable(a: dict | None, now: float | None = None) -> bool:
 def for_guest(items: list[dict], name: str) -> dict | None:
     """The guest's latest application."""
     mine = [a for a in items if _same(a["guest"], name)]
-    return max(mine, key=lambda a: a["sent"], default=None)
+    return max(reversed(mine), key=lambda a: a["sent"], default=None)  # a tie (the same second): the one added last
 
 
 def turned_down_recently(club: Club, name: str, email: str, now: float | None = None) -> bool:
     """Someone turned down less than `reapply_months` ago, by name or the same email."""
     window = club.membership["reapply_months"] * MONTH
     return any(a["state"] == "turned_down" and a["ended"] + window > (now or time.time())
-               and (_same(a["guest"], name) or a["email"].lower() == email.lower()) for a in load()["items"])
+               and (_same(a["guest"], name) or (email and a["email"].lower() == email.lower())) for a in load()["items"])  # a paper one has no email
 
 
 def club_name(club: Club) -> str:
@@ -143,6 +145,7 @@ def send(club: Club, guest: str, email: str, url: str, now: float | None = None,
             a = {"id": "a" + secrets.token_hex(5), "guest": " ".join(guest.split())[:100], "club": dict.fromkeys(
                 ("voted", "initiated", "fee_paid", "bond_paid"), "")}
             items.append(a)
+        a.pop("paper", None)  # a new link after a paper one the sponsor declined: online from here
         a.update(email=email, state="sent", token_hash=_hash(token), sent=int(now), used=None, updated=int(now),
                  expires=int(now + club.membership["link_days"] * 86400))
     days = club.membership["link_days"]
@@ -301,6 +304,41 @@ def notify_submitted(club: Club, a: dict, url: str) -> None:
         log.exception("couldn't send the emails for application %s", a["id"])
 
 
+def record_paper(club: Club, guest: str, mid: str, signed: bool, url: str, by: str, now: float | None = None) -> dict:
+    """A paper application handed in at a meeting: from here it follows the online path (the sponsor asked, or already
+    confirmed when they signed the paper; then listed, voted on, added). The details stay on the paper until Add a
+    member. `by`: who recorded it (kept, and on the PDF: no one confirmed a signed one in the app). ValueError says why not."""
+    now = int(now or time.time())
+    if mid not in club.members or club.members[mid].status.lower() != "active":
+        raise ValueError("Pick an Active member as the sponsor.")
+    if signed and mid == by:
+        raise ValueError("Someone else records a paper application you signed as the sponsor.")
+    if not signed and not club.members[mid].email:
+        raise ValueError(f"{club.name(mid)} has no email address to be asked: tick that they signed the paper, or pick another sponsor.")
+    if turned_down_recently(club, guest, "", now):
+        raise ValueError(f"They applied before, and the club turned them down less than {club.membership['reapply_months']} months ago.")
+    form = dict.fromkeys(("name", "email", "street", "city", "state", "zip", "phone", "occupation"), "") | {"name": " ".join(guest.split())[:100]}
+    if club.ham:
+        form |= dict.fromkeys(("callsign", "first_licensed", "license_class", "expires"), "")
+    with edit() as items:
+        a = for_guest(items, guest)
+        if a and a["state"] in ("submitted", "candidate", "member"):
+            raise ValueError(f"They have applied already ({SHOWN[a['state']].lower()}).")
+        if not a or a["state"] != "sent":  # an unfilled link is replaced; one filled in online (declined, ended) is kept as it was
+            a = {"id": "a" + secrets.token_hex(5), "guest": form["name"], "club": dict.fromkeys(("voted", "initiated", "fee_paid", "bond_paid"), "")}
+            items.append(a)
+        a.update(paper=True, paper_by=by, email="", state="candidate" if signed else "submitted", token_hash=None, sent=now, used=now, updated=now,
+                 expires=now, form=form, answers=[], statement="", signed={"name": form["name"], "at": now},
+                 sponsor={"typed": "", "id": mid, "asked": now, "answer": "yes" if signed else None, "at": now if signed else None, "on_paper": signed})
+        a = json.loads(json.dumps(a))
+    if not signed:
+        try:
+            _ask(club, a, url)
+        except Exception:
+            log.exception("couldn't send the emails for application %s", a["id"])
+    return a
+
+
 def ask_sponsor(club: Club, aid: str, mid: str, url: str, now: float | None = None) -> None:
     """Someone with the permission picks the member for a sponsor the applicant typed that matched no one: they are asked
     as if it had matched. ValueError says why not."""
@@ -345,7 +383,7 @@ def notify_sponsor_answered(club: Club, a: dict, url: str) -> None:
                 auth.send_email(to, f"{sponsor} can't sponsor {name}", only_to=only, body=(
                     f"{sponsor} can't sponsor {name}. The application waits: send {name} a new link on the Guests page to pick another sponsor.\n\n"
                     f"{club.sign_off}\n{branding.name(club)}"))
-        if a["state"] == "declined":
+        if a["state"] == "declined" and a["form"]["email"]:  # a paper one has no email
             auth.send_email(a["form"]["email"], f"Your application to {club_name(club)}", only_to=only, to_self=True, body=(
                 f"Hello {name},\n\nYour sponsor couldn't confirm your application to {club_name(club)}. The club will be in touch.\n\n"
                 f"{club.sign_off}\n{branding.name(club)}"))
@@ -524,7 +562,7 @@ def prefill(a: dict) -> dict:
     first, last = split_name(f["name"])
     return {"first": first, "last": last, "callsign": f.get("callsign", ""), "email": f["email"], "phone": f["phone"],
             "license_class": f.get("license_class") if f.get("license_class") in CLASSES else "",
-            "address": f"{f['street']}\n{f['city']}, {f['state']} {f['zip']}"}
+            "address": "\n".join(x for x in (f["street"], ", ".join(y for y in (f["city"], f"{f['state']} {f['zip']}".strip()) if y)) if x)}  # empty parts left out (paper, details not asked)
 
 
 def sample(club: Club, m: dict, now: float | None = None) -> dict:

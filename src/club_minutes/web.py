@@ -4010,6 +4010,24 @@ async def application_ask(request: Request, aid: str):
     return RedirectResponse("/guests?note=" + quote("They have been asked."), status_code=303)
 
 
+@app.post("/applications/paper")
+async def application_paper(request: Request):
+    """Paper application received: a regular guest's paper form, recorded so it follows the online path."""
+    if not _sees_applications(request):
+        raise HTTPException(403, "Only those who receive applications can record one.")
+    form = await request.form()
+    guest = str(form.get("guest") or "")
+    try:
+        if guest not in {g["name"] for g in membership.ready_guests(archive.guests(), int(archive.club.info.get("invite_after_visits", 3)))}:
+            raise ValueError("That guest hasn't visited enough yet.")
+        a = await run_in_threadpool(applications.record_paper, archive.club, guest, str(form.get("sponsor") or ""), bool(form.get("signed")),
+                                     base_url(request), request.state.member)
+    except ValueError as e:
+        return RedirectResponse("/guests?error=" + quote(str(e)), status_code=303)
+    return RedirectResponse("/guests?note=" + quote(f"{guest}'s paper application is recorded: "
+                            + ("a candidate." if a["state"] == "candidate" else f"{archive.club.name(a['sponsor']['id'])} has been asked to confirm.")), status_code=303)
+
+
 @app.post("/applications/{aid}/withdraw")
 def application_withdraw(request: Request, aid: str):
     if not _sees_applications(request):

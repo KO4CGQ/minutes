@@ -35,10 +35,11 @@ table.grid th:first-child { text-align: left; }
 {% else %}<p class="a">{{ q.value or '(no answer)' }}</p>{% endif %}{% endfor %}{% endif %}
 
 {% if a.statement %}<h2>Statement</h2><div class="statement">{{ statement }}</div>{% endif %}
-<p><b>Signed electronically by {{ a.signed.name }} on {{ when(a.signed.at) }}.</b></p>
+{% if a.paper %}<p><b>Handed in on paper; recorded by {{ club.name(a.paper_by) }} on {{ when(a.signed.at) }}. The details are on the paper form.</b></p>
+{% else %}<p><b>Signed electronically by {{ a.signed.name }} on {{ when(a.signed.at) }}.</b></p>{% endif %}
 
 <h2>Sponsor</h2>
-<p>{% if a.sponsor.id %}{{ sponsor }}{% else %}No sponsor named{% endif %}{% if a.sponsor.get('typed') %} (typed by the applicant: {{ a.sponsor.typed }}){% endif %}{% if a.sponsor.id %}: {% if a.sponsor.answer == 'yes' %}confirmed on {{ when(a.sponsor.at) }}{% elif a.sponsor.answer == 'no' %}declined on {{ when(a.sponsor.at) }}{% else %}hasn't answered yet{% endif %}{% endif %}.</p>
+<p>{% if a.sponsor.id %}{{ sponsor }}{% else %}No sponsor named{% endif %}{% if a.sponsor.get('typed') %} (typed by the applicant: {{ a.sponsor.typed }}){% endif %}{% if a.sponsor.id %}: {% if a.sponsor.get('on_paper') %}signed the paper form (as recorded by {{ club.name(a.paper_by) }}){% elif a.sponsor.answer == 'yes' %}confirmed on {{ when(a.sponsor.at) }}{% elif a.sponsor.answer == 'no' %}declined on {{ when(a.sponsor.at) }}{% else %}hasn't answered yet{% endif %}{% endif %}.</p>
 
 <h2>For the club</h2>
 <table>

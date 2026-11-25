@@ -386,3 +386,49 @@ def test_must_be_answered_per_question(env):
         assert r.status_code == 400 and f"Please answer: {label}" in r.text, label
     assert anon.post(f"/apply/{token}", data=good(club, token, q0="")).status_code == 200  # the optional yes or no left empty
     assert applications.find(token)["answers"][0]["value"] == ""
+
+
+def test_a_paper_application_follows_the_online_path(env):
+    club, as_, sent, _ = env
+    page = as_("n0aaaa").get("/guests").text
+    assert "Paper application received" in page and "Paper application received" not in as_("n0bbbb").get("/guests").text  # receives them; the Treasurer doesn't
+    assert as_("n0bbbb").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0cccc"}).status_code == 403
+    r = as_("n0aaaa").post("/applications/paper", data={"guest": "New Face", "sponsor": "n0cccc"}, follow_redirects=False)
+    assert "visited%20enough" in r.headers["location"]
+    assert "Active%20member" in as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0dddd"}, follow_redirects=False).headers["location"]
+    assert "signed%20as%20the%20sponsor" in as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0aaaa", "signed": "1"}, follow_redirects=False).headers["location"]
+    r = as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0cccc"}, follow_redirects=False)
+    assert "asked%20to%20confirm" in r.headers["location"] and sent[-1]["to"] == "bob@example.org" and "Will you sponsor Pat Visitor?" == sent[-1]["subject"]
+    a = applications.for_guest(applications.load()["items"], "Pat Visitor")
+    assert a["paper"] and a["paper_by"] == "n0aaaa" and a["state"] == "submitted" and a["form"]["name"] == "Pat Visitor" and a["form"]["email"] == "" and a["answers"] == []
+    assert "already" in as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0cccc"}, follow_redirects=False).headers["location"]
+    n = len(sent)
+    applications.notify_sponsor_answered(club, applications.sponsor_answer(club, a["id"], "n0cccc", False), "http://testserver")
+    assert all(m["to"] != "" for m in sent[n:])  # no email to the applicant: there's none
+    r = as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0cccc", "signed": "1"}, follow_redirects=False)
+    assert "a%20candidate" in r.headers["location"]
+    a = applications.for_guest(applications.load()["items"], "Pat Visitor")
+    assert a["state"] == "candidate" and a["sponsor"]["answer"] == "yes" and "On paper" in as_("n0aaaa").get("/guests").text
+    from club_minutes import pdf
+    text = "".join(p.extract_text() for p in pypdf.PdfReader(io.BytesIO(pdf.application(club, a))).pages)
+    assert "Handed in on paper; recorded by Jane Doe" in text and "signed the paper form (as recorded by Jane Doe)" in text and "Signed electronically" not in text
+    assert applications.prefill(a)["address"] == "" and applications.prefill(a)["first"] == "Pat"  # typed in from the paper at Add a member
+    send_link(as_, sent)  # a candidate: no new link
+    assert "applied%20already" in as_("n0aaaa").post("/guests/apply", data={"guest": "Pat Visitor", "email": "p@example.org"}, follow_redirects=False).headers["location"]
+
+
+def test_paper_keeps_a_declined_online_application_and_needs_a_sponsor_to_ask(env, monkeypatch):
+    club, as_, sent, _ = env
+    _, token = send_link(as_, sent)
+    as_(None).post(f"/apply/{token}", data=good(club, token))
+    online = applications.find(token)
+    applications.sponsor_answer(club, online["id"], "n0cccc", False)  # declined
+    r = as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0bbbb"}, follow_redirects=False)
+    assert "asked%20to%20confirm" in r.headers["location"]
+    items = applications.load()["items"]
+    kept = next(x for x in items if x["id"] == online["id"])
+    assert kept["form"]["street"] == "123 Main St" and kept["state"] == "declined" and len(items) == 2  # the online one untouched
+    applications.withdraw(applications.for_guest(items, "Pat Visitor")["id"])
+    monkeypatch.setattr(club.members["n0bbbb"], "email", "")
+    assert "no%20email" in as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0bbbb"}, follow_redirects=False).headers["location"]
+    assert "a%20candidate" in as_("n0aaaa").post("/applications/paper", data={"guest": "Pat Visitor", "sponsor": "n0bbbb", "signed": "1"}, follow_redirects=False).headers["location"]
