@@ -344,3 +344,17 @@ def test_more_words_in_the_email_and_the_bylaws_for_an_applicant(env):
     assert "<script>alert(1)" not in page and "&lt;script&gt;" in page and "<strong>hi</strong>" in page
     assert anon.post(f"/apply/{token}", data=good(club, token)).status_code == 200
     assert anon.get(f"/apply/{token}/bylaws").status_code == 404  # used
+
+
+def test_leader_sends_from_the_console_counting_tonight(env, monkeypatch):
+    from types import SimpleNamespace
+    _, as_, sent, _ = env
+    draft = SimpleNamespace(status="draft", date="2026-10-15", guests=[{"name": "Pat Visitor"}, {"name": "New Face"}])
+    monkeypatch.setitem(web.archive.by_slug, "2026-10-15", draft)
+    url = "/api/meetings/2026-10-15/invite"
+    assert as_("n0cccc").post(url, json={"guest": "Pat Visitor", "email": "p@example.org"}).status_code == 403  # not a leader
+    assert "visited enough" in as_("n0aaaa").post(url, json={"guest": "New Face", "email": "n@example.org"}).json()["error"]  # 2nd visit
+    assert "isn't in tonight" in as_("n0aaaa").post(url, json={"guest": "Someone Else", "email": "s@example.org"}).json()["error"]
+    r = as_("n0aaaa").post(url, json={"guest": "Pat Visitor", "email": "pat@example.org"})
+    assert r.status_code == 200 and sent[-1]["to"] == "pat@example.org"
+    assert applications.for_guest(applications.load()["items"], "Pat Visitor")["state"] == "sent"

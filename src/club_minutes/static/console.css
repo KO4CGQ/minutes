@@ -31,6 +31,7 @@ textarea { resize: vertical; min-height: 2.4rem; }
 .invite { display: inline-block; margin-left: .4rem; padding: 0 .45rem; border-radius: .6rem; background: var(--warn-soft); color: var(--warn-text); font-size: .75rem; }
 .mbtn .invite { margin: .2rem 0 0; }
 .invitebox { background: var(--warn-soft); border-left: 4px solid var(--warn-edge); border-radius: .4rem; padding: .6rem .8rem; margin: .5rem 0; font-weight: 600; color: var(--warn-text); }
+.invitebox .row { font-weight: 400; margin-top: .4rem; flex-wrap: wrap; }
 .share { font: inherit; font-size: .85rem; margin-left: .4rem; padding: .15rem .65rem; border-radius: 1rem; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-text); cursor: pointer; }
 .share:hover { filter: brightness(.95); } .share.ok { background: var(--btn-bg); color: var(--btn-text); }
 .chowbox { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); padding: .6rem .8rem; margin: .4rem 0 .8rem; }

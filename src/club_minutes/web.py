@@ -110,7 +110,7 @@ from .roster import COLUMNS, SHAREABLE, SheetError
 KEEPER_FIELDS = tuple(f for f in COLUMNS if f not in ("birthday", "share", "minutes_editor", "calendar_editor"))
 from .meeting import ITEM_MAX, SECTIONS
 from .pdf import linkify
-from .store import SEARCH_WORDS, Archive, spellings
+from .store import SEARCH_WORDS, Archive, _norm, spellings
 
 HERE = Path(__file__).parent
 app = FastAPI(title="Club minutes", docs_url=None, redoc_url=None, openapi_url=None)  # no API map for visitors
@@ -4229,6 +4229,35 @@ async def console_vote(request: Request, slug: str, mid: str = Depends(leader)):
     except ValueError as e:
         return JSONResponse({"error": str(e)}, 422)
     return console.applicants(archive, slug)
+
+
+@app.post("/api/meetings/{slug}/invite")
+async def console_invite(request: Request, slug: str, mid: str = Depends(leader)):
+    """Review's "Send the application": {guest, email} for a guest at this meeting whose visits, tonight's
+    included, reach invite_after_visits. Any leader may send it (the Guests page's rule is for past guests)."""
+    m = get_meeting(slug)
+    d = await _json(request)
+    if m.status != "draft" or not isinstance(d, dict):
+        raise HTTPException(400, "That request wasn't readable.")
+    club, name = archive.club, str(d.get("guest") or "")
+    here = next((g for g in m.guests if g["name"] == name), None)
+    if not here:
+        return JSONResponse({"error": "That guest isn't in tonight's attendance."}, 422)
+    call, key = here.get("callsign") or "", _norm(name)
+    grp = next((g for g in archive.guests() if (call and g["callsign"] == call) or _norm(g["name"]) == key), None)
+    if grp and grp.get("member"):
+        return JSONResponse({"error": f"{name} is a member already."}, 422)
+    visits = len({v[0] for v in (grp or {"visits": []})["visits"] if v[0] != m.date}) + 1  # tonight counts once, saved or not
+    if visits < int(club.info.get("invite_after_visits", 3)):
+        return JSONResponse({"error": "That guest hasn't visited enough yet."}, 422)
+    try:
+        await run_in_threadpool(applications.send, club, grp["name"] if grp else name, str(d.get("email") or ""), base_url(request), visits=visits)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, 422)
+    except Exception:  # noqa: BLE001
+        _log.exception("couldn't email an application link")
+        return JSONResponse({"error": "The email couldn't be sent. Try again."}, 502)
+    return {"note": f"Sent. The link works for {club.membership['link_days']} days."}
 
 
 @app.post("/api/meetings/{slug}/release")
