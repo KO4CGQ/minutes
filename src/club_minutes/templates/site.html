@@ -172,7 +172,7 @@
   <div class="pair"><label class="small">Place <input name="place{{ i }}" value="{{ '' if new else i + 1 }}" inputmode="decimal" size="3"></label>
   <label class="small">Type <select name="type{{ i }}">{% for k, label in question_types.items() %}<option value="{{ k }}"{{ ' selected' if q.type == k }}>{{ label }}</option>{% endfor %}</select></label></div>
   <label class="small">The question <input name="label{{ i }}" value="{{ q.label }}" maxlength="200"></label>
-  <label class="small" data-for="several">Choices, one a line <span class="muted">(pick several)</span> <textarea name="options{{ i }}" rows="3">{{ (q.options or [])|join('\n') }}</textarea></label>
+  <label class="small" data-for="one several">Choices, one a line <span class="muted">(pick one, pick several)</span> <textarea name="options{{ i }}" rows="3">{{ (q.options or [])|join('\n') }}</textarea></label>
   <div class="pair" data-for="grid"><label class="small">Rows, one a line <span class="muted">(grid)</span> <textarea name="qrows{{ i }}" rows="3">{{ (q.rows or [])|join('\n') }}</textarea></label>
   <label class="small">Columns, one a line <span class="muted">(grid; each cell is a tick)</span> <textarea name="qcols{{ i }}" rows="3">{{ (q.cols or [])|join('\n') }}</textarea></label></div>
   <p>{% if new %}<button type="button" class="btn small ghost" data-drop>Delete this new question</button>{% else %}<label class="check small"><input type="checkbox" name="remove{{ i }}" value="1"> Remove this question</label>{% endif %}</p>
@@ -483,8 +483,8 @@ for (const b of document.querySelectorAll("[data-add]")) {
     b.form.querySelectorAll("[data-for]").forEach(qboxes);
   });
 }
-// A question shows only the boxes its type uses (choices for pick several, rows and columns for a grid)
-function qboxes(box) { box.hidden = box.dataset.for !== box.closest("details").querySelector("select[name^=type]").value; }
+// A question shows only the boxes its type uses (choices for pick one or several, rows and columns for a grid)
+function qboxes(box) { box.hidden = !box.dataset.for.split(" ").includes(box.closest("details").querySelector("select[name^=type]").value); }
 document.querySelectorAll("[data-for]").forEach(qboxes);
 document.addEventListener("change", (e) => { if (e.target.matches("select[name^=type]")) e.target.closest("details").querySelectorAll("[data-for]").forEach(qboxes); });
 </script>{% endif %}

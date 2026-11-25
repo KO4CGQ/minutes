@@ -35,6 +35,8 @@
   {% if q.type == 'yesno' %}<fieldset><legend>{{ q.label }}</legend>
     <label class="check"><input type="radio" name="q{{ i }}" value="Yes" required{{ ' checked' if 'Yes' in have }}> <span>Yes</span></label>
     <label class="check"><input type="radio" name="q{{ i }}" value="No"{{ ' checked' if 'No' in have }}> <span>No</span></label></fieldset>
+  {% elif q.type == 'one' %}<fieldset><legend>{{ q.label }}</legend>
+    {% for o in q.options %}<label class="check"><input type="radio" name="q{{ i }}" value="{{ o }}"{{ ' required' if loop.first }}{{ ' checked' if o in have }}> <span>{{ o }}</span></label>{% endfor %}</fieldset>
   {% elif q.type == 'several' %}<fieldset><legend>{{ q.label }}</legend>
     {% for o in q.options %}<label class="check"><input type="checkbox" name="q{{ i }}" value="{{ o }}"{{ ' checked' if o in have }}> <span>{{ o }}</span></label>{% endfor %}</fieldset>
   {% elif q.type == 'grid' %}<fieldset><legend>{{ q.label }}</legend>

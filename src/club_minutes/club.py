@@ -251,7 +251,7 @@ def _quorum(raw) -> dict | None:
 
 
 # Membership applications (Admin → Site → Membership; club.yaml `membership:`): how long the link works, the vote, how
-# long a refusal lasts, what's kept. `club: invite_after_visits` is the tab's other setting. Questions: [{label, type: yesno|several|short|long|grid, options | rows + cols}].
+# long a refusal lasts, what's kept. `club: invite_after_visits` is the tab's other setting. Questions: [{label, type: yesno|one|several|short|long|grid, options | rows + cols}].
 DEFAULT_STATEMENT = ("By signing, you confirm that what you've written here is true, that you've read the club's bylaws "
                      "and agree to follow them, and that you'll pay the club's dues and fees if you become a member.")
 FIELD_DEFAULTS = {"callsign": "optional", "first_licensed": "optional", "license_class": "optional", "expires": "optional",
@@ -268,12 +268,12 @@ MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_pa
                        "invite": DEFAULT_INVITE}
 FIELD_MODES = {"required": "Required", "optional": "Optional", "hidden": "Not asked"}  # name, email and the signature are always required
 VOTE_PASSES = {"unanimous": "Unanimous", "two_thirds": "Two thirds", "majority": "A majority"}
-QUESTION_TYPES = {"yesno": "Yes or no", "several": "Pick several", "short": "Short text", "long": "Long text", "grid": "Grid of ticks"}
+QUESTION_TYPES = {"yesno": "Yes or no", "one": "Pick one", "several": "Pick several", "short": "Short text", "long": "Long text", "grid": "Grid of ticks"}
 _MEMBERSHIP_RANGES = {"link_days": (1, 365), "listed_days": (0, 365), "reapply_months": (0, 120), "keep_days": (1, 3650)}
 
 
 def clean_questions(raw) -> list[dict]:
-    """The club's own application questions, checked: each {label, type} plus options (several) or rows and cols (grid),
+    """The club's own application questions, checked: each {label, type} plus options (one, several) or rows and cols (grid),
     lists of distinct non-empty lines. Raises ValueError saying which is wrong."""
     if not isinstance(raw, list) or len(raw) > 40:
         raise ValueError("The questions are a list of at most 40.")
@@ -285,8 +285,8 @@ def clean_questions(raw) -> list[dict]:
         if not label:
             raise ValueError("Every question needs its words.")
         item = {"label": label, "type": q["type"]}
-        for key, need in (("options", "several"), ("rows", "grid"), ("cols", "grid")):
-            if q["type"] == need:
+        for key, need in (("options", ("one", "several")), ("rows", ("grid",)), ("cols", ("grid",))):
+            if q["type"] in need:
                 lines = list(dict.fromkeys(" ".join(str(x).split())[:100] for x in q.get(key) or [] if str(x).strip()))
                 if not lines or len(lines) > 40:
                     raise ValueError(f"{label}: give {key} (one to 40).")

@@ -841,6 +841,8 @@ def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path
         assert not page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")  # short text: neither
         page.select_option("select[name=type0]", "several")
         assert page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")
+        page.select_option("select[name=type0]", "one")
+        assert page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")  # pick one: choices too
         page.select_option("select[name=type0]", "grid")
         assert not page.is_visible("textarea[name=options0]") and page.is_visible("textarea[name=qcols0]")
         page.fill("textarea[name=qrows0]", "20 m\n2 m")

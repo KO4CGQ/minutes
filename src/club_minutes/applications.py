@@ -185,6 +185,9 @@ def _answers(club: Club, form) -> list[dict]:
         if q["type"] == "yesno":
             if (value := got[0] if got else "") not in ("Yes", "No"):
                 raise ValueError(f"Please answer: {q['label']}")
+        elif q["type"] == "one":
+            if (value := got[0] if got else "") not in q["options"]:
+                raise ValueError(f"Please answer: {q['label']}")
         elif q["type"] == "several":
             if bad := [g for g in got if g not in q["options"]]:
                 raise ValueError(f"{q['label']}: {bad[0]!r} isn't one of the choices.")
@@ -528,7 +531,7 @@ def sample(club: Club, m: dict, now: float | None = None) -> dict:
               "license_class": ask("license_class", "General"), "expires": ask("expires", "2029-06-30")}
     answers = []
     for q in m["questions"]:
-        value = {"yesno": "Yes", "several": q.get("options", [])[:2], "short": "A short sample answer",
+        value = {"yesno": "Yes", "one": (q.get("options") or [""])[0], "several": q.get("options", [])[:2], "short": "A short sample answer",
                  "long": "A longer sample answer.\nIt can run over several lines.",
                  "grid": {"cols": q.get("cols", []), "rows": {r: q.get("cols", [])[:1] for r in q.get("rows", [])}}}[q["type"]]
         answers.append({"label": q["label"], "type": q["type"], "value": value})

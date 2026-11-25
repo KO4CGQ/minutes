@@ -25,7 +25,8 @@ QUESTIONS = [{"label": "Been to a meeting before?", "type": "yesno"},
              {"label": "Which modes?", "type": "several", "options": ["Voice", "Digital"]},
              {"label": "Why join?", "type": "short"},
              {"label": "Tell us more", "type": "long"},
-             {"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Portable"]}]
+             {"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Portable"]},
+             {"label": "Best time?", "type": "one", "options": ["Mornings", "Evenings"]}]
 
 
 @pytest.fixture(autouse=True)
@@ -66,7 +67,7 @@ def send_link(as_, sent, who="n0aaaa", email="pat@example.org"):
 def good(club, token, **over):
     data = {"name": "Pat Visitor", "callsign": "n0call", "first_licensed": "1998", "license_class": "General", "expires": "2030-01-31",
             "street": "123 Main St", "city": "Anytown", "state": "OH", "zip": "45000", "phone": "555-0100", "email": "pat@example.org",
-            "occupation": "Nurse", "q0": "Yes", "q1": ["Digital"], "q2": "Friends", "q3": "Line one\nLine two", "q4": ["0.0", "1.1"],
+            "occupation": "Nurse", "q0": "Yes", "q1": ["Digital"], "q2": "Friends", "q3": "Line one\nLine two", "q4": ["0.0", "1.1"], "q5": "Evenings",
             "accept": "1", "signature": "pat  VISITOR", "sponsor": " bob  MEMBER ", "qh": applications.qhash(club)}
     return data | over
 
@@ -103,6 +104,7 @@ def test_the_form_is_checked_and_each_kind_of_question_is_stored(env):
                       ({"email": "nope"}, "email address"), ({"zip": ""}, "ZIP code is needed"), ({"first_licensed": "1800"}, "a year"),
                       ({"expires": "soon"}, "isn&#39;t a date"), ({"license_class": "Wizard"}, "license class"), ({"q0": ""}, "Please answer"),
                       ({"q1": ["Smoke signals"]}, "isn&#39;t one of the choices"), ({"q4": ["9.9"]}, "isn&#39;t in the grid"),
+                      ({"q5": ""}, "Please answer: Best time?"), ({"q5": "Noon"}, "Please answer: Best time?"),
                       ({"qh": "stale"}, "changed its questions"), ({"name": "x" * 101}, "too long"),
                       ({"name": "Jane https://evil.example", "signature": "Jane https://evil.example"}, "web address")):
         r = anon.post(f"/apply/{token}", data=good(club, token, **over))
@@ -117,7 +119,8 @@ def test_the_form_is_checked_and_each_kind_of_question_is_stored(env):
                             {"label": "Which modes?", "type": "several", "value": ["Digital"]},
                             {"label": "Why join?", "type": "short", "value": "Friends"},
                             {"label": "Tell us more", "type": "long", "value": "Line one\nLine two"},
-                            {"label": "Bands", "type": "grid", "value": {"cols": ["Fixed", "Portable"], "rows": {"20 m": ["Fixed"], "2 m": ["Portable"]}}}]
+                            {"label": "Bands", "type": "grid", "value": {"cols": ["Fixed", "Portable"], "rows": {"20 m": ["Fixed"], "2 m": ["Portable"]}}},
+                            {"label": "Best time?", "type": "one", "value": "Evenings"}]
     assert a["sponsor"] == {"typed": "bob MEMBER", "id": "n0cccc", "asked": a["used"], "answer": None, "at": None} and a["statement"] == club.membership["statement"]
     by = {m["to"] if isinstance(m["to"], str) else m["to"][0]: m for m in sent}  # the sponsor, the Secretary and the applicant
     assert set(by) == {"bob@example.org", "jane@example.org", "pat@example.org"}
@@ -234,10 +237,11 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     assert club.membership["vote_passes"] == "two_thirds" and club.membership["statement"] == "" and [q["label"] for q in club.membership["questions"]] == ["Bands"]
     before = club.site_settings
     for bad, why in ((form | {"link_days": "0"}, "from 1 to 365"), (form | {"vote_passes": "coin"}, "pick one"),
-                     (form | {"type0": "grid", "qcols0": ""}, "give cols"),
+                     (form | {"type0": "grid", "qcols0": ""}, "give cols"), (form | {"type1": "one"}, "give options"),
                      (form | {"invite": "Hello {guest}"}, "needs {link}"), (form | {"invite": "{link} {name}"}, "not {name}")):
         assert why in admin.post("/admin/site/membership", data=bad).text and club.site_settings == before, why
-    preview = admin.post("/admin/site/membership/preview", data=form | {"label2": "Favorite band?", "type2": "short", "rows": "3", "welcome": "**Hi** there"})
+    preview = admin.post("/admin/site/membership/preview", data=form | {"label2": "Favorite band?", "type2": "one", "options2": "20 m\n40 m", "rows": "3", "welcome": "**Hi** there"})
+    assert 'type="radio" name="q2" value="20 m" required' in preview.text and 'type="radio" name="q2" value="40 m">' in preview.text  # Pick one: round buttons
     assert "Favorite band?" in preview.text and "<strong>Hi</strong>" in preview.text and "Preview:" in preview.text and " disabled>Send my application" in preview.text
     assert club.site_settings == before  # nothing saved
     assert "from 1 to 365" in admin.post("/admin/site/membership/preview", data=form | {"link_days": "0"}).text
