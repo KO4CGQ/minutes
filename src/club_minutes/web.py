@@ -296,6 +296,7 @@ async def require_login(request: Request, call_next):
     request.state.viewing_as = va if va in archive.club.members and va != real else None
     request.state.acting_as = bool(request.state.viewing_as and acts and test_server())
     authmod.ACTING.set(request.state.acting_as)
+    plugins.VIEWING_AS.set(bool(request.state.viewing_as))
     request.state.member = request.state.viewing_as or real
     authmod.ACTOR.set(getattr(archive.club.members.get(real or ""), "email", None) or None)  # stage: their email only
     path = request.url.path
@@ -4123,8 +4124,9 @@ def console_start(request: Request, date: str = Form(...), leader_id: str = Form
     except ValueError:
         return RedirectResponse("/console?error=" + quote("Pick the meeting's date."), status_code=303)
     try:
-        new = day.isoformat() not in archive.by_slug  # not reopening a draft
-        m = console.start(archive, day, leader_id or mid, recorder=mid, online=not lan(client_ip(request)))
+        with console._starting:  # two clicks: only the one that makes the minutes fires the webhook
+            new = day.isoformat() not in archive.by_slug  # not reopening a draft
+            m = console.start(archive, day, leader_id or mid, recorder=mid, online=not lan(client_ip(request)))
         if new:
             webhooks.meeting_started(archive.club, day, base_url(request))
     except ValueError as e:  # another meeting is still open (only one at a time)
@@ -4169,7 +4171,7 @@ async def console_hold(request: Request, slug: str, mid: str = Depends(leader)):
     h = console.holder(slug, tab) if d.get("peek") else console.hold(archive, slug, mid, tab, bool(d.get("take")), prev)
     if h:
         return JSONResponse({"holder": archive.club.name(h["member"]), "you": h["member"] == mid, "since": int(h["since"])}, 409)
-    return {"held": not d.get("peek")} | ({"attendance": console.attendance(archive, slug)} if d.get("attendance") and not d.get("peek") else {})
+    return {"held": not d.get("peek")} | ({"attendance": await run_in_threadpool(console.attendance, archive, slug)} if d.get("attendance") and not d.get("peek") else {})
 
 
 @app.post("/api/meetings/{slug}/vote")

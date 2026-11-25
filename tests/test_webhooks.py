@@ -157,3 +157,37 @@ def test_calendar_changes_queue_events_with_the_contract(env):
     assert q[2]["data"] == {"date": str(day), "title": e["title"], "reason": "Hall busy", "to": f"{new}T20:00", "url": link}
     webhooks.meeting_started(c, new, "https://minutes.example.org")  # the moved night still knows its series
     assert webhooks._load()[3]["data"]["title"] == e["title"]
+
+
+def test_a_dropped_event_stays_shown_until_a_later_success(env):
+    c, _, _, status = env
+    set_up(c)
+    webhooks._save([{**webhooks._event("meeting_cancelled", {}), "tries": len(webhooks.RETRY), "next": 0},
+                    {**webhooks._event("meeting_cancelled", {}), "tries": 0, "next": 0}])
+    status[:] = [500, 204]
+    webhooks.deliver()
+    assert webhooks._load() == [] and webhooks.failure()["error"] == "HTTP 500"  # the 2nd event went, the drop is still shown
+    assert webhooks.send_test() is None and webhooks.failure() is None
+
+
+def test_deliver_does_nothing_on_data_of_another_version(env, monkeypatch):
+    from club_minutes import upgrade
+    c, _, sent, _ = env
+    set_up(c)
+    webhooks.fire("meeting_cancelled", {})
+    monkeypatch.setattr(upgrade, "version", lambda *a: upgrade.CURRENT - 1)
+    webhooks.deliver()
+    assert not sent and len(webhooks._load()) == 1
+
+
+def test_two_clicks_on_start_fire_one_meeting_started(env, monkeypatch, tmp_path):
+    from club_minutes.store import Archive
+    c, as_, _, _ = env
+    monkeypatch.setattr(web, "archive", Archive(tmp_path / "m", c))
+    (tmp_path / "m").mkdir()
+    fired = []
+    monkeypatch.setattr(webhooks, "meeting_started", lambda *a: fired.append(a))
+    t = as_("pres")
+    for _ in range(2):
+        assert t.post("/console/start", data={"date": "2026-12-01"}, follow_redirects=False).status_code == 303
+    assert len(fired) == 1

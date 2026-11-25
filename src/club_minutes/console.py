@@ -36,7 +36,7 @@ def _key(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
-_starting = threading.Lock()  # two leaders clicking Start at once still get one meeting
+_starting = threading.RLock()  # two leaders clicking Start at once still get one meeting
 _saving = threading.RLock()  # the console's save and a plugin's mark_present never overlap (each would undo the other's change)
 
 # Who is taking an open meeting's minutes: one console (browser tab) at a time, kept while it's open (it checks in every
@@ -277,12 +277,15 @@ def open_meeting(archive: Archive) -> dict | None:
     if not m:
         return None
     opened = archive.root / m.slug / "opened"
-    if not opened.exists():  # drafts from before this existed count from now
+    try:
+        when = int(opened.read_text())
+    except (OSError, ValueError):  # drafts from before this existed, or a torn write: count from now
+        when = int(time.time())
         opened.parent.mkdir(parents=True, exist_ok=True)
-        opened.write_text(str(int(time.time())))
+        opened.write_text(str(when))
     online = next((events.occurrence(e, m.date)["online"] for e in events.load()
                    if e.get("meeting") and m.date in events.dates(e, m.date, m.date)), "")
-    return {"date": m.slug, "opened": int(opened.read_text()), "online": online, "present": [*m.in_person, *m.remote]}
+    return {"date": m.slug, "opened": when, "online": online, "present": [*m.in_person, *m.remote]}
 
 
 def mark_present(archive: Archive, id: str, by: str, in_person: bool = False) -> bool:

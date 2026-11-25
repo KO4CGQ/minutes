@@ -4,12 +4,14 @@ on Site → Features. Writing one: docs/developers.md → Writing a plugin. The 
 declares what it has."""
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import re
 import tempfile
 import threading
 import time
+import unicodedata
 from importlib.metadata import entry_points
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -28,6 +30,7 @@ LOADED: dict[str, Plugin] = {}
 PROBLEMS: dict[str, str] = {}  # entry point name -> why it isn't running
 APP_PREFIXES: set[str] = set()  # the app's own first address parts, never blocked for a failed plugin of that name
 _app_loader = None
+VIEWING_AS = contextvars.ContextVar("plugin_viewing_as", default=False)  # set per request by web.py: an admin viewing as a member
 # What a plugin may declare in DATA (module level), and who it's about. Each kind gates the api calls named; "visitors"
 # gates none: it is for what a plugin collects itself from signed-out people (a typed name, say).
 KINDS = {"names": "Members' names", "email": "Members' email addresses", "roles": "Members' roles",
@@ -93,6 +96,16 @@ class Api:
             raise PermissionError(f"{self._p.name} didn't declare {kind!r}: add it to DATA, "
                                   f"e.g. DATA = {{{kind!r}: {{'why': '...', 'about': 'members'}}}}")
 
+    def viewing_as(self, request) -> bool:
+        """An admin is viewing the app as another member (read-only): `who(request)` is that member. Show a read-only page;
+        `mark_present` and `send` raise PermissionError meanwhile, so a page can't act as them."""
+        return bool(getattr(request.state, "viewing_as", None))
+
+    def _acts(self) -> None:
+        if VIEWING_AS.get():
+            raise PermissionError("An admin is viewing the app as another member, which is read-only: a plugin can't act as them "
+                                  "(check api.viewing_as(request) and show a read-only page)")
+
     def member(self, id: str) -> dict | None:
         self._uses("names")
         m = self._club().members.get(id)
@@ -145,6 +158,7 @@ class Api:
         """Mark that member present (online, or in person) in the open console meeting unless they're in its
         attendance already. True if it did. Everyone's view of the meeting picks it up like any attendance change."""
         self._uses("attendance")
+        self._acts()
         from . import console
         from .web import archive
         return console.mark_present(archive, id, f"plugin:{self._p.name}", in_person)
@@ -163,7 +177,9 @@ class Api:
     def send(self, method: str, url: str, **kwargs) -> httpx.Response:
         """An outgoing request (httpx.request), only to https and a host named in SHARES; 10 seconds at most, redirects
         not followed. Each call is logged in plugin-calls.jsonl (time, plugin, method, host, path, status; never the
-        query or a body). Raises PermissionError for any other host or a plain http address."""
+        query, a body or all but the first part of the path: chat webhook addresses hold a secret). Raises PermissionError
+        for any other host or a plain http address, and while an admin is viewing the app as a member."""
+        self._acts()
         u = urlsplit(url)
         if u.scheme != "https" or (u.hostname or "").lower() not in {s["host"].lower() for s in self._p.shares if s.get("host")}:
             raise PermissionError(f"{self._p.name} may only send to https addresses of a host named in SHARES (not {u.hostname or url!r})")
@@ -175,7 +191,7 @@ class Api:
         finally:
             with (clubmod.DATA / CALLS_LOG).open("a") as f:
                 f.write(json.dumps({"at": int(time.time()), "plugin": self._p.name, "method": method.upper(),
-                                    "host": u.hostname.lower(), "path": u.path, "status": status}) + "\n")
+                                    "host": u.hostname.lower(), "path": "/" + u.path.split("/")[1], "status": status}) + "\n")
             (clubmod.DATA / CALLS_LOG).chmod(0o600)
 
     def fresh(self, request, next: str):
@@ -389,6 +405,11 @@ def calendar_links(club) -> list[tuple[str, str]]:
     return out
 
 
+def _guest_name(n) -> str:
+    """A name a signed-out video guest typed: one line, 100 characters at most, no control or bidi characters."""
+    return one_line("".join(c for c in str(n) if unicodedata.category(c) not in ("Cc", "Cf")))[:100]
+
+
 def console_attendance(club) -> list[str]:
     """The names plugins see in a video meeting right now who aren't members, for the console's Attendance. Each
     plugin's `console_attendance(api)` also runs whenever the console renders or refreshes attendance and just before
@@ -397,7 +418,7 @@ def console_attendance(club) -> list[str]:
     for p in LOADED.values():
         if club.plugin_on(p.name) and hasattr(p.mod, "console_attendance"):
             try:
-                out += [one_line(str(n)) for n in p.mod.console_attendance(p.api)]
+                out += [_guest_name(n) for n in p.mod.console_attendance(p.api)]
             except Exception:
                 log.exception("plugin %s: console_attendance failed", p.name)
     return out

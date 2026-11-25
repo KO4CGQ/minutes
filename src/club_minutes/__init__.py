@@ -66,7 +66,7 @@ def main() -> None:
     if a.cmd == "plugins-check":  # before the data upgrade: the version before is still running on that data
         from . import plugins
         raise SystemExit(plugins.check())
-    if a.cmd != "restore":
+    if a.cmd not in ("restore", "webhooks"):  # webhooks only reads the queue and settings: deliver() checks the version
         for what in upgrade.run():  # every command sees the data in this version's shape
             print(f"Data upgraded: {what}")
 

@@ -301,5 +301,42 @@ def test_send_only_to_a_declared_https_host_and_logs_no_query_or_body(env, monke
     assert api.send("post", "https://API.example.org/v1/hi?key=secret", json={"name": "Jane"}).status_code == 204
     assert seen[0][2]["timeout"] == 10 and seen[0][2]["follow_redirects"] is False
     line = (clubmod.DATA / plugins.CALLS_LOG).read_text()
-    assert '"host": "api.example.org"' in line and '"path": "/v1/hi"' in line and '"status": 204' in line
+    assert '"host": "api.example.org"' in line and '"path": "/v1"' in line and '"status": 204' in line
     assert "secret" not in line and "Jane" not in line
+
+
+def test_a_plugin_cant_act_while_an_admin_views_as_a_member(env, monkeypatch):
+    api = plugins.LOADED["hello"].api
+    assert not api.viewing_as(types.SimpleNamespace(state=types.SimpleNamespace(viewing_as=None)))
+    assert api.viewing_as(types.SimpleNamespace(state=types.SimpleNamespace(viewing_as="m1")))
+    token = plugins.VIEWING_AS.set(True)
+    try:
+        for call in (lambda: api.mark_present("m1"), lambda: api.send("POST", "https://api.example.org/x")):
+            with pytest.raises(PermissionError, match="viewing the app as another member"):
+                call()
+    finally:
+        plugins.VIEWING_AS.reset(token)
+
+
+def test_video_guest_names_are_capped_and_stripped_of_control_and_bidi_characters():
+    assert plugins._guest_name("Pat\u202e Guest\x07\u200b") == "Pat Guest"
+    assert len(plugins._guest_name("x" * 500)) == 100
+
+
+def test_the_calls_log_keeps_only_the_first_part_of_the_path(env, monkeypatch):
+    monkeypatch.setattr(plugins.httpx, "request", lambda m, u, **kw: types.SimpleNamespace(status_code=204))
+    plugins.LOADED["hello"].api.send("POST", "https://api.example.org/hooks/SECRET-TOKEN/x?k=v")
+    line = (clubmod.DATA / plugins.CALLS_LOG).read_text()
+    assert '"path": "/hooks"' in line and "SECRET" not in line
+
+
+def test_a_torn_opened_file_counts_as_now(tmp_path):
+    from club_minutes import console
+    from club_minutes.store import Archive
+    club = Club(FIX / "test-club.yaml", roster=PEOPLE)
+    arch = Archive(tmp_path, club)
+    import datetime as dt
+    console.start(arch, dt.date(2026, 11, 10), "m2")
+    f = tmp_path / "2026-11-10" / "opened"
+    f.write_text("")
+    assert abs(console.open_meeting(arch)["opened"] - time.time()) < 5 and f.read_text().isdigit()

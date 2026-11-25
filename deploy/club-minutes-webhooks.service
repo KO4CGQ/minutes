@@ -3,6 +3,7 @@ Description=Send event webhooks that are due, and retry failed ones
 
 [Service]
 Type=oneshot
+TimeoutStartSec=120
 User=minutes
 Group=minutes
 WorkingDirectory=/opt/club-minutes

@@ -144,7 +144,10 @@ def _attempt(url: str, key: str, e: dict) -> str | None:
 
 def deliver() -> None:
     """Send what's due (the thread after each event, and the timer). Does nothing when there's no queue or no setup."""
+    from . import upgrade
     url, key = _settings().get("url") or "", secret()
+    if upgrade.version() != upgrade.CURRENT:  # the timer must never read data of another shape
+        return
     if not (clubmod.DATA / "webhook-queue.json").exists() or not valid_url(url) or not key:
         return
     with _locked("webhook-send.lock", wait=False) as mine:
@@ -161,6 +164,7 @@ def deliver() -> None:
 
 
 def _send(url: str, key: str, due: list[dict]) -> None:
+    dropped = False
     for e in due:
         err = _attempt(url, key, e)
         with _locked("webhook-queue.lock"):
@@ -172,10 +176,12 @@ def _send(url: str, key: str, due: list[dict]) -> None:
             elif e["tries"] >= len(RETRY):
                 q = [x for x in q if x["id"] != e["id"]]
                 log.warning("webhook %s dropped after %d tries", e["kind"], e["tries"] + 1)
+                dropped = True
             else:
                 next(x for x in q if x["id"] == e["id"]).update(tries=e["tries"] + 1, next=time.time() + RETRY[e["tries"]])
             _save(q)
-        _failure(e["kind"], err)
+        if err or not (q or dropped):  # a success clears the failure only once the queue is empty and nothing was dropped
+            _failure(e["kind"], err)
 
 
 def fire(kind: str, data: dict) -> None:
