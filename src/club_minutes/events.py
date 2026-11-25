@@ -63,10 +63,10 @@ def save(evs: list[dict]) -> None:
 
 
 def ensure_meeting(club) -> None:
-    """Put the weekly meeting on the Club events calendar once (club.meeting_day and meeting_time), as a real
-    repeating event leaders can change: skip a holiday, move a date. Not again if a leader deletes it."""
+    """On a new install, put the weekly meeting on the Club events calendar once, from club.yaml's seed (meeting_day and
+    meeting_time), as a real repeating event leaders can change. No seed: nothing made. Not again if a leader deletes it."""
     marker = DATA / "events-meeting-added"
-    if marker.exists():
+    if marker.exists() or club.meeting_weekday is None or club.meeting_time is None:
         return
     with locked():
         if marker.exists():
@@ -83,52 +83,6 @@ def ensure_meeting(club) -> None:
         e["meeting"] = True
         save(evs)
         marker.write_text(e["id"])
-
-
-def next_meeting(evs: list[dict], since: dt.date) -> tuple[dict, dt.date] | None:
-    """The weekly meeting's first date from `since` on, and the series it's in (a series per earlier change)."""
-    d, e = min(((d, e) for e in evs if e.get("meeting") for d in dates(e, since, since + dt.timedelta(days=400))[:1]),
-               key=lambda x: x[0], default=(None, None))
-    return (e, d) if e else None
-
-
-def move_meeting(club, since: dt.date, where: str | None, online: str | None, by: str) -> dt.date:
-    """The weekly meeting from `since` on: the club's day and time, at `where` and `online` (None: each date keeps its own). Earlier dates keep theirs; one-date
-    changes and skipped dates from `since` on go if the day moves. Each series (one per earlier change) still running
-    from `since` changes from where it starts, so a change already planned for later is changed too, not left behind.
-    Returns the first new date."""
-    nearest = lambda d: d + dt.timedelta(days=(club.meeting_weekday - d.weekday()) % 7)
-    at = lambda d: dt.datetime.fromisoformat(f"{d}T{club.meeting_time}")
-    with locked():
-        evs = load()
-        changed, series = [], sorted((x for x in evs if x.get("meeting")), key=lambda x: x["start"])
-        for e, after in zip(series, series[1:] + [None]):
-            old = next(iter(dates(e, since, since + dt.timedelta(days=400))), None)
-            if old is None:
-                continue
-            start = at(nearest(max(since, _dt(e["start"]).date())))
-            # it ends the day before the next series starts, so a new weekday can't put a date in both
-            end = min(filter(None, [e["repeat"].get("until"), after and (_dt(after["start"]).date() - dt.timedelta(days=1)).isoformat()]), default=None)
-            v = {"title": e["title"], "notes": e.get("notes", ""), "where": e.get("where", "") if where is None else where,
-                 "online": e.get("online", "") if online is None else online, "start": _iso(start, True),
-                 "end": _iso(start + (length(e) or dt.timedelta(hours=2)), True), "repeat": {**e["repeat"], "until": end}, "tz": None}
-            n = len(evs)
-            change(evs, e["id"], old.isoformat(), e["cal"], v, "following")
-            moved = evs[-1] if len(evs) > n else e  # the dates from `since` on: split off, or the whole series
-            moved["repeat"] = {**moved["repeat"], "until": end}
-            changed.append(moved)
-        if not changed:  # no meeting on the calendar (deleted, or its dates ended): a new series
-            start = at(nearest(since))
-            e = add(evs, "events", {"title": f"{club.label} meeting", "where": where or "", "online": online or "",
-                                    "notes": "", "start": _iso(start, True), "end": _iso(start + dt.timedelta(hours=2), True),
-                                    "repeat": {"freq": "weekly", "interval": 1, "last": False, "until": None}}, by)
-            e["meeting"] = True
-            changed.append(e)
-        save(evs)
-        (DATA / "events-meeting-added").write_text(changed[0]["id"])  # ensure_meeting has nothing left to do
-    first = nearest(since)
-    log(by, "changed this and following dates of", {**changed[0], "start": _iso(at(first), True)})
-    return first
 
 
 def quiet(e: dict) -> bool:

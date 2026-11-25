@@ -398,12 +398,15 @@ def test_the_meeting_day_time_and_zone_are_the_clubs_own(tmp_path, monkeypatch):
     assert (c.meeting_weekday, c.meeting_time) == (3, "19:30")
     c.info.update(meeting_day=" tuesday ", meeting_time=1170)  # unquoted in YAML, 19:30 arrives as 1170 minutes
     assert (c.meeting_weekday, c.meeting_time) == (1, "19:30")
-    for k, bad in (("meeting_day", None), ("meeting_day", "Thurs"), ("meeting_time", None), ("meeting_time", "7:30 PM"),
+    for k, bad in (("meeting_day", "Thurs"), ("meeting_time", "7:30 PM"),
                    ("meeting_time", "24:00"), ("meeting_time", True), ("timezone", "Mars/Olympus")):
         d = Club(FIX / "test-club.yaml")
         d.info[k] = bad
         with pytest.raises(ValueError, match=f"club.yaml club: {k}"):
             _ = d.meeting_weekday, d.meeting_time, d.timezone
+    seedless = Club(FIX / "test-club.yaml")
+    del seedless.info["meeting_day"], seedless.info["meeting_time"]
+    assert (seedless.meeting_weekday, seedless.meeting_time) == (None, None)  # the seed is optional
     monkeypatch.setattr(club_mod.os.path, "realpath", lambda p: "/usr/share/zoneinfo/Europe/Berlin")
     bare = Club(FIX / "test-club.yaml")
     bare.info.pop("timezone")

@@ -330,8 +330,8 @@ def import_xlsx(club: Club, path: Path, order: list[str], by: str, year: int) ->
         if date is None:
             continue
         day = date.date() if isinstance(date, dt.datetime) else date
-        wd = club.meeting_weekday
-        if day.weekday() != wd:  # a typo'd date: use the nearest meeting night
+        wd = (meetings.first(club) or (None,))[0]
+        if wd is not None and day.weekday() != wd:  # a typo'd date: use the nearest meeting night
             fixed = day + dt.timedelta(days=(wd - day.weekday() + 3) % 7 - 3)
             problems.append(f"Row {row[0].row}: {show_date(day, 'day')} isn't a meeting night; used {show_date(fixed, 'day')}")
             day = fixed

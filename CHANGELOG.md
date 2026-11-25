@@ -14,6 +14,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - **Dues by the week, the month or the year:** the Treasurer sets the period with the amount (a yearly club picks the day dues fall due), and "behind after" counts in that period. Meetings, cancellations and schedule changes never change what anyone owes. A weekly club's dues stay the same.
 
 ### Changed
+- **Meeting nights are set only on the calendar:** Admin → Site → Club no longer has a Meetings card (its day and time moved every meeting to one weekday), and Home tells leaders when no Club meeting has a date ahead. For server admins: `meeting_day` and `meeting_time` in club.yaml are now optional; they only start a new install's first meeting.
 - In minutes made from now on, a faint line separates the items in every section, as it did in Community Reports, on the page and in the PDF. Minutes already published look as they did.
 - In the leader console, members' comments on a business item show their first two lines, formatted and ending in …, with **Show more** for the rest.
 - The leader console's **Submit minutes** buttons show only once the finished minutes are on screen, so they're never submitted unseen.

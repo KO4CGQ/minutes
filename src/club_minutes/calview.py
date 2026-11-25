@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
-from . import business, chow, regions
+from . import business, chow, meetings, regions
 from . import events as store
 from .club import DATA, Club, show_date
 from .richtext import plain, title
@@ -170,7 +170,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
     if "community" in kinds:
         out += elections(club, lo, hi)
     if not public:
-        at = dt.time.fromisoformat(club.meeting_time)
+        at = dt.time.fromisoformat((meetings.first(club) or (0, "00:00"))[1])
         for d, x in chow.upcoming(chow.load(), lo, n=400) if club.has("chow") else []:
             if d > hi.isoformat():
                 break
