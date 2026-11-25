@@ -309,10 +309,19 @@ def undo(was: int, data: Path = DATA) -> bool:
     if (data / "data-version").exists() and version(data) <= was:
         return False
     with _locked(data):
-        (data / "data-version").unlink(missing_ok=True)
-        for p in data.iterdir():
-            if p.name not in SKIP and not p.name.endswith(".lock"):
-                shutil.rmtree(p) if p.is_dir() and not p.is_symlink() else p.unlink()
-        _copytree(copy, data, lambda d, _names: ["data-version"] if Path(d) == copy else [])
+        # Copy to a folder inside the data folder first (the data stays as it was if that fails), then swap by renames
+        new, old = data / ".undo-new", data / ".undo-old"
+        for d in (new, old):
+            shutil.rmtree(d, ignore_errors=True)
+        _copytree(copy, new, lambda d, _names: ["data-version"] if Path(d) == copy else [])
+        (data / "data-version").unlink(missing_ok=True)  # gone until the end: a stopped undo runs again
+        old.mkdir()
+        for p in list(data.iterdir()):
+            if p.name not in SKIP and p not in (new, old) and not p.name.endswith(".lock"):
+                p.replace(old / p.name)
+        for p in new.iterdir():
+            p.replace(data / p.name)
         shutil.copy2(copy / "data-version", data / "data-version")
+        shutil.rmtree(new)
+        shutil.rmtree(old)
     return True

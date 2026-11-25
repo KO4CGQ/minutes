@@ -71,7 +71,8 @@ def test_undo_stopped_halfway_runs_again(tmp_path, steps, monkeypatch):
     real = shutil.copytree
     monkeypatch.setattr(shutil, "copytree", lambda *a, **k: (_ for _ in ()).throw(OSError("power cut")))
     with pytest.raises(OSError):
-        upgrade.undo(1, tmp_path)  # everything deleted, nothing copied back yet
+        upgrade.undo(1, tmp_path)  # the copy fails first: the data is as it was, never emptied
+    assert (tmp_path / "links.json").exists() and upgrade.version(tmp_path) == upgrade.CURRENT
     monkeypatch.setattr(shutil, "copytree", real)
     assert upgrade.undo(1, tmp_path)
     assert json.loads((tmp_path / "business.json").read_text()) == {"items": [1]} and (tmp_path / "links.json").exists()

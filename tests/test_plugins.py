@@ -154,6 +154,16 @@ def test_update_check_turns_off_a_plugin_that_wont_load_or_holds_the_update_if_c
     assert 'name="plugin_hold_wrong" value="1" checked' in client(a, "n0admn", admin=True).get("/admin/site/features").text
 
 
+def test_update_check_warns_of_a_plugin_that_is_on_but_not_installed_and_holds_if_chosen(env, monkeypatch, capsys):
+    club, _a, _ = env
+    monkeypatch.setenv("CLUB_MINUTES_CONFIG", str(FIX / "test-club.yaml"))
+    club.save_site_settings({("plugins", "ghost"): True})
+    assert plugins.check() == 0 and "Plugin ghost is turned on but isn't installed" in capsys.readouterr().out
+    assert club.site_settings["plugins"]["ghost"] is True  # warned, not turned off
+    club.save_site_settings({("plugin_hold", "ghost"): True})
+    assert plugins.check() == 1 and "Plugin ghost is not installed, and Site" in capsys.readouterr().out
+
+
 def test_a_damaged_settings_file_never_reads_as_hold(env, monkeypatch):
     monkeypatch.setenv("CLUB_MINUTES_CONFIG", str(FIX / "test-club.yaml"))
     (clubmod.DATA / "site-settings.json").write_text("[1]")
