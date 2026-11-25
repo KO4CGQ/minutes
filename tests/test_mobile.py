@@ -838,7 +838,11 @@ def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path
         page.goto("http://testserver/admin/site/membership")
         page.click("text=+ Add a question")
         page.fill("input[name=label0]", "Bands")
+        assert not page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")  # short text: neither
+        page.select_option("select[name=type0]", "several")
+        assert page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")
         page.select_option("select[name=type0]", "grid")
+        assert not page.is_visible("textarea[name=options0]") and page.is_visible("textarea[name=qcols0]")
         page.fill("textarea[name=qrows0]", "20 m\n2 m")
         page.fill("textarea[name=qcols0]", "Fixed\nMobile")
         with page.expect_navigation():
