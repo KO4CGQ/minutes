@@ -3,6 +3,7 @@ Planning, Community), the minutes' dated Upcoming Events, chow nights and shared
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import json
 import re
@@ -221,13 +222,33 @@ def _order(e: Entry):
 def feed_token(mid: str, reset: bool = False) -> str:
     """The secret in a member's private feed address (calendar-feeds.json). reset: a new one; the old link stops working."""
     import secrets
+    with _feeds() as tokens:
+        if reset or mid not in tokens:
+            tokens[mid] = secrets.token_urlsafe(24)
+        return tokens[mid]
+
+
+def forget_feed(mid: str) -> None:
+    """A member's feed address gone (they left): the link stops working."""
+    with _feeds() as tokens:
+        tokens.pop(mid, None)
+
+
+@contextlib.contextmanager
+def _feeds():
+    """calendar-feeds.json, read and written back under a lock: the web app and the daily job both change it."""
+    import fcntl
     p = DATA / "calendar-feeds.json"
-    tokens = json.loads(p.read_text()) if p.exists() else {}
-    if reset or mid not in tokens:
-        tokens[mid] = secrets.token_urlsafe(24)
-        p.write_text(json.dumps(tokens))
-        p.chmod(0o600)
-    return tokens[mid]
+    with open(DATA / "calendar-feeds.lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        tokens = json.loads(p.read_text()) if p.exists() else {}
+        before = dict(tokens)
+        yield tokens
+        if tokens != before:
+            tmp = p.with_suffix(".tmp")
+            tmp.write_text(json.dumps(tokens))
+            tmp.chmod(0o600)
+            tmp.replace(p)
 
 
 def member_for_feed(token: str) -> str | None:

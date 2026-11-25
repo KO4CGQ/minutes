@@ -53,6 +53,7 @@ NOT_ATOMIC = {
     ("business.py", 'open(DATA / "business.lock", "w")'): "a lock",
     ("recovery.py", 'open(DATA / "recovery.lock", "w")'): "a lock",
     ("prefs.py", 'open(DATA / "prefs.lock", "w")'): "a lock",
+    ("calview.py", 'open(DATA / "calendar-feeds.lock", "w")'): "a lock",
     ("auth.py", 'open(DATA / "email-log.lock", "w")'): "a lock",
     ("corrections.py", 'open(archive.root / s / ".send.lock", "w")'): "a lock",
     ("treasurer.py", 'open(DATA / "treasurer.lock", "w")'): "a lock",

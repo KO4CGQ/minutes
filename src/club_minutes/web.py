@@ -2357,7 +2357,9 @@ def member(request: Request, who: str):
     return page(request, "member.html", member=m, h=archive.member_history(mid), total=len(archive.meetings),
                 contact=contact, is_me=viewer == mid, is_officer=privileged(request), can_moderate=moderates(request),
                 can_view_as=elevated and mid != request.state.real_member, can_act_as=test_server(),
-                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=archive.club.role_names(mid))
+                can_edit_roster=archive.club.keeps_roster(viewer) or elevated, member_roles=archive.club.role_names(mid),
+                purge_note=prefs.purge_note(mid) if (archive.club.keeps_roster(viewer) or elevated)
+                and m.status.lower() in ("inactive", "silent key") else None)  # made Active again: the note goes at once
 
 
 STATUSES = ("Active", "Suspended", "Inactive", "Silent Key", "Prospect")
