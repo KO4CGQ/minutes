@@ -353,7 +353,7 @@ class Club:
         self.email = cfg.get("email") or {}
         self.never_record = [" ".join(str(x).split()) for x in (cfg.get("privacy") or {}).get("never_record") or [] if str(x).strip()]
         self.redact = [_n(x) for x in self.never_record]
-        self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (callsign ids)
+        self.admins = {str(x).lower() for x in cfg.get("admins") or []}  # may turn on admin mode (member ids or current callsigns)
         # Offices whose holders add new members to the roster (the Secretary keeps it, usually).
         self.offices = cfg.get("offices") or []  # the bylaws' offices (offices.py); a default list if empty
         self.roster_keepers = [str(x).lower() for x in cfg.get("roster_keepers") or ["Secretary", "Treasurer"]]
@@ -481,6 +481,8 @@ class Club:
                 for k in PICKED:
                     setattr(m, k, m.id in picked.get(k, []))
         self.__dict__.pop("_speaker_patterns", None)  # cached; rebuilt from the new names
+        if self.members and (stale := sorted(a for a in self.admins if self._admin_id(a) not in self.members)):
+            log.warning("admins: in club.yaml names no current member: %s (a member id or a current callsign counts; a former one doesn't)", ", ".join(stale))
 
     def refresh(self) -> bool:
         """Reload people if the roster cache changed on disk (e.g. the nightly sync). Cheap: one stat."""
@@ -676,14 +678,19 @@ class Club:
     @property
     def all_admins(self) -> set[str]:
         """club.yaml's and the app's admins, less any suspended by the officers (recovery.py)."""
-        return {self.canonical(a) for a in self.admins | self.app_admins} - self.suspended  # club.yaml may still have an old call
+        return {self._admin_id(a) for a in self.admins | self.app_admins} - self.suspended
+
+    def _admin_id(self, a: str) -> str:
+        """A member id, or the member who now holds that callsign; never through a former callsign (an alias), which
+        anyone could list for a stale entry and so become that admin."""
+        return a if a in self.members else self._by_call.get(a, a)
 
     @property
     def suspended(self) -> set[str]:
         """Admins suspended by a recovery: their admin rights don't count, club.yaml's included; another admin lifts it."""
         p = DATA / "admins-suspended.json"
         try:
-            return {self.canonical(a) for a in json.loads(p.read_text())} if p.exists() else set()
+            return {self._admin_id(a) for a in json.loads(p.read_text())} if p.exists() else set()
         except (OSError, ValueError, TypeError):
             log.exception("%s is damaged; nobody is suspended", p)
             return set()
