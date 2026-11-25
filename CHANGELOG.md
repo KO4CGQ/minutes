@@ -24,6 +24,7 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - A member's **New callsign** no longer needs the backup passphrase or moves any records: they keep everything, links to their page use the new callsign, and old links still work.
 
 ### Fixed
+- A correction to a meeting's attendance now updates the quorum line in its minutes, and the leader console checks the quorum again when a motion is added.
 - On iPhones, **Download PDF** opened the PDF in place of the minutes (or, in Firefox, did nothing) instead of saving it.
 - Minutes from before 1.2 no longer show a line between community reports: they look as they did when they were made.
 

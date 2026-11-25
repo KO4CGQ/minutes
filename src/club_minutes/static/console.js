@@ -608,21 +608,33 @@
       const val = (w) => w.querySelector("input").value.trim();
       const go = async () => {
         if (!val(mover) || !what.value.trim() || !result.value) { alert("Fill in who moved it, what it was, and the result."); return; }
+        refresh();  // attendance may have changed since the form opened: check again now, still advisory
+        const q = quorum();
+        if (q && !q.ok && !confirm("No quorum yet: motions shouldn't be brought up until there is one. Add this motion anyway?")) return;
         if (await send("/business/motion", { mover: val(mover), seconder: val(second), what: what.value, result: result.value, pics: mpics })) { mform = motionForm(); draw(); }
       };
-      const q = quorum();
-      return h("div", { class: "bizitem motion" },
-        q && !q.ok ? h("p", { class: "msg warn", role: "status" }, "No quorum yet: motions shouldn't be brought up until there is one.") :
-          q ? h("p", { class: "hint", role: "status" }, `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`) : null,
+      const note = h("p", { role: "status" });
+      const refresh = () => {  // the quorum as it is now, not as it was when the form was made
+        const q = quorum();
+        note.hidden = !q;
+        note.className = q && !q.ok ? "msg warn" : "hint";
+        note.textContent = !q ? "" : !q.ok ? "No quorum yet: motions shouldn't be brought up until there is one."
+          : `A motion needs ${q.majority} vote${q.majority === 1 ? "" : "s"} to pass (a majority of the members present).`;
+      };
+      refresh();
+      const box = h("div", { class: "bizitem motion" },
+        note,
         h("div", { class: "row" }, mover, h("span", {}, "moved to")), what, picker, thumbs,
         h("div", { class: "row" }, second, result, h("button", { class: "btn small", onclick: go }, "Add motion")));
+      box.refresh = refresh;
+      return box;
     };
     // New Business: two cards, Items and Motions, both open, each with its box ready (Jim, 2026-11-20)
     const card = (title, rows, form) => h("details", { class: "card bizcard", open: true }, h("summary", {}, h("h3", {}, title)), ...rows, form);
     let addBox, mform;  // kept across redraws (any save redraws), so a half-typed item or motion isn't lost
     const draw = () => {
       const items = isNew ? D.business.new : D.business.old;
-      if (isNew) { addBox ??= add(); mform ??= motionForm(); }
+      if (isNew) { addBox ??= add(); mform ??= motionForm(); mform.refresh(); }
       box.replaceChildren(...(isNew ? [card("Items", items.filter((x) => !x.motion).map(row), addBox),
         card("Motions", items.filter((x) => x.motion).map(row), mform)]
         : [...(items.length ? items.map(row) : [h("p", { class: "muted" }, "No open items.")]),
