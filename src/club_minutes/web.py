@@ -2785,7 +2785,7 @@ templates.env.filters["admin_action"] = admin_action
 
 @app.get("/admin", response_class=HTMLResponse)
 @app.get("/admin/", response_class=HTMLResponse)
-def admin_home(request: Request, mid: str = Depends(real_me)):
+def admin_home(request: Request, note: str = "", mid: str = Depends(real_me)):
     """The admin tools in one place, each with a line of how things stand (not found for anyone else, like every
     admin page). The name menu links here instead of listing every tool."""
     if not archive.club.is_admin(mid):
@@ -2803,9 +2803,18 @@ def admin_home(request: Request, mid: str = Depends(real_me)):
         upd = None if PREVIEW else updates.available()
     except Exception:  # GitHub not reachable: just don't say  # noqa: BLE001
         upd = None
-    return page(request, "admin.html", only_admin=len(archive.club.active_admins) == 1, failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
+    return page(request, "admin.html", only_admin=len(archive.club.active_admins) == 1, purge_held=len(prefs.purge_hold()), note=note, failed=failed, bans=len(authn.bans()), held=held, backup_st=backup.status(),
                 passphrase_set=len(os.environ.get("CLUB_MINUTES_BACKUP_PASSPHRASE", "")) >= 12, upd=upd,
                 stage_last=json.loads(sp.read_text()) if STAGE and sp.exists() else None)
+
+
+@app.post("/admin/purge-hold/confirm")
+def purge_hold_confirm(request: Request):
+    """Admin mode: these leavers really left, so their 90-day clocks start now."""
+    _security_admin(request)
+    n = prefs.confirm_hold()
+    _admin_log(request, purge_hold_confirmed=n)
+    return RedirectResponse("/admin?note=" + quote(f"Started the 90-day clock for {n} member{'s' if n != 1 else ''}."), status_code=303)
 
 
 @app.get("/admin/backups", response_class=HTMLResponse)

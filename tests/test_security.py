@@ -219,6 +219,9 @@ def test_admin_address_members_tab_and_a_page_for_not_found(app, monkeypatch):
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
     hub = admin.get("/admin").text
     assert all(f'href="/admin/{t}"' in hub for t in ("security", "updates", "site", "email")) and "failed sign-in" in hub
+    assert "purge-hold" not in hub
+    monkeypatch.setattr(web.prefs, "purge_hold", lambda: ["n0bbbb"])
+    assert 'action="/admin/purge-hold/confirm"' in admin.get("/admin").text  # the notice, with its Confirm button
     assert member.get("/admin").status_code == 404
     page_ = member.get("/no-such-page", headers={"Accept": "text/html"})
     assert page_.status_code == 404 and "Page not found" in page_.text
