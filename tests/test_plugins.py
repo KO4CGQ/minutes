@@ -222,3 +222,42 @@ def test_a_plugin_sees_the_open_meeting_marks_members_online_and_lists_guests(en
     assert console.context(arch, arch.by_slug["2026-11-10"])["video_guests"] == ["Pat Guest"]
     club.save_site_settings({("plugins", "hello"): False})
     assert console.attendance(arch, "2026-11-10")["video_guests"] == []  # off: not asked
+
+
+def test_the_public_test_helper_runs_a_plugin_and_allowed_members_today_and_the_site_head(tmp_path, monkeypatch):
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    import helloplugin
+
+    from club_minutes.testing import plugin_app
+    monkeypatch.syspath_prepend(str(FIX))
+    app = plugin_app(helloplugin, PEOPLE, tmp_path, monkeypatch, admins=["n0admn"])
+    assert "Hi m1" in app.client("m1").get("/hello/").text and app.client().get("/hello/", follow_redirects=False).status_code == 303
+    me = app.client("m1").get("/hello/whoami").json()
+    assert me["librarian"] is False and me["members"]["m2"] == "John Doe"
+    assert me["today"] == str(dt.datetime.now(ZoneInfo("America/New_York")).date())  # the club's day, not the server's
+    assert app.client("n0admn", admin=True).get("/hello/whoami").json()["librarian"] is True  # admin mode counts
+    app.give("officer", "edit")
+    page = app.client("n0admn", admin=True).get("/hello/admin/page").text  # a settings page: Site's heading and tabs by themselves
+    assert "<h1>Site</h1>" in page and 'href="/hello/admin"' in page and "Hi the admin" in page
+    assert app.club.role_table()["officer"]["perms"][-1] == "hello.edit"
+
+
+def test_a_roles_save_keeps_a_plugins_permissions_while_it_is_off_or_not_loaded(env, monkeypatch):
+    club, *_ = env
+    club.save_site_settings({("plugins", "hello"): True})
+    t = club.role_table()
+    t["officer"]["perms"] = [*t["officer"]["perms"], "hello.edit"]
+    club.save_roles(t)
+    club.save_site_settings({("plugins", "hello"): False})
+    club.save_roles(club.role_table())  # Site → Roles saved while it's off: the form doesn't show hello.edit
+    monkeypatch.delitem(clubmod.PERMISSIONS, "hello.edit")  # and saved again by something with no plugins loaded
+    club.save_roles(club.role_table())
+    monkeypatch.setitem(clubmod.PERMISSIONS, "hello.edit", "edit the hello board (Hello board)")
+    club.save_site_settings({("plugins", "hello"): True})
+    assert "hello.edit" in club.role_table()["officer"]["perms"]  # still there once it's back
+    t = club.role_table()
+    t["officer"]["perms"].remove("hello.edit")
+    club.save_roles(t)  # while it's on, taking it off a role works as before
+    assert "hello.edit" not in club.role_table()["officer"]["perms"]

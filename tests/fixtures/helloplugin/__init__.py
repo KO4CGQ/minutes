@@ -47,8 +47,18 @@ def note(text: str):
     return api.storage.load()
 
 
+@router.get("/admin/page")
+def admin_page(request: Request):
+    return api.page(request, "hello.html", who="the admin")
+
+
+@router.get("/whoami")
+def whoami(request: Request):
+    return {"librarian": api.allowed(request, "edit"), "members": api.members(), "today": str(api.today())}
+
+
 def calendar_links(api):
-    return [("Hello room", "https://example.org/hello"), ("Hello page", "/hello/")]  # a path: the app adds its own address
+    return [("Hello room", "https://example.org/hello"), ("Hello page", "/")]  # relative to /hello, like NAV: the app adds /hello and its own address
 
 
 def form_action(api):

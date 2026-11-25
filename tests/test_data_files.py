@@ -49,6 +49,7 @@ NOT_ATOMIC = {
     ("backup.py", "p"): "backup-status.json",
     ("events.py", "marker"): "a marker file",
     ("console.py", "opened"): "when the console opened the meeting: one number, written once",
+    ("testing.py", '(_tmp / "club.yaml")'): "a throwaway club.yaml for plugins' tests, in a temp folder",
     ("events.py", '(DATA / "events-meeting-added")'): "a marker file",
     ("updates.py", "cache"): "the release check's cache",
     ("calview.py", "p"): "calendar-feeds.json",
