@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Membership application · {{ app_name() }}{% endblock %}{% block body %}
 {% macro got(k) %}{{ form.get(k) or '' }}{% endmacro %}
-<div class="login">
+<div class="login apply">
 <img src="{{ brand() }}" alt="" class="loginlogo {{ logo_class() }}">
 {% if not a %}
 <h1>This link doesn't work</h1>

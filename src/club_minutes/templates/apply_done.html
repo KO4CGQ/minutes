@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block title %}Application sent{% endblock %}{% block body %}
-<div class="login">
+<div class="login apply">
 <img src="{{ brand() }}" alt="" class="loginlogo {{ logo_class() }}">
 <h1>Thank you, {{ a.form.name }}</h1>
 <p>Your application is with the club. We've emailed you to say it arrived{{ ', and asked your sponsor to confirm' if a and a.sponsor and a.sponsor.id }}. The club will be in touch.</p>

@@ -8,7 +8,7 @@
 <p>By sponsoring them you say that, to your knowledge, {{ a.form.name }} is of good character, and that you will help them learn the club's ways.</p>
 <form method="post" action="/applications/{{ a.id }}/sponsor" class="row">
   <button class="btn" name="answer" value="yes">I sponsor {{ a.form.name }}</button>
-  <button class="btn ghost" name="answer" value="no">I can't sponsor them</button>
+  <button class="btn ghost" name="answer" value="no" data-confirm="Tell the club you can't sponsor {{ a.form.name }}?">I can't sponsor them</button>
 </form>
 {% endif %}
 {% endblock %}

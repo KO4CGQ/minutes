@@ -200,6 +200,8 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .login h1 { font-size: 1.55rem; margin: .7rem 0 1.4rem; }
 .login form { display: flex; flex-direction: column; align-items: stretch; gap: .5rem; }
 .login label { font-weight: 600; } .login input[type=email] { text-align: center; width: 100%; padding: .65rem .75rem; }
+.login.apply { text-align: left; } .login.apply .loginlogo, .login.apply h1 { display: block; margin-left: auto; margin-right: auto; text-align: center; }  /* a long form reads left-aligned */
+.login.apply input:not([type=checkbox]):not([type=radio]), .login.apply select, .login.apply textarea { width: 100%; text-align: left; }
 .login .help { color: var(--muted); font-size: .85rem; margin-bottom: .3rem; } .login .small { margin-top: 1.6rem; }
 .or { color: var(--faint); margin: 1rem 0; }
 
@@ -392,6 +394,7 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
   /* tables fit the screen: tighter cells, less important columns hidden */
   .list { font-size: .93rem; } .list th, .list td { padding: .55rem .4rem; }
   .list thead th { font-size: .66rem; letter-spacing: 0; }
+  .list.wide { display: block; overflow-x: auto; }  /* Guests with its Application column: the table scrolls inside the page, the page doesn't */
   .list .opt { display: none; } .list th:empty, .list td:empty { padding: 0; }
   .cols { gap: 0; }
   /* business cards: the buttons as even rows, big enough to tap */
