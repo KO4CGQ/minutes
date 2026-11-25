@@ -261,7 +261,7 @@ def test_secret_made_on_site_features(env, monkeypatch):
     as_("pres").post("/admin/site/jitsi-secret")
     assert meet.secret() != value  # a new one replaces it
     monkeypatch.setenv("CLUB_MINUTES_JITSI_SECRET", "y" * 40)
-    assert meet.secret() == "y" * 40 and "Make a" not in as_("pres").get("/admin/site/features").text
+    assert meet.secret() == "y" * 40 and 'form="jitsi-secret"' not in as_("pres").get("/admin/site/features").text
     assert "error=" in as_("pres").post("/admin/site/jitsi-secret", follow_redirects=False).headers["location"]
 
 

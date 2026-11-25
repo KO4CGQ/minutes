@@ -205,6 +205,24 @@
 </form>
 {% if here_keys|select('in', ['modules.chow', 'club.public_calendars', 'calendar.holidays', 'calendar.extra_holidays', 'calendar.elections', 'modules.jitsi', 'jitsi.domain', 'jitsi.app_id', 'club.supports_app', 'club.pictures_per_day'])|list %}<form method="post" action="/admin/site/features" data-confirm="Go back to club.yaml's chow, video meetings, public calendars and regions?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% if tab == 'features' %}<form id="jitsi-secret" method="post" action="/admin/site/jitsi-secret"></form>{% endif %}
+{% elif tab == 'connections' %}
+<p class="muted">Other services the app works with. Each change is in the admin log.</p>
+<form method="post" action="/admin/site/webhooks" class="profile sitewide">
+<div class="card sitesec"><h2>Event webhooks</h2>
+<p class="hint">Tell a service of the club's choosing (a chat bot, say) when something happens to a meeting. Each event is signed with a secret only the app and that service know. What's sent, and how to receive it: the server admin guide. The app adds no member's name or email.</p>
+<div class="fmtgrid"><label for="f-wh">The service's address</label><input id="f-wh" name="webhook_url" type="url" value="{{ wh_url }}" maxlength="500" placeholder="https://hooks.example.org/club-minutes" autocomplete="off" spellcheck="false"><span></span></div>
+<fieldset class="check-group"><legend class="small">Send when</legend>
+{% for k, name in wh_kind_names.items() %}<label class="check"><input type="checkbox" name="kind_{{ k }}" value="1"{{ ' checked' if k in wh_kinds }}> <span>{{ name }}</span></label>
+{% endfor %}</fieldset>
+<p class="hint">Nothing is sent without an address, a secret and at least one box ticked. Plain http works only for localhost.
+{% if wh_made %}The secret was made here {{ wh_made|listdate }}, and isn't shown again. If the service lost it, make a new one and give it that: the old one stops working.{% else %}<b>Not working yet:</b> there's no secret. Make one, then give it to the service.{% endif %}</p>
+{% if wh_failure %}<p class="error" role="alert">The last event failed: {{ wh_failure.kind }}, {{ wh_failure.when }}, {{ wh_failure.error }}. This goes away after the next one is sent.</p>{% endif %}
+<p class="row"><button class="btn">Save</button>
+<button class="btn small{{ ' ghost' if wh_made }}" form="webhook-secret"{% if wh_made %} data-confirm="Make a new secret? The service stops accepting events until it has the new one."{% endif %}>{{ 'Make a new webhook secret' if wh_made else 'Make a webhook secret' }}</button>
+{% if wh_made and wh_url %}<button class="btn small ghost" form="webhook-test">Send a test event</button>{% endif %}</p>
+</div>
+</form>
+<form id="webhook-secret" method="post" action="/admin/site/webhook-secret"></form><form id="webhook-test" method="post" action="/admin/site/webhook-test"></form>
 {% elif tab == 'bylaws' %}
 <p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/bylaws" class="profile sitewide">

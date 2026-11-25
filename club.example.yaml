@@ -116,6 +116,12 @@ links:  # shown in the "Club Links" footer of the minutes and on the Links page
 #                                                  # (role keys; none: every member); others: knock or no
 #   adhoc: {on: false}         # members may open rooms of their own (with the same settings as a room, for all of them)
 
+# Event webhooks are set on Admin → Site → Features only (the address, the kinds sent and an app-made secret; server admin guide → Event
+# webhooks): the two names below are kept in the data folder's site-settings.json, and a value here is not read.
+# webhooks:
+#   url: https://hooks.example.org/club-minutes   # https only (http for localhost)
+#   kinds: [meeting_started, meeting_cancelled, meeting_moved, meeting_restored, minutes_published]
+
 # Offices whose holders can add new members from the Roster page (default: Secretary and Treasurer). Also on Admin → Site → Offices.
 # roster_keepers: [Secretary, Treasurer]
 

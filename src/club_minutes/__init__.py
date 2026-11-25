@@ -44,6 +44,7 @@ def main() -> None:
     ci.add_argument("--write", action="store_true", help="save it (refuses if a chow schedule already exists)")
     rem = sub.add_parser("reminders", help="daily: business item and chow reminders, and the meeting-day email")
     rem.add_argument("--dry-run", action="store_true", help="print what would be sent; send and record nothing")
+    sub.add_parser("webhooks", help="every minute: send the event webhooks that are due (and retry failed ones)")
     sub.add_parser("auto-update", help="nightly: install a newer release that needs no steps by hand, after a backup (if turned on)")
     bk = sub.add_parser("backup", help="an encrypted backup of the data folder, checked, kept and sent off the server")
     bk.add_argument("--if-due", action="store_true", help="only if the schedule on the Backups page says one is due (the hourly timer)")
@@ -149,6 +150,9 @@ def main() -> None:
             print(f"Removed {n} business item(s) added at that meeting.")
         business.save(s)
         print(f"Deleted {d}. Restart the web service so it drops it from memory.")
+    elif a.cmd == "webhooks":
+        from . import webhooks
+        webhooks.deliver()
     elif a.cmd == "reminders":
         import datetime as dt
 
