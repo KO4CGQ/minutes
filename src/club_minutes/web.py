@@ -127,11 +127,11 @@ if not _log.handlers:
     _log.setLevel(logging.INFO)
     _log.propagate = False
 
-_SECRET_IN_PATH = re.compile(r"(/calendar/feed/)[^/?.]+|((?:[?&]|%3[Ff]|%26)t(?:=|%3[Dd]))[\w-]+")  # also inside a ?next= the sign-in redirect adds
+_SECRET_IN_PATH = re.compile(r"(/calendar/feed/|/apply/)[^/?.]+|((?:[?&]|%3[Ff]|%26)t(?:=|%3[Dd]))[\w-]+")  # also inside a ?next= the sign-in redirect adds
 
 
 def _hide_tokens(record: logging.LogRecord) -> bool:
-    """The access log keeps no secret tokens: a calendar feed's (long-lived) and a sign-in or confirm link's `t=`."""
+    """The access log keeps no secret tokens: a calendar feed's (long-lived), an application link's, and a sign-in or confirm link's `t=`."""
     a = record.args
     if isinstance(a, tuple) and len(a) == 5 and isinstance(a[2], str):  # uvicorn's (client, method, path, version, status)
         record.args = (*a[:2], _SECRET_IN_PATH.sub(lambda m: (m[1] or m[2]) + "…", a[2]), *a[3:])
@@ -1884,7 +1884,7 @@ async def roster_add(request: Request, mid: str = Depends(roster_keeper)):
     if not any(x["id"] == form.get("application") and x["state"] == "candidate" and x["club"].get("voted") for x in applications.load()["items"]):
         form.pop("application", None)  # only a candidate the club voted in is added from an application
     try:
-        new = await run_in_threadpool(membership.add_member, archive.club, form, mid, url=base_url(request))
+        new = await run_in_threadpool(membership.add_member, archive.club, form, mid, url=base_url(request), admin_ok=admin_mode(request))
     except (ValueError, SheetError) as e:
         ready = membership.ready_guests(archive.guests(), int(archive.club.info.get("invite_after_visits", 3)))
         return page(request, "roster_add.html", ready=ready, guest=None, f=form, error=str(e),
@@ -2452,7 +2452,7 @@ def member_callsign(request: Request, who: str, callsign: str = Form(""), date: 
     try:
         if err := may_change(request, who, "members", "callsign"):
             raise ValueError(err)
-        callsign_mod.change(archive.club, who, callsign, date, mid)
+        callsign_mod.change(archive.club, who, callsign, date, mid, admin_ok=admin_mode(request))
         archive.reload()
     except (ValueError, SheetError) as e:
         return RedirectResponse(_safe_next(_edit_url(who, "callsign") + "error=" + quote(str(e))), status_code=303)
@@ -4080,8 +4080,8 @@ async def apply_submit(request: Request, token: str, background: BackgroundTasks
 
 @app.get("/api/roster")
 def roster_api(request: Request):
-    """Active members' callsign, name, email, officer tick and former callsigns, for the club's other tools (the Discord bot, in its
-    own container on the same Proxmox host). Only from this server itself or the addresses in
+    """Active members' callsign, name, email, officer tick and former callsigns, for the club's other tools (a chat bot, say, on
+    another machine or container nearby). Only from this server itself or the addresses in
     CLUB_MINUTES_ROSTER_API_ALLOW (comma-separated), never through the web proxy, with the token in CLUB_MINUTES_ROSTER_API_TOKEN
     (both in /etc/club-minutes/env). Off (404) without that token. Calls from an allowed address are logged in api-log.jsonl (kept 90 days)."""
     import hmac

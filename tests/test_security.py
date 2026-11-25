@@ -832,6 +832,7 @@ def test_access_log_hides_tokens():
     for path, shown in (("/calendar/feed/AbC_d-9xYz.ics?show=chow", "/calendar/feed/….ics?show=chow"),
                         ("/login/link?t=s3cr3t-tok_en", "/login/link?t=…"), ("/admin/confirm/link?next=/x&t=abc", "/admin/confirm/link?next=/x&t=…"),
                         ("/login?next=%2Fadmin%2Fconfirm%2Flink%3Ft%3DAb-9_x", "/login?next=%2Fadmin%2Fconfirm%2Flink%3Ft%3D…"),
+                        ("/apply/Ab-9_xYz", "/apply/…"), ("/apply/Ab-9_xYz/pdf", "/apply/…/pdf"),
                         ("/minutes?tab=open", "/minutes?tab=open")):
         r = rec(path)
         assert web._hide_tokens(r) and r.getMessage() == f'10.0.0.1:5 - "GET {shown} HTTP/1.1" 200', path

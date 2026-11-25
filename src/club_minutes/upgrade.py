@@ -14,6 +14,7 @@ from __future__ import annotations
 import fcntl
 import shutil
 import sqlite3
+import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -297,6 +298,20 @@ def run(data: Path = DATA) -> list[str]:
         if not (data / "data-version").exists():
             _set(data, CURRENT)
         return [what for _v, what, _s in todo]
+
+
+def forget_copy(data: Path = DATA, days: int = 7) -> bool:
+    """The daily job: delete the copy kept from before an upgrade once it finished and `days` have passed (it holds
+    everything the purges later delete: leavers' details, old applications). True if it went."""
+    copy = data / COPY
+    with _locked(data):
+        if not copy.is_dir() or (data / STARTED).exists() or version(data) != CURRENT:
+            return False
+        made = (copy / "data-version").stat().st_mtime if (copy / "data-version").exists() else copy.stat().st_mtime
+        if time.time() - made < days * 86400:
+            return False
+        shutil.rmtree(copy)
+        return True
 
 
 def undo(was: int, data: Path = DATA) -> bool:

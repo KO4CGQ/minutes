@@ -31,7 +31,7 @@ def test_roster_api(tmp_path, monkeypatch):
 
 
 def test_roster_api_allowlist(tmp_path, monkeypatch):
-    """The Discord bot's own container, listed in CLUB_MINUTES_ROSTER_API_ALLOW, may call it; other LAN addresses may not."""
+    """A tool on another machine, listed in CLUB_MINUTES_ROSTER_API_ALLOW, may call it; other LAN addresses may not."""
     monkeypatch.setattr(web, "archive", Archive(tmp_path, Club(FIX / "test-club.yaml", roster=PEOPLE)))
     monkeypatch.setattr(web, "DATA", tmp_path)
     monkeypatch.setenv("CLUB_MINUTES_ROSTER_API_TOKEN", "s3cret")

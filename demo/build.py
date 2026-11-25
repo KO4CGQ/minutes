@@ -49,7 +49,7 @@ membership.new_id = lambda club: next(readable)  # the demo keeps readable ids (
 for i, (call, first, last, cls, _) in enumerate(PEOPLE):
     joined = today - dt.timedelta(weeks=8 if call == "K0MAXX" else 400 // 7 + i)  # Max is new: he owes the initiation fee
     membership.add_member(club, {"callsign": call, "first": first, "last": last, "email": f"{first.lower()}.{last.lower()}@example.org",
-                                 "phone": f"555-01{i:02d}", "license_class": cls, "joined": joined.isoformat()}, by="demo")
+                                 "phone": f"555-01{i:02d}", "license_class": cls, "joined": joined.isoformat()}, by="demo", admin_ok=True)
 ids = {call: club.canonical(call.lower()) for call, *_ in PEOPLE}
 start = (today - dt.timedelta(days=400)).isoformat()
 for call, *_, office in PEOPLE:

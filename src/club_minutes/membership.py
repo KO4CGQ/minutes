@@ -73,8 +73,9 @@ def new_id(club: Club) -> str:
 
 
 @roster_locked
-def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url: str = "") -> str:
-    """Add a member to the roster sheet and the app. Returns their id. Raises ValueError or SheetError."""
+def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url: str = "", admin_ok: bool = False) -> str:
+    """Add a member to the roster sheet and the app. Returns their id. Raises ValueError or SheetError. A callsign on the
+    admins lists (which would make them an admin) only with admin_ok: an admin in admin mode, or the server's own commands."""
     f = clean(form, club.ham)
     name = f"{f['first']} {f['last']}"
     for m in club.members.values():
@@ -85,8 +86,8 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
     if f["callsign"] and (other := club.resolve(f["callsign"])):  # someone's earlier call, or an id: it would point at them
         raise ValueError(f"{f['callsign']} was {club.name(other)}'s callsign, so it can't be given to someone new here.")
     mid = new_id(club)
-    if any(x and club.admin_listed(x) for x in (f["callsign"], mid)):
-        raise ValueError("That callsign is on the admins list: an admin must remove it there first.")
+    if not admin_ok and any(x and club.admin_listed(x) for x in (f["callsign"], mid)):
+        raise ValueError("That callsign is on the admins list: only an admin, in admin mode, can give it to a member (or remove it from the list first).")
     sheet = sheet or Sheet()
     sheet.add_row({"id": mid, "callsign": f["callsign"], "full_name": name, "email": f["email"], "phone": f["phone"],
                    "address": f["address"], "class": f["license_class"], "status": "Active"},

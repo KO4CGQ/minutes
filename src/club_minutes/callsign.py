@@ -93,7 +93,7 @@ def rename_id(old: str, new: str, data: Path | None = None) -> dict[str, int]:
 
 
 @roster_locked
-def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet | None = None) -> None:
+def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet | None = None, admin_ok: bool = False) -> None:
     """Give a member a new callsign. Their id stays as it is, so no record changes. Raises ValueError or roster.SheetError."""
     m = club.members.get(mid)
     if not m:
@@ -105,8 +105,8 @@ def change(club: Club, mid: str, callsign: str, date: str, by: str, sheet: Sheet
         raise ValueError(f"{m.first}'s callsign is already {new_call}.")
     if club.resolve(new_call) not in (None, mid):
         raise ValueError(f"{new_call} belongs to another member, now or before.")
-    if club.admin_listed(new_call) and club.resolve(new_call) != mid:  # a former admin's call would make the holder an admin
-        raise ValueError("That callsign is on the admins list: an admin must remove it there first.")
+    if not admin_ok and club.admin_listed(new_call) and club.resolve(new_call) != mid:  # a former admin's call would make the holder an admin
+        raise ValueError("That callsign is on the admins list: only an admin, in admin mode, can give it to a member (or remove it from the list first).")
     try:
         date = dt.date.fromisoformat(date).isoformat()
     except ValueError:

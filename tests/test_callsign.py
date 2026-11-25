@@ -153,3 +153,4 @@ def test_a_callsign_on_an_admins_list_cant_be_given_to_someone_else(env, monkeyp
         callsign.change(club, "n0aaaa", "N0ZZZZ", "2026-11-08", "n0bbbb")
     with pytest.raises(ValueError, match="admins list"):
         membership.add_member(club, {"first": "Zed", "last": "New", "callsign": "N0ZZZZ", "license_class": "General", "joined": "2026-11-05"}, by="n0bbbb")
+    callsign.change(club, "n0aaaa", "N0ZZZZ", "2026-11-08", "n0bbbb", admin_ok=True)  # an admin, in admin mode, may

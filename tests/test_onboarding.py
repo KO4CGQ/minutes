@@ -102,7 +102,7 @@ def test_a_vote_is_refused_before_the_meeting_and_above_the_members_present(with
     _club, _, aid, a = candidate(with_env)
     m = meeting(a, "2026-11-12")
     m.in_person, m.remote = ["n0aaaa", "n0bbbb"], ["n0cccc"]
-    with pytest.raises(ValueError, match="more than the 3 members present"):
+    with pytest.raises(ValueError, match="more than the 3 members marked present"):
         console.vote(a, "2026-11-12", aid, 3, 1)
     console.vote(a, "2026-11-12", aid, 2, 1)
     console.submit(a, "2026-11-12")

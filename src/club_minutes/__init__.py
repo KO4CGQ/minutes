@@ -126,7 +126,7 @@ def main() -> None:
         sheet.save({"Member Roster": [roster.PreviewSheet.HEADER], "Membership Log": [roster.PreviewSheet.LOG_HEADER]})
         try:
             mid = membership.add_member(club, {"callsign": a.callsign, "first": a.first, "last": a.last, "email": a.email,
-                                               "license_class": a.license_class}, by="first-member")
+                                               "license_class": a.license_class}, by="first-member", admin_ok=True)
         except Exception as e:  # noqa: BLE001
             sheet.path.unlink(missing_ok=True)  # as if never run: fix the details and run it again
             raise SystemExit(str(e)) if isinstance(e, ValueError) else e
@@ -201,6 +201,11 @@ def main() -> None:
                     print(f"deleted or trimmed {n} old membership application(s)")
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't purge old membership applications: {e}")
+            try:
+                if upgrade.forget_copy():
+                    print("deleted the copy of the data kept from before the last update (a week old)")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't delete the copy kept from before the last update: {e}")
             try:
                 from . import pictures
                 from .store import Archive

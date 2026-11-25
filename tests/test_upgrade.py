@@ -211,3 +211,18 @@ def test_step_8_moves_video_meetings_into_the_meet_plugin(tmp_path, monkeypatch)
     cfg.write_text("club: {}\n")
     upgrade._v8(fresh)
     assert not (fresh / "plugins").exists() and not (fresh / "roles.json").exists()
+
+
+def test_the_kept_copy_goes_a_week_after_a_good_update(tmp_path, steps):
+    import os
+    import time
+    (tmp_path / "business.json").write_text('{"items": [1]}')
+    upgrade.run(tmp_path)
+    copy = tmp_path / upgrade.COPY
+    assert not upgrade.forget_copy(tmp_path) and copy.is_dir()  # too soon: an undo may still need it
+    week_ago = time.time() - 8 * 86400
+    os.utime(copy / "data-version", (week_ago, week_ago))
+    (tmp_path / upgrade.STARTED).write_text("1\n")
+    assert not upgrade.forget_copy(tmp_path)  # an upgrade under way keeps it
+    (tmp_path / upgrade.STARTED).unlink()
+    assert upgrade.forget_copy(tmp_path) and not copy.exists()

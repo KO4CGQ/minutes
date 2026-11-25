@@ -42,6 +42,8 @@ The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/
 - Someone who knows a member's email address can no longer stop them signing in with an emailed link for an hour.
 - A callsign under `admins:` in club.yaml no longer makes an admin of a member who lists it as a former callsign.
 - An automatic ban no longer shows whether an email address is a member's.
+- Fixes a way a roster keeper could gain an admin's access; update soon.
+- Another website can no longer get a visitor's internet address banned.
 
 ## 1.2.0 (2026-11-22)
 
