@@ -280,3 +280,17 @@ def test_a_name_never_becomes_markup_in_the_minutes():
         html = str(richtext.render(richtext.escape(name) + " has applied.")).replace("&#x27;", "'").replace("&#39;", "'")
         assert "<a " not in html and "<strong" not in html and "<h" not in html and "<li" not in html and "<blockquote" not in html and "<code" not in html, name
         assert name.lstrip(">").replace("`", "'").strip() in html.replace("&gt;", ">"), name
+
+
+def test_a_cross_site_request_for_a_made_up_link_isnt_counted_toward_a_ban(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from club_minutes import web
+    seen = []
+    monkeypatch.setattr(web.authn, "event", lambda *a, **k: seen.append(a[0]))
+    anon = TestClient(web.app)
+    for path in ("/apply/not-a-link", "/login/link?t=x"):
+        assert anon.get(path, headers={"Sec-Fetch-Site": "cross-site"}, follow_redirects=False).status_code in (303, 404)
+    assert seen == []
+    anon.get("/apply/not-a-link")
+    assert seen == ["bad_link"]

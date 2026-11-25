@@ -49,7 +49,7 @@
 {% if e.notes %}<p class="calnotes">{{ e.notes|linkify }}</p>{% endif %}
 {% if e.from_minutes %}<p class="muted small">From the last meeting's Upcoming Events{% if can_edit %}; change it in the leader console{% endif %}.</p>{% endif %}
 {% if can_edit and e.id %}<p class="row"><a class="btn small" href="/calendar/edit?id={{ e.id }}{% if e.occ %}&d={{ e.occ }}{% endif %}">{{ emoji('✏️', 'pencil') }} Edit</a></p>{% endif %}
-{% if can_edit and e.meeting and e.id and e.occ %}
+{% if can_edit and can_lead and e.meeting and e.id and e.occ %}
 {% if e.change %}<form method="post" action="/calendar/meeting/restore" class="row"><input type="hidden" name="id" value="{{ e.id }}"><input type="hidden" name="d" value="{{ e.occ }}"><button class="btn small ghost">Put the meeting back as planned</button></form>{% endif %}
 {% if e.change != 'cancelled' %}<details class="edit"><summary>Cancel this meeting</summary><form method="post" action="/calendar/meeting/cancel"><input type="hidden" name="id" value="{{ e.id }}"><input type="hidden" name="d" value="{{ e.occ }}">
   <label>Reason (optional) <input name="reason" maxlength="200"></label>

@@ -228,7 +228,9 @@ def purge_removed(load_club=Club, today: dt.date | None = None) -> tuple[int, in
         hold = _read("purge-hold.json")
         held = {mid: e for mid, e in hold.items() if mid not in keep}  # back on the roster: nothing happens to them
         new = sorted(((set(club.members) - keep) | gone) - set(left) - set(held))
-        if new and len(new) * 4 > len(club.members):  # a bad bulk edit or import: an admin confirms before any clock starts
+        big = len(new) * 4 > len(club.members)
+        new = [mid for mid in new if profile.has_details(club, mid)]  # nothing to delete (say, a Silent Key with no contact details): no clock
+        if new and big:  # a bad bulk edit or import: an admin confirms before any clock starts
             log.error("purge_removed: %d of %d members became Inactive or gone in one night; their %d-day clocks wait for an admin (Admin page)",
                       len(new), len(club.members), PURGE_DAYS)
             held |= {mid: {"date": today.isoformat()} for mid in new}
@@ -278,10 +280,11 @@ def purge_list(club: Club, today: dt.date, url: str) -> list[tuple[str, str, str
     Keyed by the week, so a second run that week sends nothing."""
     if today.weekday() != 0:
         return []
+    from . import profile
     waiting = []
     for mid, e in _read("removed.json").items():
         try:
-            if mid in club.members and "purged" not in e:
+            if mid in club.members and "purged" not in e and profile.has_details(club, mid):
                 waiting.append((dt.date.fromisoformat(e["date"]) + dt.timedelta(days=PURGE_DAYS), club.name(mid)))
         except (KeyError, TypeError, ValueError):  # a damaged entry: left out
             continue

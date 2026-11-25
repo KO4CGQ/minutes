@@ -630,7 +630,12 @@ def test_cancel_and_reschedule_a_meeting_from_the_calendar(tmp_path, monkeypatch
         r = t.post(f"/calendar/meeting/{what}", data={**form_, **extra}, follow_redirects=False)
         assert r.status_code == 403 and events.load()[0]["changes"] == {}, what  # a member who isn't a calendar editor
     c.members["n0bbbb"].calendar_editor = True
+    for what in ("cancel", "move", "restore"):  # a calendar editor edits events but can't call off a night
+        assert t.post(f"/calendar/meeting/{what}", data=form_, follow_redirects=False).status_code == 403
+    c.members["n0bbbb"].minutes_editor = True
     t.post("/calendar/meeting/cancel", data={**form_, "reason": "Holiday"})
+    pub = calview.entries(c, Archive(tmp_path, c), None, dt.date(2026, 11, 1), dt.date(2026, 11, 30), public=True)[0] if "events" in calview.public_kinds(c) else []
+    assert all("Holiday" not in e.title for e in pub)  # a public calendar says "No meeting", not why
     page = t.get("/calendar?start=2026-11-19").text
     assert "No meeting (Holiday)" in page and "Put the meeting back as planned" in page
     assert events.load()[0]["changes"] == {"2026-11-19": {"cancelled": True, "reason": "Holiday"}}
