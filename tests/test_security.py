@@ -809,7 +809,6 @@ URL_SECRET = re.compile(r"[?&;](jwt|t|token|key|secret|email\w*|addr\w*)=")
 URL_SECRETS_OK = {
     ("auth.py", "?t="): "one-time sign-in and email-confirm links, emailed (and hidden in logs by hide_tokens)",
     ("web.py", "?t="): "one-time admin-mode and recovery links, emailed",
-    ("web.py", "?jwt="): "the video redirect, sent with Referrer-Policy: no-referrer",
     ("web.py", "&email_sent="): "the profile page's note: an address in our own page's URL; the default Referrer-Policy is same-origin",
 }
 
@@ -823,7 +822,6 @@ def test_no_token_or_address_in_a_url_without_a_reason():
                     found.setdefault((p.name, m.group(0)), []).append(i)
     unknown = {k: v for k, v in found.items() if k not in URL_SECRETS_OK}
     assert not unknown, f"a token or address in a URL: add a reason to URL_SECRETS_OK, or hide it: {unknown}"
-    assert web.app.router and 'Referrer-Policy"] = "no-referrer"' in Path(web.__file__).read_text()  # the jwt redirect's reason holds
 
 
 def test_access_log_hides_tokens():

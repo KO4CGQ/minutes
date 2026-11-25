@@ -161,6 +161,67 @@ def _v7(data: Path) -> None:
     tmp.replace(p)
 
 
+def _save(p: Path, obj, mode: int | None = None) -> None:
+    import json
+    import os
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(obj, indent=1))
+    if mode:
+        os.chmod(tmp, mode)
+    tmp.replace(p)
+
+
+def _v8(data: Path) -> None:
+    """8 (1.3.0): video meetings (Jitsi) leave the app for the "meet" plugin. Its settings (club.yaml's and Site's
+    jitsi: block: domain, app_id, room, rooms, adhoc), the rooms members opened (meet-rooms.json) and the secret the
+    app made (jitsi-secret) go into the plugin's storage, plugins/meet.json; `modules: jitsi` becomes the plugin
+    ticked on; the meet_host permission becomes meet.host (the built-in Officer and Meeting leader had it by default,
+    so they are written out with it). club.yaml is root's and stays as it is: the app no longer reads its jitsi: block.
+    Nothing is done for a club that never set Jitsi up. Safe to run again: it starts from what the plugin file holds
+    and takes what's left of the old places. THIS STEP EXISTS IN 1.3 ONLY: in the release after, empty this function
+    (keep its STEPS entry: CURRENT counts STEPS, so the data version stays)."""
+    import json
+    import os
+
+    import yaml
+
+    from .club import ROOT
+    cfg = Path(os.environ.get("CLUB_MINUTES_CONFIG", ROOT / "club.yaml"))
+    yml = (yaml.safe_load(cfg.read_text()) if cfg.exists() else None) or {}
+    sp, rp, op = data / "site-settings.json", data / "meet-rooms.json", data / "jitsi-secret"
+    site = json.loads(sp.read_text()) if sp.exists() else {}
+    block = {**(yml.get("jitsi") or {}), **(site.get("jitsi") or {})}
+    on = bool({**(yml.get("modules") or {}), **(site.get("modules") or {})}.get("jitsi"))
+    if not (on or block or rp.exists() or op.exists()):
+        return
+    out = data / "plugins" / "meet.json"
+    plugin = json.loads(out.read_text()) if out.exists() else {}
+    plugin |= {k: block[k] for k in ("domain", "app_id", "room", "rooms", "adhoc") if block.get(k) is not None}
+    if rp.exists():
+        plugin["openers"] = json.loads(rp.read_text() or "{}")
+    if op.exists() and op.read_text().strip():
+        plugin |= {"secret": op.read_text().strip(), "secret_made": op.stat().st_mtime}
+    out.parent.mkdir(exist_ok=True)
+    _save(out, plugin, 0o600)  # the plugin's file first: what's left of the old places is only removed after it
+    rj = json.loads((data / "roles.json").read_text()) if (data / "roles.json").exists() else {}
+    table = rj.setdefault("table", {})
+    for k, default in (("officer", ("lead", "calendar", "chow", "contacts", "oversee", "moderate", "treasurer")),
+                       ("minutes_editor", ("lead", "calendar"))):
+        if "perms" not in table.get(k, {}):
+            table.setdefault(k, {})["perms"] = list(default) + ["meet_host"]  # as shipped, so with it
+    for t in table.values():
+        t["perms"] = ["meet.host" if x == "meet_host" else x for x in t.get("perms", [])]
+    _save(data / "roles.json", rj)
+    site.pop("jitsi", None)
+    mods = {k: v for k, v in (site.get("modules") or {}).items() if k != "jitsi"}
+    site = {k: v for k, v in site.items() if k != "modules"} | ({"modules": mods} if mods else {})
+    if on:
+        site.setdefault("plugins", {})["meet"] = True
+    _save(sp, site)
+    rp.unlink(missing_ok=True)
+    op.unlink(missing_ok=True)
+
+
 STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (2, "the Minutes editor and Calendar editor ticks moved to Admin → Site → Roles (roles.json)", _roles_file),
     (3, "1.1.0's data (custom roles, corrected minutes' versions, suspended admins, new sign-in columns): 1.0 can't read it", _v3),
@@ -168,6 +229,7 @@ STEPS: list[tuple[int, str, Callable[[Path], None]]] = [
     (5, "the Treasurer's dues can be a week, a month or a year at a time (rates.dues with a period, arrears_periods): 1.2.0 can't read it", _v5),
     (6, "each member's id is stored in the roster's id column, so a callsign change keeps it: 1.2 would misread a changed callsign", _v6),
     (7, "a cancelled or rescheduled meeting is a record on its calendar series, not a deleted date or a \"No meeting\" entry: 1.2 can't read it", _v7),
+    (8, "video meetings moved to the meet plugin (plugins/meet.json, the plugin ticked on, meet.host): 1.2 can't read it", _v8),
 ]
 CURRENT = 1 + len(STEPS)  # 1: the shape of 1.0.0's data (and 0.x's, which is the same)
 COPY = "before-upgrade"
