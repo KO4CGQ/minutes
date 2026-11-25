@@ -124,6 +124,22 @@ def test_the_form_is_checked_and_each_kind_of_question_is_stored(env):
     assert pdf.application(club, a).startswith(b"%PDF")
 
 
+def test_fields_hidden_are_ignored_required_are_enforced_and_bad_settings_refused(env):
+    club, _, _, _ = env
+    club.membership["fields"] = {**clubmod.FIELD_DEFAULTS, "callsign": "required", "phone": "hidden", "street": "hidden"}
+    from starlette.datastructures import FormData
+
+    def form(**over):  # a list value is several fields of the same name, as a browser sends
+        return FormData([(k, x) for k, v in good(club, "t", **over).items() for x in (v if isinstance(v, list) else [v])])
+    with pytest.raises(ValueError, match="Callsign is needed"):
+        applications.check(club, form(callsign=""))
+    f, _, _ = applications.check(club, form())
+    assert f["phone"] == "" and f["street"] == "" and f["callsign"] == "N0CALL" and f["city"] == "Anytown"
+    for bad in ({"phone": "maybe"}, {"fax": "hidden"}):
+        with pytest.raises(ValueError, match="fields maps"):
+            clubmod._membership({"fields": bad})
+
+
 def test_only_the_right_people_send_see_and_download(env):
     club, as_, sent, _ = env
     assert as_("n0cccc").post("/guests/apply", data={"guest": "Pat Visitor", "email": "p@example.org"}).status_code == 403

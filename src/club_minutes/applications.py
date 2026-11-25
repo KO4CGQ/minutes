@@ -141,8 +141,8 @@ def sponsor_match(club: Club, typed: str) -> str | None:
 
 
 def qhash(club: Club) -> str:
-    """A short hash of the club's questions, carried in the form to notice a change between showing and sending it."""
-    return hashlib.sha256(json.dumps(club.membership["questions"], sort_keys=True).encode()).hexdigest()[:12]
+    """A short hash of the club's questions and field settings, carried in the form to notice a change between showing and sending it."""
+    return hashlib.sha256(json.dumps([club.membership["questions"], club.membership["fields"]], sort_keys=True).encode()).hexdigest()[:12]
 
 
 def _year(v: str) -> str:
@@ -196,23 +196,27 @@ def check(club: Club, form) -> tuple[dict, list[dict], str]:
         raise ValueError("The club changed its questions while you were filling this in. Please look over your answers below and send it again.")
     if re.search(r"://|www\.", str(form.get("name") or ""), re.IGNORECASE):  # the name goes in the minutes, which link web addresses
         raise ValueError("Your name can't include a web address.")
+    modes = club.membership["fields"]
+
+    def field(key: str, label: str, size: int) -> str:  # hidden: never read from the form
+        return "" if modes[key] == "hidden" else _text(form, key, label, size, modes[key] == "required")
     f = {"name": _text(form, "name", "Your name", 100), "email": _text(form, "email", "Email", 254),
-         "street": _text(form, "street", "Street address", 100), "city": _text(form, "city", "City", 60),
-         "state": _text(form, "state", "State", 40), "zip": _text(form, "zip", "ZIP code", 12),
-         "phone": _text(form, "phone", "Phone", 30, False), "occupation": _text(form, "occupation", "Occupation", 100, False)}
+         "street": field("street", "Street address", 100), "city": field("city", "City", 60),
+         "state": field("state", "State", 40), "zip": field("zip", "ZIP code", 12),
+         "phone": field("phone", "Phone", 30), "occupation": field("occupation", "Occupation", 100)}
     if not valid_email(f["email"]):
         raise ValueError("That doesn't look like an email address.")
     if f["phone"] and not re.fullmatch(r"[\d\s()+.\-x]{7,30}", f["phone"]):
         raise ValueError("Phone: digits, spaces and + ( ) - . only.")
     if club.ham:
-        f["callsign"] = _text(form, "callsign", "Callsign", 7, False).upper()
+        f["callsign"] = field("callsign", "Callsign", 7).upper()
         if f["callsign"] and not re.fullmatch(r"[A-Z0-9]{3,7}", f["callsign"]):
             raise ValueError(f"{f['callsign']} doesn't look like a callsign.")
-        f["first_licensed"] = _year(_text(form, "first_licensed", "First licensed", 4, False))
-        f["license_class"] = _text(form, "license_class", "License class", 20, False)
+        f["first_licensed"] = _year(field("first_licensed", "First licensed", 4))
+        f["license_class"] = field("license_class", "License class", 20)
         if f["license_class"] not in ("", NO_LICENSE, *CLASSES):
             raise ValueError("Pick a license class from the list.")
-        f["expires"] = _text(form, "expires", "License expiry", 10, False)
+        f["expires"] = field("expires", "License expiry", 10)
         try:
             f["expires"] = dt.date.fromisoformat(f["expires"]).isoformat() if f["expires"] else ""
         except ValueError:

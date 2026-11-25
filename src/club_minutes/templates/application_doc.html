@@ -22,7 +22,7 @@ table.grid th:first-child { text-align: left; }
 <h2>Applicant</h2>
 <table>
 {% for label, value in (("Name", a.form.name), ("Callsign", a.form.callsign if club.ham), ("First licensed", a.form.first_licensed if club.ham),
-  ("License class", a.form.license_class if club.ham), ("License expires", a.form.expires if club.ham), ("Address", a.form.street ~ "\n" ~ a.form.city ~ ", " ~ a.form.state ~ " " ~ a.form.zip),
+  ("License class", a.form.license_class if club.ham), ("License expires", a.form.expires if club.ham), ("Address", [a.form.street, [a.form.city, (a.form.state ~ " " ~ a.form.zip)|trim]|select|join(", ")]|select|join("\n")),
   ("Phone", a.form.phone), ("Email", a.form.email), ("Occupation", a.form.occupation)) if value %}
 <tr><th>{{ label }}</th><td style="white-space: pre-wrap">{{ value }}</td></tr>{% endfor %}
 </table>

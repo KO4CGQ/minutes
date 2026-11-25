@@ -254,8 +254,11 @@ def _quorum(raw) -> dict | None:
 # long a refusal lasts, what's kept. `club: invite_after_visits` is the tab's other setting. Questions: [{label, type: yesno|several|short|long|grid, options | rows + cols}].
 DEFAULT_STATEMENT = ("By signing, you confirm that what you've written here is true, that you've read the club's bylaws "
                      "and agree to follow them, and that you'll pay the club's dues and fees if you become a member.")
+FIELD_DEFAULTS = {"callsign": "optional", "first_licensed": "optional", "license_class": "optional", "expires": "optional",
+                  "street": "required", "city": "required", "state": "required", "zip": "required", "phone": "optional", "occupation": "optional"}
 MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
-                       "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": []}
+                       "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": [], "welcome": "", "fields": FIELD_DEFAULTS}
+FIELD_MODES = {"required": "Required", "optional": "Optional", "hidden": "Not asked"}  # name, email and the signature are always required
 VOTE_PASSES = {"unanimous": "Unanimous", "two_thirds": "Two thirds", "majority": "A majority"}
 QUESTION_TYPES = {"yesno": "Yes or no", "several": "Pick several", "short": "Short text", "long": "Long text", "grid": "Grid of ticks"}
 _MEMBERSHIP_RANGES = {"link_days": (1, 365), "listed_days": (0, 365), "reapply_months": (0, 120), "keep_days": (1, 3650)}
@@ -297,6 +300,12 @@ def _membership(raw) -> dict:
         raise ValueError("club.yaml membership: vote is true or false, vote_passes one of " + ", ".join(VOTE_PASSES))
     if not isinstance(out["statement"], str) or len(out["statement"]) > 5000:
         raise ValueError("club.yaml membership: statement is text of at most 5000 characters")
+    if not isinstance(out["welcome"], str) or len(out["welcome"]) > 5000:
+        raise ValueError("club.yaml membership: welcome is text of at most 5000 characters")
+    f = out["fields"]
+    if not isinstance(f, dict) or set(f) - set(FIELD_DEFAULTS) or set(f.values()) - set(FIELD_MODES):
+        raise ValueError("club.yaml membership: fields maps " + ", ".join(FIELD_DEFAULTS) + " to " + ", ".join(FIELD_MODES))
+    out["fields"] = {**FIELD_DEFAULTS, **f}
     out["questions"] = clean_questions(out["questions"])
     return out
 
