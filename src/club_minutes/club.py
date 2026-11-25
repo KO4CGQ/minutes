@@ -374,18 +374,23 @@ class Club:
         self.modules = {**MODULES, **{k: bool(v) for k, v in (cfg.get("modules") or {}).items() if k in MODULES}}
 
     @property
-    def meeting_weekday(self) -> int:
-        """The weekly meeting's day (Monday 0), from club.yaml `club: meeting_day:`. Required: no club's day is a default."""
+    def meeting_weekday(self) -> int | None:
+        """The seed's day (Monday 0), from club.yaml `club: meeting_day:`: optional, used once to make the first meeting
+        series (events.ensure_meeting). None if missing; a wrong one stops the start."""
         day = str(self.info.get("meeting_day") or "").strip().lower()
+        if not day:
+            return None
         if day not in WEEKDAYS:
             raise ValueError(f"club.yaml club: meeting_day: {self.info.get('meeting_day')!r} isn't a day of the week (e.g. Thursday)")
         return WEEKDAYS.index(day)
 
     @property
-    def meeting_time(self) -> str:
-        """The meeting's start, "HH:MM" (24-hour), from club.yaml `club: meeting_time:`. Required. Unquoted, YAML reads
-        19:30 as 1170 (minutes): taken as that time, not an error."""
+    def meeting_time(self) -> str | None:
+        """The seed's start, "HH:MM" (24-hour), from club.yaml `club: meeting_time:`: optional, like meeting_day. Unquoted,
+        YAML reads 19:30 as 1170 (minutes): taken as that time, not an error."""
         raw = self.info.get("meeting_time")
+        if raw is None or raw == "":
+            return None
         t = f"{raw // 60:02d}:{raw % 60:02d}" if isinstance(raw, int) and not isinstance(raw, bool) else str(raw or "").strip()
         if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t):
             raise ValueError(f"club.yaml club: meeting_time: {raw!r} isn't a time like \"19:30\" (24-hour, in quotes)")

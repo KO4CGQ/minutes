@@ -32,7 +32,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import chow
+from . import chow, meetings
 from .club import DATA, Club, show_date
 
 PAYMENTS = ("dues", "initiation", "chow", "certificate")
@@ -455,7 +455,7 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
     start, joined = max(c["start"], m.member_since or ""), m.member_since or c["start"]
     now = step(c, "dues", today.isoformat())
     # Weekly dues fall due on every meeting weekday, holidays included (a weekly club's year is 52 nights).
-    due = dues_dates(c, club.meeting_weekday, dt.date.fromisoformat(start))
+    due = dues_dates(c, (meetings.first(club) or (0,))[0], dt.date.fromisoformat(start))
     charges = list(itertools.takewhile(lambda x: x[0] <= today, due))
     missed = sorted(d for d, x in (nights if nights is not None else chow.load()["nights"]).items()
                     if x.get("member") == mid and x.get("status") == "missed" and start <= d <= today.isoformat()
@@ -477,7 +477,7 @@ def standing(club: Club, s: dict, mid: str, today: dt.date | None = None, nights
         cert_due = j.replace(year=j.year + int(c["certificate_years"]), day=28 if (j.month, j.day) == (2, 29) else j.day)
     # paid ahead: the day before the first due date their credit doesn't cover (None when it covers none)
     credit, covered, through = -owed, 0, None
-    for d, cents_ in itertools.islice(dues_dates(c, club.meeting_weekday, today + dt.timedelta(days=1)), 1000) if credit > 0 else ():
+    for d, cents_ in itertools.islice(dues_dates(c, (meetings.first(club) or (0,))[0], today + dt.timedelta(days=1)), 1000) if credit > 0 else ():
         if credit < cents_:
             through = d - dt.timedelta(days=1) if covered else None
             break

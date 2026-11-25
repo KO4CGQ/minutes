@@ -49,7 +49,24 @@ def _all(club: Club, start: dt.date, until: dt.date, chow: bool):
             o = events.in_zone(events.occurrence(e, d), e.get("tz"), club.timezone)
             day = d if rec.get("cancelled") else dt.date.fromisoformat(o["start"][:10])
             if start <= day <= until:
-                yield day, o["start"][11:16] or club.meeting_time, rec
+                yield day, o["start"][11:16] or "00:00", rec
+
+
+def first(club: Club) -> tuple[int, str] | None:
+    """(weekday Monday 0, "HH:MM") of the club's first meeting series, the one chow defaults to (the earliest that still has
+    a date ahead): weekly dues fall on its weekday. With no series, club.yaml's seed; with neither, None."""
+    today = dt.date.today()
+    live = [e for e in events.load() if e.get("meeting") and events.dates(e, today, today + dt.timedelta(days=400))[:1]]
+    if live:
+        e = min(live, key=lambda e: e["start"])
+        return dt.date.fromisoformat(e["start"][:10]).weekday(), e["start"][11:16] or "00:00"
+    return (club.meeting_weekday, club.meeting_time) if club.meeting_weekday is not None else None
+
+
+def has_nights(club: Club) -> bool:
+    """False when no Club meeting series has a date ahead: Home tells the leaders."""
+    events.ensure_meeting(club)
+    return any(events.dates(e, dt.date.today(), dt.date.today() + dt.timedelta(days=400))[:1] for e in events.load() if e.get("meeting"))
 
 
 def nights(club: Club, start: dt.date, until: dt.date, with_cancelled: bool = False, chow: bool = False) -> list[dt.date]:
@@ -60,7 +77,7 @@ def nights(club: Club, start: dt.date, until: dt.date, with_cancelled: bool = Fa
 
 def time_on(club: Club, day: dt.date) -> str:
     """When the meeting held on `day` starts ("19:30"): the first one, if two series meet that day."""
-    return min((t for d, t, rec in _all(club, day, day, False) if d == day and not rec.get("cancelled")), default=club.meeting_time)
+    return min((t for d, t, rec in _all(club, day, day, False) if d == day and not rec.get("cancelled")), default=(first(club) or (0, "00:00"))[1])
 
 
 # ---------------- cancel, reschedule, put back ----------------

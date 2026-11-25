@@ -348,6 +348,22 @@ def test_the_weekly_meeting_is_on_the_calendar_from_the_start(tmp_path):
     assert not any(e.title == "W0TEST meeting" for e in calview.entries(c, Archive(tmp_path, c), "n0bbbb", today, today + dt.timedelta(days=20))[0])
 
 
+def test_meeting_nights_come_from_the_calendar_and_the_seed_is_optional(tmp_path):
+    from club_minutes import meetings
+    c = club()
+    del c.info["meeting_day"], c.info["meeting_time"]
+    (events.DATA / "events-meeting-added").unlink()
+    assert not meetings.has_nights(c) and meetings.first(c) is None  # no seed, no series: nothing made, the warning shows
+    c.info.update(meeting_day="Thursday", meeting_time="19:30")
+    assert meetings.has_nights(c) and meetings.first(c) == (3, "19:30")  # seeded once
+    c.info.update(meeting_day="Tuesday", meeting_time="18:00")
+    assert meetings.first(c) == (3, "19:30")  # later seeds are ignored: the series decides
+    evs = events.load()
+    events.delete(evs, evs[0]["id"], None)
+    events.save(evs)
+    assert not meetings.has_nights(c) and meetings.first(c) == (1, "18:00")  # no series left: dues keep the seed's weekday
+
+
 def test_an_event_in_another_time_zone_shows_in_club_time(tmp_path):
     # Field Day: the fourth full weekend of June (always the 4th Saturday), 1800 UTC Saturday to 2059 UTC Sunday
     v = events.from_form({"title": "Field Day", "date": "2026-06-27", "time": "18:00", "end_date": "2026-06-28", "end_time": "20:59",

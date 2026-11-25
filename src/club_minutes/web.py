@@ -87,7 +87,6 @@ from .club import (
     PREVIEW,
     ROLES,
     STAGE,
-    WEEKDAYS,
     _agenda,
     _server_timezone,
     num,
@@ -2122,7 +2121,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
-                today=today, teams=next((ln for ln in club.links if (ln.get("icon") or link_icon(ln.get("url", ""))) == "video"), None),  # Teams, Zoom, Meet…
+                today=today, no_nights=can_lead_now(request) and not meetings.has_nights(club), teams=next((ln for ln in club.links if (ln.get("icon") or link_icon(ln.get("url", ""))) == "video"), None),  # Teams, Zoom, Meet…
                 fmt=lambda d: show_date(d, "day"), error=error)
 
 
@@ -3040,7 +3039,7 @@ FEATURE_KEYS = (("modules", "chow"), ("club", "public_calendars"), ("calendar", 
                 ("modules", "jitsi"), ("jitsi", "domain"), ("jitsi", "app_id"), ("club", "supports_app"),
                 ("club", "pictures_per_day"))
 BYLAWS_KEYS = (("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"))
-CLUB_KEYS = ("name", "callsign", "meeting_day", "meeting_time", "timezone", "names", "ham")
+CLUB_KEYS = ("name", "callsign", "timezone", "names", "ham")
 DATE_PRESETS = {"us": ("US: month first", {"list": "%b %-d, %Y", "document": "%B %-d, %Y", "short": "%b %-d", "long": "%B %-d"}),
                 "dayfirst": ("Day first", {"list": "%-d %b %Y", "document": "%-d %B %Y", "short": "%-d %b", "long": "%-d %B"})}
 
@@ -3068,11 +3067,9 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 set_here=[k for k in club.site_settings.get("club", {}) if k in CLUB_KEYS] + list(club.site_settings.get("meeting", {})),
                 agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), roles_stamp=_roles_stamp(), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
-                meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
                 pictures=SITE_PICTURES, source=branding.source, plugin_rows=plugins.rows(club),
                 wh_url=webhooks._settings().get("url", ""), wh_kinds=webhooks._settings().get("kinds") or [], wh_kind_names=webhooks.KINDS,
                 wh_made=(m := webhooks.secret_made()) and dt.date.fromtimestamp(m), wh_failure=webhooks.failure(),
-                pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.label} Minutes", upload_mb=limits.upload_mb(),
                 colours=(c := branding.colours()), colours_own=bool(branding._settings().get("theme")),
@@ -3502,30 +3499,11 @@ async def site_privacy(request: Request):
     return RedirectResponse("/admin/site/privacy?note=" + quote("Saved."), status_code=303)
 
 
-def _meeting_where(since: dt.date) -> tuple[str, str]:
-    """Where the weekly meeting is, and its online link, on its first date from `since` on (from the calendar)."""
-    found = events.next_meeting(events.load(), since)
-    o = events.occurrence(*found) if found else {}
-    return o.get("where", ""), o.get("online", "")
-
-
-
 @app.post("/admin/site/club")
 async def site_club(request: Request):
-    """Club tab: name, callsign, meeting day and time, time zone, short or full names; all saved together, or back to club.yaml's.
+    """Club tab: name, callsign, time zone, short or full names; all saved together, or back to club.yaml's.
     Only what differs from club.yaml is kept, so later changes there still count for the rest."""
     mid, form, club = _site_admin(request), await request.form(), archive.club
-    old_day, old_time = club.meeting_weekday, club.meeting_time
-    today = dt.date.today()
-    try:
-        since = dt.date.fromisoformat(form.get("since") or today.isoformat())
-    except ValueError:
-        since = None
-    if since is None or since < today:
-        return RedirectResponse("/admin/site/club?error=" + quote("Starting: today or a later date."), status_code=303)
-    online = (form.get("online") or "").strip()[:500]
-    if online and not events.ONLINE_RE.fullmatch(online):
-        return RedirectResponse("/admin/site/club?error=" + quote("The online link starts with https:// (copy it from the meeting app's invite)."), status_code=303)
     if form.get("back"):
         values = dict.fromkeys(CLUB_KEYS)
     else:
@@ -3540,8 +3518,7 @@ async def site_club(request: Request):
         names = form.get("names") or "short"
         if names not in ("short", "full"):
             return RedirectResponse("/admin/site/club?error=" + quote("Names: short or full."), status_code=303)
-        typed = {"name": name, "callsign": call, "names": names, "meeting_day": (form.get("meeting_day") or "").strip().title(),
-                 "meeting_time": (form.get("meeting_time") or "").strip()[:5], "timezone": (form.get("timezone") or "").strip()}
+        typed = {"name": name, "callsign": call, "names": names, "timezone": (form.get("timezone") or "").strip()}
         yc = club.yaml.get("club") or {}
         base = {k: str(yc.get(k) or "").strip() for k in CLUB_KEYS} | {"timezone": str(yc.get("timezone") or "").strip() or _server_timezone(),
                                                                     "names": str(yc.get("names") or "short")}
@@ -3552,8 +3529,7 @@ async def site_club(request: Request):
         club.save_site_settings({("club", k): v for k, v in values.items()})
     except ValueError as e:  # the start-up checks' words, for this page
         msg = str(e).replace("club.yaml club: ", "").replace(" (24-hour, in quotes)", "")
-        for k, label in (("meeting_day: ", "Meeting day: "), ("meeting_time: ", "Start time: "), ("timezone: ", "Time zone: ")):
-            msg = msg.replace(k, label)
+        msg = msg.replace("timezone: ", "Time zone: ")
         return RedirectResponse("/admin/site/club?error=" + quote(msg), status_code=303)
     _admin_log(request, site_club="club.yaml" if form.get("back") else ", ".join(k for k, v in values.items() if v is not None) or "club.yaml")
     app_name = " ".join((form.get("app_name") or "").split())[:60]
@@ -3561,20 +3537,6 @@ async def site_club(request: Request):
         branding.set_name(app_name, mid)
         _admin_log(request, site_name=branding.name(club))
     note = "Saved."
-    # only what was changed on the page: each later date keeps its own place and link otherwise (a change planned for later)
-    where = " ".join((form.get("where") or "").split())[:200]
-    where = where if "where" in form and where != form.get("shown_where", "") else None
-    online = online if "where" in form and online != form.get("shown_online", "") else None
-    if (club.meeting_weekday, club.meeting_time) != (old_day, old_time) or (where, online) != (None, None):
-        first = events.move_meeting(club, since, where, online, mid)
-        note = f"Saved. The weekly meeting on the calendar changes from {show_date(first, 'day_year')}; earlier dates stay as they were."
-    late = 0
-    if club.has("chow"):
-        ahead = [d for d in chow.load()["nights"] if d >= today.isoformat()]
-        held = {d.isoformat() for d in meetings.nights(club, today, dt.date.fromisoformat(max(ahead)), with_cancelled=True, chow=True)} if ahead else set()
-        late = sum(1 for d in ahead if d not in held)
-    if late:
-        note += f" {late} chow night{'s are' if late != 1 else ' is'} still on the old day: move {'them' if late != 1 else 'it'} on the Chow page."
     return RedirectResponse("/admin/site/club?note=" + quote(note), status_code=303)
 
 

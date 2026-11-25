@@ -3,8 +3,8 @@
 # Every setting, with what it does: club.example.yaml.
 
 club:
-  meeting_day: Thursday    # the weekly meeting: the app won't start without these two (also changed later on Site)
-  meeting_time: "19:30"    # 24-hour, in quotes
+  meeting_day: Thursday    # optional: the weekly meeting the app puts on the calendar once, on a new install;
+  meeting_time: "19:30"    # 24-hour, in quotes. After that, meeting nights are set on the calendar only
 
 auth:
   rp_id: minutes.example.org   # the HTTPS address members use; passkeys only work there
