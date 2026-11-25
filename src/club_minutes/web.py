@@ -72,6 +72,7 @@ from . import (
     treasurer,
     updates,
     upgrade,
+    webhooks,
 )
 from . import callsign as callsign_mod
 from . import pdf as pdfmod
@@ -2851,6 +2852,15 @@ def security_limits(request: Request, upload_mb: int = Form(...), _mid: str = De
 FRESH_SECONDS = 300  # making someone an admin needs a passkey or emailed link this recent
 
 
+def fresh_confirm(request: Request, next: str) -> RedirectResponse | None:
+    """None if they confirmed it's them (passkey or emailed link) in the last FRESH_SECONDS; otherwise the redirect
+    to confirm, which comes back to `next`."""
+    confirmed = (request.state.admin_until or 0) - ADMIN_MINUTES * 60  # when they last confirmed it's them
+    if confirmed < time.time() - FRESH_SECONDS:
+        return RedirectResponse("/admin/confirm?next=" + quote(next), status_code=303)
+    return None
+
+
 def _tell_admins(request: Request, before: set[str], subject: str, what: str) -> None:
     """Every admin before or after the change (so the one added or removed too), except whoever made it."""
     club = archive.club
@@ -2868,9 +2878,8 @@ def admins_add(request: Request, member: str = Form("")):
         raise HTTPException(400, "Pick a member from the roster.")
     if member in club.all_admins:
         return RedirectResponse("/admin/security/admins", status_code=303)
-    confirmed = (request.state.admin_until or 0) - ADMIN_MINUTES * 60  # when they last confirmed it's them
-    if confirmed < time.time() - FRESH_SECONDS:
-        return RedirectResponse("/admin/confirm?next=" + quote(f"/admin/security/admins?add={member}"), status_code=303)
+    if redirect := fresh_confirm(request, f"/admin/security/admins?add={member}"):
+        return redirect
     before = club.all_admins
     with recovery.locked():
         club.save_app_admins(club.app_admins | {member})
@@ -2984,7 +2993,7 @@ def security_signout(request: Request, session: list[int] = Form(...), member: s
 
 # ---------------- Site (admins, in admin mode): the app's name and the club's logo ----------------
 
-SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("bylaws", "Bylaws"),
+SITE_TABS = (("look", "Look"), ("club", "Club"), ("agenda", "Agenda"), ("roles", "Roles"), ("features", "Features"), ("connections", "Connections"), ("bylaws", "Bylaws"),
              ("dates", "Dates"), ("privacy", "Privacy"), ("video", "Video"))
 PUBLIC_CALS = {**events.CALS, "holiday": "Holidays"}  # never chow or birthdays
 REFS = {"dues": "Dues, fees and their amounts (Treasurer pages)", "bills": "Regular bills", "arrears": "The arrears email",
@@ -3022,6 +3031,8 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 agenda=_agenda_rows(club), builtins=SECTIONS, office_rows=_office_rows(club), role_rows=_role_rows(club), permissions=_shown_perms(club), roles_stamp=_roles_stamp(), regions=regions.choices(), public_cals=PUBLIC_CALS, refs=REFS,
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 meeting_where=_meeting_where(sample), weekdays=[d.title() for d in WEEKDAYS],
+                wh_url=webhooks._settings().get("url", ""), wh_kinds=webhooks._settings().get("kinds") or [], wh_kind_names=webhooks.KINDS,
+                wh_made=(m := webhooks.secret_made()) and dt.date.fromtimestamp(m), wh_failure=webhooks.failure(),
                 pictures=SITE_PICTURES, source=branding.source,
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.label} Minutes", upload_mb=limits.upload_mb(),
@@ -3199,6 +3210,39 @@ def site_jitsi_secret(request: Request):
     r = page(request, "jitsi_secret.html", value=value, domain=meet._setting(archive.club, "domain") or "", app_id=meet._setting(archive.club, "app_id") or "club-minutes")
     r.headers["Cache-Control"] = "no-store"  # shown once: never kept by the browser
     return r
+
+
+@app.post("/admin/site/webhooks")
+async def site_webhooks(request: Request):
+    """Connections tab: where event webhooks go and which kinds are sent."""
+    _mid, form = _site_admin(request), await request.form()
+    url, kinds = (form.get("webhook_url") or "").strip(), [k for k in webhooks.KINDS if form.get(f"kind_{k}")]
+    if url and not webhooks.valid_url(url):
+        return RedirectResponse("/admin/site/connections?error=" + quote("Event webhooks: the address must start with https:// (http:// only for localhost)."), status_code=303)
+    archive.club.save_site_settings({("webhooks", "url"): url, ("webhooks", "kinds"): kinds})
+    _admin_log(request, site_webhooks=f"{urlsplit(url).hostname or 'no address'}: {', '.join(kinds) or 'none'}")
+    return RedirectResponse("/admin/site/connections?note=" + quote("Saved."), status_code=303)
+
+
+@app.post("/admin/site/webhook-secret", response_class=HTMLResponse)
+def site_webhook_secret(request: Request):
+    """Make a new signing secret for event webhooks and show it once. Needs a fresh confirmation, like making an admin."""
+    _site_admin(request)
+    if redirect := fresh_confirm(request, "/admin/site/connections?note=" + quote("Confirmed. Make the secret now.")):
+        return redirect
+    value = webhooks.new_secret()
+    _admin_log(request, webhook_secret="made a new one")
+    r = page(request, "webhook_secret.html", value=value)
+    r.headers["Cache-Control"] = "no-store"  # shown once: never kept by the browser
+    return r
+
+
+@app.post("/admin/site/webhook-test")
+def site_webhook_test(request: Request):
+    _site_admin(request)
+    err = webhooks.send_test()
+    _admin_log(request, webhook_test=err or "sent")
+    return RedirectResponse("/admin/site/connections?" + ("error=" + quote(f"The test event failed: {err}") if err else "note=" + quote("Test event sent.")), status_code=303)
 
 
 @app.post("/admin/site/bylaws")
@@ -3993,7 +4037,10 @@ def console_start(request: Request, date: str = Form(...), leader_id: str = Form
     except ValueError:
         return RedirectResponse("/console?error=" + quote("Pick the meeting's date."), status_code=303)
     try:
+        new = day.isoformat() not in archive.by_slug  # not reopening a draft
         m = console.start(archive, day, leader_id or mid, recorder=mid, online=not lan(client_ip(request)))
+        if new:
+            webhooks.meeting_started(archive.club, day, base_url(request))
     except ValueError as e:  # another meeting is still open (only one at a time)
         return RedirectResponse("/console?error=" + quote(str(e)), status_code=303)
     return RedirectResponse(f"/console/{m.slug}", status_code=303)
@@ -4103,6 +4150,8 @@ def console_submit(request: Request, background: BackgroundTasks, slug: str, mid
         if isinstance(e, ValueError):  # already in the archive: never rebuilt or emailed again
             raise HTTPException(409, str(e))
         raise
+    if fresh:
+        webhooks.minutes_published(archive.club, dt.date.fromisoformat(slug), base_url(request))
     background.add_task(keep_pdf, slug)
     background.add_task(email_minutes, slug, f"{base_url(request)}/meetings/{slug}")
     return RedirectResponse(f"/meetings/{slug}", status_code=303)

@@ -56,6 +56,7 @@ Admin → **Site** changes most of the club's settings in the app, checked as yo
 | **Agenda** | The meeting's sections in order (built-in and the club's own), for minutes made from then on (published minutes keep theirs), when a guest is invited to join, how many days before a reminder goes out, and the quorum rule (a percent of the members and/or a number of officers; empty, the default, turns the quorum check off). |
 | **Roles** | The club's offices from its bylaws: each an officer's office or a board seat (like a trustee), with how many seats. Who holds each office is on Roster → Offices. Then the roles, one card each: what it allows, the offices that give it (whole titles only), the members picked for it, and who has it now. Rename any role, add the club's own (**Add a role**), remove one of the club's own, or put a built-in **Back to the built-in**. A save that would leave a permission with no role is refused; recording money always comes with the Treasurer pages. Admin isn't a role and no role edit can give it. |
 | **Features** | The chow module, public calendars, holidays (any country or state, plus the club's own), election days, video meetings, how many pictures a member can add a day (20 by default), and **The club supports Club Minutes** (it takes the menu's Support link away for everyone and the About page thanks the club). |
+| **Connections** | **Event webhooks**: the address of a service that receives the app's events, which events it gets, and the secret that signs them (below). |
 | **Bylaws** | The bylaws sections the app cites, the arrears rule, and a certificate members buy (a bond), if the club has one. |
 | **Dates** | How dates are written (US order unless changed). |
 | **Privacy** | Names never recorded: a guest with one is left out of the minutes, a line with one out of imported minutes. |
@@ -237,6 +238,40 @@ For the club's other tools on the same server, for example a chat bot (Discord, 
 - Then it answers only `Authorization: Bearer <token>` requests from the server itself or an address in `CLUB_MINUTES_ROSTER_API_ALLOW` (comma-separated; the tool's container), never through the web proxy. E.g. from the tool's container: `curl -H "Authorization: Bearer $TOKEN" http://<this server's LAN IP>:8000/api/roster`.
 - Give the tool's container a fixed IP, and close port 8000 to everyone else (Security → Closing the app's port). Every call, allowed or not, is logged.
 
+## 📣 Event webhooks
+The app can tell another service on the club's side (a chat bot, say) when something happens to a meeting. Set up on Admin → Site → Connections, **Event webhooks** (admins, in admin mode):
+
+- **The service's address:** https only (plain http only for `localhost`, `127.0.0.1` or `::1`, a receiver on the same machine).
+- **Send when:** meeting started, meeting cancelled, meeting moved, meeting back on, minutes published. Nothing is sent without an address, a secret and at least one kind ticked.
+- **The secret:** **Make a webhook secret** (after confirming it's you again with a passkey or emailed link, as for making an admin) shows a signing secret once and keeps it in the data folder (`webhook-secret`, the app's only; in the backups). A new one replaces it: the service must be given it. Never send it by email or chat.
+- **Send a test event** sends a `test` event with no data at once and says whether the service took it. The card shows the last failure (when, the kind, the error), until the next event is sent. No email is sent about failures. Every change to these settings is in the admin log (never the secret).
+
+**How it sends:** each event is added to `webhook-queue.json` in the data folder and sent at once in the background. A 2xx answer is a success; anything else (or no answer in 10 seconds) is tried again after 1 minute, 5 minutes, 30 minutes, 2 hours and 6 hours, then the event is dropped (logged). The `club-minutes-webhooks.timer` (installed by `update.sh`, every minute) runs `club-minutes webhooks` to send what is due; with webhooks not set up it does nothing. Redirects are not followed. Each attempt is logged (time, kind, the service's host, the result; never the event or the secret).
+
+**The request a service receives:** `POST` with a JSON body and these headers:
+
+- `Content-Type: application/json`
+- `X-Club-Minutes-Event: <kind>`
+- `X-Club-Minutes-Signature: t=<unix seconds>,v1=<hex>`, where `hex` is the HMAC-SHA256, keyed with the secret, of `<t>.<the raw body>` (the digits of `t`, a dot, then the body's exact bytes). It is made fresh at each attempt, so check it against the raw body before parsing, compare in constant time, and refuse a `t` more than 5 minutes from your clock.
+
+```json
+{"id": "9f2c1d0e5b7a4c3e8d6f0a1b2c3d4e5f", "kind": "meeting_cancelled", "sent": "2026-11-24T19:02:11-05:00",
+ "data": {"date": "2026-12-01", "title": "Example Radio Club meeting", "reason": "Holiday", "url": "https://minutes.example.org/calendar?start=2026-12-01"}}
+```
+
+`id` is 32 hex characters, the same on every retry of an event: remember the ones you handled and ignore a repeat. `sent` is when the event happened, with its offset. Dates are `YYYY-MM-DD`, links absolute. The app adds no member's name, email or other personal data, and nothing from the minutes' text (a title or reason is sent as a leader typed it). `data` by kind:
+
+| `kind` | `data` |
+|---|---|
+| `meeting_started` | `date`, `title` (the calendar series' title), `url` (the meeting's page), `online_url` (that night's video link, or `null`) |
+| `meeting_cancelled` | `date`, `title`, `reason` (as typed, may be `""`), `url` (the calendar) |
+| `meeting_moved` | `date` (the original), `to` (`YYYY-MM-DDTHH:MM`, or `YYYY-MM-DD` for an all-day series), `title`, `reason`, `url` |
+| `meeting_restored` | `date`, `title`, `url` |
+| `minutes_published` | `date`, `title`, `url` (the minutes) |
+| `test` | `{}` |
+
+To check by hand: `printf '%s' "$t.$body" | openssl dgst -sha256 -hmac "$secret"`.
+
 ## 📜 Bylaws
 The Bylaws page shows the club's constitution and bylaws from `bylaws.md` in the data folder (`/var/lib/club-minutes/bylaws.md`). It's kept out of the public repo.
 
@@ -259,7 +294,7 @@ People, their titles and who may lead come from the roster the app keeps, edited
 ## 🗂️ Where things are kept
 All in the data folder (`/var/lib/club-minutes`), and all in the backups:
 
-- **State:** the roster (`roster-sheet.json`, rebuilt into `roster.json` daily at 04:00), `events.json` (calendars), `chow.json`, `business.json`, `treasurer.json`, `email-prefs.json`, `settings.json` (each member's display choices), `site-settings.json` (Site), `branding/` and `branding.json` (Look), `admins.json`, `limits.json`, `backup-settings.json` (not in the backups: it holds the S3 secret).
+- **State:** the roster (`roster-sheet.json`, rebuilt into `roster.json` daily at 04:00), `events.json` (calendars), `chow.json`, `business.json`, `treasurer.json`, `email-prefs.json`, `settings.json` (each member's display choices), `site-settings.json` (Site), `webhook-secret`, `webhook-queue.json` (events waiting to be sent) and `webhook-failure.json`, `branding/` and `branding.json` (Look), `admins.json`, `limits.json`, `backup-settings.json` (not in the backups: it holds the S3 secret).
 - **Logs**, each change with who made it: `profile-changes.jsonl` (roster), `calendar-log.jsonl`, `chow-log.jsonl`, `treasurer-log.jsonl`, `admin-log.jsonl`, `api-log.jsonl`, `email-log.jsonl`. The admin and API logs keep 90 days (the daily job trims them); the API log holds only calls from allowed addresses.
 - **The minutes:** a folder per meeting, with `emailed.json` beside each saying who it was sent to.
 - **`data-version`:** which shape the files are in. A new version that stores something differently reshapes the files itself at start, after copying the folder to `before-upgrade/` (not in the backups); if it then doesn't start, the update puts that copy back and returns to the version before. An older version won't start on data a newer one has reshaped: restore a backup made before the update instead.
