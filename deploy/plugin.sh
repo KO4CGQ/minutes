@@ -14,6 +14,14 @@ main() {
   local APP=/opt/club-minutes ETC=/etc/club-minutes
   local LIST=$ETC/plugins KEYS=$ETC/plugin-keys
   export UV_CACHE_DIR=/var/cache/club-minutes-uv UV_PYTHON_INSTALL_DIR="$APP/.uv-python"  # root's, as update.sh's
+  lock() {  # one updater at a time, with update.sh (it holds the lock itself while it runs plugin.sh install)
+    [ -z "${CLUB_MINUTES_UPDATE_LOCKED:-}" ] || return 0
+    exec 9>/run/club-minutes-update.lock
+    flock -n 9 || { echo "Another update or plugin change is running; try again when it has finished." >&2; exit 1; }
+  }
+  retry() {  # the network steps: three tries, a short pause between
+    local n; for n in 1 2 3; do "$@" && return 0; echo "Try $n of 3 failed." >&2; [ "$n" = 3 ] || sleep 5; done; return 1
+  }
   git_env() {  # $1 NAME: its key, if it has one; host keys kept beside the keys (the first connection, at add, sets
     # them; a changed one is refused). Never a prompt: the nightly update runs with no one there.
     local key=""; [ -f "$KEYS/$1" ] && key="-i $KEYS/$1 -o IdentitiesOnly=yes"
@@ -30,8 +38,11 @@ main() {
     local at=${2%%#*}@$3
     [[ "$2" == *#* ]] && at+="#${2#*#}"
     # never moving the app's own packages from the versions it was tested with (its uv.lock)
-    local pins; pins=$(mktemp); (cd "$APP" && uv export -q --frozen --no-dev --no-hashes --no-emit-project -o "$pins")
-    timeout 600 uv pip install -q --python "$APP/.venv/bin/python" -c "$pins" "$at" || { rm -f "$pins"; return 1; }
+    # and the app itself pinned too, so a plugin that depends on club-minutes can't pull another copy from PyPI
+    local pins; pins=$(mktemp)
+    { (cd "$APP" && uv export -q --frozen --no-dev --no-hashes --no-emit-project -o "$pins") &&
+      "$APP/.venv/bin/python" -c 'from importlib.metadata import version; print("club-minutes==" + version("club-minutes"))' >>"$pins"; } || { rm -f "$pins"; return 1; }
+    retry timeout 600 uv pip install -q --python "$APP/.venv/bin/python" -c "$pins" "$at" || { rm -f "$pins"; return 1; }
     rm -f "$pins"
   }
   dist_of() {  # $1 NAME: the installed package whose entry point is NAME
@@ -43,6 +54,7 @@ print(next((e.dist.name for e in entry_points(group="club_minutes.plugins") if e
   case "$cmd" in
     add)
       local name=${2:-} url=${3:-} key=${4:-}
+      lock
       [[ "$name" =~ ^[a-z0-9]+$ ]] || { echo "NAME: lowercase letters and digits, the plugin's own name" >&2; exit 2; }
       [[ "$url" =~ ^git\+(ssh|https|file):// ]] || { echo "URL: git+ssh://…, git+https://… (or git+file://… for a test)" >&2; exit 2; }
       if [ -f "$LIST" ] && grep -q "^$name " "$LIST"; then echo "$name is installed already: remove it first" >&2; exit 1; fi
@@ -62,6 +74,7 @@ print(next((e.dist.name for e in entry_points(group="club_minutes.plugins") if e
       echo "Installed $name $tag. Turn it on at Admin → Site → Features." ;;
     remove)
       local name=${2:-} line
+      lock
       line=$(grep "^$name " "$LIST" 2>/dev/null) || { echo "$name isn't installed by this command" >&2; exit 1; }
       uv pip uninstall -q --python "$APP/.venv/bin/python" "$(cut -d' ' -f2 <<<"$line")"
       grep -v "^$name " "$LIST" >"$LIST.new" || true
@@ -71,6 +84,7 @@ print(next((e.dist.name for e in entry_points(group="club_minutes.plugins") if e
       echo "Removed $name. Its data stays in the data folder (plugins/$name.json)." ;;
     list) [ -s "$LIST" ] && awk '{print $1, $4, $3}' "$LIST" || echo "No plugins installed by this command." ;;
     install)
+      lock
       [ -s "$LIST" ] || return 0
       local name dist url tag new out=""
       while read -r name dist url tag <&3; do  # fd 3: ssh and uv may read stdin

@@ -125,6 +125,12 @@ systemctl start club-minutes
 
 **What an update promises: recovery, not rollback.** Any 1.x server updates straight to the newest 1.x, with no versions in between. Every update keeps a copy of the data first, and a failed update puts it back by itself and stays on the version before. Once an update has worked, older code isn't promised to read the new data: to go back, restore a backup made before the update, as below.
 
+**After updating from 1.2, video meetings stay off until you install the meet plugin** (`sudo /opt/club-minutes/deploy/plugin.sh add meet URL`, with the address the kit's README gives: see Plugins below). The update moves the settings across, but the plugin itself isn't part of the app. Until it's installed, Updates and the update email say that `meet` is turned on but not installed.
+
+**A version held back by "Wait for … before updating the app":** the app goes back to the version it had, and **nothing retries it by itself**: the automatic update doesn't try a failed version again (it emails you once, and the Updates page shows which plugin held it). When the plugin has a release that works with the new version, update again by hand (Updates page, or `update.sh`): each update first moves every plugin to its newest release, then checks. The same hold applies to a plugin that is ticked on but isn't installed (its install failed): the update goes back until it is.
+
+**If an update stops part way** (a failed install, a plugin that won't install, the updater killed because it ran too long), it puts everything back: the code, the app's Python environment, the plugin list and plugins, the settings and the data, and starts the timers again. Only one update or plugin change runs at a time (a second says so and stops). Updates stop the app's timers while they run, retry the downloads three times, and need free disk space twice the size of the data folder (the backups aren't counted); if there isn't, nothing is changed and the update says so.
+
 **Going back a version** (say, from 1.2 to 1.1): a version can't read data a newer one has upgraded, so put back a backup made before the update (Back up first on the Updates page, and automatic updates, make one in `backups/`), then install the older release. Anything changed since that backup is lost; the newer data stays beside it until you remove it.
 ```sh
 sudo -u minutes /opt/club-minutes/.venv/bin/club-minutes restore /var/lib/club-minutes/backups/BACKUP.tar.gz.enc /tmp/restored

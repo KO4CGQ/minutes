@@ -316,15 +316,20 @@ def _check() -> int:
     on = {k for k, v in (cfg.get("plugins") or {}).items() if v}
     hold = {k for k, v in (cfg.get("plugin_hold") or {}).items() if v}
     bad = {}
+    have = set()
     for ep in _entry_points():
+        have.add(ep.name)
         if ep.name in on:
             try:
                 Plugin(ep.load(), ep.name)
             except Exception as e:  # noqa: BLE001 - anything a plugin raises: it won't load
                 bad[ep.name] = f"{type(e).__name__}: {e}"
-    if held := [n for n in bad if n in hold]:
+    gone = sorted(on - have)  # ticked on, nothing installed: its install failed, or it was never added
+    for n in gone:
+        print(f"Plugin {n} is turned on but isn't installed (see the lines above if its install failed; plugin.sh add or plugin.sh install puts it back).")
+    if held := [n for n in [*bad, *gone] if n in hold]:
         for n in held:
-            print(f"Plugin {n} has no release for this version yet ({bad[n]}), and Site → Features says to wait for it: the app stays on the version it had.")
+            print(f"Plugin {n} {'has no release for this version yet (' + bad[n] + ')' if n in bad else 'is not installed'}, and Site → Features says to wait for it: the app stays on the version it had.")
         return 1
     for n, why in bad.items():
         print(f"Plugin {n} has no release for this version yet ({why}), so it was turned off. Tick it on again on Site → Features once it has one.")
