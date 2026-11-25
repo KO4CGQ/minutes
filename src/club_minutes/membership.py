@@ -84,8 +84,10 @@ def add_member(club: Club, form: dict, by: str, sheet: Sheet | None = None, url:
             raise ValueError(f"{name} is already on the roster.")
     if f["callsign"] and (other := club.resolve(f["callsign"])):  # someone's earlier call, or an id: it would point at them
         raise ValueError(f"{f['callsign']} was {club.name(other)}'s callsign, so it can't be given to someone new here.")
-    sheet = sheet or Sheet()
     mid = new_id(club)
+    if any(x and club.admin_listed(x) for x in (f["callsign"], mid)):
+        raise ValueError("That callsign is on the admins list: an admin must remove it there first.")
+    sheet = sheet or Sheet()
     sheet.add_row({"id": mid, "callsign": f["callsign"], "full_name": name, "email": f["email"], "phone": f["phone"],
                    "address": f["address"], "class": f["license_class"], "status": "Active"},
                   optional=("phone", "address", "class"))

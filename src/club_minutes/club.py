@@ -791,6 +791,11 @@ class Club:
         tmp.write_text(json.dumps(sorted(ids)))
         tmp.replace(p)
 
+    def admin_listed(self, who: str) -> bool:
+        """Whether an id or callsign is on an admin list (club.yaml, the app's, suspended), whoever holds it now: handing
+        it to a new member would make them an admin."""
+        return who.strip().lower() in {str(a).lower() for a in self.admins | self.app_admins | self.suspended}
+
     def is_admin(self, mid: str | None) -> bool:
         """Listed under admins: in club.yaml or added in the app. Admin rights apply only while admin mode is on."""
         return bool(mid) and mid in self.all_admins

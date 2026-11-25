@@ -16,8 +16,8 @@ DAY0 = dt.date(2026, 11, 1)
 PEOPLE = [{"id": "n0aaaa", "first": "Amy", "last": "Appleseed", "callsign": "N0AAAA", "email": "amy@example.org", "role": "Secretary", "officer": True},
           {"id": "n0bbbb", "first": "Bob", "last": "Bloggs", "callsign": "N0BBBB", "email": "bob@example.org", "phone": "555-0101",
            "address": "123 Main St, Anytown", "birthday": "03-04", "share": ["email"], "status": "Inactive"},
-          {"id": "n0cccc", "first": "Cal", "last": "Customer", "callsign": "N0CCCC"}] + [
-    {"id": f"n0{c * 4}", "first": c.upper(), "last": "Member", "callsign": f"N0{c.upper() * 4}"} for c in "defg"]  # 7: one leaver is under a quarter
+          {"id": "n0cccc", "first": "Cal", "last": "Customer", "callsign": "N0CCCC", "email": "cal@example.org"}] + [
+    {"id": f"n0{c * 4}", "first": c.upper(), "last": "Member", "callsign": f"N0{c.upper() * 4}", "email": f"{c}@example.org"} for c in "defg"]  # 7: one leaver is under a quarter
 
 
 @pytest.fixture
@@ -180,3 +180,13 @@ def test_admin_confirm_starts_the_clocks(env, monkeypatch):
     r = c.post("/admin/purge-hold/confirm", follow_redirects=False)
     assert r.status_code == 303 and prefs.purge_hold() == [] and "n0cccc" in json.loads((tmp / "removed.json").read_text())
     assert "purge_hold_confirmed" in (tmp / "admin-log.jsonl").read_text()
+
+
+def test_a_leaver_with_nothing_to_delete_gets_no_clock_and_isnt_listed(env):
+    tmp, cache = env
+    people = json.loads(cache.read_text())
+    people += [{"id": "n0hhhh", "first": "H", "last": "Member", "callsign": "N0HHHH"}]  # 8: two leavers aren't a big night
+    people[2].update(status="Silent Key", email=None)  # Cal: no contact details, photo or feed
+    cache.write_text(json.dumps(people))
+    prefs.purge_removed(load(cache), DAY0)
+    assert set(json.loads((tmp / "removed.json").read_text())) == {"n0bbbb"}  # Bob has details; Cal is only a record

@@ -616,12 +616,18 @@ def login_email(request: Request, background: BackgroundTasks, email: str = Form
     return RedirectResponse(f"/login?sent=1&next={quote(_safe_next(next))}", status_code=303)
 
 
+def _bad_link(request: Request, detail: str = "") -> None:
+    """Log a made-up link toward a ban, unless another site's page made the browser ask (an <img>, a redirect)."""
+    if request.headers.get("sec-fetch-site") != "cross-site":
+        authn.event("bad_link", client_ip(request), detail=detail, agent=request.headers.get("user-agent", ""))
+
+
 @app.get("/login/link")
 def login_link(request: Request, t: str = ""):
     used = authn.use_link(t)
     if not used:
         if not authn.link_issued(t):  # an old link isn't an attack; a made-up one counts toward a ban
-            authn.event("bad_link", client_ip(request), agent=request.headers.get("user-agent", ""))
+            _bad_link(request)
         return RedirectResponse("/login?error=link", status_code=303)
     member, next_url = used
     response = start_session(request, RedirectResponse(next_url, status_code=303), member, "email link")
@@ -3826,6 +3832,8 @@ def calendar_meeting(request: Request, what: str, id: str = Form(...), d: str = 
                      date: str = Form(""), time: str = Form(""), mid: str = Depends(me)):
     """Cancel a meeting date, move it to another day and time, or put it back (what: cancel, move, restore)."""
     _calendar_editor(request)
+    if not can_lead_now(request):  # calendar editors edit events; calling off a meeting night is the leaders' call
+        raise HTTPException(403, "Only officers and meeting leaders can cancel or move a meeting.")
     if what not in ("cancel", "move", "restore"):
         raise HTTPException(404)
     club, url, notes = archive.club, base_url(request), []
@@ -4030,7 +4038,7 @@ def _apply_page(request: Request, token: str, a: dict | None, form=None, error: 
 def apply_form(request: Request, token: str):
     a = applications.find(token)
     if not a:  # a link the app never sent
-        authn.event("bad_link", client_ip(request), detail="application link", agent=request.headers.get("user-agent", ""))
+        _bad_link(request, "application link")
     ok = a if applications.usable(a) else None
     return _apply_page(request, token, ok, {"name": ok["guest"], "email": ok["email"]} if ok else None, status=200 if ok else 404)
 
@@ -4040,7 +4048,7 @@ def apply_pdf(request: Request, token: str):
     """The applicant's own copy, from the thank-you page: for an hour after they sent it (the link is theirs alone)."""
     a = applications.find(token)
     if not a:
-        authn.event("bad_link", client_ip(request), detail="application link", agent=request.headers.get("user-agent", ""))
+        _bad_link(request, "application link")
     if not a or not a.get("form") or time.time() - (a.get("signed") or {}).get("at", 0) > applications.OWN_COPY_SECONDS:
         return _apply_page(request, token, None, status=404)
     return Response(pdfmod.application(archive.club, a, authn.rp_id), media_type="application/pdf",
@@ -4052,7 +4060,7 @@ async def apply_submit(request: Request, token: str, background: BackgroundTasks
     a = applications.find(token)
     if not applications.usable(a):  # checked before anything is read from the request
         if not a:
-            authn.event("bad_link", client_ip(request), detail="application link", agent=request.headers.get("user-agent", ""))
+            _bad_link(request, "application link")
         return _apply_page(request, token, None, status=404)
     if not request.headers.get("content-length", "").isdigit() or int(request.headers["content-length"]) > 65536:
         raise HTTPException(413, "That's too big for an application.")

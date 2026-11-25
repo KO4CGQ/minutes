@@ -108,6 +108,17 @@ def change(club: Club, mid: str, new: dict[str, str], by: str, sheet: Sheet | No
 
 
 @roster_locked
+def has_details(club: Club, mid: str) -> bool:
+    """Whether forget_member would delete anything: roster contact details, a photo, a feed link or change-log lines."""
+    from . import avatars, calview
+    m = club.members.get(mid)
+    feeds = calview.DATA / "calendar-feeds.json"
+    if (m and any(getattr(m, f) for f in EDITABLE)) or avatars.path(mid).exists() or (feeds.exists() and mid in json.loads(feeds.read_text())):
+        return True
+    p = log_path()
+    return p.exists() and any(_entry_member(x) == mid for x in p.read_text().splitlines())
+
+
 def forget_member(club: Club, mid: str) -> bool:
     """A leaver's personal details gone (the daily job, 90 days after they left): their lines out of the change log, their
     photo and calendar feed, and their roster row's email, phone, address, birthday and sharing blanked. Each step can be run

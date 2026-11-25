@@ -150,7 +150,7 @@ def entries(club: Club, archive, viewer: str | None, lo: dt.date, hi: dt.date, p
             o = store.occurrence(e, d)
             rec = e.get("changes", {}).get(d.isoformat(), {}) if e.get("meeting") else {}
             if rec.get("cancelled"):  # a cancelled meeting stays on its date, as "No meeting"
-                o = {**o, "title": "No meeting" + (f" ({rec['reason']})" if rec.get("reason") else "")}
+                o = {**o, "title": "No meeting" + (f" ({rec['reason']})" if rec.get("reason") and not public else "")}
             x = _entry(store.in_zone(o, e.get("tz"), tz), e["cal"], id=e["id"], repeats=bool(e.get("repeat")),
                        occ=d.isoformat() if e.get("repeat") else None, zone=_zone(o, e.get("tz"), tz),
                        meeting=bool(e.get("meeting")), change="cancelled" if rec.get("cancelled") else "moved" if rec.get("moved") else "")
