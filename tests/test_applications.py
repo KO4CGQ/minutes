@@ -1,9 +1,11 @@
 """Membership applications: the emailed link, the form, the sponsor, who may send, see and download, the purge, the settings."""
+import io
 import json
 import re
 import time
 from pathlib import Path
 
+import pypdf
 import pytest
 from fastapi.testclient import TestClient
 
@@ -240,6 +242,15 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     assert club.site_settings == before  # nothing saved
     assert "from 1 to 365" in admin.post("/admin/site/membership/preview", data=form | {"link_days": "0"}).text
     assert as_("n0cccc").post("/admin/site/membership/preview", data=form).status_code == 404
+    pdf = admin.post("/admin/site/membership/pdf", data=form | {"label2": "Favorite band?", "type2": "short", "rows": "3", "field_phone": "hidden"})
+    assert pdf.headers["content-type"] == "application/pdf" and pdf.content.startswith(b"%PDF") and club.site_settings == before
+    text = "".join(pg.extract_text() for pg in pypdf.PdfReader(io.BytesIO(pdf.content)).pages)
+    assert "Jane Doe" in text and "Favorite band?" in text and "555-0100" not in text  # phone not asked
+    assert as_("n0cccc").post("/admin/site/membership/pdf", data=form).status_code == 404
+    saved = admin.get("/admin/site/membership/preview")  # a reload or bookmark: the saved settings, not an error
+    assert saved.status_code == 200 and "Preview:" in saved.text and 'name="q0"' in saved.text
+    got = admin.get("/admin/site/membership/pdf")
+    assert got.headers["content-type"] == "application/pdf" and as_("n0cccc").get("/admin/site/membership/pdf").status_code == 404
     assert "Back to club.yaml" in admin.get("/admin/site/membership").text
     admin.post("/admin/site/membership", data={"back": "1"})
     assert club.site_settings == {} and club.membership == clubmod.MEMBERSHIP_DEFAULTS

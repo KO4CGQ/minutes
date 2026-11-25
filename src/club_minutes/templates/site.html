@@ -182,7 +182,7 @@
 <template id="t-question">{{ q_row('__i__', {'label': '', 'type': 'short'}, True) }}</template>
 <p><button type="button" class="btn small" data-add="t-question" data-into="qlist" data-focus="label" data-next="{{ m.questions|length }}" hidden>+ Add a question</button></p>
 </div>
-<p class="row"><button class="btn">Save</button> <button class="btn ghost" formaction="/admin/site/membership/preview" formtarget="_blank" formnovalidate>Preview the form</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
+<p class="row"><button class="btn">Save</button> <button class="btn ghost" formaction="/admin/site/membership/preview" formtarget="_blank" formnovalidate>Preview the form</button> <button class="btn ghost" formaction="/admin/site/membership/pdf" formtarget="_blank" formnovalidate>Preview the PDF</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
 {% if membership_here %}<form method="post" action="/admin/site/membership" data-confirm="Go back to club.yaml's membership settings?"><input type="hidden" name="back" value="1"><button class="btn small ghost">Back to club.yaml</button></form>{% endif %}
 {% elif tab == 'features' %}

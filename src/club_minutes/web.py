@@ -3343,12 +3343,26 @@ async def site_membership(request: Request):
     return RedirectResponse("/admin/site/membership?note=" + quote("Saved."), status_code=303)
 
 
-@app.post("/admin/site/membership/preview", response_class=HTMLResponse)
-async def site_membership_preview(request: Request):
-    """Preview the form: the application form as a guest sees it, with the settings as typed on the tab; nothing saved or sendable."""
+@app.api_route("/admin/site/membership/pdf", methods=["GET", "POST"])
+async def site_membership_pdf(request: Request):
+    """Preview the PDF: a made-up applicant's filled application with the settings as typed on the tab; nothing saved.
+    Opened as an address (a reload, a bookmark): the saved settings."""
     _site_admin(request)
     try:
-        v = _membership_form(await request.form(), archive.club)
+        v = _membership_form(await request.form(), archive.club) if request.method == "POST" else archive.club.membership
+    except ValueError as e:
+        return page(request, "apply.html", a=None, preview=True, error=str(e).removeprefix("club.yaml membership: "), form={})
+    pdf = await run_in_threadpool(pdfmod.application, archive.club, applications.sample(archive.club, v), authn.rp_id)
+    return Response(pdf, media_type="application/pdf", headers={"Cache-Control": "no-store", "Content-Disposition": 'inline; filename="application-preview.pdf"'})
+
+
+@app.api_route("/admin/site/membership/preview", methods=["GET", "POST"], response_class=HTMLResponse)
+async def site_membership_preview(request: Request):
+    """Preview the form: the application form as a guest sees it, with the settings as typed on the tab; nothing saved or sendable.
+    Opened as an address (a reload, a bookmark): the saved settings."""
+    _site_admin(request)
+    try:
+        v = _membership_form(await request.form(), archive.club) if request.method == "POST" else archive.club.membership
     except ValueError as e:
         return page(request, "apply.html", a=None, preview=True, error=str(e).removeprefix("club.yaml membership: "), form={})
     return page(request, "apply.html", a={"guest": ""}, preview=True, form={}, error="", token="", classes=applications.CLASSES + (applications.NO_LICENSE,),

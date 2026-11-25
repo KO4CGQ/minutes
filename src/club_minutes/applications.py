@@ -514,3 +514,24 @@ def prefill(a: dict) -> dict:
     return {"first": first, "last": last, "callsign": f.get("callsign", ""), "email": f["email"], "phone": f["phone"],
             "license_class": f.get("license_class") if f.get("license_class") in CLASSES else "",
             "address": f"{f['street']}\n{f['city']}, {f['state']} {f['zip']}"}
+
+
+def sample(club: Club, m: dict, now: float | None = None) -> dict:
+    """A made-up filled application for Site → Membership's Preview the PDF: a fictional applicant, a sample answer to
+    each of m's questions, m's details asked and statement (m: the tab's settings as typed). Never stored."""
+    def ask(k, v):
+        return "" if m["fields"].get(k) == "hidden" else v
+    f = {"name": "Jane Doe", "email": "jane.doe@example.org", "street": ask("street", "123 Main St"), "city": ask("city", "Anytown"),
+         "state": ask("state", "OH"), "zip": ask("zip", "45000"), "phone": ask("phone", "555-0100"), "occupation": ask("occupation", "Nurse")}
+    if club.ham:
+        f |= {"callsign": ask("callsign", "N0CALL"), "first_licensed": ask("first_licensed", "2019"),
+              "license_class": ask("license_class", "General"), "expires": ask("expires", "2029-06-30")}
+    answers = []
+    for q in m["questions"]:
+        value = {"yesno": "Yes", "several": q.get("options", [])[:2], "short": "A short sample answer",
+                 "long": "A longer sample answer.\nIt can run over several lines.",
+                 "grid": {"cols": q.get("cols", []), "rows": {r: q.get("cols", [])[:1] for r in q.get("rows", [])}}}[q["type"]]
+        answers.append({"label": q["label"], "type": q["type"], "value": value})
+    now = int(now or time.time())
+    return {"form": f, "answers": answers, "statement": m["statement"], "signed": {"name": "Jane Doe", "at": now},
+            "sponsor": {"typed": "", "id": None, "asked": None, "answer": None, "at": None}, "club": dict.fromkeys(("voted", "initiated", "fee_paid", "bond_paid"), "")}
