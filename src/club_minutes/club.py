@@ -207,6 +207,7 @@ PERMISSIONS = {
     "emails": "change another member's email",
     "status": "change a member's status",
     "roster_emails": "get the roster emails",
+    "applications": "receive membership applications",
 }
 # The built-in roles: key: (name, what it allows until an admin changes it). The keys are older than the names:
 # "board" is Minutes editor and "minutes_editor" is Meeting leader (roles.json and the roster's columns keep the keys).
@@ -215,7 +216,7 @@ ROLES: dict[str, tuple[str, tuple[str, ...]]] = {
     "board": ("Minutes editor", ("correct",)),
     "treasurer": ("Treasurer", ("treasurer", "money")),
     "roster_keeper": ("Roster keeper", ("members", "emails", "status")),
-    "secretary": ("Secretary", ("roster_emails",)),
+    "secretary": ("Secretary", ("roster_emails", "applications")),
     "minutes_editor": ("Meeting leader", ("lead", "calendar")),
     "calendar_editor": ("Calendar editor", ("calendar",)),
 }
@@ -249,13 +250,64 @@ def _quorum(raw) -> dict | None:
     return out if any(v is not None for v in out.values()) else None
 
 
+# Membership applications (Admin → Site → Membership; club.yaml `membership:`): how long the link works, the vote, how
+# long a refusal lasts, what's kept. `club: invite_after_visits` is the tab's other setting. Questions: [{label, type: yesno|several|short|long|grid, options | rows + cols}].
+DEFAULT_STATEMENT = ("By signing, you confirm that what you've written here is true, that you've read the club's bylaws "
+                     "and agree to follow them, and that you'll pay the club's dues and fees if you become a member.")
+MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
+                       "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": []}
+VOTE_PASSES = {"unanimous": "Unanimous", "two_thirds": "Two thirds", "majority": "A majority"}
+QUESTION_TYPES = {"yesno": "Yes or no", "several": "Pick several", "short": "Short text", "long": "Long text", "grid": "Grid of ticks"}
+_MEMBERSHIP_RANGES = {"link_days": (1, 365), "listed_days": (0, 365), "reapply_months": (0, 120), "keep_days": (1, 3650)}
+
+
+def clean_questions(raw) -> list[dict]:
+    """The club's own application questions, checked: each {label, type} plus options (several) or rows and cols (grid),
+    lists of distinct non-empty lines. Raises ValueError saying which is wrong."""
+    if not isinstance(raw, list) or len(raw) > 40:
+        raise ValueError("The questions are a list of at most 40.")
+    out = []
+    for q in raw:
+        if not isinstance(q, dict) or q.get("type") not in QUESTION_TYPES:
+            raise ValueError("Every question needs a type: " + ", ".join(QUESTION_TYPES) + ".")
+        label = " ".join(str(q.get("label") or "").split())[:200]
+        if not label:
+            raise ValueError("Every question needs its words.")
+        item = {"label": label, "type": q["type"]}
+        for key, need in (("options", "several"), ("rows", "grid"), ("cols", "grid")):
+            if q["type"] == need:
+                lines = list(dict.fromkeys(" ".join(str(x).split())[:100] for x in q.get(key) or [] if str(x).strip()))
+                if not lines or len(lines) > 40:
+                    raise ValueError(f"{label}: give {key} (one to 40).")
+                item[key] = lines
+        out.append(item)
+    return out
+
+
+def _membership(raw) -> dict:
+    """The membership: settings with defaults filled in. Raises ValueError for a wrong one (as for the other settings)."""
+    raw = raw or {}
+    if not isinstance(raw, dict) or set(raw) - set(MEMBERSHIP_DEFAULTS):
+        raise ValueError("club.yaml membership: has a setting the app doesn't know")
+    out = {**MEMBERSHIP_DEFAULTS, **raw}
+    for k, (lo, hi) in _MEMBERSHIP_RANGES.items():
+        if isinstance(out[k], bool) or not isinstance(out[k], int) or not lo <= out[k] <= hi:
+            raise ValueError(f"club.yaml membership: {k}: {out[k]!r} isn't a whole number from {lo} to {hi}")
+    if not isinstance(out["vote"], bool) or out["vote_passes"] not in VOTE_PASSES:
+        raise ValueError("club.yaml membership: vote is true or false, vote_passes one of " + ", ".join(VOTE_PASSES))
+    if not isinstance(out["statement"], str) or len(out["statement"]) > 5000:
+        raise ValueError("club.yaml membership: statement is text of at most 5000 characters")
+    out["questions"] = clean_questions(out["questions"])
+    return out
+
+
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).
 # Never sign-in, admins or email test mode: a mistake there locks people out or needs the server anyway.
 SITE_KEYS = {("club", k) for k in ("date_formats", "name", "callsign", "meeting_day", "meeting_time", "timezone",
                                     "invite_after_visits", "remind_days_before", "public_calendars", "supports_app", "pictures_per_day", "names", "ham")} | {
     ("meeting", "sections"), ("meeting", "quorum"), ("modules", "chow"), ("calendar", "holidays"), ("calendar", "extra_holidays"), ("calendar", "elections"),
     ("bylaws", "refs"), ("bylaws", "arrears_note"), ("treasurer", "certificate"), ("privacy", "never_record"),
-    ("", "offices"), ("", "roster_keepers"), ("webhooks", "url"), ("webhooks", "kinds")}  # "": a top-level club.yaml setting
+    ("", "offices"), ("", "roster_keepers"), ("webhooks", "url"), ("webhooks", "kinds")} | {("membership", k) for k in MEMBERSHIP_DEFAULTS}  # "": a top-level club.yaml setting
 
 
 # club.yaml settings renamed since 1.0.0: (section, old name) -> (section, new name). The old name keeps working
@@ -341,6 +393,7 @@ class Club:
     def _configure(self, cfg: dict) -> None:
         """The settings, from club.yaml with the Site page's on top. Raises ValueError for a wrong one."""
         self.info = cfg.get("club", {})
+        self.membership = _membership(cfg.get("membership"))
         for k, lo, hi in (("invite_after_visits", 1, 50), ("remind_days_before", 0, 60)):  # read later, so checked now
             v = self.info.get(k)
             if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi):
@@ -608,6 +661,11 @@ class Club:
                       "offices": [offs[o.lower()] for o in t.get("offices", self._default_offices(k)) if o.lower() in offs],
                       "members": [self.canonical(i) for i in picked or [] if self.canonical(i) in self.members],
                       "builtin": k in ROLES, "edited": bool(t)}
+        for p in PERMISSIONS:  # a permission newer than the saved table (no role has it): the built-ins that ship with it
+            if not any(p in r["perms"] for r in out.values()):
+                for k, (_n, perms) in ROLES.items():
+                    if p in perms:
+                        out[k]["perms"] = [q for q in PERMISSIONS if q in out[k]["perms"] or q == p]
         return out
 
     def save_roles(self, table: dict[str, dict]) -> None:

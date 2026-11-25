@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Application sent{% endblock %}{% block body %}
+<div class="login">
+<img src="{{ brand() }}" alt="" class="loginlogo {{ logo_class() }}">
+<h1>Thank you, {{ a.form.name }}</h1>
+<p>Your application is with the club. We've emailed you to say it arrived{{ ', and asked your sponsor to confirm' if a and a.sponsor and a.sponsor.id }}. The club will be in touch.</p>
+<p><a class="btn" href="/apply/{{ token }}/pdf" download>Download your application (PDF)</a><br><span class="muted small">For your records: this works for an hour.</span></p>
+<p class="muted">Your sponsor sees your name and callsign. The club's officers who handle applications get all your answers. Members see your name, callsign and sponsor in the meeting minutes while you are a candidate, and the result of the vote.</p>
+</div>
+{% endblock %}

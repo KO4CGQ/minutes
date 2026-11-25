@@ -22,3 +22,4 @@ py/reflective-xss	club_minutes/web.py	return HTMLResponse(str(richtext.render(te
 py/polynomial-redos	club_minutes/richtext.py	out = LINK.sub(link, out)	Runs on Markdown's own output, where typed < and > are escaped: every <a href is a link Markdown wrote and closed; text is 5,000 characters at most.
 py/path-injection	club_minutes/web.py	if not re.fullmatch(r"[0-9a-f]{16}", kid) or not (p := branding.kept_logo(kid)).exists():	The id must be exactly 16 hex characters before the path is built.
 py/path-injection	club_minutes/web.py	return FileResponse(p, media_type="image/png", headers={"Cache-Control": "public, max-age=31536000, immutable"})	The id must be exactly 16 hex characters before the path is built.
+py/stack-trace-exposure	club_minutes/web.py	return JSONResponse({"error": str(e)}, 422)	Only our own ValueError messages from applications.record_vote (whole numbers, not yet due, not up for a vote), written for the leader; other exceptions aren't caught there.

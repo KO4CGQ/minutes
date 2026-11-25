@@ -797,6 +797,62 @@ def test_site_enter_saves_and_leaving_unsaved_asks(tmp_path, monkeypatch, engine
 
 
 @pytest.mark.parametrize("engine", ENGINES)
+def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path, monkeypatch, engine):
+    """Site → Membership: + Add a question builds a row, Save keeps it; the guest's public form then shows it, with no script errors."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from club_minutes import applications, web
+    from club_minutes import club as clubmod
+    monkeypatch.setattr(clubmod, "DATA", tmp_path)
+    monkeypatch.setattr(applications, "DATA", tmp_path)
+    monkeypatch.setattr(applications.auth, "send_email", lambda *a, **k: 0)
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Amy", "last": "Appleseed", "email": "amy@example.org", "role": "President", "officer": True, "status": "Active"}])
+    club.save_app_admins({"n0admn"})
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    tok = a.new_session("n0admn")
+    a.set_admin(tok, 60)
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, tok)
+
+    def serve(route):
+        q = route.request
+        r = c.request(q.method, q.url.replace("http://testserver", ""), content=q.post_data_buffer,
+                      headers={"content-type": q.headers.get("content-type", "")}, follow_redirects=q.method == "POST")
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page()
+        page.route("http://testserver/**", serve)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda m: errors.append(m.text) if "Content Security Policy" in m.text else None)
+        page.goto("http://testserver/admin/site/membership")
+        page.click("text=+ Add a question")
+        page.fill("input[name=label0]", "Bands")
+        page.select_option("select[name=type0]", "grid")
+        page.fill("textarea[name=qrows0]", "20 m\n2 m")
+        page.fill("textarea[name=qcols0]", "Fixed\nMobile")
+        with page.expect_navigation():
+            page.click("main form.sitemembership button.btn >> text=Save")
+        assert club.membership["questions"] == [{"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Mobile"]}]
+        c.cookies.clear()  # the guest is nobody
+        applications.send(club, "Pat Visitor", "pat@example.org", "http://testserver")
+        with applications.edit() as items:
+            items[0]["token_hash"] = applications._hash("t" * 20)
+        page.goto("http://testserver/apply/" + "t" * 20)
+        assert page.locator("input[name=q0]").count() == 4 and page.is_visible("input[name=signature]")
+        assert not errors, errors
+        browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
 def test_submit_shows_only_once_the_minutes_are_on_screen(tmp_path, monkeypatch, engine):
     """console.js Review: no Submit while the preview loads, nor if it fails (never submitted sight unseen)."""
     sync_api = pytest.importorskip("playwright.sync_api")
@@ -837,3 +893,47 @@ def test_submit_shows_only_once_the_minutes_are_on_screen(tmp_path, monkeypatch,
         page.get_by_role("button", name=re.compile("Review")).click()
         sync_api.expect(page.get_by_role("button", name="Submit minutes")).to_have_count(2)
         browser.close()
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_the_console_records_a_candidates_vote(tmp_path, monkeypatch, engine):
+    """console.js Membership Applications: the candidate is listed, the paper ballot's count is recorded and its result shown."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from fastapi.testclient import TestClient
+
+    from club_minutes import applications, console, web
+    monkeypatch.setattr(applications, "DATA", tmp_path)
+    club = Club(FIX / "test-club.yaml", roster=[{"id": "n0admn", "first": "Jane", "last": "Doe", "email": "jane@example.org", "role": "President", "officer": True, "status": "Active"}])
+    a = Auth(club, tmp_path / "auth.sqlite")
+    monkeypatch.setattr(web, "authn", a)
+    monkeypatch.setattr(web.archive, "club", club)
+    with applications.edit() as items:
+        items.append({"id": "a1", "guest": "Pat Visitor", "state": "candidate", "form": {"name": "Pat Visitor"}, "sponsor": {"id": "n0admn", "at": 1}, "club": {}})
+    m = console.start(web.archive, dt.date(2026, 11, 12), "n0admn", recorder="n0admn")
+    c = TestClient(web.app)
+    c.cookies.set(web.COOKIE, a.new_session("n0admn"))
+
+    def serve(route):
+        r = c.request(route.request.method, route.request.url.replace("http://testserver", ""), data=route.request.post_data_buffer,
+                      headers={k: v for k, v in route.request.headers.items() if k.lower() == "content-type"}, follow_redirects=False)
+        route.fulfill(status=r.status_code, headers=dict(r.headers), body=r.content)
+
+    with sync_api.sync_playwright() as p:
+        try:
+            browser = getattr(p, engine).launch()
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"no {engine} for Playwright: {e}")
+        page = browser.new_page(viewport={"width": 375, "height": 800})
+        page.route("http://testserver/**", serve)
+        page.goto(f"http://testserver/console/{m.slug}")
+        page.get_by_role("button", name=re.compile("Membership Applications")).click()
+        sync_api.expect(page.get_by_role("heading", name="Pat Visitor")).to_be_visible()
+        page.get_by_label("Yes").fill("12")
+        page.get_by_label("No", exact=True).fill("0")
+        page.get_by_role("button", name="Record the vote").click()
+        sync_api.expect(page.get_by_text("12–0: passed")).to_be_visible()
+        shots = Path.home() / "project-notes/w8lbz/test-shots/2026-11-24-onboarding"
+        shots.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(shots / f"console-vote-{engine}.png"))
+        browser.close()
+    assert [i.text for i in web.archive.by_slug[m.slug].items("Membership Applications")] == ["Pat Visitor's application was voted on: passed (12–0)."]

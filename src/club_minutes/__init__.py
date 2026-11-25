@@ -196,6 +196,12 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001
                 print(f"couldn't drop the settings of members who left: {e}")
             try:
+                from . import applications
+                if n := applications.purge(club):
+                    print(f"deleted or trimmed {n} old membership application(s)")
+            except Exception as e:  # noqa: BLE001
+                print(f"couldn't purge old membership applications: {e}")
+            try:
                 from . import pictures
                 from .store import Archive
                 if n := pictures.prune_unused(Archive(club=club)):

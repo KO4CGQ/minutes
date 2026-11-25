@@ -28,7 +28,7 @@ CODE_BLOCK = re.compile(r"^([ \t]*)```[^`\n]*\n(.*?)^\1```[ \t]*$", re.MULTILINE
 CODE = re.compile(r"`([^`\n]+)`")
 QUOTE = re.compile(r"^[ \t]*(?:&gt;[ \t]?)+", re.MULTILINE)  # "> " after escaping (the one < or > Markdown may read); indented: in a list item
 TITLED_QR = re.compile(r"(\[[^\[\]\n]+\]\(https?://[^\s()]+)\)[ \t]*\[QR\]", re.IGNORECASE)
-NOT_LINK = re.compile(r"\[(?![^\[\]\n]*\]\([^\n]*\))")  # a "[" no link starts at: "[text](…)" on one line, no other bracket
+NOT_LINK = re.compile(r"(?<!\\)\[(?![^\[\]\n]*\]\([^\n]*\))")  # a "[" no link starts at: "[text](…)" on one line, no other bracket
 QUOTE_MARK = re.compile(r"^(?:[ \t]*>[ \t]?)*")
 
 
@@ -71,6 +71,13 @@ def _lists_apart(text: str) -> str:
             out.append("")  # a line without "> " ends the quote (Markdown would carry it on inside)
         out.append(line)
     return "\n".join(out)
+
+
+def escape(text: str) -> str:
+    """Text someone else typed, escaped so it shows as typed inside a line of minutes (no marks, links, mentions or list
+    starts). shortcut: a bare web address still becomes a plain link, as anywhere else."""
+    t = re.sub(r"([\\*_\[\]()])", r"\\\1", text.replace("`", "'").lstrip(">"))
+    return re.sub(r"^(\d+)\.", r"\1\\.", re.sub(r"^([-+])", r"\\\1", t))
 
 
 def mentions(text: str) -> set[str]:

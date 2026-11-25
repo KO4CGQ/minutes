@@ -13,7 +13,7 @@ import shutil
 import threading
 import time
 
-from . import auth, business, chow, meetings, pictures, plugins, prefs, snapshot
+from . import applications, auth, business, chow, meetings, pictures, plugins, prefs, snapshot
 from .club import show_date
 from .meeting import Item, Meeting, item_text, one_line
 from .store import Archive
@@ -81,7 +81,10 @@ def start(archive: Archive, date: dt.date, leader: str | None, recorder: str | N
             if m.status != "draft":
                 raise ValueError(f"{show_date(date, 'long')}'s minutes are already in the archive. To fix something, "
                                  "use Correct these minutes on that page.")
-            return m
+            sync_applications(archive, m)  # a guest may have become a candidate since the minutes were started
+            m.save(archive.root)
+            archive.reload()
+            return archive.by_slug[m.slug]
         if (archive.root / date.isoformat() / "minutes.md").exists():  # on disk but not loaded: unreadable
             raise ValueError(f"{show_date(date, 'long')}'s minutes exist but can't be read, so a new draft would replace them. "
                              "Ask an admin to look at the file (see the server log).")
@@ -111,9 +114,39 @@ def _start(archive: Archive, date: dt.date, leader: str | None, recorder: str | 
     if archive.club.has("chow"):
         later = [(d, x) for d, x in chow.upcoming(chow.load(), date + dt.timedelta(days=1), n=4)]
         m.sections["Upcoming Chow"] = [Item(chow.describe(archive.club, d, x)) for d, x in later]
+    sync_applications(archive, m)
     m.save(archive.root)
     archive.reload()
     return archive.by_slug[m.slug]
+
+
+def _applications(archive: Archive) -> list[dict]:
+    try:
+        return applications.load()["items"]
+    except ValueError:  # damaged (logged by load): the meeting goes on without the candidates
+        return []
+
+
+def sync_applications(archive: Archive, m: Meeting) -> None:
+    """The minutes' Membership Applications section: the candidates, and any vote recorded at this meeting."""
+    lines = applications.section_lines(archive.club, _applications(archive), m.slug, [x.date for x in archive.meetings])
+    m.sections.pop(applications.SECTION, None)
+    if lines:
+        m.sections[applications.SECTION] = [Item(t) for t in lines]
+
+
+def applicants(archive: Archive, slug: str) -> dict:
+    return applications.console_view(archive.club, _applications(archive), slug, [x.date for x in archive.meetings])
+
+
+def vote(archive: Archive, slug: str, aid: str, yes, no) -> None:
+    """Record the paper ballot's count (or the acceptance) for a candidate at this meeting; ValueError says why not."""
+    m = archive.by_slug[slug]
+    _draft(m)
+    applications.record_vote(archive.club, aid, slug, [x.date for x in archive.meetings], yes, no)
+    sync_applications(archive, m)
+    m.save(archive.root)
+    archive.reload()
 
 
 def business_state(archive: Archive) -> dict:
@@ -210,6 +243,7 @@ def context(archive: Archive, m: Meeting) -> dict:
         "email": {"roster": len(recipients(archive)), "only_to": club.email.get("only_to")},
         "chow": chow_tonight(archive, m) if club.has("chow") else None,
         "business": business_items(archive, m.slug),
+        "applicants": applicants(archive, m.slug),
         "celebrations": celebrations(club, m.date),
         "paid_since": paid_since(archive, m.date),
         "video_guests": plugins.console_attendance(club),
@@ -402,6 +436,7 @@ def _apply(archive: Archive, slug: str, data: dict) -> Meeting:
     m.guests = [g for g in guests if not club.is_redacted(g["name"])]
     m.sections = sections
     m.sections.update(business_sections(archive, slug))  # tracked: never from the browser
+    sync_applications(archive, m)
     m.save(archive.root)
     state_path(archive, slug).write_text(json.dumps(data.get("state") or {}))
     archive.reload()
@@ -423,9 +458,11 @@ def submit(archive: Archive, slug: str, by: str | None = None) -> Meeting:
     if archive.club.has("chow"):
         m.sections["Upcoming Chow"] = [Item(t) for t in chow.minutes_section(archive.club, chow.load(), chow.history(), slug)]
     m.sections.update(business_sections(archive, slug))
+    sync_applications(archive, m)
     m.status = "published"
     m.shown = snapshot.take(archive.club, m)  # the minutes keep what they show from today (snapshot.py)
     m.save(archive.root)
+    applications.settle(slug)  # a vote recorded here: passed, or turned down
     _holds.pop(slug, None)  # finished: nobody holds them now
     if by:
         closed_by[slug] = by

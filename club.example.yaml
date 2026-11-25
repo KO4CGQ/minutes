@@ -9,7 +9,7 @@ club:
   # app_name: Example Club Minutes   # the app's name in pages and emails; default "<callsign> Minutes", or "<name> Minutes" without a callsign (Admin → Site sets it too)
   meeting_day: Thursday     # optional, with meeting_time: used once, on a new install, to put the weekly meeting on the calendar;
   meeting_time: "19:30"     # 24-hour. Ignored after; meeting nights are then set on the calendar (the "Start meeting" button pulses from 30 minutes before)
-  invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit
+  invite_after_visits: 3   # remind the leader to invite a guest to apply on their Nth visit, and let them be emailed the application (Admin → Site → Membership sets it too)
   timezone: America/New_York  # for the club calendars; left out: the server's own
   public_calendars: []     # e.g. [events, community]: shown to anyone at /calendar/public and /calendar/public.ics
   supports_app: false      # true: the club gives toward Club Minutes; the menu's Support link goes away for everyone
@@ -23,6 +23,19 @@ club:
     short: "%b %-d"       # without the year, e.g. Nov 5 (calendar, emails); the weekday is added where shown: Thu Nov 5
     long: "%B %-d"        # e.g. November 5; with the weekday: Thursday, November 5
     # Day first:  list: "%-d %b %Y"  document: "%-d %B %Y"  short: "%-d %b"  long: "%-d %B"
+
+# Membership applications (Admin → Site → Membership sets all of these too; each default is shown).
+# membership:
+#   link_days: 30          # days the emailed application link works
+#   listed_days: 0         # days a candidate is listed in the minutes before the vote (0: the vote is at the next meeting)
+#   vote: true             # members vote on a candidate; false: the officers accept the application
+#   vote_passes: unanimous # unanimous, two_thirds or majority
+#   reapply_months: 24     # months before someone turned down may apply again
+#   keep_days: 90          # days an application that didn't lead to membership is kept, then deleted
+#   statement: "By signing, you agree to follow the club's bylaws."   # shown above the signature; may be empty
+#   questions:             # the club's own, in order; type: yesno, several (options), short, long or grid (rows and cols)
+#     - {label: "Have you been to a meeting before?", type: yesno}
+#     - {label: "Which bands do you use?", type: grid, rows: [20 m, 2 m], cols: [Fixed, Portable, Mobile]}
 
 auth:
   rp_id: minutes.example-tailnet.ts.net   # passkeys only work on this exact HTTPS hostname

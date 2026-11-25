@@ -29,7 +29,7 @@ log = logging.getLogger("club_minutes.callsign")
 # Current-state files that hold member ids (as values, or as keys): renamed. *.jsonl logs are history: left alone.
 STATE_FILES = ("chow.json", "business.json", "events.json", "calendar-feeds.json", "ask-about.json", "email-prefs.json",
                "settings.json", "treasurer.json", "admins.json", "roles.json", "admins-suspended.json", "recovery.json",
-               "removed.json", "purge-hold.json")
+               "removed.json", "purge-hold.json", "applications.json")
 AUTH_COLUMNS = {"sessions": ("member", "view_as"), "links": ("member",), "passkeys": ("member",), "challenges": ("member",),
                 "email_changes": ("member", "by"), "signins": ("member",), "events": ("member",),
                 "known_browsers": ("member",)}

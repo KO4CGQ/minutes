@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Membership application</title>
+<style>
+@page { size: Letter; margin: 0.8in; }
+body { font: 11pt/1.4 sans-serif; color: #111; }
+header { display: flex; align-items: center; gap: 14pt; border-bottom: 2pt solid #333; padding-bottom: 8pt; }
+header img { height: 48pt; }
+h1 { font-size: 17pt; margin: 0; } h2 { font-size: 12pt; margin: 16pt 0 4pt; border-bottom: 0.5pt solid #999; }
+.club { font-size: 11pt; color: #444; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; vertical-align: top; padding: 2pt 6pt 2pt 0; }
+th { width: 32%; font-weight: 600; }
+table.grid th, table.grid td { border: 0.5pt solid #999; padding: 2pt 5pt; text-align: center; width: auto; }
+table.grid th:first-child { text-align: left; }
+.q { margin: 6pt 0 0; font-weight: 600; } .a { margin: 0; white-space: pre-wrap; }
+.statement { white-space: pre-wrap; } .blank { border-bottom: 0.5pt solid #666; height: 13pt; }
+</style></head>
+<body>
+<header><img src="{{ brand("logo", True) }}" alt="">
+<div><div class="club">{{ club.info.get('name') or club.label }}</div><h1>Membership application</h1></div></header>
+
+<h2>Applicant</h2>
+<table>
+{% for label, value in (("Name", a.form.name), ("Callsign", a.form.callsign if club.ham), ("First licensed", a.form.first_licensed if club.ham),
+  ("License class", a.form.license_class if club.ham), ("License expires", a.form.expires if club.ham), ("Address", a.form.street ~ "\n" ~ a.form.city ~ ", " ~ a.form.state ~ " " ~ a.form.zip),
+  ("Phone", a.form.phone), ("Email", a.form.email), ("Occupation", a.form.occupation)) if value %}
+<tr><th>{{ label }}</th><td style="white-space: pre-wrap">{{ value }}</td></tr>{% endfor %}
+</table>
+
+{% if a.answers %}<h2>Questions</h2>
+{% for q in a.answers %}<p class="q">{{ q.label }}</p>
+{% if q.type == 'grid' %}<table class="grid"><tr><th></th>{% for c in q.value.cols %}<th>{{ c }}</th>{% endfor %}</tr>
+{% for row, ticked in q.value.rows.items() %}<tr><th>{{ row }}</th>{% for c in q.value.cols %}<td>{{ 'X' if c in ticked else '' }}</td>{% endfor %}</tr>{% endfor %}</table>
+{% elif q.type == 'several' %}<p class="a">{{ q.value|join(', ') or 'None' }}</p>
+{% else %}<p class="a">{{ q.value or '(no answer)' }}</p>{% endif %}{% endfor %}{% endif %}
+
+{% if a.statement %}<h2>Statement</h2><p class="statement">{{ a.statement }}</p>{% endif %}
+<p><b>Signed electronically by {{ a.signed.name }} on {{ when(a.signed.at) }}.</b></p>
+
+<h2>Sponsor</h2>
+<p>{% if a.sponsor.id %}{{ sponsor }}{% else %}No sponsor named{% endif %}{% if a.sponsor.get('typed') %} (typed by the applicant: {{ a.sponsor.typed }}){% endif %}{% if a.sponsor.id %}: {% if a.sponsor.answer == 'yes' %}confirmed on {{ when(a.sponsor.at) }}{% elif a.sponsor.answer == 'no' %}declined on {{ when(a.sponsor.at) }}{% else %}hasn't answered yet{% endif %}{% endif %}.</p>
+
+<h2>For the club</h2>
+<table>
+<tr><th>Date voted on</th><td><div class="blank">{{ a.club.voted }}</div></td></tr>
+<tr><th>Initiation date</th><td><div class="blank">{{ a.club.initiated }}</div></td></tr>
+<tr><th>Initiation fee paid</th><td><div class="blank">{{ fees[0] }}</div></td></tr>
+<tr><th>{{ club.certificate.name if club.certificate else 'Bond or certificate' }} paid</th><td><div class="blank">{{ fees[1] }}</div></td></tr>
+</table>
+</body></html>
