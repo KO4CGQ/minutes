@@ -16,6 +16,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader, PrefixLoader
 from starlette.routing import compile_path
 
 from . import club as clubmod
+from .meeting import one_line
 
 PLUGIN_API = 1
 GROUP = "club_minutes.plugins"
@@ -98,6 +99,25 @@ class Api:
         """The address members reach the app at (https://host), for links a page shows."""
         from .web import base_url
         return base_url(request)
+
+    def meeting(self) -> dict | None:
+        """The meeting open in the leader console now: {"date": "YYYY-MM-DD", "opened": unix seconds the console opened
+        it, "online": that night's Online link on the calendar ('' if none), "present": ids in its attendance}; else None."""
+        from . import console
+        from .web import archive
+        return console.open_meeting(archive)
+
+    def mark_present(self, id: str, in_person: bool = False) -> bool:
+        """Mark that member present (online, or in person) in the open console meeting unless they're in its
+        attendance already. True if it did. Everyone's view of the meeting picks it up like any attendance change."""
+        from . import console
+        from .web import archive
+        return console.mark_present(archive, id, f"plugin:{self._p.name}", in_person)
+
+    def client_ip(self, request) -> str | None:
+        """The visitor's real address (through the app's proxy, as sign-in bans see it)."""
+        from .web import client_ip
+        return client_ip(request)
 
     def email(self, id: str) -> str | None:
         if not self._p.needs_email:
@@ -293,6 +313,20 @@ def calendar_links(club) -> list[tuple[str, str]]:
                 out += [(str(label), str(url)) for label, url in p.mod.calendar_links(p.api)]
             except Exception:
                 log.exception("plugin %s: calendar_links failed", p.name)
+    return out
+
+
+def console_attendance(club) -> list[str]:
+    """The names plugins see in a video meeting right now who aren't members, for the console's Attendance. Each
+    plugin's `console_attendance(api)` also runs whenever the console renders or refreshes attendance and just before
+    the minutes are submitted, so it can mark members from what it knows (api.mark_present)."""
+    out = []
+    for p in LOADED.values():
+        if club.plugin_on(p.name) and hasattr(p.mod, "console_attendance"):
+            try:
+                out += [one_line(str(n)) for n in p.mod.console_attendance(p.api)]
+            except Exception:
+                log.exception("plugin %s: console_attendance failed", p.name)
     return out
 
 

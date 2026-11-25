@@ -1,5 +1,6 @@
 """Plugins (plugins.py, experimental API 1): off until an admin ticks one, sign-in and admin mode enforced by the
 app, one broken or wrong-API plugin never stops the rest."""
+import time
 import types
 from pathlib import Path
 
@@ -194,3 +195,30 @@ def test_a_plugin_with_a_settings_page_gets_a_site_tab_while_on(env):
     page = admin.get("/admin/site/club").text
     assert '<a href="/hello/admin" class="">Hello board</a>' in page and 'href="/admin/site/club" class="on" aria-current="page"' in page
     assert 'href="/admin/site/look" class="on"' in admin.get("/admin/site").text  # the bare address is Look
+
+
+def test_a_plugin_sees_the_open_meeting_marks_members_online_and_lists_guests(env, tmp_path, monkeypatch):
+    import datetime as dt
+
+    from club_minutes import console, events
+    club, *_ = env
+    club.save_site_settings({("plugins", "hello"): True})
+    from club_minutes.store import Archive
+    (tmp_path / "minutes").mkdir()
+    arch = Archive(tmp_path / "minutes", club)  # its own: no draft left open by another test
+    monkeypatch.setattr(web, "archive", arch)
+    api = plugins.LOADED["hello"].api
+    assert api.meeting() is None and api.mark_present("m1") is False  # no console open
+    events.save([{"id": "w", "cal": "events", "title": "Meeting", "online": "https://example.org/meet/club", "meeting": True,
+                  "start": "2026-11-10T19:00", "repeat": {"freq": "weekly"}}])
+    console.start(arch, dt.date(2026, 11, 10), "m2")
+    m = api.meeting()
+    assert m["date"] == "2026-11-10" and m["online"] == "https://example.org/meet/club" and abs(m["opened"] - time.time()) < 5
+    assert api.mark_present("m1") is True and api.mark_present("m1") is False and api.mark_present("nobody") is False
+    assert api.mark_present("n0admn", in_person=True) is True and arch.by_slug["2026-11-10"].in_person == ["n0admn"]
+    assert arch.by_slug["2026-11-10"].remote == ["m1"] and api.meeting()["present"] == ["n0admn", "m1"]
+    api.storage.save({"mark": "m2"})  # the hook marks while the console renders, refreshes and submits
+    assert console.attendance(arch, "2026-11-10") == {"in_person": ["n0admn"], "remote": ["m1", "m2"], "video_guests": ["Pat Guest"]}
+    assert console.context(arch, arch.by_slug["2026-11-10"])["video_guests"] == ["Pat Guest"]
+    club.save_site_settings({("plugins", "hello"): False})
+    assert console.attendance(arch, "2026-11-10")["video_guests"] == []  # off: not asked

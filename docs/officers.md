@@ -58,6 +58,7 @@ What a member may do comes from their **roles**. A role is given by the offices 
 
 ## 🎙️ At the meeting
 Whoever starts the meeting in the console is marked present: in person when they're on the meeting place's network, online otherwise. Tap their name in Attendance to change it.
+With the video meetings plugin on, members who are in the meeting's video room (the weekly meeting's Online link) for a few minutes while the console is open are marked online by themselves; untick one and they stay unticked. Guests in the video are listed in Attendance with **+ Add as guest**.
 
 If the club has a quorum rule (an admin sets it on Site → Agenda), the console's Attendance step shows whether there is a quorum as you mark people present. Only Active members count, never guests. Without a quorum, the step where you add a motion warns you not to bring motions up yet; once enough members are present, it shows how many votes a motion needs to pass (a majority of the members present). The minutes and their PDF record the result under Attendance; minutes from before the rule, or from a club without one, show nothing.
 
