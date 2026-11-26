@@ -2,32 +2,34 @@
 {% macro got(k) %}{{ form.get(k) or '' }}{% endmacro %}
 <div class="login apply">
 <img src="{{ brand() }}" alt="" class="loginlogo {{ logo_class() }}">
-{% if not a %}
+{% if preview %}<p class="msg warn" role="status">Preview: the form as a guest sees it, with the settings as typed. Nothing is saved or sent.</p>{% endif %}
+{% if preview and not a %}
+<h1>Preview</h1>
+<p class="msg err" role="alert">{{ error }}</p>
+{% elif not a %}
 <h1>This link doesn't work</h1>
 <p>It has expired, was already used, or was mistyped. Ask the club to send you a new one.</p>
 {% else %}
 <h1>Apply to join {{ club.info.get('name') or club.label }}</h1>
-<div class="muted">
-<p><b>Who sees what.</b> Your sponsor sees your name and callsign. The club's officers who handle applications see all your answers in the app (nothing is sent by email). Members see your name, callsign and sponsor in the meeting minutes while you are a candidate, and the result of the vote, which stays in the minutes.</p>
-<p><b>How long it's kept.</b> If you don't join, your application is deleted {{ club.membership['keep_days'] }} days after the link expires or the vote. If the club turns you down, your name and email are kept {{ club.membership['reapply_months'] }} months so you can't be invited again too soon. Once you are a member, the roster holds your details and the application is deleted {{ club.membership['keep_days'] }} days later.</p>
-</div>
+{% if welcome %}<div>{{ welcome }}</div>{% else %}<p>Thank you for your interest in joining {{ club.info.get('name') or club.label }}. Please fill in the form below; the club will be in touch.</p>{% endif %}
 {% if error %}<p class="msg err" role="alert">{{ error }}</p>{% endif %}
 <form method="post" action="/apply/{{ token }}" class="profile">
   <input type="hidden" name="qh" value="{{ qh }}">
   <label>Full name <input name="name" value="{{ got('name') }}" required maxlength="100" autocomplete="name"></label>
+  {% macro req(k) %}{{ ' required' if fields[k] == 'required' }}{% endmacro %}
   {% if club.ham %}
-  <label>Callsign <input name="callsign" value="{{ got('callsign') }}" maxlength="7" autocapitalize="characters" spellcheck="false"><span class="hint">Leave empty if you aren't licensed yet.</span></label>
-  <label>First licensed (year) <input name="first_licensed" value="{{ got('first_licensed') }}" inputmode="numeric" maxlength="4" size="6"></label>
-  <label>License class <select name="license_class"><option value="">(choose)</option>{% for c in classes %}<option{{ ' selected' if form.get('license_class') == c }}>{{ c }}</option>{% endfor %}</select></label>
-  <label>License expires <input name="expires" type="date" value="{{ got('expires') }}"></label>
+  {% if fields.callsign != 'hidden' %}<label>Callsign <input name="callsign" value="{{ got('callsign') }}"{{ req('callsign') }} maxlength="7" autocapitalize="characters" spellcheck="false">{% if fields.callsign != 'required' %}<span class="hint">Leave empty if you aren't licensed yet.</span>{% endif %}</label>{% endif %}
+  {% if fields.first_licensed != 'hidden' %}<label>First licensed (year) <input name="first_licensed" value="{{ got('first_licensed') }}"{{ req('first_licensed') }} inputmode="numeric" maxlength="4" size="6"></label>{% endif %}
+  {% if fields.license_class != 'hidden' %}<label>License class <select name="license_class"{{ req('license_class') }}><option value="">(choose)</option>{% for c in classes %}<option{{ ' selected' if form.get('license_class') == c }}>{{ c }}</option>{% endfor %}</select></label>{% endif %}
+  {% if fields.expires != 'hidden' %}<label>License expires <input name="expires" type="date" value="{{ got('expires') }}"{{ req('expires') }}></label>{% endif %}
   {% endif %}
-  <label>Street address <input name="street" value="{{ got('street') }}" required maxlength="100" autocomplete="street-address"></label>
-  <label>City <input name="city" value="{{ got('city') }}" required maxlength="60" autocomplete="address-level2"></label>
-  <label>State <input name="state" value="{{ got('state') }}" required maxlength="40" size="6" autocomplete="address-level1"></label>
-  <label>ZIP code <input name="zip" value="{{ got('zip') }}" required maxlength="12" size="10" autocomplete="postal-code"></label>
-  <label>Phone <input name="phone" type="tel" value="{{ got('phone') }}" maxlength="30" autocomplete="tel"></label>
+  {% if fields.street != 'hidden' %}<label>Street address <input name="street" value="{{ got('street') }}"{{ req('street') }} maxlength="100" autocomplete="street-address"></label>{% endif %}
+  {% if fields.city != 'hidden' %}<label>City <input name="city" value="{{ got('city') }}"{{ req('city') }} maxlength="60" autocomplete="address-level2"></label>{% endif %}
+  {% if fields.state != 'hidden' %}<label>State <input name="state" value="{{ got('state') }}"{{ req('state') }} maxlength="40" size="6" autocomplete="address-level1"></label>{% endif %}
+  {% if fields.zip != 'hidden' %}<label>ZIP code <input name="zip" value="{{ got('zip') }}"{{ req('zip') }} maxlength="12" size="10" autocomplete="postal-code"></label>{% endif %}
+  {% if fields.phone != 'hidden' %}<label>Phone <input name="phone" type="tel" value="{{ got('phone') }}"{{ req('phone') }} maxlength="30" autocomplete="tel"></label>{% endif %}
   <label>Email <input name="email" type="email" value="{{ got('email') }}" required maxlength="254" autocomplete="email"></label>
-  <label>Occupation <input name="occupation" value="{{ got('occupation') }}" maxlength="100"></label>
+  {% if fields.occupation != 'hidden' %}<label>Occupation <input name="occupation" value="{{ got('occupation') }}"{{ req('occupation') }} maxlength="100"></label>{% endif %}
 
   {% for q in questions %}{% set i = loop.index0 %}{% set have = form.getlist('q' ~ i) if form.getlist is defined else [] %}
   {% if q.type == 'yesno' %}<fieldset><legend>{{ q.label }}</legend>
@@ -45,10 +47,10 @@
   <label>Your sponsor (optional) <input name="sponsor" value="{{ got('sponsor') }}" maxlength="100" autocomplete="off">
     <span class="hint">Type the name{% if club.ham %} or callsign{% endif %} of a member who knows you; they get an email asking them to confirm. If you don't know a member yet, leave it empty: the club will find you a sponsor.</span></label>
 
-  {% if statement %}<h2>The club's statement</h2><p style="white-space: pre-wrap">{{ statement }}</p>{% endif %}
+  {% if statement %}<h2>The club's statement</h2><div>{{ statement }}</div>{% if has_bylaws %}<p><a href="{{ '/bylaws' if preview else '/apply/' ~ token ~ '/bylaws' }}" target="_blank" rel="noopener">Read the club's bylaws</a></p>{% endif %}{% endif %}
   <label class="check"><input type="checkbox" name="accept" value="1" required{{ ' checked' if form.get('accept') }}> <span>I accept these conditions, and understand my name will be listed in the club's minutes.</span></label>
   <label>Type your full name to sign <input name="signature" value="{{ got('signature') }}" required maxlength="100" autocomplete="off"></label>
-  <p><button class="btn big">Send my application</button></p>
+  <p><button class="btn big"{{ ' disabled' if preview }}>Send my application</button></p>
 </form>
 {% endif %}
 </div>

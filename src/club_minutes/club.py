@@ -254,8 +254,19 @@ def _quorum(raw) -> dict | None:
 # long a refusal lasts, what's kept. `club: invite_after_visits` is the tab's other setting. Questions: [{label, type: yesno|several|short|long|grid, options | rows + cols}].
 DEFAULT_STATEMENT = ("By signing, you confirm that what you've written here is true, that you've read the club's bylaws "
                      "and agree to follow them, and that you'll pay the club's dues and fees if you become a member.")
+FIELD_DEFAULTS = {"callsign": "optional", "first_licensed": "optional", "license_class": "optional", "expires": "optional",
+                  "street": "required", "city": "required", "state": "required", "zip": "required", "phone": "optional", "occupation": "optional"}
+DEFAULT_INVITE = ("Hello {guest},\n\nThank you for visiting {club}. Here is your membership application:\n\n{link}\n\n"
+                  "It's yours alone, so please don't share it. It works for {days} and until you send it in.")
+INVITE_WORDS = {"guest": "the guest's name", "first_name": "the guest's first name", "club": "the club's name",
+                "short": "the club's callsign (or its name, for a club without one)", "link": "their application link (required)",
+                "days": "how long the link works, e.g. 30 days", "until": "the last day it works, e.g. December 5, 2026",
+                "next_meeting": "the next club meeting, e.g. Thursday, December 3 at 7:30 PM (empty if none)",
+                "visits": "how many times they have visited", "bylaws": "a link to the club's bylaws, which they can read without signing in"}
 MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
-                       "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": []}
+                       "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": [], "welcome": "", "fields": FIELD_DEFAULTS,
+                       "invite": DEFAULT_INVITE}
+FIELD_MODES = {"required": "Required", "optional": "Optional", "hidden": "Not asked"}  # name, email and the signature are always required
 VOTE_PASSES = {"unanimous": "Unanimous", "two_thirds": "Two thirds", "majority": "A majority"}
 QUESTION_TYPES = {"yesno": "Yes or no", "several": "Pick several", "short": "Short text", "long": "Long text", "grid": "Grid of ticks"}
 _MEMBERSHIP_RANGES = {"link_days": (1, 365), "listed_days": (0, 365), "reapply_months": (0, 120), "keep_days": (1, 3650)}
@@ -297,8 +308,25 @@ def _membership(raw) -> dict:
         raise ValueError("club.yaml membership: vote is true or false, vote_passes one of " + ", ".join(VOTE_PASSES))
     if not isinstance(out["statement"], str) or len(out["statement"]) > 5000:
         raise ValueError("club.yaml membership: statement is text of at most 5000 characters")
+    if not isinstance(out["welcome"], str) or len(out["welcome"]) > 5000:
+        raise ValueError("club.yaml membership: welcome is text of at most 5000 characters")
+    f = out["fields"]
+    if not isinstance(f, dict) or set(f) - set(FIELD_DEFAULTS) or set(f.values()) - set(FIELD_MODES):
+        raise ValueError("club.yaml membership: fields maps " + ", ".join(FIELD_DEFAULTS) + " to " + ", ".join(FIELD_MODES))
+    out["fields"] = {**FIELD_DEFAULTS, **f}
+    check_invite(out["invite"])
     out["questions"] = clean_questions(out["questions"])
     return out
+
+
+def check_invite(text) -> None:
+    """The invitation email's words: plain text with {link} in it, and no {word} the app doesn't fill in."""
+    if not isinstance(text, str) or len(text) > 5000:
+        raise ValueError("club.yaml membership: invite is text of at most 5000 characters")
+    if "{link}" not in text:
+        raise ValueError("The invitation email needs {link} in it, or the guest can't apply.")
+    if bad := [w for w in re.findall(r"\{([^{}]*)\}", text) if w not in INVITE_WORDS]:
+        raise ValueError("The invitation email can use only " + ", ".join("{" + w + "}" for w in INVITE_WORDS) + f"; not {{{bad[0]}}}.")
 
 
 # Settings an admin may change on Admin → Site (saved in site-settings.json, over club.yaml's): (section, key).

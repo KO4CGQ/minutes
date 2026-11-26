@@ -1,9 +1,11 @@
 """Membership applications: the emailed link, the form, the sponsor, who may send, see and download, the purge, the settings."""
+import io
 import json
 import re
 import time
 from pathlib import Path
 
+import pypdf
 import pytest
 from fastapi.testclient import TestClient
 
@@ -124,6 +126,22 @@ def test_the_form_is_checked_and_each_kind_of_question_is_stored(env):
     assert pdf.application(club, a).startswith(b"%PDF")
 
 
+def test_fields_hidden_are_ignored_required_are_enforced_and_bad_settings_refused(env):
+    club, _, _, _ = env
+    club.membership["fields"] = {**clubmod.FIELD_DEFAULTS, "callsign": "required", "phone": "hidden", "street": "hidden"}
+    from starlette.datastructures import FormData
+
+    def form(**over):  # a list value is several fields of the same name, as a browser sends
+        return FormData([(k, x) for k, v in good(club, "t", **over).items() for x in (v if isinstance(v, list) else [v])])
+    with pytest.raises(ValueError, match="Callsign is needed"):
+        applications.check(club, form(callsign=""))
+    f, _, _ = applications.check(club, form())
+    assert f["phone"] == "" and f["street"] == "" and f["callsign"] == "N0CALL" and f["city"] == "Anytown"
+    for bad in ({"phone": "maybe"}, {"fax": "hidden"}):
+        with pytest.raises(ValueError, match="fields maps"):
+            clubmod._membership({"fields": bad})
+
+
 def test_only_the_right_people_send_see_and_download(env):
     club, as_, sent, _ = env
     assert as_("n0cccc").post("/guests/apply", data={"guest": "Pat Visitor", "email": "p@example.org"}).status_code == 403
@@ -204,7 +222,7 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     assert "Changed here" not in page and "Back to club.yaml" not in page and "By signing, you confirm" in page
     assert as_("n0cccc").get("/admin/site/membership").status_code == 404
     form = {"rows": "2", "invite_after_visits": "3", "link_days": "30", "listed_days": "0", "vote": "1", "vote_passes": "unanimous",
-            "reapply_months": "24", "keep_days": "90", "statement": club.membership["statement"],
+            "reapply_months": "24", "keep_days": "90", "statement": club.membership["statement"], "invite": club.membership["invite"],
             "label0": "Bands", "type0": "grid", "qrows0": "20 m\n2 m", "qcols0": "Fixed\nMobile", "place0": "2",
             "label1": "Licensed?", "type1": "yesno", "place1": "1"}
     assert "Saved" in admin.post("/admin/site/membership", data=form).text and club.site_settings["membership"] == {
@@ -216,8 +234,23 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     assert club.membership["vote_passes"] == "two_thirds" and club.membership["statement"] == "" and [q["label"] for q in club.membership["questions"]] == ["Bands"]
     before = club.site_settings
     for bad, why in ((form | {"link_days": "0"}, "from 1 to 365"), (form | {"vote_passes": "coin"}, "pick one"),
-                     (form | {"type0": "grid", "qcols0": ""}, "give cols")):
+                     (form | {"type0": "grid", "qcols0": ""}, "give cols"),
+                     (form | {"invite": "Hello {guest}"}, "needs {link}"), (form | {"invite": "{link} {name}"}, "not {name}")):
         assert why in admin.post("/admin/site/membership", data=bad).text and club.site_settings == before, why
+    preview = admin.post("/admin/site/membership/preview", data=form | {"label2": "Favorite band?", "type2": "short", "rows": "3", "welcome": "**Hi** there"})
+    assert "Favorite band?" in preview.text and "<strong>Hi</strong>" in preview.text and "Preview:" in preview.text and " disabled>Send my application" in preview.text
+    assert club.site_settings == before  # nothing saved
+    assert "from 1 to 365" in admin.post("/admin/site/membership/preview", data=form | {"link_days": "0"}).text
+    assert as_("n0cccc").post("/admin/site/membership/preview", data=form).status_code == 404
+    pdf = admin.post("/admin/site/membership/pdf", data=form | {"label2": "Favorite band?", "type2": "short", "rows": "3", "field_phone": "hidden"})
+    assert pdf.headers["content-type"] == "application/pdf" and pdf.content.startswith(b"%PDF") and club.site_settings == before
+    text = "".join(pg.extract_text() for pg in pypdf.PdfReader(io.BytesIO(pdf.content)).pages)
+    assert "Jane Doe" in text and "Favorite band?" in text and "555-0100" not in text  # phone not asked
+    assert as_("n0cccc").post("/admin/site/membership/pdf", data=form).status_code == 404
+    saved = admin.get("/admin/site/membership/preview")  # a reload or bookmark: the saved settings, not an error
+    assert saved.status_code == 200 and "Preview:" in saved.text and 'name="q0"' in saved.text
+    got = admin.get("/admin/site/membership/pdf")
+    assert got.headers["content-type"] == "application/pdf" and as_("n0cccc").get("/admin/site/membership/pdf").status_code == 404
     assert "Back to club.yaml" in admin.get("/admin/site/membership").text
     admin.post("/admin/site/membership", data={"back": "1"})
     assert club.site_settings == {} and club.membership == clubmod.MEMBERSHIP_DEFAULTS
@@ -294,3 +327,36 @@ def test_a_cross_site_request_for_a_made_up_link_isnt_counted_toward_a_ban(tmp_p
     assert seen == []
     anon.get("/apply/not-a-link")
     assert seen == ["bad_link"]
+
+
+def test_the_invitation_email_uses_the_clubs_words(env):
+    club, as_, sent, _ = env
+    _, token = send_link(as_, sent)
+    assert sent[-1]["body"].startswith("Hello Pat Visitor,") and "works for 30 days" in sent[-1]["body"]  # the default
+    club.save_site_settings({("membership", "invite"): "Hi {guest}! Join {club} here: {link} ({days}). {link}"})
+    _, token = send_link(as_, sent)
+    body = sent[-1]["body"]
+    assert body.startswith(f"Hi Pat Visitor! Join {applications.club_name(club)} here: ") and body.count(f"/apply/{token}") == 2
+    assert "(30 days)" in body and club.sign_off in body
+
+
+def test_more_words_in_the_email_and_the_bylaws_for_an_applicant(env):
+    club, as_, sent, tmp = env
+    club.save_site_settings({("membership", "invite"): "{first_name}|{short}|{visits}|{until}|{bylaws}|{next_meeting}|{link}"})
+    _, token = send_link(as_, sent)
+    first, short, visits, until, bylaws, nxt, link = sent[-1]["body"].split("\n")[0].split("|")
+    assert (first, short, visits) == ("Pat", club.label, "3") and bylaws == link + "/bylaws" and until[-4:].isdigit()
+    assert nxt == "" or " at " in nxt
+    anon = as_(None)
+    assert "hasn't put its bylaws here" in anon.get(f"/apply/{token}/bylaws").text
+    assert "Read the club" not in anon.get(f"/apply/{token}").text
+    (tmp / "bylaws.md").write_text("# Bylaws\n\nArticle one.")
+    r = anon.get(f"/apply/{token}/bylaws")
+    assert r.status_code == 200 and "Article one." in r.text and r.headers["cache-control"] == "no-store"
+    assert f"/apply/{token}/bylaws" in anon.get(f"/apply/{token}").text
+    assert anon.get("/apply/not-a-link/bylaws").status_code == 404
+    club.save_site_settings({("membership", "welcome"): "<script>alert(1)</script> **hi**"})
+    page = anon.get(f"/apply/{token}").text
+    assert "<script>alert(1)" not in page and "&lt;script&gt;" in page and "<strong>hi</strong>" in page
+    assert anon.post(f"/apply/{token}", data=good(club, token)).status_code == 200
+    assert anon.get(f"/apply/{token}/bylaws").status_code == 404  # used

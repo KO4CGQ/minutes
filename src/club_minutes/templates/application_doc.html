@@ -13,7 +13,7 @@ th { width: 32%; font-weight: 600; }
 table.grid th, table.grid td { border: 0.5pt solid #999; padding: 2pt 5pt; text-align: center; width: auto; }
 table.grid th:first-child { text-align: left; }
 .q { margin: 6pt 0 0; font-weight: 600; } .a { margin: 0; white-space: pre-wrap; }
-.statement { white-space: pre-wrap; } .blank { border-bottom: 0.5pt solid #666; height: 13pt; }
+.blank { border-bottom: 0.5pt solid #666; height: 13pt; }
 </style></head>
 <body>
 <header><img src="{{ brand("logo", True) }}" alt="">
@@ -22,7 +22,7 @@ table.grid th:first-child { text-align: left; }
 <h2>Applicant</h2>
 <table>
 {% for label, value in (("Name", a.form.name), ("Callsign", a.form.callsign if club.ham), ("First licensed", a.form.first_licensed if club.ham),
-  ("License class", a.form.license_class if club.ham), ("License expires", a.form.expires if club.ham), ("Address", a.form.street ~ "\n" ~ a.form.city ~ ", " ~ a.form.state ~ " " ~ a.form.zip),
+  ("License class", a.form.license_class if club.ham), ("License expires", a.form.expires if club.ham), ("Address", [a.form.street, [a.form.city, (a.form.state ~ " " ~ a.form.zip)|trim]|select|join(", ")]|select|join("\n")),
   ("Phone", a.form.phone), ("Email", a.form.email), ("Occupation", a.form.occupation)) if value %}
 <tr><th>{{ label }}</th><td style="white-space: pre-wrap">{{ value }}</td></tr>{% endfor %}
 </table>
@@ -34,7 +34,7 @@ table.grid th:first-child { text-align: left; }
 {% elif q.type == 'several' %}<p class="a">{{ q.value|join(', ') or 'None' }}</p>
 {% else %}<p class="a">{{ q.value or '(no answer)' }}</p>{% endif %}{% endfor %}{% endif %}
 
-{% if a.statement %}<h2>Statement</h2><p class="statement">{{ a.statement }}</p>{% endif %}
+{% if a.statement %}<h2>Statement</h2><div class="statement">{{ statement }}</div>{% endif %}
 <p><b>Signed electronically by {{ a.signed.name }} on {{ when(a.signed.at) }}.</b></p>
 
 <h2>Sponsor</h2>
