@@ -83,6 +83,7 @@ from .club import (
     CALLSIGN,
     DATA,
     DATES,
+    LISTED_BY,
     MEMBERSHIP_DEFAULTS,
     PERMISSIONS,
     PREVIEW,
@@ -3013,7 +3014,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
     return page(request, "site.html", tab=tab, error=error, note=note,
-                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
+                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, listed_by=LISTED_BY, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -3285,12 +3286,15 @@ async def site_membership(request: Request):
         else:
             v = {}
             for k, label, lo, hi in (("invite_after_visits", "Visits before a guest may apply", 1, 50), ("link_days", "Days the application link works", 1, 365),
-                                     ("listed_days", "Days a candidate is listed", 0, 365), ("reapply_months", "Months before applying again", 0, 120),
+                                     ("listed_days", "How long a candidate is listed", 0, 365), ("reapply_months", "Months before applying again", 0, 120),
                                      ("keep_days", "Days an application is kept", 1, 3650)):
                 n = num(form.get(k))
                 if n is None or not lo <= n <= hi:
                     raise ValueError(f"{label}: a whole number from {lo} to {hi}.")
                 v[k] = n
+            v["listed_by"] = form.get("listed_by") or ""
+            if v["listed_by"] not in LISTED_BY:
+                raise ValueError("How long a candidate is listed: days or meetings.")
             v["vote"] = bool(form.get("vote"))
             v["vote_passes"] = form.get("vote_passes") or ""
             if v["vote_passes"] not in VOTE_PASSES:

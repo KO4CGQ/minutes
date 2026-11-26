@@ -203,19 +203,19 @@ def test_membership_settings_defaults_save_and_back_to_club_yaml(env, monkeypatc
     assert 'name="link_days" min="1" max="365" value="30"' in page and 'name="invite_after_visits" min="1" max="50" value="3"' in page
     assert "Changed here" not in page and "Back to club.yaml" not in page and "By signing, you confirm" in page
     assert as_("n0cccc").get("/admin/site/membership").status_code == 404
-    form = {"rows": "2", "invite_after_visits": "3", "link_days": "30", "listed_days": "0", "vote": "1", "vote_passes": "unanimous",
+    form = {"rows": "2", "invite_after_visits": "3", "link_days": "30", "listed_days": "0", "listed_by": "days", "vote": "1", "vote_passes": "unanimous",
             "reapply_months": "24", "keep_days": "90", "statement": club.membership["statement"],
             "label0": "Bands", "type0": "grid", "qrows0": "20 m\n2 m", "qcols0": "Fixed\nMobile", "place0": "2",
             "label1": "Licensed?", "type1": "yesno", "place1": "1"}
     assert "Saved" in admin.post("/admin/site/membership", data=form).text and club.site_settings["membership"] == {
         "questions": [{"label": "Licensed?", "type": "yesno"}, {"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Mobile"]}]}
     assert "invite_after_visits" not in club.site_settings.get("club", {})  # unchanged values aren't kept
-    assert "Saved" in admin.post("/admin/site/membership", data=form | {"invite_after_visits": "5", "link_days": "7", "vote": "", "vote_passes": "two_thirds",
+    assert "Saved" in admin.post("/admin/site/membership", data=form | {"invite_after_visits": "5", "link_days": "7", "vote": "", "vote_passes": "two_thirds", "listed_by": "meetings",
                                                                          "statement": "", "remove1": "1"}).text
     assert club.info["invite_after_visits"] == 5 and club.membership["link_days"] == 7 and not club.membership["vote"]
-    assert club.membership["vote_passes"] == "two_thirds" and club.membership["statement"] == "" and [q["label"] for q in club.membership["questions"]] == ["Bands"]
+    assert club.membership["vote_passes"] == "two_thirds" and club.membership["statement"] == "" and club.membership["listed_by"] == "meetings" and [q["label"] for q in club.membership["questions"]] == ["Bands"]
     before = club.site_settings
-    for bad, why in ((form | {"link_days": "0"}, "from 1 to 365"), (form | {"vote_passes": "coin"}, "pick one"),
+    for bad, why in ((form | {"link_days": "0"}, "from 1 to 365"), (form | {"vote_passes": "coin"}, "pick one"), (form | {"listed_by": "weeks"}, "days or meetings"),
                      (form | {"type0": "grid", "qcols0": ""}, "give cols")):
         assert why in admin.post("/admin/site/membership", data=bad).text and club.site_settings == before, why
     assert "Back to club.yaml" in admin.get("/admin/site/membership").text

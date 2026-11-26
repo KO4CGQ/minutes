@@ -27,7 +27,8 @@ club:
 # Membership applications (Admin → Site → Membership sets all of these too; each default is shown).
 # membership:
 #   link_days: 30          # days the emailed application link works
-#   listed_days: 0         # days a candidate is listed in the minutes before the vote (0: the vote is at the next meeting)
+#   listed_days: 0         # how long a candidate is listed in the minutes before the vote (0: the vote is at the next meeting)
+#   listed_by: days        # what listed_days counts: days, or meetings (listed at that many, voted on at the next)
 #   vote: true             # members vote on a candidate; false: the officers accept the application
 #   vote_passes: unanimous # unanimous, two_thirds or majority
 #   reapply_months: 24     # months before someone turned down may apply again

@@ -449,7 +449,7 @@
         const count = () => ({ yes: yes.value === "" ? null : +yes.value, no: no.value === "" ? null : +no.value });
         const status = b ? h("p", { class: "msg ok", role: "status" }, b.accepted ? "Accepted." : `${b.yes}\u2013${b.no}: ${b.passed ? "passed" : "not passed"}. The minutes say so; submitting them ${b.passed ? "records it" : "turns the application down"}.`) : null;
         return h("div", { class: "card" }, h("h3", {}, p.name), h("p", { class: "hint" }, `Sponsored by ${p.sponsor}.`),
-          !p.can_vote ? h("p", { class: "hint" }, `Not up for a vote yet: it can be recorded from ${p.due}.`)
+          !p.can_vote ? h("p", { class: "hint" }, `Not up for a vote yet: it can be recorded ${p.due}.`)
             : A.vote ? h("div", { class: "row" },
               h("label", { for: `yes${i}` }, "Yes"), yes, h("label", { for: `no${i}` }, "No"), no,
               h("span", { class: "hint" }, `${here} members present. Passes under: ${A.rule}.`),
