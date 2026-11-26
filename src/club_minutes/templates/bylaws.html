@@ -1,4 +1,5 @@
 {% extends "base.html" %}{% block title %}Bylaws{% endblock %}{% block body %}
 {% if html %}<article class="minutes bylaws">{{ html }}</article>
+{% elif public %}<p class="muted">The club hasn't put its bylaws here yet.</p>
 {% else %}<p class="muted">The bylaws haven't been added yet. An admin puts them in <code>bylaws.md</code> in the data directory.</p>{% endif %}
 {% endblock %}
