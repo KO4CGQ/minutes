@@ -1001,6 +1001,14 @@ def test_the_application_pages_fit_a_phone_and_read_left_aligned(phone_env, engi
         for path in ("/guests", f"/applications/{aid}/sponsor", "/apply/tok2"):
             page.goto("http://testserver" + path)
             wide[path] = page.evaluate("document.documentElement.scrollWidth")
+        page.goto("http://testserver/guests")  # each guest's application forms are in a dialog, opened by its button
+        assert not page.locator("#ap-1").is_visible()
+        page.get_by_role("button", name="Waiting for the sponsor: Pat Visitor's application").click()
+        assert page.locator("#sp-1").is_visible() and page.evaluate("document.documentElement.scrollWidth") <= 390
+        box = page.locator("#ga1").bounding_box()
+        assert box["x"] >= 0 and box["x"] + box["width"] <= 390, box
+        page.keyboard.press("Escape")
+        assert not page.locator("#sp-1").is_visible()
         page.goto("http://testserver/thanks")
         wide["thanks"] = page.evaluate("document.documentElement.scrollWidth")
         assert "Thank you" in page.content()

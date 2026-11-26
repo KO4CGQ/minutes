@@ -102,7 +102,7 @@ button.linkbtn:hover { color: var(--danger); } button.linkbtn.more { color: var(
 
 /* badges, chips, messages */
 .badge { font-size: .74rem; font-weight: 600; padding: .08rem .5rem; border-radius: 1rem; background: var(--info-soft); color: var(--text); }
-.badge.warn { background: var(--warn-soft); color: var(--warn-text); }
+.badge.warn { background: var(--warn-soft); color: var(--warn-text); } button.badge.open { border: 0; cursor: pointer; font-family: inherit; text-align: left; line-height: 1.3; }  /* Guests: the step opens the guest's application window */
 .chip { display: inline-flex; align-items: center; gap: .25rem; background: var(--surface-3); border-radius: 1rem; padding: .12rem .65rem; font-size: .84rem; }
 .chip a { color: inherit; text-decoration: none; } .chip a:hover { text-decoration: underline; }
 .chip.late { background: var(--danger-soft); color: var(--danger-text); font-weight: 600; } .chip.warn { background: var(--warn-soft); color: var(--warn-text); }
@@ -396,7 +396,6 @@ div.relnotes ul { padding-left: 1.2rem; margin: .5rem 0; } div.relnotes li { mar
   /* tables fit the screen: tighter cells, less important columns hidden */
   .list { font-size: .93rem; } .list th, .list td { padding: .55rem .4rem; }
   .list thead th { font-size: .66rem; letter-spacing: 0; }
-  .list.wide { display: block; overflow-x: auto; }  /* Guests with its Application column: the table scrolls inside the page, the page doesn't */
   .list .opt { display: none; } .list th:empty, .list td:empty { padding: 0; }
   .cols { gap: 0; }
   /* business cards: the buttons as even rows, big enough to tap */
@@ -789,4 +788,5 @@ dialog.fmtlink .err { color: var(--danger-text); margin: .3rem 0 0; } dialog.fmt
 .itemtext .who, .ctext .who { white-space: nowrap; font-size: .75rem; background: var(--surface-3, #dee8f0); border-radius: .6rem; padding: 0 .4rem; text-decoration: none; color: var(--accent-text, #192760); }  /* a mention on the Business page, like the minutes' name pill */
 
 @media (pointer: coarse) { form.correct .rm, form.correct input[type=radio] { min-height: 44px; } form.correct .rm { display: inline-flex; align-items: center; } form.correct input[type=radio] { min-width: 44px; } }  /* a finger-sized tap */
-.paper { margin: .3rem 0; } .paper form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-top: .3rem; }  /* Guests: paper application received */
+.guestapp label:not(.check) { display: block; margin: .3rem 0 .2rem; } table.list td .guestapp select, .guestapp input[type=email] { width: 100%; max-width: 100%; font-size: inherit; } .guestapp h3 { font-size: 1rem; margin: 1.1rem 0 .3rem; }
+.guestapp .dacts { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0 .2rem; } .guestapp .dacts form { margin: 0; }  /* Guests: a guest's application dialog */
