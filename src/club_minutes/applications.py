@@ -9,12 +9,15 @@ Kept in applications.json in the data folder ({"items": [...]}, mode 0600), read
   answers [{label, type, value}]      the club's questions as they were asked, so a later edit of them changes nothing
   statement, signed {name, at}        the club's statement shown above the signature, and the typed signature (name and time; no address is kept)
   sponsor {typed, id, asked, answer, at}  what the applicant typed; the member id (None until it matched exactly one
-                                      Active member, or someone on the Guests page picked one); answer None, "yes" or "no"
+                                      Active member, or someone on the Guests page picked one); answer None, "yes" or "no";
+                                      likely: the one member it may be (`likely_sponsors`), asked to claim it; not_me: who said it isn't them
   club {voted, initiated, fee_paid, bond_paid, ballot}   "For the club" on the PDF, empty until the vote and the fees
                                       (the fees are read from the Treasurer's records when the PDF is made); ballot: the
                                       vote recorded in a meeting's console {meeting, yes, no, passed} or {meeting, accepted,
                                       passed}, settled when those minutes are submitted (`settle`)
   ended, member                       when it was turned down or withdrawn; the member id it led to
+  paper, paper_by                     True for one handed in on paper and recorded on the Guests page (`record_paper`), and
+                                      the member who recorded it: no link, no email, the form holding only the name
 state: sent (link out), submitted (waiting for the sponsor), declined (the sponsor said no; the applicant may be sent a
 new link to pick another), candidate (sponsored: for the club to vote on), turned_down, withdrawn, member.
 Part of this is personal: `purge` (the daily job) deletes what the settings say, and nothing here is logged.
@@ -32,9 +35,18 @@ import re
 import secrets
 import time
 import unicodedata
+from zoneinfo import ZoneInfo
 
-from . import auth, branding, richtext
-from .club import DATA, VOTE_PASSES, Club, show_date, valid_email
+from . import auth, branding, meetings, richtext
+from .club import (
+    DATA,
+    INVITE_WORDS,
+    VOTE_PASSES,
+    Club,
+    must_answer,
+    show_date,
+    valid_email,
+)
 from .membership import CLASSES, split_name
 
 log = logging.getLogger("club_minutes.applications")
@@ -93,21 +105,31 @@ def usable(a: dict | None, now: float | None = None) -> bool:
 def for_guest(items: list[dict], name: str) -> dict | None:
     """The guest's latest application."""
     mine = [a for a in items if _same(a["guest"], name)]
-    return max(mine, key=lambda a: a["sent"], default=None)
+    return max(reversed(mine), key=lambda a: a["sent"], default=None)  # a tie (the same second): the one added last
 
 
 def turned_down_recently(club: Club, name: str, email: str, now: float | None = None) -> bool:
     """Someone turned down less than `reapply_months` ago, by name or the same email."""
     window = club.membership["reapply_months"] * MONTH
     return any(a["state"] == "turned_down" and a["ended"] + window > (now or time.time())
-               and (_same(a["guest"], name) or a["email"].lower() == email.lower()) for a in load()["items"])
+               and (_same(a["guest"], name) or (email and a["email"].lower() == email.lower())) for a in load()["items"])  # a paper one has no email
 
 
 def club_name(club: Club) -> str:
     return " ".join(str(club.info.get("name") or club.label).split())
 
 
-def send(club: Club, guest: str, email: str, url: str, now: float | None = None) -> None:
+def next_meeting(club: Club, now: float) -> str:
+    """"Thursday, December 3 at 7:30 PM": the next club meeting not yet started, in the club's time zone; empty if none."""
+    here = dt.datetime.fromtimestamp(now, ZoneInfo(club.timezone)).replace(tzinfo=None)
+    for d in meetings.nights(club, here.date(), here.date() + dt.timedelta(days=60)):
+        at = dt.datetime.combine(d, dt.time.fromisoformat(meetings.time_on(club, d)))
+        if at > here:
+            return f"{show_date(d, 'weekday')} at {at:%-I:%M %p}"
+    return ""
+
+
+def send(club: Club, guest: str, email: str, url: str, now: float | None = None, visits: int = 0) -> None:
     """Email the guest their application link, replacing an unused or declined one. ValueError says why not."""
     now = now or time.time()
     email = " ".join(email.split())
@@ -124,13 +146,16 @@ def send(club: Club, guest: str, email: str, url: str, now: float | None = None)
             a = {"id": "a" + secrets.token_hex(5), "guest": " ".join(guest.split())[:100], "club": dict.fromkeys(
                 ("voted", "initiated", "fee_paid", "bond_paid"), "")}
             items.append(a)
+        a.pop("paper", None)  # a new link after a paper one the sponsor declined: online from here
         a.update(email=email, state="sent", token_hash=_hash(token), sent=int(now), used=None, updated=int(now),
                  expires=int(now + club.membership["link_days"] * 86400))
     days = club.membership["link_days"]
-    auth.send_email(email, f"Your application to {club_name(club)}", only_to=club.email_only_to(), to_self=True, body=(
-        f"Hello {guest},\n\nThank you for visiting {club_name(club)}. Here is your membership application:\n\n{url}/apply/{token}\n\n"
-        f"It's yours alone, so please don't share it. It works for {days} day{'s' * (days != 1)} and until you send it in.\n\n"
-        f"{club.sign_off}\n{branding.name(club)}"))
+    words = {"guest": guest, "first_name": split_name(guest)[0], "club": club_name(club), "short": club.label, "link": f"{url}/apply/{token}",
+             "days": f"{days} day{'s' * (days != 1)}", "until": show_date(dt.datetime.fromtimestamp(now + days * 86400).date(), "document"),
+             "next_meeting": next_meeting(club, now), "visits": str(visits), "bylaws": f"{url}/apply/{token}/bylaws"}
+    body = re.sub(r"\{(" + "|".join(INVITE_WORDS) + r")\}", lambda m: words[m[1]], club.membership["invite"])  # one pass: a name with {link} in it stays as typed
+    auth.send_email(email, f"Your application to {club_name(club)}", only_to=club.email_only_to(), to_self=True,
+                    body=f"{body}\n\n{club.sign_off}\n{branding.name(club)}")
 
 
 def sponsor_match(club: Club, typed: str) -> str | None:
@@ -140,9 +165,26 @@ def sponsor_match(club: Club, typed: str) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
+def likely_sponsors(club: Club, typed: str, skip: str = "") -> list[str]:
+    """Active members (ids, best first) who may be the sponsor typed when it matched no one: every typed word fits one of their
+    name words or callsign (the same word 2, one starts the other, as an initial does, 1, the same first letter 0.5, a
+    callsign one letter off 1.5) and at least one fits better than a first letter. "James F" finds Jim Flattery."""
+    said = re.findall(r"\w+", typed.casefold())
+    out = []
+    for m in club.members.values():
+        if m.status.lower() != "active" or m.id == skip:
+            continue
+        words, call = re.findall(r"\w+", m.name.casefold()), (m.callsign or "").casefold() if club.ham else ""
+        fits = [max([2 if w in words else 1 if any(x.startswith(w) or w.startswith(x) for x in words) else 0.5 if any(x[0] == w[0] for x in words) else 0,
+                     2 if w == call else 1.5 if call and len(w) == len(call) and sum(a != b for a, b in zip(w, call)) == 1 else 0]) for w in said]
+        if fits and min(fits) > 0 and max(fits) >= 1:
+            out.append((-sum(fits), m.name.casefold(), m.id))
+    return [i for *_, i in sorted(out)]
+
+
 def qhash(club: Club) -> str:
-    """A short hash of the club's questions, carried in the form to notice a change between showing and sending it."""
-    return hashlib.sha256(json.dumps(club.membership["questions"], sort_keys=True).encode()).hexdigest()[:12]
+    """A short hash of the club's questions and field settings, carried in the form to notice a change between showing and sending it."""
+    return hashlib.sha256(json.dumps([club.membership["questions"], club.membership["fields"]], sort_keys=True).encode()).hexdigest()[:12]
 
 
 def _year(v: str) -> str:
@@ -168,9 +210,10 @@ def _text(form, key: str, label: str, size: int, need: bool = True) -> str:
 def _answers(club: Club, form) -> list[dict]:
     out = []
     for i, q in enumerate(club.membership["questions"]):
-        got = form.getlist(f"q{i}")
-        if q["type"] == "yesno":
-            if (value := got[0] if got else "") not in ("Yes", "No"):
+        got, must = form.getlist(f"q{i}"), must_answer(q)
+        if q["type"] in ("yesno", "one"):
+            value = got[0] if got else ""
+            if value not in (("Yes", "No") if q["type"] == "yesno" else q["options"]) and (must or value):
                 raise ValueError(f"Please answer: {q['label']}")
         elif q["type"] == "several":
             if bad := [g for g in got if g not in q["options"]]:
@@ -186,6 +229,8 @@ def _answers(club: Club, form) -> list[dict]:
             value = _clean(str(got[0]).replace("\r\n", "\n"), True).strip() if got else ""
             if len(value) > (200 if q["type"] == "short" else 3000):
                 raise ValueError(f"{q['label']} is too long.")
+        if must and not (any(value["rows"].values()) if q["type"] == "grid" else value):
+            raise ValueError(f"Please answer: {q['label']}")
         out.append({"label": q["label"], "type": q["type"], "value": value})
     return out
 
@@ -196,23 +241,27 @@ def check(club: Club, form) -> tuple[dict, list[dict], str]:
         raise ValueError("The club changed its questions while you were filling this in. Please look over your answers below and send it again.")
     if re.search(r"://|www\.", str(form.get("name") or ""), re.IGNORECASE):  # the name goes in the minutes, which link web addresses
         raise ValueError("Your name can't include a web address.")
+    modes = club.membership["fields"]
+
+    def field(key: str, label: str, size: int) -> str:  # hidden: never read from the form
+        return "" if modes[key] == "hidden" else _text(form, key, label, size, modes[key] == "required")
     f = {"name": _text(form, "name", "Your name", 100), "email": _text(form, "email", "Email", 254),
-         "street": _text(form, "street", "Street address", 100), "city": _text(form, "city", "City", 60),
-         "state": _text(form, "state", "State", 40), "zip": _text(form, "zip", "ZIP code", 12),
-         "phone": _text(form, "phone", "Phone", 30, False), "occupation": _text(form, "occupation", "Occupation", 100, False)}
+         "street": field("street", "Street address", 100), "city": field("city", "City", 60),
+         "state": field("state", "State", 40), "zip": field("zip", "ZIP code", 12),
+         "phone": field("phone", "Phone", 30), "occupation": field("occupation", "Occupation", 100)}
     if not valid_email(f["email"]):
         raise ValueError("That doesn't look like an email address.")
     if f["phone"] and not re.fullmatch(r"[\d\s()+.\-x]{7,30}", f["phone"]):
         raise ValueError("Phone: digits, spaces and + ( ) - . only.")
     if club.ham:
-        f["callsign"] = _text(form, "callsign", "Callsign", 7, False).upper()
+        f["callsign"] = field("callsign", "Callsign", 7).upper()
         if f["callsign"] and not re.fullmatch(r"[A-Z0-9]{3,7}", f["callsign"]):
             raise ValueError(f"{f['callsign']} doesn't look like a callsign.")
-        f["first_licensed"] = _year(_text(form, "first_licensed", "First licensed", 4, False))
-        f["license_class"] = _text(form, "license_class", "License class", 20, False)
+        f["first_licensed"] = _year(field("first_licensed", "First licensed", 4))
+        f["license_class"] = field("license_class", "License class", 20)
         if f["license_class"] not in ("", NO_LICENSE, *CLASSES):
             raise ValueError("Pick a license class from the list.")
-        f["expires"] = _text(form, "expires", "License expiry", 10, False)
+        f["expires"] = field("expires", "License expiry", 10)
         try:
             f["expires"] = dt.date.fromisoformat(f["expires"]).isoformat() if f["expires"] else ""
         except ValueError:
@@ -234,9 +283,11 @@ def submit(club: Club, token: str, form, now: float | None = None) -> dict:
             raise ValueError("This link has expired or was already used.")
         f, answers, typed = check(club, form)
         sponsor = sponsor_match(club, typed)
+        likely = [] if sponsor or not typed else [i for i in likely_sponsors(club, typed) if club.members[i].email]
         a.update(state="submitted", used=now, updated=now, form=f, answers=answers, statement=club.membership["statement"],
                  signed={"name": _text(form, "signature", "Your signature", 100), "at": now},
-                 sponsor={"typed": typed, "id": sponsor, "asked": now if sponsor else None, "answer": None, "at": None}, email=f["email"])
+                 sponsor={"typed": typed, "id": sponsor, "asked": now if sponsor else None, "answer": None, "at": None,
+                          **({"likely": likely[0]} if len(likely) == 1 else {})}, email=f["email"])
         return json.loads(json.dumps(a))
 
 
@@ -253,16 +304,29 @@ def _ask(club: Club, a: dict, url: str) -> None:
             f"Please sign in and say whether you will:\n\n{url}/applications/{a['id']}/sponsor\n\n{club.sign_off}\n{branding.name(club)}"))
 
 
+def _ask_likely(club: Club, a: dict, url: str) -> None:
+    m, name = club.members[a["sponsor"]["likely"]], a["form"]["name"]
+    auth.send_email(m.email, f"Are you {name}'s sponsor?", only_to=club.email_only_to(), body=(
+        f"Hello {m.first},\n\n{name} has applied to join {club_name(club)} and typed \"{a['sponsor']['typed']}\" as their sponsor, "
+        f"which may be you. Please sign in and say whether you sponsor them, or that it isn't you:\n\n{url}/applications/{a['id']}/sponsor\n\n"
+        f"{club.sign_off}\n{branding.name(club)}"))
+
+
 def notify_submitted(club: Club, a: dict, url: str) -> None:
     """After the form: the sponsor is asked (when the typed name matched a member); the holders are told it's on the Guests
     page and the applicant that it arrived. No PDF goes by email (it's on the Guests page). A failure to send is only logged."""
     name, only, sid = a["form"]["name"], club.email_only_to(), a["sponsor"]["id"]
+    likely = a["sponsor"].get("likely")
     who = f"Their sponsor, {club.name(sid)}, has been asked to confirm." if sid else (
+        f"They typed \"{a['sponsor']['typed']}\" as their sponsor, which may be {club.name(likely)}: they have been asked whether it's them. "
+        "If it isn't, pick a member on the Guests page.") if likely else (
         (f"They typed \"{a['sponsor']['typed']}\" as their sponsor, which isn't one member" if a["sponsor"]["typed"] else "They named no sponsor")
         + ": pick a member on the Guests page.")
     try:
         if sid:
             _ask(club, a, url)
+        elif likely:
+            _ask_likely(club, a, url)
         if to := holders(club):
             auth.send_email(to, f"Membership application: {name}", only_to=only, body=(
                 f"{name} has submitted a membership application. {who}\n\nIt's on the Guests page: {url}/guests\n\n{club.sign_off}\n{branding.name(club)}"))
@@ -271,6 +335,41 @@ def notify_submitted(club: Club, a: dict, url: str) -> None:
             f"Your sponsor will be asked to confirm, and the club will be in touch.\n\n{club.sign_off}\n{branding.name(club)}"))
     except Exception:
         log.exception("couldn't send the emails for application %s", a["id"])
+
+
+def record_paper(club: Club, guest: str, mid: str, signed: bool, url: str, by: str, now: float | None = None) -> dict:
+    """A paper application handed in at a meeting: from here it follows the online path (the sponsor asked, or already
+    confirmed when they signed the paper; then listed, voted on, added). The details stay on the paper until Add a
+    member. `by`: who recorded it (kept, and on the PDF: no one confirmed a signed one in the app). ValueError says why not."""
+    now = int(now or time.time())
+    if mid not in club.members or club.members[mid].status.lower() != "active":
+        raise ValueError("Pick an Active member as the sponsor.")
+    if signed and mid == by:
+        raise ValueError("Someone else records a paper application you signed as the sponsor.")
+    if not signed and not club.members[mid].email:
+        raise ValueError(f"{club.name(mid)} has no email address to be asked: tick that they signed the paper, or pick another sponsor.")
+    if turned_down_recently(club, guest, "", now):
+        raise ValueError(f"They applied before, and the club turned them down less than {club.membership['reapply_months']} months ago.")
+    form = dict.fromkeys(("name", "email", "street", "city", "state", "zip", "phone", "occupation"), "") | {"name": " ".join(guest.split())[:100]}
+    if club.ham:
+        form |= dict.fromkeys(("callsign", "first_licensed", "license_class", "expires"), "")
+    with edit() as items:
+        a = for_guest(items, guest)
+        if a and a["state"] in ("submitted", "candidate", "member"):
+            raise ValueError(f"They have applied already ({SHOWN[a['state']].lower()}).")
+        if not a or a["state"] != "sent":  # an unfilled link is replaced; one filled in online (declined, ended) is kept as it was
+            a = {"id": "a" + secrets.token_hex(5), "guest": form["name"], "club": dict.fromkeys(("voted", "initiated", "fee_paid", "bond_paid"), "")}
+            items.append(a)
+        a.update(paper=True, paper_by=by, email="", state="candidate" if signed else "submitted", token_hash=None, sent=now, used=now, updated=now,
+                 expires=now, form=form, answers=[], statement="", signed={"name": form["name"], "at": now},
+                 sponsor={"typed": "", "id": mid, "asked": now, "answer": "yes" if signed else None, "at": now if signed else None, "on_paper": signed})
+        a = json.loads(json.dumps(a))
+    if not signed:
+        try:
+            _ask(club, a, url)
+        except Exception:
+            log.exception("couldn't send the emails for application %s", a["id"])
+    return a
 
 
 def ask_sponsor(club: Club, aid: str, mid: str, url: str, now: float | None = None) -> None:
@@ -284,6 +383,7 @@ def ask_sponsor(club: Club, aid: str, mid: str, url: str, now: float | None = No
         if mid not in club.members or club.members[mid].status.lower() != "active":
             raise ValueError("Pick an Active member.")
         a["sponsor"].update(id=mid, asked=now)
+        a["sponsor"].pop("likely", None)
         a["updated"] = now
         a = json.loads(json.dumps(a))
     try:
@@ -293,23 +393,37 @@ def ask_sponsor(club: Club, aid: str, mid: str, url: str, now: float | None = No
 
 
 def sponsor_answer(club: Club, aid: str, mid: str, yes: bool, now: float | None = None) -> dict:
-    """The sponsor's answer. ValueError if this isn't theirs to answer (or has been answered)."""
+    """The sponsor's answer, or the likely member's (`likely_sponsors`): yes makes them the sponsor; no, from them, means it
+    isn't them (or they can't), and the application waits for someone to pick one. ValueError if this isn't theirs to answer."""
     now = int(now or time.time())
     with edit() as items:
         a = next((x for x in items if x["id"] == aid), None)
-        if not a or a["state"] != "submitted" or a["sponsor"]["id"] != mid:
+        claim = bool(a) and not a["sponsor"]["id"] and a["sponsor"].get("likely") == mid
+        if not a or a["state"] != "submitted" or (a["sponsor"]["id"] != mid and not claim):
             raise ValueError("This application doesn't need your answer.")
+        if claim:
+            a["sponsor"].pop("likely")
+            if not yes:
+                a["sponsor"]["not_me"] = mid
+                a["updated"] = now
+                return json.loads(json.dumps(a))
+            a["sponsor"].update(id=mid, asked=now)
         a["sponsor"].update(answer="yes" if yes else "no", at=now)
         a.update(state="candidate" if yes else "declined", updated=now)
         return json.loads(json.dumps(a))
 
 
 def notify_sponsor_answered(club: Club, a: dict, url: str) -> None:
-    """The holders are told (a link to the PDF on the Guests page, not the PDF again); a no also tells the applicant."""
-    name, sponsor, only = a["form"]["name"], club.name(a["sponsor"]["id"]), club.email_only_to()
+    """The holders are told (a link to the PDF on the Guests page, not the PDF again); a no also tells the applicant, unless
+    it was the likely member saying it isn't them."""
+    name, sponsor, only = a["form"]["name"], club.name(a["sponsor"]["id"] or a["sponsor"].get("not_me", "")), club.email_only_to()
     try:
         if to := holders(club):
-            if a["state"] == "candidate":
+            if a["state"] == "submitted":
+                auth.send_email(to, f"Pick a sponsor for {name}", only_to=only, body=(
+                    f"{name} typed \"{a['sponsor']['typed']}\" as their sponsor. {sponsor} says it isn't them, or they can't sponsor {name}. "
+                    f"Pick a member on the Guests page: {url}/guests\n\n{club.sign_off}\n{branding.name(club)}"))
+            elif a["state"] == "candidate":
                 auth.send_email(to, f"{name} is sponsored", only_to=only, body=(
                     f"{sponsor} has confirmed they sponsor {name}, who is now a candidate. The application, with their confirmation, is "
                     f"on the Guests page ({url}/guests): sign in to download the PDF.\n\n{club.sign_off}\n{branding.name(club)}"))
@@ -317,7 +431,7 @@ def notify_sponsor_answered(club: Club, a: dict, url: str) -> None:
                 auth.send_email(to, f"{sponsor} can't sponsor {name}", only_to=only, body=(
                     f"{sponsor} can't sponsor {name}. The application waits: send {name} a new link on the Guests page to pick another sponsor.\n\n"
                     f"{club.sign_off}\n{branding.name(club)}"))
-        if a["state"] == "declined":
+        if a["state"] == "declined" and a["form"]["email"]:  # a paper one has no email
             auth.send_email(a["form"]["email"], f"Your application to {club_name(club)}", only_to=only, to_self=True, body=(
                 f"Hello {name},\n\nYour sponsor couldn't confirm your application to {club_name(club)}. The club will be in touch.\n\n"
                 f"{club.sign_off}\n{branding.name(club)}"))
@@ -496,4 +610,25 @@ def prefill(a: dict) -> dict:
     first, last = split_name(f["name"])
     return {"first": first, "last": last, "callsign": f.get("callsign", ""), "email": f["email"], "phone": f["phone"],
             "license_class": f.get("license_class") if f.get("license_class") in CLASSES else "",
-            "address": f"{f['street']}\n{f['city']}, {f['state']} {f['zip']}"}
+            "address": "\n".join(x for x in (f["street"], ", ".join(y for y in (f["city"], f"{f['state']} {f['zip']}".strip()) if y)) if x)}  # empty parts left out (paper, details not asked)
+
+
+def sample(club: Club, m: dict, now: float | None = None) -> dict:
+    """A made-up filled application for Site → Membership's Preview the PDF: a fictional applicant, a sample answer to
+    each of m's questions, m's details asked and statement (m: the tab's settings as typed). Never stored."""
+    def ask(k, v):
+        return "" if m["fields"].get(k) == "hidden" else v
+    f = {"name": "Jane Doe", "email": "jane.doe@example.org", "street": ask("street", "123 Main St"), "city": ask("city", "Anytown"),
+         "state": ask("state", "OH"), "zip": ask("zip", "45000"), "phone": ask("phone", "555-0100"), "occupation": ask("occupation", "Nurse")}
+    if club.ham:
+        f |= {"callsign": ask("callsign", "N0CALL"), "first_licensed": ask("first_licensed", "2019"),
+              "license_class": ask("license_class", "General"), "expires": ask("expires", "2029-06-30")}
+    answers = []
+    for q in m["questions"]:
+        value = {"yesno": "Yes", "one": (q.get("options") or [""])[0], "several": q.get("options", [])[:2], "short": "A short sample answer",
+                 "long": "A longer sample answer.\nIt can run over several lines.",
+                 "grid": {"cols": q.get("cols", []), "rows": {r: q.get("cols", [])[:1] for r in q.get("rows", [])}}}[q["type"]]
+        answers.append({"label": q["label"], "type": q["type"], "value": value})
+    now = int(now or time.time())
+    return {"form": f, "answers": answers, "statement": m["statement"], "signed": {"name": "Jane Doe", "at": now},
+            "sponsor": {"typed": "", "id": None, "asked": None, "answer": None, "at": None}, "club": dict.fromkeys(("voted", "initiated", "fee_paid", "bond_paid"), "")}
