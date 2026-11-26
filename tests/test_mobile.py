@@ -831,19 +831,30 @@ def test_site_membership_adds_a_question_and_the_application_form_opens(tmp_path
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"no {engine} for Playwright: {e}")
         page = browser.new_page()
-        page.route("http://testserver/**", serve)
+        page.context.route("http://testserver/**", serve)  # the preview opens in a new tab
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: errors.append(m.text) if "Content Security Policy" in m.text else None)
         page.goto("http://testserver/admin/site/membership")
         page.click("text=+ Add a question")
         page.fill("input[name=label0]", "Bands")
+        assert not page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")  # short text: neither
+        page.select_option("select[name=type0]", "several")
+        assert page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")
+        page.select_option("select[name=type0]", "one")
+        assert page.is_visible("textarea[name=options0]") and not page.is_visible("textarea[name=qrows0]")  # pick one: choices too
         page.select_option("select[name=type0]", "grid")
+        assert not page.is_visible("textarea[name=options0]") and page.is_visible("textarea[name=qcols0]")
         page.fill("textarea[name=qrows0]", "20 m\n2 m")
         page.fill("textarea[name=qcols0]", "Fixed\nMobile")
         with page.expect_navigation():
             page.click("main form.sitemembership button.btn >> text=Save")
         assert club.membership["questions"] == [{"label": "Bands", "type": "grid", "rows": ["20 m", "2 m"], "cols": ["Fixed", "Mobile"]}]
+        with page.expect_popup() as pop:
+            page.click("text=Preview the form")
+        pop.value.wait_for_load_state()
+        assert pop.value.is_visible("text=20 m") and pop.value.is_disabled("button:has-text('Send my application')")
+        pop.value.close()
         c.cookies.clear()  # the guest is nobody
         applications.send(club, "Pat Visitor", "pat@example.org", "http://testserver")
         with applications.edit() as items:
