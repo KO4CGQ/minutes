@@ -83,6 +83,9 @@ from .club import (
     CALLSIGN,
     DATA,
     DATES,
+    FIELD_DEFAULTS,
+    FIELD_MODES,
+    INVITE_WORDS,
     MEMBERSHIP_DEFAULTS,
     PERMISSIONS,
     PREVIEW,
@@ -93,6 +96,7 @@ from .club import (
     _agenda,
     _membership,
     _server_timezone,
+    check_invite,
     clean_questions,
     num,
     office_list,
@@ -2499,10 +2503,15 @@ def roster(request: Request, status: str = "Active", p: str = Query("1", alias="
 @app.get("/bylaws", response_class=HTMLResponse)
 def bylaws(request: Request):
     """The club's constitution and bylaws, from bylaws.md in the data directory (not in this public repo)."""
+    return _bylaws_page(request)
+
+
+def _bylaws_page(request: Request, public: bool = False) -> HTMLResponse:
+    """`public`: shown to an applicant (their link), who isn't told where an admin puts the file."""
     import markdown
     p = DATA / "bylaws.md"
     html = Markup(markdown.markdown(p.read_text())) if p.exists() else None
-    return page(request, "bylaws.html", html=html)
+    return page(request, "bylaws.html", html=html, public=public)
 
 
 LINK_ICONS = (("teams.", "video"), ("zoom.", "video"), ("meet.", "video"), ("discord.", "chat"), ("mailto:", "mail"),
@@ -3013,7 +3022,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
     return page(request, "site.html", tab=tab, error=error, note=note,
-                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
+                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, field_modes=FIELD_MODES, invite_words=INVITE_WORDS, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -3273,6 +3282,46 @@ def _lines(text) -> list[str]:
     return [" ".join(x.split()) for x in str(text or "").splitlines() if x.strip()]
 
 
+def _membership_form(form, club) -> dict:
+    """The Membership tab's settings as typed (ValueError says what's wrong): for Save, and for Preview the form."""
+    v = {}
+    for k, label, lo, hi in (("invite_after_visits", "Visits before a guest may apply", 1, 50), ("link_days", "Days the application link works", 1, 365),
+                             ("listed_days", "Days a candidate is listed", 0, 365), ("reapply_months", "Months before applying again", 0, 120),
+                             ("keep_days", "Days an application is kept", 1, 3650)):
+        n = num(form.get(k))
+        if n is None or not lo <= n <= hi:
+            raise ValueError(f"{label}: a whole number from {lo} to {hi}.")
+        v[k] = n
+    v["vote"] = bool(form.get("vote"))
+    v["vote_passes"] = form.get("vote_passes") or ""
+    if v["vote_passes"] not in VOTE_PASSES:
+        raise ValueError("What passes: pick one from the list.")
+    v["statement"] = "\n".join(x.rstrip() for x in str(form.get("statement") or "").splitlines()).strip()
+    if len(v["statement"]) > 5000:
+        raise ValueError("The statement is too long (5000 characters at most).")
+    v["welcome"] = "\n".join(x.rstrip() for x in str(form.get("welcome") or "").splitlines()).strip()
+    if len(v["welcome"]) > 5000:
+        raise ValueError("The welcome text is too long (5000 characters at most).")
+    v["invite"] = "\n".join(x.rstrip() for x in str(form.get("invite") or "").splitlines()).strip()
+    check_invite(v["invite"])
+    v["fields"] = {k: form.get("field_" + k) or club.membership["fields"][k] for k in FIELD_DEFAULTS}  # a non-ham club's page has no ham selects
+    if set(v["fields"].values()) - set(FIELD_MODES):
+        raise ValueError("Application fields: pick one from each list.")
+    qs = []
+    for i in range(min(num(form.get("rows")) or 0, 60)):
+        label = " ".join((form.get(f"label{i}") or "").split())
+        if label and not form.get(f"remove{i}"):  # a question with no words is removed
+            try:
+                place = float(form.get(f"place{i}") or 999)
+            except ValueError:
+                raise ValueError(f"The place for {label} isn't a number.") from None
+            qs.append((place, i, {"label": label, "type": form.get(f"type{i}"), "options": _lines(form.get(f"options{i}")),
+                                  "rows": _lines(form.get(f"qrows{i}")), "cols": _lines(form.get(f"qcols{i}")),
+                                  "required": bool(form.get(f"required{i}"))}))
+    v["questions"] = clean_questions([q for *_, q in sorted(qs, key=lambda t: t[:2])])
+    return v
+
+
 @app.post("/admin/site/membership")
 async def site_membership(request: Request):
     """Membership tab: when a guest may apply, how an application is handled and kept, the club's statement and its own
@@ -3283,32 +3332,7 @@ async def site_membership(request: Request):
         if form.get("back"):
             values = dict.fromkeys(keys)
         else:
-            v = {}
-            for k, label, lo, hi in (("invite_after_visits", "Visits before a guest may apply", 1, 50), ("link_days", "Days the application link works", 1, 365),
-                                     ("listed_days", "Days a candidate is listed", 0, 365), ("reapply_months", "Months before applying again", 0, 120),
-                                     ("keep_days", "Days an application is kept", 1, 3650)):
-                n = num(form.get(k))
-                if n is None or not lo <= n <= hi:
-                    raise ValueError(f"{label}: a whole number from {lo} to {hi}.")
-                v[k] = n
-            v["vote"] = bool(form.get("vote"))
-            v["vote_passes"] = form.get("vote_passes") or ""
-            if v["vote_passes"] not in VOTE_PASSES:
-                raise ValueError("What passes: pick one from the list.")
-            v["statement"] = "\n".join(x.rstrip() for x in str(form.get("statement") or "").splitlines()).strip()
-            if len(v["statement"]) > 5000:
-                raise ValueError("The statement is too long (5000 characters at most).")
-            qs = []
-            for i in range(min(num(form.get("rows")) or 0, 60)):
-                label = " ".join((form.get(f"label{i}") or "").split())
-                if label and not form.get(f"remove{i}"):  # a question with no words is removed
-                    try:
-                        place = float(form.get(f"place{i}") or 999)
-                    except ValueError:
-                        raise ValueError(f"The place for {label} isn't a number.") from None
-                    qs.append((place, i, {"label": label, "type": form.get(f"type{i}"), "options": _lines(form.get(f"options{i}")),
-                                          "rows": _lines(form.get(f"qrows{i}")), "cols": _lines(form.get(f"qcols{i}"))}))
-            v["questions"] = clean_questions([q for *_, q in sorted(qs, key=lambda t: t[:2])])
+            v = _membership_form(form, club)
             base, yc = _membership(club.yaml.get("membership")), club.yaml.get("club") or {}
             inv = v.pop("invite_after_visits")
             values = {("club", "invite_after_visits"): None if inv == int(yc.get("invite_after_visits") or 3) else inv,
@@ -3318,6 +3342,33 @@ async def site_membership(request: Request):
         return RedirectResponse("/admin/site/membership?error=" + quote(str(e).removeprefix("club.yaml membership: ")), status_code=303)
     _admin_log(request, site_membership="club.yaml" if form.get("back") else ", ".join(k for (_, k), x in values.items() if x is not None) or "club.yaml")
     return RedirectResponse("/admin/site/membership?note=" + quote("Saved."), status_code=303)
+
+
+@app.api_route("/admin/site/membership/pdf", methods=["GET", "POST"])
+async def site_membership_pdf(request: Request):
+    """Preview the PDF: a made-up applicant's filled application with the settings as typed on the tab; nothing saved.
+    Opened as an address (a reload, a bookmark): the saved settings."""
+    _site_admin(request)
+    try:
+        v = _membership_form(await request.form(), archive.club) if request.method == "POST" else archive.club.membership
+    except ValueError as e:
+        return page(request, "apply.html", a=None, preview=True, error=str(e).removeprefix("club.yaml membership: "), form={})
+    pdf = await run_in_threadpool(pdfmod.application, archive.club, applications.sample(archive.club, v), authn.rp_id)
+    return Response(pdf, media_type="application/pdf", headers={"Cache-Control": "no-store", "Content-Disposition": 'inline; filename="application-preview.pdf"'})
+
+
+@app.api_route("/admin/site/membership/preview", methods=["GET", "POST"], response_class=HTMLResponse)
+async def site_membership_preview(request: Request):
+    """Preview the form: the application form as a guest sees it, with the settings as typed on the tab; nothing saved or sendable.
+    Opened as an address (a reload, a bookmark): the saved settings."""
+    _site_admin(request)
+    try:
+        v = _membership_form(await request.form(), archive.club) if request.method == "POST" else archive.club.membership
+    except ValueError as e:
+        return page(request, "apply.html", a=None, preview=True, error=str(e).removeprefix("club.yaml membership: "), form={})
+    return page(request, "apply.html", a={"guest": ""}, preview=True, form={}, error="", token="", classes=applications.CLASSES + (applications.NO_LICENSE,),
+                qh="", statement=richtext.render(v["statement"]), welcome=richtext.render(v["welcome"]), has_bylaws=(DATA / "bylaws.md").exists(),
+                fields=v["fields"], questions=v["questions"], today=dt.date.today())
 
 
 def _roles_stamp() -> str:
@@ -3961,6 +4012,24 @@ async def application_ask(request: Request, aid: str):
     return RedirectResponse("/guests?note=" + quote("They have been asked."), status_code=303)
 
 
+@app.post("/applications/paper")
+async def application_paper(request: Request):
+    """Paper application received: a regular guest's paper form, recorded so it follows the online path."""
+    if not _sees_applications(request):
+        raise HTTPException(403, "Only those who receive applications can record one.")
+    form = await request.form()
+    guest = str(form.get("guest") or "")
+    try:
+        if guest not in {g["name"] for g in membership.ready_guests(archive.guests(), int(archive.club.info.get("invite_after_visits", 3)))}:
+            raise ValueError("That guest hasn't visited enough yet.")
+        a = await run_in_threadpool(applications.record_paper, archive.club, guest, str(form.get("sponsor") or ""), bool(form.get("signed")),
+                                     base_url(request), request.state.member)
+    except ValueError as e:
+        return RedirectResponse("/guests?error=" + quote(str(e)), status_code=303)
+    return RedirectResponse("/guests?note=" + quote(f"{guest}'s paper application is recorded: "
+                            + ("a candidate." if a["state"] == "candidate" else f"{archive.club.name(a['sponsor']['id'])} has been asked to confirm.")), status_code=303)
+
+
 @app.post("/applications/{aid}/withdraw")
 def application_withdraw(request: Request, aid: str):
     if not _sees_applications(request):
@@ -3979,11 +4048,13 @@ async def guests_apply(request: Request):
         raise HTTPException(403, "Only those who keep the roster or receive applications can send one.")
     form, club = await request.form(), archive.club
     guest = str(form.get("guest") or "")
-    ready = {g["name"] for g in membership.ready_guests(archive.guests(), int(club.info.get("invite_after_visits", 3)))}
+    gs = archive.guests()
+    ready = {g["name"] for g in membership.ready_guests(gs, int(club.info.get("invite_after_visits", 3)))}
     try:
         if guest not in ready:
             raise ValueError("That guest hasn't visited enough yet.")
-        await run_in_threadpool(applications.send, club, guest, str(form.get("email") or ""), base_url(request))
+        visits = next(len(g["visits"]) for g in gs if g["name"] == guest)
+        await run_in_threadpool(applications.send, club, guest, str(form.get("email") or ""), base_url(request), visits=visits)
     except ValueError as e:
         return RedirectResponse("/guests?error=" + quote(str(e)), status_code=303)
     except Exception:  # noqa: BLE001
@@ -4031,7 +4102,8 @@ async def sponsor_answer(request: Request, aid: str, background: BackgroundTasks
 
 def _apply_page(request: Request, token: str, a: dict | None, form=None, error: str = "", status: int = 200) -> HTMLResponse:
     r = page(request, "apply.html", a=a, form=form or {}, error=error, token=token, classes=applications.CLASSES + (applications.NO_LICENSE,),
-             qh=applications.qhash(archive.club), statement=archive.club.membership["statement"],
+             qh=applications.qhash(archive.club), statement=richtext.render(archive.club.membership["statement"]),  # no names: a public page
+             welcome=richtext.render(archive.club.membership["welcome"]), has_bylaws=(DATA / "bylaws.md").exists(), fields=archive.club.membership["fields"],
              questions=archive.club.membership["questions"], today=dt.date.today())
     r.status_code = status
     r.headers["Cache-Control"] = "no-store"
@@ -4045,6 +4117,19 @@ def apply_form(request: Request, token: str):
         _bad_link(request, "application link")
     ok = a if applications.usable(a) else None
     return _apply_page(request, token, ok, {"name": ok["guest"], "email": ok["email"]} if ok else None, status=200 if ok else 404)
+
+
+@app.get("/apply/{token}/bylaws", response_class=HTMLResponse)
+def apply_bylaws(request: Request, token: str):
+    """The bylaws for an applicant, while their link works (members-only otherwise); a bad link is a bad link."""
+    a = applications.find(token)
+    if not a:
+        _bad_link(request, "application link")
+    if not applications.usable(a):
+        return _apply_page(request, token, None, status=404)
+    r = _bylaws_page(request, public=True)
+    r.headers["Cache-Control"] = "no-store"
+    return r
 
 
 @app.get("/apply/{token}/pdf")
