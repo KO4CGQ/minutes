@@ -1,0 +1,8 @@
+# Debian packages the app needs on its server, one a line (# starts a comment). deploy/after-update.sh installs any
+# that are missing, on a new server (setup.sh runs it) and at every update, from the version being installed: a new
+# line here reaches every server with that update. Never remove one a release still needs (a rollback reinstalls none).
+libpango-1.0-0          # PDFs (WeasyPrint)
+libpangoft2-1.0-0
+fonts-dejavu-core       # PDFs: the text
+fonts-liberation
+fonts-noto-color-emoji  # PDFs: emoji
