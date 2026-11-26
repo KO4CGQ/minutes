@@ -151,6 +151,8 @@ def test_the_sponsor_confirms_or_declines(env):
     assert as_("n0aaaa").post(f"/applications/{aid}/sponsor", data={"answer": "yes"}).status_code == 404
     page = as_("n0cccc").get(f"/applications/{aid}/sponsor").text
     assert "I sponsor Pat Visitor" in page and "I can't sponsor them" in page
+    home = as_("n0cccc").get("/").text  # the request waits on the sponsor's Home too, and nobody else's
+    assert "has asked you to sponsor" in home and f"/applications/{aid}/sponsor" in home and f"/applications/{aid}/sponsor" not in as_("n0aaaa").get("/").text
     sent.clear()
     as_("n0cccc").post(f"/applications/{aid}/sponsor", data={"answer": "no"})
     a = applications.find(token)
@@ -161,6 +163,7 @@ def test_the_sponsor_confirms_or_declines(env):
     sent.clear()
     as_("n0cccc").post(f"/applications/{aid}/sponsor", data={"answer": "yes"})
     a = applications.find(new)
+    assert f"/applications/{aid}/sponsor" not in as_("n0cccc").get("/").text  # answered: gone from Home
     assert a["state"] == "candidate" and a["sponsor"]["answer"] == "yes" and a["sponsor"]["at"] and not sent[0]["files"] and "/guests" in sent[0]["body"]  # a link, not the PDF again
     assert send_link(as_, sent)[0].headers["location"].startswith("/guests?error=")  # applied already
 
@@ -313,6 +316,7 @@ def test_a_near_sponsor_is_suggested_and_the_one_likely_member_may_claim_it(env)
     assert "Likely" in as_("n0aaaa").get("/guests").text and "asked Bob Member" in as_("n0aaaa").get("/guests").text
     assert as_("n0bbbb").get(f"/applications/{a['id']}/sponsor").status_code == 404
     assert "which may be you" in as_("n0cccc").get(f"/applications/{a['id']}/sponsor").text
+    assert "which may be you" in as_("n0cccc").get("/").text  # on the likely member's Home too
     sent.clear()
     as_("n0cccc").post(f"/applications/{a['id']}/sponsor", data={"answer": "no"})  # not them
     a = applications.find(token)

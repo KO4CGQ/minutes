@@ -141,6 +141,11 @@ def sponsor_match(club: Club, typed: str) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
+def to_answer(items: list[dict], mid: str) -> list[dict]:
+    """Applications waiting for this member's answer as sponsor: named and asked, or the one member it may be."""
+    return [a for a in items if a["state"] == "submitted" and mid and mid == (a["sponsor"]["id"] or a["sponsor"].get("likely"))]
+
+
 def likely_sponsors(club: Club, typed: str, skip: str = "") -> list[str]:
     """Active members (ids, best first) who may be the sponsor typed when it matched no one: every typed word fits one of their
     name words or callsign (the same word 2, one starts the other, as an initial does, 1, the same first letter 0.5, a

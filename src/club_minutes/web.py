@@ -2068,6 +2068,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
     return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, certificate_note=treasurer.certificate_note(club), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=next((x for d, x in upcoming if nights and d == nights[0].isoformat()), None),  # that night's chow only (Jim, 2026-11-22)
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
+                sponsoring=applications.to_answer(applications.load()["items"], mid),
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
                 today=today, no_nights=can_lead_now(request) and not meetings.has_nights(club), teams=next((ln for ln in club.links if (ln.get("icon") or link_icon(ln.get("url", ""))) == "video"), None),  # Teams, Zoom, Meet…
                 fmt=lambda d: show_date(d, "day"), error=error)
