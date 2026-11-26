@@ -9,7 +9,8 @@ Kept in applications.json in the data folder ({"items": [...]}, mode 0600), read
   answers [{label, type, value}]      the club's questions as they were asked, so a later edit of them changes nothing
   statement, signed {name, at}        the club's statement shown above the signature, and the typed signature (name and time; no address is kept)
   sponsor {typed, id, asked, answer, at}  what the applicant typed; the member id (None until it matched exactly one
-                                      Active member, or someone on the Guests page picked one); answer None, "yes" or "no"
+                                      Active member, or someone on the Guests page picked one); answer None, "yes" or "no";
+                                      likely: the one member it may be (`likely_sponsors`), asked to claim it; not_me: who said it isn't them
   club {voted, initiated, fee_paid, bond_paid, ballot}   "For the club" on the PDF, empty until the vote and the fees
                                       (the fees are read from the Treasurer's records when the PDF is made); ballot: the
                                       vote recorded in a meeting's console {meeting, yes, no, passed} or {meeting, accepted,
@@ -140,6 +141,28 @@ def sponsor_match(club: Club, typed: str) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
+def to_answer(items: list[dict], mid: str) -> list[dict]:
+    """Applications waiting for this member's answer as sponsor: named and asked, or the one member it may be."""
+    return [a for a in items if a["state"] == "submitted" and mid and mid == (a["sponsor"]["id"] or a["sponsor"].get("likely"))]
+
+
+def likely_sponsors(club: Club, typed: str, skip: str = "") -> list[str]:
+    """Active members (ids, best first) who may be the sponsor typed when it matched no one: every typed word fits one of their
+    name words or callsign (the same word 2, one starts the other, as an initial does, 1, the same first letter 0.5, a
+    callsign one letter off 1.5) and at least one fits better than a first letter. "James F" finds Jim Flattery."""
+    said = re.findall(r"\w+", typed.casefold())
+    out = []
+    for m in club.members.values():
+        if m.status.lower() != "active" or m.id == skip:
+            continue
+        words, call = re.findall(r"\w+", m.name.casefold()), (m.callsign or "").casefold() if club.ham else ""
+        fits = [max([2 if w in words else 1 if any(x.startswith(w) or w.startswith(x) for x in words) else 0.5 if any(x[0] == w[0] for x in words) else 0,
+                     2 if w == call else 1.5 if call and len(w) == len(call) and sum(a != b for a, b in zip(w, call)) == 1 else 0]) for w in said]
+        if fits and min(fits) > 0 and max(fits) >= 1:
+            out.append((-sum(fits), m.name.casefold(), m.id))
+    return [i for *_, i in sorted(out)]
+
+
 def qhash(club: Club) -> str:
     """A short hash of the club's questions, carried in the form to notice a change between showing and sending it."""
     return hashlib.sha256(json.dumps(club.membership["questions"], sort_keys=True).encode()).hexdigest()[:12]
@@ -234,9 +257,11 @@ def submit(club: Club, token: str, form, now: float | None = None) -> dict:
             raise ValueError("This link has expired or was already used.")
         f, answers, typed = check(club, form)
         sponsor = sponsor_match(club, typed)
+        likely = [] if sponsor or not typed else [i for i in likely_sponsors(club, typed) if club.members[i].email]
         a.update(state="submitted", used=now, updated=now, form=f, answers=answers, statement=club.membership["statement"],
                  signed={"name": _text(form, "signature", "Your signature", 100), "at": now},
-                 sponsor={"typed": typed, "id": sponsor, "asked": now if sponsor else None, "answer": None, "at": None}, email=f["email"])
+                 sponsor={"typed": typed, "id": sponsor, "asked": now if sponsor else None, "answer": None, "at": None,
+                          **({"likely": likely[0]} if len(likely) == 1 else {})}, email=f["email"])
         return json.loads(json.dumps(a))
 
 
@@ -253,16 +278,29 @@ def _ask(club: Club, a: dict, url: str) -> None:
             f"Please sign in and say whether you will:\n\n{url}/applications/{a['id']}/sponsor\n\n{club.sign_off}\n{branding.name(club)}"))
 
 
+def _ask_likely(club: Club, a: dict, url: str) -> None:
+    m, name = club.members[a["sponsor"]["likely"]], a["form"]["name"]
+    auth.send_email(m.email, f"Are you {name}'s sponsor?", only_to=club.email_only_to(), body=(
+        f"Hello {m.first},\n\n{name} has applied to join {club_name(club)} and typed \"{a['sponsor']['typed']}\" as their sponsor, "
+        f"which may be you. Please sign in and say whether you sponsor them, or that it isn't you:\n\n{url}/applications/{a['id']}/sponsor\n\n"
+        f"{club.sign_off}\n{branding.name(club)}"))
+
+
 def notify_submitted(club: Club, a: dict, url: str) -> None:
     """After the form: the sponsor is asked (when the typed name matched a member); the holders are told it's on the Guests
     page and the applicant that it arrived. No PDF goes by email (it's on the Guests page). A failure to send is only logged."""
     name, only, sid = a["form"]["name"], club.email_only_to(), a["sponsor"]["id"]
+    likely = a["sponsor"].get("likely")
     who = f"Their sponsor, {club.name(sid)}, has been asked to confirm." if sid else (
+        f"They typed \"{a['sponsor']['typed']}\" as their sponsor, which may be {club.name(likely)}: they have been asked whether it's them. "
+        "If it isn't, pick a member on the Guests page.") if likely else (
         (f"They typed \"{a['sponsor']['typed']}\" as their sponsor, which isn't one member" if a["sponsor"]["typed"] else "They named no sponsor")
         + ": pick a member on the Guests page.")
     try:
         if sid:
             _ask(club, a, url)
+        elif likely:
+            _ask_likely(club, a, url)
         if to := holders(club):
             auth.send_email(to, f"Membership application: {name}", only_to=only, body=(
                 f"{name} has submitted a membership application. {who}\n\nIt's on the Guests page: {url}/guests\n\n{club.sign_off}\n{branding.name(club)}"))
@@ -284,6 +322,7 @@ def ask_sponsor(club: Club, aid: str, mid: str, url: str, now: float | None = No
         if mid not in club.members or club.members[mid].status.lower() != "active":
             raise ValueError("Pick an Active member.")
         a["sponsor"].update(id=mid, asked=now)
+        a["sponsor"].pop("likely", None)
         a["updated"] = now
         a = json.loads(json.dumps(a))
     try:
@@ -293,23 +332,37 @@ def ask_sponsor(club: Club, aid: str, mid: str, url: str, now: float | None = No
 
 
 def sponsor_answer(club: Club, aid: str, mid: str, yes: bool, now: float | None = None) -> dict:
-    """The sponsor's answer. ValueError if this isn't theirs to answer (or has been answered)."""
+    """The sponsor's answer, or the likely member's (`likely_sponsors`): yes makes them the sponsor; no, from them, means it
+    isn't them (or they can't), and the application waits for someone to pick one. ValueError if this isn't theirs to answer."""
     now = int(now or time.time())
     with edit() as items:
         a = next((x for x in items if x["id"] == aid), None)
-        if not a or a["state"] != "submitted" or a["sponsor"]["id"] != mid:
+        claim = bool(a) and not a["sponsor"]["id"] and a["sponsor"].get("likely") == mid
+        if not a or a["state"] != "submitted" or (a["sponsor"]["id"] != mid and not claim):
             raise ValueError("This application doesn't need your answer.")
+        if claim:
+            a["sponsor"].pop("likely")
+            if not yes:
+                a["sponsor"]["not_me"] = mid
+                a["updated"] = now
+                return json.loads(json.dumps(a))
+            a["sponsor"].update(id=mid, asked=now)
         a["sponsor"].update(answer="yes" if yes else "no", at=now)
         a.update(state="candidate" if yes else "declined", updated=now)
         return json.loads(json.dumps(a))
 
 
 def notify_sponsor_answered(club: Club, a: dict, url: str) -> None:
-    """The holders are told (a link to the PDF on the Guests page, not the PDF again); a no also tells the applicant."""
-    name, sponsor, only = a["form"]["name"], club.name(a["sponsor"]["id"]), club.email_only_to()
+    """The holders are told (a link to the PDF on the Guests page, not the PDF again); a no also tells the applicant, unless
+    it was the likely member saying it isn't them."""
+    name, sponsor, only = a["form"]["name"], club.name(a["sponsor"]["id"] or a["sponsor"].get("not_me", "")), club.email_only_to()
     try:
         if to := holders(club):
-            if a["state"] == "candidate":
+            if a["state"] == "submitted":
+                auth.send_email(to, f"Pick a sponsor for {name}", only_to=only, body=(
+                    f"{name} typed \"{a['sponsor']['typed']}\" as their sponsor. {sponsor} says it isn't them, or they can't sponsor {name}. "
+                    f"Pick a member on the Guests page: {url}/guests\n\n{club.sign_off}\n{branding.name(club)}"))
+            elif a["state"] == "candidate":
                 auth.send_email(to, f"{name} is sponsored", only_to=only, body=(
                     f"{sponsor} has confirmed they sponsor {name}, who is now a candidate. The application, with their confirmation, is "
                     f"on the Guests page ({url}/guests): sign in to download the PDF.\n\n{club.sign_off}\n{branding.name(club)}"))

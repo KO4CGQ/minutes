@@ -7,6 +7,10 @@
   <form method="post" action="/chow/requests/{{ r.id }}/answer"><input type="hidden" name="approve" value="1"><button class="btn small">Approve</button></form>
   <form method="post" action="/chow/requests/{{ r.id }}/answer"><input type="hidden" name="approve" value="0"><button class="btn small ghost">Decline</button></form></div>
 {% endfor %}
+{% for a in sponsoring %}
+<div class="msg ok swapreq"><b>{{ a.form.name }}</b> {% if a.sponsor.id %}has asked you to sponsor their membership application{% else %}typed “{{ a.sponsor.typed }}” as their sponsor, which may be you{% endif %}.
+  <a class="btn small" href="/applications/{{ a.id }}/sponsor">Answer</a></div>
+{% endfor %}
 <div class="homegrid">
 <section class="card">
   <h2>{% if live %}Meeting in progress{% else %}Next meeting{% endif %}</h2>

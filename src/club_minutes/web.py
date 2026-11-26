@@ -2068,6 +2068,7 @@ def home(request: Request, error: str = "", mid: str = Depends(me)):
     return page(request, "home.html", dues=treasurer.standing(club, ts, mid) if treasurer.members_see(ts := treasurer.load()) else None, certificate_note=treasurer.certificate_note(club), money=treasurer.money, next_meeting=nights[0] if nights else None, chow_next=next((x for d, x in upcoming if nights and d == nights[0].isoformat()), None),  # that night's chow only (Jim, 2026-11-22)
                 my_chow=next(((d, x) for d, x in upcoming if x.get("member") == mid and x.get("status") != "none"), None),
                 swaps=[r for r in s["swaps"] if r["status"] == "pending" and r["with"] == mid],
+                sponsoring=applications.to_answer(applications.load()["items"], mid),
                 items=sorted(items, key=lambda x: x["due"] or "9999"), latest=latest, coming=coming, undated=undated,
                 today=today, no_nights=can_lead_now(request) and not meetings.has_nights(club), teams=next((ln for ln in club.links if (ln.get("icon") or link_icon(ln.get("url", ""))) == "video"), None),  # Teams, Zoom, Meet…
                 fmt=lambda d: show_date(d, "day"), error=error)
@@ -3943,7 +3944,9 @@ def guests(request: Request, note: str = "", error: str = ""):
     items = applications.load()["items"] if sends else []
     return page(request, "guests.html", guests=gs, note=note, error=error, sends=sends, sees=_sees_applications(request), ready=ready,
                 adds=archive.club.keeps_roster(request.state.member) or admin_mode(request),
-                apps={g["name"]: a for g in gs if (a := applications.for_guest(items, g["name"]))}, app_states=applications.SHOWN, now=time.time(),
+                apps=(apps := {g["name"]: a for g in gs if (a := applications.for_guest(items, g["name"]))}), app_states=applications.SHOWN, now=time.time(),
+                likely={a["id"]: applications.likely_sponsors(archive.club, a["sponsor"]["typed"], a["sponsor"].get("not_me", ""))
+                        for a in apps.values() if a["state"] == "submitted" and not a["sponsor"]["id"] and a["sponsor"]["typed"]},
                 actives=sorted(((m.id, m.name) for m in archive.club.members.values() if m.status.lower() == "active"), key=lambda c: c[1].lower()))
 
 
@@ -4002,8 +4005,9 @@ def application_pdf(request: Request, aid: str):
 
 def _mine_to_sponsor(request: Request, aid: str) -> dict:
     a = next((x for x in applications.load()["items"] if x["id"] == aid), None)
-    if not a or not a.get("sponsor") or a["sponsor"]["id"] != request.state.member:
-        raise HTTPException(404)  # only the sponsor named sees it
+    me = request.state.member
+    if not a or not a.get("sponsor") or me not in (a["sponsor"]["id"], a["sponsor"].get("likely"), a["sponsor"].get("not_me")):
+        raise HTTPException(404)  # only the sponsor named sees it (or the one member it may be, asked to claim it)
     return a
 
 
