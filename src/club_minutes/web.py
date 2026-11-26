@@ -3943,7 +3943,9 @@ def guests(request: Request, note: str = "", error: str = ""):
     items = applications.load()["items"] if sends else []
     return page(request, "guests.html", guests=gs, note=note, error=error, sends=sends, sees=_sees_applications(request), ready=ready,
                 adds=archive.club.keeps_roster(request.state.member) or admin_mode(request),
-                apps={g["name"]: a for g in gs if (a := applications.for_guest(items, g["name"]))}, app_states=applications.SHOWN, now=time.time(),
+                apps=(apps := {g["name"]: a for g in gs if (a := applications.for_guest(items, g["name"]))}), app_states=applications.SHOWN, now=time.time(),
+                likely={a["id"]: applications.likely_sponsors(archive.club, a["sponsor"]["typed"], a["sponsor"].get("not_me", ""))
+                        for a in apps.values() if a["state"] == "submitted" and not a["sponsor"]["id"] and a["sponsor"]["typed"]},
                 actives=sorted(((m.id, m.name) for m in archive.club.members.values() if m.status.lower() == "active"), key=lambda c: c[1].lower()))
 
 
@@ -4002,8 +4004,9 @@ def application_pdf(request: Request, aid: str):
 
 def _mine_to_sponsor(request: Request, aid: str) -> dict:
     a = next((x for x in applications.load()["items"] if x["id"] == aid), None)
-    if not a or not a.get("sponsor") or a["sponsor"]["id"] != request.state.member:
-        raise HTTPException(404)  # only the sponsor named sees it
+    me = request.state.member
+    if not a or not a.get("sponsor") or me not in (a["sponsor"]["id"], a["sponsor"].get("likely"), a["sponsor"].get("not_me")):
+        raise HTTPException(404)  # only the sponsor named sees it (or the one member it may be, asked to claim it)
     return a
 
 

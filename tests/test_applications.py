@@ -238,7 +238,7 @@ def test_a_club_with_its_own_secretary_role_still_gets_the_new_permission(tmp_pa
 def test_the_sponsor_is_typed_and_unmatched_or_empty_waits_for_someone_to_pick(env):
     club, as_, sent, _ = env
     assert applications.sponsor_match(club, "N0CCCC") == "n0cccc" and applications.sponsor_match(club, "sam gone") is None  # callsign; not Active
-    for typed, why in (("Bob", "x"), ("", "empty")):
+    for typed, why in (("Zed", "x"), ("", "empty")):
         _, token = send_link(as_, sent)
         sent.clear()
         assert as_(None).post(f"/apply/{token}", data=good(club, token, sponsor=typed)).status_code == 200
@@ -246,7 +246,7 @@ def test_the_sponsor_is_typed_and_unmatched_or_empty_waits_for_someone_to_pick(e
         assert a["state"] == "submitted" and a["sponsor"] == {"typed": typed, "id": None, "asked": None, "answer": None, "at": None}
         assert "bob@example.org" not in [m["to"] for m in sent]  # no sponsor asked yet
         page = as_("n0aaaa").get("/guests").text
-        assert ("Sponsor typed: Bob" if typed else "No sponsor named") in page and "Ask this sponsor" in page and "Ask this sponsor" not in as_("n0cccc").get("/guests").text
+        assert ("Sponsor typed: Zed" if typed else "No sponsor named") in page and "Ask this sponsor" in page and "Ask this sponsor" not in as_("n0cccc").get("/guests").text
         assert as_("n0cccc").post(f"/applications/{a['id']}/ask", data={"member": "n0cccc"}).status_code == 403
         sent.clear()
         as_("n0aaaa").post(f"/applications/{a['id']}/ask", data={"member": "n0dddd"})  # not Active: refused
@@ -294,3 +294,47 @@ def test_a_cross_site_request_for_a_made_up_link_isnt_counted_toward_a_ban(tmp_p
     assert seen == []
     anon.get("/apply/not-a-link")
     assert seen == ["bad_link"]
+
+
+def test_a_near_sponsor_is_suggested_and_the_one_likely_member_may_claim_it(env):
+    club, as_, sent, _ = env
+    assert applications.likely_sponsors(club, "B Member") == ["n0cccc"] and applications.likely_sponsors(club, "Robert M") == []  # no fit better than a letter
+    assert applications.likely_sponsors(club, "Bob") == ["n0cccc"] and applications.likely_sponsors(club, "N0CCCD") == ["n0cccc"]  # a callsign one letter off
+    assert applications.likely_sponsors(club, "T") == ["n0bbbb"] and applications.likely_sponsors(club, "Bob", skip="n0cccc") == []
+    assert set(applications.likely_sponsors(club, "J")) == {"n0aaaa"}  # Sam Gone isn't Active
+    _, token = send_link(as_, sent)
+    sent.clear()
+    as_(None).post(f"/apply/{token}", data=good(club, token, sponsor="Bobby M."))
+    a = applications.find(token)
+    assert a["sponsor"]["id"] is None and a["sponsor"]["likely"] == "n0cccc"
+    ask = next(m for m in sent if m["to"] == "bob@example.org")
+    assert "typed \"Bobby M.\"" in ask["body"] and f"/applications/{a['id']}/sponsor" in ask["body"]
+    assert "may be Bob Member" in next(m for m in sent if m["to"] == ["jane@example.org"])["body"]
+    assert "Likely" in as_("n0aaaa").get("/guests").text and "asked Bob Member" in as_("n0aaaa").get("/guests").text
+    assert as_("n0bbbb").get(f"/applications/{a['id']}/sponsor").status_code == 404
+    assert "which may be you" in as_("n0cccc").get(f"/applications/{a['id']}/sponsor").text
+    sent.clear()
+    as_("n0cccc").post(f"/applications/{a['id']}/sponsor", data={"answer": "no"})  # not them
+    a = applications.find(token)
+    assert a["state"] == "submitted" and a["sponsor"]["id"] is None and a["sponsor"]["not_me"] == "n0cccc" and "likely" not in a["sponsor"]
+    assert [m["to"] for m in sent] == [["jane@example.org"]] and "Pick a member" in sent[0]["body"]  # the applicant isn't told
+    assert "isn't you" in as_("n0cccc").get(f"/applications/{a['id']}/sponsor").text
+    assert "Likely" not in as_("n0aaaa").get("/guests").text  # Bob said no: not offered first again
+    with applications.edit() as items:  # the same, but this time it is them
+        next(x for x in items if x["id"] == a["id"])["sponsor"] = {"typed": "Bobby M.", "id": None, "asked": None, "answer": None, "at": None, "likely": "n0cccc"}
+    sent.clear()
+    as_("n0cccc").post(f"/applications/{a['id']}/sponsor", data={"answer": "yes"})
+    a = applications.find(token)
+    assert a["state"] == "candidate" and a["sponsor"]["id"] == "n0cccc" and a["sponsor"]["answer"] == "yes" and "is sponsored" in sent[0]["subject"]
+
+
+def test_two_likely_members_ask_no_one(env):
+    club, as_, sent, _ = env
+    _, token = send_link(as_, sent)
+    sent.clear()
+    import dataclasses
+    club.members["n0eeee"] = dataclasses.replace(club.members["n0cccc"], id="n0eeee", first="Bill", callsign="N0EEEE", email="bill@example.org")
+    assert applications.likely_sponsors(club, "B Member") == ["n0eeee", "n0cccc"]  # Bill and Bob Member: both fit
+    as_(None).post(f"/apply/{token}", data=good(club, token, sponsor="B Member"))
+    assert "likely" not in applications.find(token)["sponsor"] and not {"bob@example.org", "bill@example.org"} & {m["to"] for m in sent if isinstance(m["to"], str)}
+    assert "Likely" in as_("n0aaaa").get("/guests").text  # both offered first
