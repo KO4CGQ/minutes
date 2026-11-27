@@ -107,7 +107,7 @@
 {% elif tab == 'settings' %}
 {% set ro = '' if edit else 'disabled' %}
 {% if not edit %}<p class="hint">Only the Treasurer (or an admin in admin mode) changes these.</p>{% endif %}
-<form method="post" action="/treasurer/settings" class="modern card"><h2>Tracking: dues, bills and spending</h2>
+<form method="post" action="/treasurer/settings" class="modern card sitesec"><h2>Tracking: dues, bills and spending</h2>
   {% for k, v in modes.items() %}<label class="check"><input type="radio" name="mode" value="{{ k }}" {{ 'checked' if cfg.mode == k }} {{ ro }}> {{ v }}</label>{% endfor %}
   <div class="formrow">
     <label>Tracking starts<input type="date" name="start" value="{{ cfg.start or '' }}" {{ ro }}></label>
@@ -119,7 +119,7 @@
   {% if edit %}<div class="formrow"><button class="btn small">Save</button></div>{% endif %}
 </form>
 
-<div class="card"><h2>Amounts</h2>
+<div class="card sitesec"><h2>Amounts</h2>
   <p class="hint">The club's amounts{{ cite('dues') }}. When they change, add the new amount with the date it takes effect: earlier weeks keep the old one{% if cert() %}, and the {{ cert().short }}'s price is the one in effect when a member joined{% endif %}.</p>
   <table class="list"><thead><tr><th>What</th><th>From</th><th class="n">Amount</th>{% if edit %}<th></th>{% endif %}</tr></thead><tbody>
   {% for k, label in rates.items() %}{% for x in cfg.rates[k] %}<tr><td>{{ label }}</td><td>{{ fmt(x['from']) if x['from'] > '2000-01-01' else 'always' }}</td><td class="n">{{ dues_text(x) if k == 'dues' else money(x.cents) }}</td>
@@ -136,7 +136,7 @@
     <p class="hint">The week, month and day are for dues only (a week's dues fall due on each meeting night, a month's on the 1st, a year's on the day picked) and are ignored for the other amounts.</p></form>{% endif %}
 </div>
 
-<div class="card"><h2>Accounts</h2>
+<div class="card sitesec"><h2>Accounts</h2>
   <p>{{ cfg.accounts|join(' · ') }}</p>
   {% if edit %}<form method="post" action="/treasurer/settings/account" class="modern"><div class="formrow">
     <label>New account<input name="name" required maxlength="60" placeholder="e.g. Emergency Fund"></label><button class="btn small">Add account</button></div></form>
@@ -144,7 +144,7 @@
     <label>Remove an unused account<select name="name">{% for a in cfg.accounts %}<option>{{ a }}</option>{% endfor %}</select></label><button class="btn small ghost" data-confirm="Remove the account chosen in the list?">Remove account</button></div></form>{% endif %}
 </div>
 
-<div class="card"><h2>Spending categories</h2>
+<div class="card sitesec"><h2>Spending categories</h2>
   <p class="hint">What the Spending page groups expenses by ({{ 8 }} at most, one colour each). Renaming keeps every expense in it; removing one moves its expenses to Other.</p>
   {% for k, v in cats.items() %}{% if edit %}<form method="post" action="/treasurer/settings/category" class="modern"><input type="hidden" name="key" value="{{ k }}">
     <div class="formrow"><label>{{ 'Category' if loop.first else '' }}<input name="label" value="{{ v }}" maxlength="40" required aria-label="Name of {{ v }}"></label><button class="btn small ghost">Rename</button>
@@ -154,7 +154,7 @@
     <label>New category<input name="label" required maxlength="40" placeholder="e.g. Repeater"></label><button class="btn small" aria-label="Add the category">Add</button></div></form>{% endif %}
 </div>
 
-<div class="card"><h2>Funds</h2>
+<div class="card sitesec"><h2>Funds</h2>
   <p class="hint">A fund a committee runs, like the drinks fund: its keepers get this page with only their fund's account, to record its money in and out.</p>
   {% for f in cfg.funds %}<p><b>{{ f.name }}</b> · {{ f.account }} · kept by {% for k in f.keepers %}{{ club.name(k) }}{{ ', ' if not loop.last }}{% endfor %}
     {% if edit %}<form method="post" action="/treasurer/settings/fund" class="inline" data-confirm="Remove the {{ f.name }}? Its money stays recorded."><input type="hidden" name="name" value="{{ f.name }}"><input type="hidden" name="remove" value="1"><button class="linkbtn">Remove</button></form>{% endif %}</p>
