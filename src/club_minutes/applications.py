@@ -397,14 +397,21 @@ def passed(rule: str, yes: int, no: int) -> bool:
     return yes > no
 
 
-def listed(club: Club, items: list[dict], date: dt.date, dates: list[dt.date]) -> list[tuple[dict, dt.date]]:
-    """[(application, day the vote may be recorded)] for candidates not yet voted on, listed at a meeting on `date`: every
-    meeting after the day they became a candidate. The vote waits `listed_days` after the first of those (`dates`: the meetings)."""
-    out = []
+def listed(club: Club, items: list[dict], date: dt.date, dates: list[dt.date]) -> list[tuple[dict, str | None]]:
+    """[(application, None if the vote may be recorded at `date`, else when it may be)] for candidates not yet voted on,
+    listed at a meeting on `date`: every meeting after the day they became a candidate (`dates`: the meetings). The vote
+    waits `listed_days` days after the first of those, or with `listed_by: meetings`, that many meetings listed."""
+    out, n = [], club.membership["listed_days"]
     for a in items:
         if a["state"] != "candidate" or a["club"].get("voted") or date <= (since := dt.date.fromtimestamp(a["sponsor"]["at"])):
             continue
-        out.append((a, min(d for d in {*dates, date} if d > since) + dt.timedelta(days=club.membership["listed_days"])))
+        ms = sorted(d for d in {*dates, date} if d > since)
+        if club.membership["listed_by"] == "meetings":
+            left = n - ms.index(date)
+            out.append((a, None if left <= 0 else "at the next meeting" if left == 1 else f"{left} meetings from now"))
+        else:
+            due = ms[0] + dt.timedelta(days=n)
+            out.append((a, None if date >= due else "from " + show_date(due, "long")))
     return out
 
 
@@ -431,10 +438,9 @@ def console_view(club: Club, items: list[dict], slug: str, dates: list[dt.date])
     """What the console shows for this meeting: each candidate, when their vote may be recorded, and what was recorded."""
     date = dt.date.fromisoformat(slug)
     return {"vote": club.membership["vote"], "rule": VOTE_PASSES[club.membership["vote_passes"]], "lines": section_lines(club, items, slug, dates),
-            "people": [{"id": a["id"], "name": _who(club, a), "sponsor": club.name(a["sponsor"]["id"]), "can_vote": date >= due,
-                        "due": show_date(due, "long"),
+            "people": [{"id": a["id"], "name": _who(club, a), "sponsor": club.name(a["sponsor"]["id"]), "can_vote": not when, "due": when,
                         "ballot": b if (b := a["club"].get("ballot") or {}).get("meeting") == slug else None}
-                       for a, due in listed(club, items, date, dates)]}
+                       for a, when in listed(club, items, date, dates)]}
 
 
 def record_vote(club: Club, aid: str, slug: str, dates: list[dt.date], yes=None, no=None) -> None:
@@ -442,12 +448,12 @@ def record_vote(club: Club, aid: str, slug: str, dates: list[dt.date], yes=None,
     earlier at this meeting. ValueError says why not."""
     date = dt.date.fromisoformat(slug)
     with edit() as items:
-        found = next(((a, due) for a, due in listed(club, items, date, dates) if a["id"] == aid), None)
+        found = next(((a, when) for a, when in listed(club, items, date, dates) if a["id"] == aid), None)
         if not found:
             raise ValueError("That application isn't up for a vote at this meeting.")
-        a, due = found
-        if date < due:
-            raise ValueError(f"The vote can't be recorded until {show_date(due, 'long')}.")
+        a, when = found
+        if when:
+            raise ValueError(f"The vote can't be recorded yet: it can be {when}.")
         if not club.membership["vote"]:
             a["club"]["ballot"] = {"meeting": slug, "accepted": True, "passed": True}
             return

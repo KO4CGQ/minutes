@@ -254,8 +254,9 @@ def _quorum(raw) -> dict | None:
 # long a refusal lasts, what's kept. `club: invite_after_visits` is the tab's other setting. Questions: [{label, type: yesno|several|short|long|grid, options | rows + cols}].
 DEFAULT_STATEMENT = ("By signing, you confirm that what you've written here is true, that you've read the club's bylaws "
                      "and agree to follow them, and that you'll pay the club's dues and fees if you become a member.")
-MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
+MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "listed_by": "days", "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
                        "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": []}
+LISTED_BY = {"days": "days", "meetings": "meetings"}
 VOTE_PASSES = {"unanimous": "Unanimous", "two_thirds": "Two thirds", "majority": "A majority"}
 QUESTION_TYPES = {"yesno": "Yes or no", "several": "Pick several", "short": "Short text", "long": "Long text", "grid": "Grid of ticks"}
 _MEMBERSHIP_RANGES = {"link_days": (1, 365), "listed_days": (0, 365), "reapply_months": (0, 120), "keep_days": (1, 3650)}
@@ -293,6 +294,8 @@ def _membership(raw) -> dict:
     for k, (lo, hi) in _MEMBERSHIP_RANGES.items():
         if isinstance(out[k], bool) or not isinstance(out[k], int) or not lo <= out[k] <= hi:
             raise ValueError(f"club.yaml membership: {k}: {out[k]!r} isn't a whole number from {lo} to {hi}")
+    if out["listed_by"] not in LISTED_BY:
+        raise ValueError("club.yaml membership: listed_by is days or meetings")
     if not isinstance(out["vote"], bool) or out["vote_passes"] not in VOTE_PASSES:
         raise ValueError("club.yaml membership: vote is true or false, vote_passes one of " + ", ".join(VOTE_PASSES))
     if not isinstance(out["statement"], str) or len(out["statement"]) > 5000:

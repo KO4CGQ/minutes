@@ -143,11 +143,11 @@
 <p class="hint">The leader console reminds the leader when a guest reaches that many visits, and the Guests page then offers to email them the application. An application is deleted, answers and all, that many days after its link ran out unused, after the sponsor said no, or after it was withdrawn; one the club turned down keeps only the name and email until the months are up, so they can't apply again sooner.</p></div>
 <div class="card sitesec"><h2>The vote</h2>
 <div class="fmtgrid">
-<label for="m-listed">Days a candidate is listed in the minutes before the vote</label><span><input id="m-listed" type="number" name="listed_days" min="0" max="365" value="{{ m.listed_days }}" required> days</span>{{ origin('membership.listed_days') }}
+<label for="m-listed">How long a candidate is listed in the minutes before the vote</label><span><input id="m-listed" type="number" name="listed_days" min="0" max="365" value="{{ m.listed_days }}" required> <select name="listed_by" aria-label="Counted in">{% for k, label in listed_by.items() %}<option value="{{ k }}"{{ ' selected' if m.listed_by == k }}>{{ label }}</option>{% endfor %}</select></span>{{ origin('membership.listed_by' if 'membership.listed_by' in set_here or 'membership.listed_by' in here_keys else 'membership.listed_days') }}
 <label for="m-vote">A vote</label><label class="check"><input id="m-vote" type="checkbox" name="vote" value="1"{{ ' checked' if m.vote }}> <span>Members vote on each candidate (unticked: the officers accept the application)</span></label>{{ origin('membership.vote') }}
 <label for="m-pass">What passes</label><select id="m-pass" name="vote_passes">{% for k, label in vote_passes.items() %}<option value="{{ k }}"{{ ' selected' if m.vote_passes == k }}>{{ label }}</option>{% endfor %}</select>{{ origin('membership.vote_passes') }}
 </div>
-<p class="hint">0 days: the vote is at the next meeting after they apply.</p></div>
+<p class="hint">Days count from the first meeting they're listed at; meetings, how many they're listed at before the one with the vote. 0: the vote is at the next meeting after they apply.</p></div>
 <div class="card sitesec"><h2>The club's statement {{ origin('membership.statement') }}</h2>
 <label class="sr" for="m-stmt">The club's statement</label><textarea id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
 <p class="hint">Plain text, shown above the signature: what the club is and the conditions of membership. May be empty.</p></div>

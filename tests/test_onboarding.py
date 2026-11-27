@@ -42,7 +42,7 @@ def test_listed_until_the_vote_which_waits_for_listed_days_and_a_failed_vote_tur
     m = meeting(a, "2026-11-12")
     line = [i.text for i in m.items(applications.SECTION)]
     assert line == ["Pat Visitor (N0CALL) has applied for membership, sponsored by Bob Member."]  # names only
-    with pytest.raises(ValueError, match="can't be recorded until November 19"):
+    with pytest.raises(ValueError, match="recorded yet: it can be from November 19"):
         console.vote(a, "2026-11-12", aid, 3, 0)
     console.submit(a, "2026-11-12")
     assert applications.load()["items"][0]["state"] == "candidate"  # still listed
@@ -58,6 +58,21 @@ def test_listed_until_the_vote_which_waits_for_listed_days_and_a_failed_vote_tur
     console.submit(a, "2026-11-19")
     item = applications.load()["items"][0]
     assert item["state"] == "turned_down" and item["ended"]
+
+
+def test_listed_by_meetings_waits_for_that_many_meetings(with_env):
+    club, _, aid, a = candidate(with_env)
+    club.save_site_settings({("membership", "listed_days"): 2, ("membership", "listed_by"): "meetings"})
+    meeting(a, "2026-11-12")
+    with pytest.raises(ValueError, match="it can be 2 meetings from now"):
+        console.vote(a, "2026-11-12", aid, 3, 0)
+    console.submit(a, "2026-11-12")
+    meeting(a, "2026-11-13")  # the count is meetings, not days
+    with pytest.raises(ValueError, match="it can be at the next meeting"):
+        console.vote(a, "2026-11-13", aid, 3, 0)
+    console.submit(a, "2026-11-13")
+    meeting(a, "2026-11-26")
+    console.vote(a, "2026-11-26", aid, 3, 0)
 
 
 def test_a_passed_vote_then_add_as_a_member_marks_it_and_the_fees_come_from_the_treasurer(with_env, monkeypatch):
