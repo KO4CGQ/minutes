@@ -154,15 +154,19 @@
 {% for w, what in invite_words.items() %}<code>{{ '{' ~ w ~ '}' }}</code> {{ what }}{{ ', ' if not loop.last else '.' }}{% endfor %}</p></div>
 <div class="card sitesec"><h2>The club's statement {{ origin('membership.statement') }}</h2>
 <label class="sr" for="m-stmt">The club's statement</label><textarea data-format id="m-stmt" name="statement" rows="6" maxlength="5000">{{ m.statement }}</textarea>
-<p class="hint">Shown above the signature: what the club is and the conditions of membership. Bold, lists and links are allowed. May be empty.</p></div>
+<p class="hint">Shown above the signature: what the club is and the conditions of membership. Bold, lists and links are allowed. May be empty.</p>
+<label for="m-accept">The box the guest ticks {{ origin('membership.accept') }}</label><textarea id="m-accept" name="accept" rows="2" maxlength="300" class="grow">{{ m.accept }}</textarea>
+<p class="hint">Under the statement, with a tick box the guest must tick. Empty: "{{ default_accept }}"</p></div>
 <div class="card sitesec"><h2>The form's welcome text {{ origin('membership.welcome') }}</h2>
 <label class="sr" for="m-welcome">The form's welcome text</label><textarea data-format id="m-welcome" name="welcome" rows="4" maxlength="5000">{{ m.welcome }}</textarea>
 <p class="hint">Under the form's heading. Bold, lists and links are allowed. Empty: a short thank-you is shown.</p></div>
 <div class="card sitesec"><h2>Details the form asks for {{ origin('membership.fields') }}</h2>
-<p class="hint">Name, email and the signature are always required.</p>
+<p class="hint">Name, email and the signature are always required; the form marks each required one with *. A hint is the small text under a detail (empty: none).</p>
 <div class="fmtgrid">
-{% for k, label in (('callsign', 'Callsign'), ('first_licensed', 'First licensed'), ('license_class', 'License class'), ('expires', 'License expires'), ('street', 'Street address'), ('city', 'City'), ('state', 'State'), ('zip', 'ZIP code'), ('phone', 'Phone'), ('occupation', 'Occupation')) if club.ham or k not in ('callsign', 'first_licensed', 'license_class', 'expires') %}
-<label for="m-f-{{ k }}">{{ label }}</label><select id="m-f-{{ k }}" name="field_{{ k }}">{% for mode, mlabel in field_modes.items() %}<option value="{{ mode }}"{{ ' selected' if m.fields[k] == mode }}>{{ mlabel }}</option>{% endfor %}</select><span></span>
+{% for k, label in (('name', 'Full name'), ('callsign', 'Callsign'), ('first_licensed', 'First licensed'), ('license_class', 'License class'), ('expires', 'License expires'), ('street', 'Street address'), ('city', 'City'), ('state', 'State'), ('zip', 'ZIP code'), ('phone', 'Phone'), ('email', 'Email'), ('occupation', 'Occupation'), ('sponsor', 'Sponsor')) if club.ham or k not in ('callsign', 'first_licensed', 'license_class', 'expires') %}
+{% if k in m.fields %}<label for="m-f-{{ k }}">{{ label }}</label><select id="m-f-{{ k }}" name="field_{{ k }}">{% for mode, mlabel in field_modes.items() %}<option value="{{ mode }}"{{ ' selected' if m.fields[k] == mode }}>{{ mlabel }}</option>{% endfor %}</select>
+{% else %}<span id="m-f-{{ k }}">{{ label }}</span><span class="muted">Always required</span>{% endif %}
+<input name="hint_{{ k }}" value="{{ m.hints[k] }}" maxlength="300" placeholder="Hint (optional)" aria-label="{{ label }}: hint">
 {% endfor %}
 </div></div>
 <div class="card sitesec"><h2>The club's own questions {{ origin('membership.questions') }}</h2>

@@ -261,6 +261,8 @@ def check(club: Club, form) -> tuple[dict, list[dict], str]:
         f["license_class"] = field("license_class", "License class", 20)
         if f["license_class"] not in ("", NO_LICENSE, *CLASSES):
             raise ValueError("Pick a license class from the list.")
+        if f["license_class"] == NO_LICENSE and modes["license_class"] == "required":
+            raise ValueError("The club asks for a license: pick your license class.")
         f["expires"] = field("expires", "License expiry", 10)
         try:
             f["expires"] = dt.date.fromisoformat(f["expires"]).isoformat() if f["expires"] else ""
@@ -271,7 +273,7 @@ def check(club: Club, form) -> tuple[dict, list[dict], str]:
         raise ValueError("Tick that you accept the conditions.")
     if not _same(_text(form, "signature", "Your signature", 100), f["name"]):
         raise ValueError("Type your full name exactly as you wrote it above, to sign.")
-    return f, answers, _text(form, "sponsor", "Your sponsor", 100, False)
+    return f, answers, field("sponsor", "Your sponsor", 100)
 
 
 def submit(club: Club, token: str, form, now: float | None = None) -> dict:

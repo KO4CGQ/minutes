@@ -204,6 +204,8 @@ nav.tabs a:hover { color: var(--text); } nav.tabs a.on { background: var(--surfa
 .login label { font-weight: 600; } .login input[type=email] { text-align: center; width: 100%; padding: .65rem .75rem; }
 .login.apply { text-align: left; max-width: 56rem; } .login.apply .loginlogo, .login.apply h1 { display: block; margin-left: auto; margin-right: auto; text-align: center; }  /* a long form reads left-aligned */
 .login.apply input:not([type=checkbox]):not([type=radio]), .login.apply select, .login.apply textarea { width: 100%; text-align: left; }
+textarea.grow { width: 100%; field-sizing: content; min-height: 3.4em; }  /* grows with its words (older browsers: two rows, resizable) */
+.req { color: var(--danger-text); font-weight: 700; margin-left: .15rem; }  /* the form's * on a required detail */
 @media (min-width: 48rem) {  /* desktop: short fields share a row; phones keep one column */
   .login.apply form.profile { max-width: none; display: grid; grid-template-columns: repeat(12, 1fr); column-gap: 1rem; align-items: start; }
   .login.apply form.profile :is(input:not([type=checkbox]):not([type=radio]), select) { box-sizing: border-box; height: 2.6rem; padding: .45rem .65rem; }  /* boxes side by side match (the sign-in page's email box is bigger) */

@@ -140,6 +140,15 @@ def test_fields_hidden_are_ignored_required_are_enforced_and_bad_settings_refuse
         applications.check(club, form(callsign=""))
     f, _, _ = applications.check(club, form())
     assert f["phone"] == "" and f["street"] == "" and f["callsign"] == "N0CALL" and f["city"] == "Anytown"
+    assert applications.check(club, form(license_class=applications.NO_LICENSE))[0]["license_class"] == applications.NO_LICENSE  # optional: allowed
+    club.membership["fields"]["license_class"] = "required"
+    with pytest.raises(ValueError, match="asks for a license"):
+        applications.check(club, form(license_class=applications.NO_LICENSE))
+    club.membership["fields"]["sponsor"] = "required"
+    with pytest.raises(ValueError, match="Your sponsor is needed"):
+        applications.check(club, form(sponsor=""))
+    club.membership["fields"]["sponsor"] = "hidden"
+    assert applications.check(club, form(sponsor="Jane Doe"))[2] == ""  # not asked: never read; officers pick one
     for bad in ({"phone": "maybe"}, {"fax": "hidden"}):
         with pytest.raises(ValueError, match="fields maps"):
             clubmod._membership({"fields": bad})
@@ -410,6 +419,36 @@ def test_more_words_in_the_email_and_the_bylaws_for_an_applicant(env):
     assert anon.get(f"/apply/{token}/bylaws").status_code == 404  # used
 
 
+def test_hints_and_the_accept_box_are_the_clubs_own(env, monkeypatch):
+    club, as_, sent, _ = env
+    monkeypatch.setattr(web, "admin_mode", lambda request: True)
+    club.save_app_admins({"n0bbbb"})
+    admin = as_("n0bbbb")
+    _, token = send_link(as_, sent)
+    form = as_(None).get(f"/apply/{token}").text
+    assert "Leave empty if you aren" in form and "the club will find you a sponsor" in form and clubmod.DEFAULT_ACCEPT.replace("'", "&#39;") in form
+    assert "(optional)" not in form and 'Street address<span class="req" aria-hidden="true">*</span>' in form and 'Phone<span class="req"' not in form
+    page = admin.get("/admin/site/membership").text
+    assert 'name="hint_sponsor" value="Type the name' in page and 'name="hint_phone" value=""' in page and 'id="m-accept" name="accept"' in page
+    base = {"rows": "0", "invite_after_visits": "3", "link_days": "30", "listed_days": "0", "listed_by": "days", "vote": "1", "vote_passes": "unanimous",
+            "reapply_months": "24", "keep_days": "90", "statement": club.membership["statement"], "invite": club.membership["invite"]}
+    data = base | {"hint_phone": "  Mobile   is best <b>", "hint_sponsor": "", "accept": "I agree.", "field_callsign": "required"}
+    assert "Saved" in admin.post("/admin/site/membership", data=data).text
+    assert club.membership["hints"]["phone"] == "Mobile is best <b>" and club.membership["hints"]["sponsor"] == "" and club.membership["accept"] == "I agree."
+    form = as_(None).get(f"/apply/{token}").text
+    assert "Mobile is best &lt;b&gt;" in form and "find you a sponsor" not in form and "I agree." in form
+    assert "Leave empty if you aren" not in form and 'Callsign<span class="req"' in form  # the built-in hint would contradict a required callsign
+    assert "<option>None yet</option>" in form
+    assert "Saved" in admin.post("/admin/site/membership", data=data | {"field_license_class": "required"}).text
+    assert "<option>None yet</option>" not in as_(None).get(f"/apply/{token}").text  # a club that asks for a license doesn't offer it
+    assert "Saved" in admin.post("/admin/site/membership", data=data | {"field_sponsor": "hidden"}).text
+    assert 'name="sponsor"' not in as_(None).get(f"/apply/{token}").text and 'id="m-f-sponsor" name="field_sponsor"' in admin.get("/admin/site/membership").text
+    before = club.site_settings
+    for bad in ({"hint_phone": "x" * 301}, {"accept": "x" * 301}):
+        assert "too long" in admin.post("/admin/site/membership", data=data | bad).text and club.site_settings == before
+    assert "Saved" in admin.post("/admin/site/membership", data=data | {"accept": " "}).text and club.membership["accept"] == clubmod.DEFAULT_ACCEPT
+
+
 def test_must_be_answered_per_question(env):
     club, as_, sent, _ = env
     assert clubmod.clean_questions([{"label": "A", "type": "yesno", "required": True}, {"label": "B", "type": "short", "required": False},
@@ -424,7 +463,8 @@ def test_must_be_answered_per_question(env):
     _, token = send_link(as_, sent)
     anon = as_(None)
     form = as_("n0aaaa").get(f"/apply/{token}").text
-    assert 'value="Yes" required' not in form and "(optional)" in form and "(tick at least one)" in form
+    assert 'value="Yes" required' not in form and "(tick at least one)" in form and "(optional)" not in form
+    assert f'{qs[0]["label"]}</legend>' in form and f'{qs[1]["label"]}<span class="req" aria-hidden="true">*</span>' in form  # * on required only
     for over, label in (({"q1": []}, "Which modes?"), ({"q2": ""}, "Why join?"), ({"q3": " "}, "Tell us more"), ({"q4": []}, "Bands")):
         r = anon.post(f"/apply/{token}", data=good(club, token, **over))
         assert r.status_code == 400 and f"Please answer: {label}" in r.text, label

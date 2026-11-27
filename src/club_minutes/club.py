@@ -255,7 +255,14 @@ def _quorum(raw) -> dict | None:
 DEFAULT_STATEMENT = ("By signing, you confirm that what you've written here is true, that you've read the club's bylaws "
                      "and agree to follow them, and that you'll pay the club's dues and fees if you become a member.")
 FIELD_DEFAULTS = {"callsign": "optional", "first_licensed": "optional", "license_class": "optional", "expires": "optional",
-                  "street": "required", "city": "required", "state": "required", "zip": "required", "phone": "optional", "occupation": "optional"}
+                  "street": "required", "city": "required", "state": "required", "zip": "required", "phone": "optional", "occupation": "optional",
+                  "sponsor": "optional"}  # sponsor not asked: those who receive applications pick one on the Guests page
+DEFAULT_ACCEPT = "I accept these conditions, and understand my name will be listed in the club's minutes."
+# The hint under each detail on the form (Site → Membership); "" shows none. name, email and sponsor have no mode.
+HINT_FIELDS = ("name", "callsign", "first_licensed", "license_class", "expires", "street", "city", "state", "zip", "phone", "email", "occupation", "sponsor")
+DEFAULT_HINTS = {**dict.fromkeys(HINT_FIELDS, ""), "callsign": "Leave empty if you aren't licensed yet.",
+                 "sponsor": "Type the name of a member who knows you; they get an email asking them to confirm. If you don't know "
+                            "a member yet, leave it empty: the club will find you a sponsor."}
 DEFAULT_INVITE = ("Hello {guest},\n\nThank you for visiting {club}. Here is your membership application:\n\n{link}\n\n"
                   "It's yours alone, so please don't share it. It works for {days} and until you send it in.")
 INVITE_WORDS = {"guest": "the guest's name", "first_name": "the guest's first name", "club": "the club's name",
@@ -265,6 +272,7 @@ INVITE_WORDS = {"guest": "the guest's name", "first_name": "the guest's first na
                 "visits": "how many times they have visited", "bylaws": "a link to the club's bylaws, which they can read without signing in"}
 MEMBERSHIP_DEFAULTS = {"link_days": 30, "listed_days": 0, "vote": True, "vote_passes": "unanimous", "reapply_months": 24,
                        "keep_days": 90, "statement": DEFAULT_STATEMENT, "questions": [], "welcome": "", "fields": FIELD_DEFAULTS,
+                       "hints": DEFAULT_HINTS, "accept": DEFAULT_ACCEPT,
                        "invite": DEFAULT_INVITE}
 FIELD_MODES = {"required": "Required", "optional": "Optional", "hidden": "Not asked"}  # name, email and the signature are always required
 VOTE_PASSES = {"unanimous": "Unanimous", "two_thirds": "Two thirds", "majority": "A majority"}
@@ -321,6 +329,12 @@ def _membership(raw) -> dict:
     if not isinstance(f, dict) or set(f) - set(FIELD_DEFAULTS) or set(f.values()) - set(FIELD_MODES):
         raise ValueError("club.yaml membership: fields maps " + ", ".join(FIELD_DEFAULTS) + " to " + ", ".join(FIELD_MODES))
     out["fields"] = {**FIELD_DEFAULTS, **f}
+    h = out["hints"]
+    if not isinstance(h, dict) or set(h) - set(HINT_FIELDS) or not all(isinstance(x, str) and len(x) <= 300 for x in h.values()):
+        raise ValueError("club.yaml membership: hints maps " + ", ".join(HINT_FIELDS) + " to text of at most 300 characters")
+    out["hints"] = {k: " ".join(h.get(k, DEFAULT_HINTS.get(k, "")).split()) for k in HINT_FIELDS}
+    if not isinstance(out["accept"], str) or not out["accept"].strip() or len(out["accept"]) > 300:
+        raise ValueError("club.yaml membership: accept is text of 1 to 300 characters")
     check_invite(out["invite"])
     out["questions"] = clean_questions(out["questions"])
     return out

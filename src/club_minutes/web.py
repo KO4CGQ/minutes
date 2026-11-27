@@ -83,8 +83,11 @@ from .club import (
     CALLSIGN,
     DATA,
     DATES,
+    DEFAULT_ACCEPT,
+    DEFAULT_HINTS,
     FIELD_DEFAULTS,
     FIELD_MODES,
+    HINT_FIELDS,
     INVITE_WORDS,
     MEMBERSHIP_DEFAULTS,
     PERMISSIONS,
@@ -3022,7 +3025,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
     fmts = {k: v for k, v in DATES.items() if k in ("list", "document", "short", "long")}
     sample = dt.date.today()  # the examples and the live preview show today
     return page(request, "site.html", tab=tab, error=error, note=note,
-                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, field_modes=FIELD_MODES, invite_words=INVITE_WORDS, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
+                question_types=QUESTION_TYPES, vote_passes=VOTE_PASSES, field_modes=FIELD_MODES, default_accept=DEFAULT_ACCEPT, invite_words=INVITE_WORDS, membership_here=any(k == "club.invite_after_visits" or k.startswith("membership.") for k in [f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys]),
                 presets=DATE_PRESETS, fmts=fmts, preset=next((k for k, (_, v) in DATE_PRESETS.items() if v == fmts), "custom"),
                 dates_here="date_formats" in club.site_settings.get("club", {}), sample=sample,
                 # every code's text for the sample date, made by Python itself, for the page's live preview of own formats
@@ -3307,6 +3310,12 @@ def _membership_form(form, club) -> dict:
     v["fields"] = {k: form.get("field_" + k) or club.membership["fields"][k] for k in FIELD_DEFAULTS}  # a non-ham club's page has no ham selects
     if set(v["fields"].values()) - set(FIELD_MODES):
         raise ValueError("Application fields: pick one from each list.")
+    v["hints"] = {k: " ".join(str(form.get("hint_" + k, club.membership["hints"][k])).split()) for k in HINT_FIELDS}
+    if any(len(x) > 300 for x in v["hints"].values()):
+        raise ValueError("A hint is too long (300 characters at most).")
+    v["accept"] = " ".join(str(form.get("accept") or "").split()) or DEFAULT_ACCEPT
+    if len(v["accept"]) > 300:
+        raise ValueError("The accept box's words are too long (300 characters at most).")
     qs = []
     for i in range(min(num(form.get("rows")) or 0, 60)):
         label = " ".join((form.get(f"label{i}") or "").split())
@@ -3368,7 +3377,7 @@ async def site_membership_preview(request: Request):
         return page(request, "apply.html", a=None, preview=True, error=str(e).removeprefix("club.yaml membership: "), form={})
     return page(request, "apply.html", a={"guest": ""}, preview=True, form={}, error="", token="", classes=applications.CLASSES + (applications.NO_LICENSE,),
                 qh="", statement=richtext.render(v["statement"]), welcome=richtext.render(v["welcome"]), has_bylaws=(DATA / "bylaws.md").exists(),
-                fields=v["fields"], questions=v["questions"], today=dt.date.today())
+                fields=v["fields"], hints=_form_hints(v), accept=v["accept"], questions=v["questions"], today=dt.date.today())
 
 
 def _roles_stamp() -> str:
@@ -4100,11 +4109,16 @@ async def sponsor_answer(request: Request, aid: str, background: BackgroundTasks
     return RedirectResponse(back, status_code=303)
 
 
+def _form_hints(m: dict) -> dict:
+    """The hints the form shows: a built-in "leave it empty" one under a callsign or sponsor the club requires would contradict it."""
+    return {**m["hints"], **{k: "" for k in ("callsign", "sponsor") if m["fields"][k] == "required" and m["hints"][k] == DEFAULT_HINTS[k]}}
+
+
 def _apply_page(request: Request, token: str, a: dict | None, form=None, error: str = "", status: int = 200) -> HTMLResponse:
     r = page(request, "apply.html", a=a, form=form or {}, error=error, token=token, classes=applications.CLASSES + (applications.NO_LICENSE,),
              qh=applications.qhash(archive.club), statement=richtext.render(archive.club.membership["statement"]),  # no names: a public page
              welcome=richtext.render(archive.club.membership["welcome"]), has_bylaws=(DATA / "bylaws.md").exists(), fields=archive.club.membership["fields"],
-             questions=archive.club.membership["questions"], today=dt.date.today())
+             hints=_form_hints(archive.club.membership), accept=archive.club.membership["accept"], questions=archive.club.membership["questions"], today=dt.date.today())
     r.status_code = status
     r.headers["Cache-Control"] = "no-store"
     return r
