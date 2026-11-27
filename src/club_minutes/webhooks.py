@@ -73,6 +73,13 @@ def new_secret() -> str:
     return value
 
 
+def remove_secret() -> None:
+    """No secret: nothing is sent. Events still waiting are dropped, so none goes out later under another secret."""
+    with _locked("webhook-queue.lock"):
+        for name in ("webhook-secret", "webhook-queue.json", "webhook-failure.json", "webhook-sent.json"):
+            (clubmod.DATA / name).unlink(missing_ok=True)
+
+
 def signature(key: str, t: int, body: bytes) -> str:
     return f"t={t},v1=" + hmac.new(key.encode(), f"{t}.".encode() + body, hashlib.sha256).hexdigest()
 
@@ -116,6 +123,21 @@ def _failure(kind: str | None = None, error: str | None = None) -> None:
         p.unlink(missing_ok=True)
 
 
+def _sent(kind: str) -> None:
+    """Remember the last event the service took (shown on the card)."""
+    p = clubmod.DATA / "webhook-sent.json"
+    p.write_text(json.dumps({"at": int(time.time()), "kind": kind}))
+    p.chmod(0o600)
+
+
+def last_sent() -> dict | None:
+    try:
+        s = json.loads((clubmod.DATA / "webhook-sent.json").read_text())
+        return {"at": int(s["at"]), "kind": KINDS.get(s["kind"], "Test event")}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def failure() -> dict | None:
     try:
         f = json.loads((clubmod.DATA / "webhook-failure.json").read_text())
@@ -139,6 +161,8 @@ def _attempt(url: str, key: str, e: dict) -> str | None:
     except (httpx.HTTPError, httpx.InvalidURL) as x:
         err = type(x).__name__  # never str(x): it can hold the address
     log.info("webhook %s to %s: %s", e["kind"], urlsplit(url).hostname, err or "sent")
+    if not err:
+        _sent(e["kind"])
     return err
 
 

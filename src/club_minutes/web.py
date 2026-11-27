@@ -3024,7 +3024,7 @@ def site_page(request: Request, tab: str = "look", error: str = "", note: str = 
                 here_keys=[f"{sec}.{k}" for sec, keys in club.site_settings.items() for k in keys], zones=events.ZONES,
                 pictures=SITE_PICTURES, source=branding.source, plugin_rows=plugins.rows(club),
                 wh_url=webhooks._settings().get("url", ""), wh_kinds=webhooks._settings().get("kinds") or [], wh_kind_names=webhooks.KINDS,
-                wh_made=(m := webhooks.secret_made()) and dt.date.fromtimestamp(m), wh_failure=webhooks.failure(),
+                wh_made=webhooks.secret_made(), wh_made_by=_secret_maker(club) if tab == "connections" else None, wh_sent=webhooks.last_sent(), wh_failure=webhooks.failure(),
                 backings=branding.BACKINGS, backing_choice=branding._settings().get("backing", "auto"), backing_auto=branding.auto_backing(),
                 default_name=f"{archive.club.label} Minutes", upload_mb=limits.upload_mb(),
                 colours=(c := branding.colours()), colours_own=bool(branding._settings().get("theme")),
@@ -3158,15 +3158,30 @@ async def site_webhooks(request: Request):
 
 @app.post("/admin/site/webhook-secret", response_class=HTMLResponse)
 def site_webhook_secret(request: Request):
-    """Make a new signing secret for event webhooks and show it once. Needs a fresh confirmation, like making an admin."""
+    """Make a new signing secret for event webhooks and show it once. Admin mode is enough: the secret only signs events
+    to the club's own service, whose address an admin can change anyway."""
     _site_admin(request)
-    if redirect := fresh_confirm(request, "/admin/site/connections?note=" + quote("Confirmed. Make the secret now.")):
-        return redirect
     value = webhooks.new_secret()
     _admin_log(request, webhook_secret="made a new one")
     r = page(request, "webhook_secret.html", value=value)
     r.headers["Cache-Control"] = "no-store"  # shown once: never kept by the browser
     return r
+
+
+@app.post("/admin/site/webhook-secret/remove")
+def site_webhook_secret_remove(request: Request):
+    _site_admin(request)
+    webhooks.remove_secret()
+    _admin_log(request, webhook_secret="removed")
+    return RedirectResponse("/admin/site/connections?note=" + quote("Webhook secret removed: no events are sent."), status_code=303)
+
+
+def _secret_maker(club) -> str | None:
+    """Who made the webhook secret, from the admin log (shortcut: gone once the log drops it after 90 days; then not shown)."""
+    p = DATA / "admin-log.jsonl"
+    lines = p.read_text().splitlines() if p.exists() else []
+    e = next((json.loads(x) for x in reversed(lines) if '"webhook_secret": "made a new one"' in x), None)
+    return club.name(e["member"]) if e and e.get("member") in club.members else None
 
 
 @app.post("/admin/site/webhook-test")

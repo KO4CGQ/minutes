@@ -11,6 +11,7 @@ SRC = sorted((Path(__file__).parents[1] / "src" / "club_minutes").glob("*.py"))
 NO_MEMBER_IDS = {
     "webhook-queue.json": "events waiting to be sent: dates, titles, links, never a member",
     "webhook-failure.json": "the last failed event's kind, time and error",
+    "webhook-sent.json": "the last event sent: its kind and time",
     "backup-status.json": "when the last backup ran",
     "branding.json": "the club's look",
     "limits.json": "the upload limit",
@@ -41,7 +42,7 @@ def test_every_data_file_with_member_ids_follows_a_callsign_change():
 # Writes that aren't a temporary file then .replace(): "not atomic yet", except the locks and markers (nothing to tear).
 NOT_ATOMIC = {
     ("webhooks.py", 'open(clubmod.DATA / name, "w")'): "an empty lock file",
-    ("webhooks.py", "p"): "webhook-failure.json: a torn one only hides the last failure",
+    ("webhooks.py", "p"): "webhook-failure.json, webhook-sent.json: a torn one only hides the last failure or send",
     ("auth.py", "p"): "the email log trimmed to its last lines",
     ("console.py", "state_path(archive, slug)"): "a console's saved state",
     ("console.py", "(archive.root / slug / name)"): "a console status file",
