@@ -578,7 +578,9 @@ button.cardopen .card-text { display: block; }
 li.dup .caltitle, li.dup > strong { background: var(--warn-soft); border-radius: .2rem; }
 /* Site page: one row per picture (what it looks like now, where it's used, Upload and Reset) */
 .sitename input { flex: 1; max-width: 22rem; }
-.sitepics { display: grid; gap: .6rem; }
+.sitepics { display: grid; gap: .6rem; container-type: inline-size; }
+@container (max-width: 36rem) {  /* a narrow card (two to a row): the buttons go under the words */
+  .sitepic { grid-template-columns: 6.5rem 1fr; } .sitepic .acts { grid-column: 2; } .sitepic form.backing select { margin: .25rem 0 0; width: 100%; } }
 .sitepic { display: grid; grid-template-columns: 6.5rem 1fr auto; gap: 1rem; align-items: center; padding: .8rem 1rem;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .sitepic .thumb { width: 6.5rem; height: 5rem; display: grid; place-items: center; border-radius: var(--radius-sm);
@@ -632,7 +634,21 @@ form.colours input:disabled { color: var(--text); border-color: var(--border-str
 
 /* Admin → Site: each section a card; collapsible ones open from their heading */
 .sitesec { margin: 0 0 1rem; } fieldset.sitesec { min-width: 0; } /* "Your own formats" only while it's ticked (CSS :has; an older browser just always shows it) */
-.sitedates:has(input[name=preset]:not([value=custom]):checked) [data-own] { display: none; } .sitesec h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
+/* Admin pages (the "‹ Admin" crumb, plugins' too), on a wide screen: short cards in two columns; anything else in the same
+   box (text, Save, a lone form) keeps the full width, and so does a card holding a table or an editor. */
+main:has(> .crumb a[href="/admin"]) form.profile { max-width: none; }
+@media (min-width: 90rem) { main:has(> .crumb a[href="/admin"]) { max-width: 84rem; } }  /* a big screen: room for two cards side by side */
+.card.sitesec { container-type: inline-size; }
+.sitesec .fmtgrid { grid-template-columns: minmax(0, max-content) minmax(min(8rem, 100%), 20rem) minmax(0, 1fr); }  /* a long label wraps instead of pushing the boxes out */
+@container (max-width: 32rem) {  /* a narrow card (two to a row): labels above their boxes, as on a phone */
+  .sitesec .fmtgrid { grid-template-columns: 1fr; } .sitesec .fmtgrid > span { margin-bottom: .4rem; } }
+@media (min-width: 62rem) {  /* two balanced columns: cards fill the left one, then the right, in page order, so the page ends level */
+  main:has(> .crumb a[href="/admin"]) form:has(> .card.sitesec ~ .card.sitesec), main:has(> .crumb a[href="/admin"]) .cards:has(> .card ~ .card), main:has(> .crumb a[href="/admin"]):is(:has(> form.profile + form.profile), :has(> .card.sitesec ~ .card.sitesec)) { display: block; columns: 2; column-gap: 1rem; orphans: 1; widows: 1; }  /* a card is a line here: one alone may start a column */
+  main:has(> .crumb a[href="/admin"]) form:has(> .card.sitesec ~ .card.sitesec) > *, main:has(> .crumb a[href="/admin"]) .cards:has(> .card ~ .card) > *, main:has(> .crumb a[href="/admin"]):is(:has(> form.profile + form.profile), :has(> .card.sitesec ~ .card.sitesec)) > * { column-span: all; }
+  main:has(> .crumb a[href="/admin"]) form:has(> .card.sitesec ~ .card.sitesec) > .card.sitesec, main:has(> .crumb a[href="/admin"]) .cards:has(> .card ~ .card) > .card, main:has(> .crumb a[href="/admin"]):is(:has(> form.profile + form.profile), :has(> .card.sitesec ~ .card.sitesec)) > .card.sitesec, main:has(> .crumb a[href="/admin"]):is(:has(> form.profile + form.profile), :has(> .card.sitesec ~ .card.sitesec)) > form.profile:has(> .card.sitesec):not(:has(> .card.sitesec ~ .card.sitesec)) { column-span: none; break-inside: avoid; display: inline-block; width: 100%; vertical-align: top; margin-top: 0; }  /* inline-block: a column break keeps its bottom margin */
+  :is(main:has(> .crumb a[href="/admin"]) form:has(> .card.sitesec ~ .card.sitesec), main:has(> .crumb a[href="/admin"]):is(:has(> form.profile + form.profile), :has(> .card.sitesec ~ .card.sitesec))) > .card.sitesec:has(table, [data-move], [data-into="qlist"], .hrow, input[name^="hint_"]) { column-span: all; display: block; }
+}
+.sitedates:has(input[name=preset]:not([value=custom]):checked) [data-own] { display: none !important; }  /* !important: over the columns' inline-block */ .sitesec h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
 details.sitesec > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .5rem; }
 details.sitesec > summary::-webkit-details-marker { display: none; }
 details.sitesec > summary::before { content: "›"; font-size: 1.3rem; line-height: 1; color: var(--muted); transition: transform .15s; }

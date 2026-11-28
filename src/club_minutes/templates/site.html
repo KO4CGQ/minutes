@@ -204,6 +204,12 @@
 {% set pub = club.info.get('public_calendars') or [] %}
 {% for k, label in public_cals.items() %}<label class="check"><input type="checkbox" name="public_{{ k }}" value="1"{{ ' checked' if k in pub }}> {{ label }}</label>{% endfor %}
 </div>
+<div class="card sitesec"><h2>Election days</h2>
+<div class="fmtgrid">
+<label for="f-ele">Election days</label><select id="f-ele" name="elections"><option value="">None</option>{% for code, about in regions.elections.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('elections') == code }}>{{ about }}</option>{% endfor %}</select>{{ origin('calendar.elections') }}
+</div>
+<p class="hint">On the Community calendar: the US general election (even years), or a state's own (primaries too). For a state that isn't listed, add its primaries as Community events.</p>
+</div>
 <div class="card sitesec"><h2>Holidays</h2>
 <div class="fmtgrid">
 <label for="f-hol">The country's</label><input id="f-hol" name="holidays" list="hol-regions" value="{{ regions.holidays.get(club.calendar.get('holidays') or '', '') }}" placeholder="None: type a country or state" autocomplete="off" spellcheck="false">{{ origin('calendar.holidays') }}
@@ -228,12 +234,6 @@
 {% for j in range(10) %}<input type="checkbox" class="more" id="more{{ j }}" aria-label="Add a holiday"><label for="more{{ j }}" class="btn small ghost add">+ Add a holiday</label>{{ holrow(own|length + j, {}) }}{% endfor %}
 </div>
 <p class="hint">Days the club keeps that aren't on the country's list, with or without a country above: a date (December 24) or a weekday (the last Friday of June). "Days after" moves it on: Black Friday is November, 4th Thursday, 1 day after. Remove takes one out when you save (Undo, before then, keeps it). All of them go on the Holidays calendar. A meeting night on a holiday still gets chow scheduled; an officer marks it No chow on the Chow page if the club skips it.</p>
-</div>
-<div class="card sitesec"><h2>Election days</h2>
-<div class="fmtgrid">
-<label for="f-ele">Election days</label><select id="f-ele" name="elections"><option value="">None</option>{% for code, about in regions.elections.items() %}<option value="{{ code }}"{{ ' selected' if club.calendar.get('elections') == code }}>{{ about }}</option>{% endfor %}</select>{{ origin('calendar.elections') }}
-</div>
-<p class="hint">On the Community calendar: the US general election (even years), or a state's own (primaries too). For a state that isn't listed, add its primaries as Community events.</p>
 </div>
 <p class="row"><button class="btn">Save</button> <button type="button" class="btn ghost" data-discard hidden>Discard changes</button></p>
 </form>
