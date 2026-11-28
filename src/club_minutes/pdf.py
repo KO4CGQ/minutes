@@ -10,7 +10,7 @@ import jinja2
 from markupsafe import Markup, escape
 
 from . import branding, corrections, pictures, richtext, snapshot, theme
-from .club import DATES, show_date
+from .club import DATA, DATES, show_date
 
 HERE = Path(__file__).parent
 URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,)])")
@@ -35,25 +35,47 @@ def _env(club, rp_id: str | None) -> jinja2.Environment:
     return env
 
 
+# "Page X of Y" in the bottom margin (so it can't change how many pages there are): only on a PDF of more than one page
+PAGE_NUMBERS = '@page { @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 9pt sans-serif; color: #666; } }'
+
+
+def numbers_from() -> str:
+    """The first day this app numbered PDF pages (pdf-pages-from, written the first time it's asked): minutes of
+    meetings before it are never numbered, so minutes from before the update look as they always did."""
+    p = DATA / "pdf-pages-from"
+    try:
+        return p.read_text().strip()
+    except FileNotFoundError:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        (tmp := p.with_suffix(".tmp")).write_text(today := dt.date.today().isoformat())
+        tmp.replace(p)
+        return today
+
+
+def _write(html: str, numbers: bool = True) -> bytes:
+    from weasyprint import CSS, HTML
+    doc = HTML(string=html, base_url=str(HERE)).render()
+    if numbers and len(doc.pages) > 1:
+        doc = HTML(string=html, base_url=str(HERE)).render(stylesheets=[CSS(string=PAGE_NUMBERS)])
+    return doc.write_pdf()
+
+
 def render_pdf(archive, m, rp_id: str | None) -> tuple[str, bytes]:
     """(file name, PDF bytes) for submitted minutes: 15-oct-26-minutes.pdf, or -v2.pdf for a corrected version.
     rp_id: the site's address (club.yaml auth: rp_id), for the app's own links in the minutes."""
-    from weasyprint import HTML
     html = _env(archive.club, rp_id).get_template("minutes_doc.html").render(m=m, current=archive.by_slug.get(m.slug, m))
-    return corrections.pdf_name(m), HTML(string=html, base_url=str(HERE)).write_pdf()
+    return corrections.pdf_name(m), _write(html, str(m.date) >= numbers_from())
 
 
 def application(club, rec: dict, rp_id: str | None = None) -> bytes:
     """A membership application as a PDF: the club's name and logo, the answers, the signature and the sponsor's
     confirmation, and a block for the club's own part (applications.py)."""
-    from weasyprint import HTML
-
     from . import applications
     def when(t):
         return dt.datetime.fromtimestamp(t).strftime(DATES["list"] + ", %-I:%M %p") if t else ""
     html = _env(club, rp_id).get_template("application_doc.html").render(
         a=rec, sponsor=club.name((rec.get("sponsor") or {}).get("id")), when=when, fees=applications.fees(rec))
-    return HTML(string=html, base_url=str(HERE)).write_pdf()
+    return _write(html)
 
 
 def kept(archive, m, rp_id: str | None) -> tuple[str, bytes]:
