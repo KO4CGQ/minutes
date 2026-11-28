@@ -33,6 +33,13 @@ club:
 #   reapply_months: 24     # months before someone turned down may apply again
 #   keep_days: 90          # days an application that didn't lead to membership is kept, then deleted
 #   statement: "By signing, you agree to follow the club's bylaws."   # shown above the signature; may be empty
+#   welcome: "Thank you for your interest in joining us."   # under the form's heading; empty: a short thank-you
+#   invite: "Hello {guest}, here is your application to {club}: {link} (it works for {days})."   # the invitation email; {link} is required; also {first_name}, {short}, {until}, {next_meeting}, {visits}, {bylaws}
+#   fields:                # per detail: required, optional or hidden (callsign, first_licensed, license_class, expires, street, city, state, zip, phone, occupation, sponsor)
+#     street: optional     # defaults: street, city, state and zip required, the rest optional
+#   hints:                 # the small text under a detail ("" shows none): name, callsign, first_licensed, license_class, expires, street, city, state, zip, phone, email, occupation, sponsor
+#     phone: "A mobile number is best."   # defaults: a hint under callsign and sponsor only
+#   accept: "I accept these conditions."   # the sentence beside the box the guest must tick
 #   questions:             # the club's own, in order; type: yesno, several (options), short, long or grid (rows and cols)
 #     - {label: "Have you been to a meeting before?", type: yesno}
 #     - {label: "Which bands do you use?", type: grid, rows: [20 m, 2 m], cols: [Fixed, Portable, Mobile]}
