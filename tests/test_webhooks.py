@@ -88,8 +88,9 @@ def test_a_success_clears_the_last_failure(env):
     c, _, _, status = env
     set_up(c)
     status[:] = [503]
-    assert webhooks.send_test() == "HTTP 503" and webhooks.failure()["kind"] == "test"
-    assert webhooks.send_test() is None and webhooks.failure() is None
+    assert webhooks.send_test() == "HTTP 503" and webhooks.failure()["kind"] == "test" and webhooks.last_sent() is None
+    assert webhooks.last_sent() is None
+    assert webhooks.send_test() is None and webhooks.failure() is None and webhooks.last_sent()["kind"] == "Test event"
 
 
 def test_only_ticked_kinds_and_only_when_set_up(env):
@@ -115,26 +116,32 @@ def test_admin_routes(env, monkeypatch):
     c.save_app_admins({"pres"})
     assert as_("pres").post("/admin/site/webhooks", follow_redirects=False).status_code == 403  # not in admin mode
     monkeypatch.setattr(web, "admin_mode", lambda request: True)
-    for path in ("webhooks", "webhook-secret", "webhook-test"):
+    for path in ("webhooks", "webhook-secret", "webhook-test", "webhook-secret/remove"):
         assert as_("n0call").post(f"/admin/site/{path}").status_code == 404  # not an admin
     r = as_("pres").post("/admin/site/webhooks", data={"webhook_url": "http://hooks.example.org/x"}, follow_redirects=False)
     assert "error=" in r.headers["location"] and not webhooks._settings()
     as_("pres").post("/admin/site/webhooks", data={"webhook_url": URL, "kind_meeting_moved": "1", "kind_bogus": "1"})
     assert webhooks._settings() == {"url": URL, "kinds": ["meeting_moved"]}
-    # the secret needs a confirmation made in the last few minutes
-    r = as_("pres").post("/admin/site/webhook-secret", follow_redirects=False)
-    assert r.headers["location"].startswith("/admin/confirm") and not webhooks.secret()
-    monkeypatch.setattr(web, "fresh_confirm", lambda request, next: None)
-    r = as_("pres").post("/admin/site/webhook-secret")
+    assert "None yet" not in as_("pres").get("/admin/site/connections").text  # no secret: no facts
+    r = as_("pres").post("/admin/site/webhook-secret")  # one click in admin mode, no second confirmation
     value = webhooks.secret()
     assert len(value) == 64 and value in r.text and r.headers["cache-control"] == "no-store"
     assert stat.S_IMODE((clubmod.DATA / "webhook-secret").stat().st_mode) == 0o600
     page = as_("pres").get("/admin/site/connections").text
     assert value not in page and "Make a new secret" in page and "Send a test event" in page
+    assert "by Jane Doe" in page and "None yet with this secret" in page
     log = (clubmod.DATA / "admin-log.jsonl").read_text()
     assert value not in log and "webhook_secret" in log and "site_webhooks" in log
     r = as_("pres").post("/admin/site/webhook-test", follow_redirects=False)
     assert "note=" in r.headers["location"] and json.loads(sent[-1][1])["kind"] == "test"
+    assert "Test event, " in as_("pres").get("/admin/site/connections").text
+    webhooks._save([{**webhooks._event("meeting_moved", {}), "tries": 1, "next": 0}])
+    r = as_("pres").post("/admin/site/webhook-secret/remove", follow_redirects=False)
+    assert "note=" in r.headers["location"] and not webhooks.secret() and webhooks._load() == [] and webhooks.last_sent() is None
+    page = as_("pres").get("/admin/site/connections").text
+    assert "there's no secret" in page and "Remove the secret" not in page and "by Jane Doe" not in page
+    webhooks.fire("meeting_moved", {})
+    assert webhooks._load() == []  # nothing queued without a secret
 
 
 def test_calendar_changes_queue_events_with_the_contract(env):
@@ -167,7 +174,7 @@ def test_a_dropped_event_stays_shown_until_a_later_success(env):
     status[:] = [500, 204]
     webhooks.deliver()
     assert webhooks._load() == [] and webhooks.failure()["error"] == "HTTP 500"  # the 2nd event went, the drop is still shown
-    assert webhooks.send_test() is None and webhooks.failure() is None
+    assert webhooks.last_sent()["kind"] == "Meeting cancelled"
 
 
 def test_deliver_does_nothing_on_data_of_another_version(env, monkeypatch):

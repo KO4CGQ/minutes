@@ -247,15 +247,21 @@
 <fieldset class="check-group"><legend class="small">Send when</legend>
 {% for k, name in wh_kind_names.items() %}<label class="check"><input type="checkbox" name="kind_{{ k }}" value="1"{{ ' checked' if k in wh_kinds }}> <span>{{ name }}</span></label>
 {% endfor %}</fieldset>
-<p class="hint">Nothing is sent without an address, a secret and at least one box ticked. Plain http works only for localhost.
-{% if wh_made %}The secret was made here {{ wh_made|listdate }}, and isn't shown again. If the service lost it, make a new one and give it that: the old one stops working.{% else %}<b>Not working yet:</b> there's no secret. Make one, then give it to the service.{% endif %}</p>
+<p class="hint">Nothing is sent without an address, a secret and at least one box ticked. Plain http works only for localhost.</p>
+{% if wh_made %}<dl class="evinfo">
+<dt>Secret made</dt><dd>{{ wh_made|tsfull }}{% if wh_made_by %} by {{ wh_made_by }}{% endif %}</dd>
+<dt>Last event sent</dt><dd>{% if wh_sent and wh_sent.at >= wh_made|int %}{{ wh_sent.kind }}, {{ wh_sent.at|tsfull }}{% else %}None yet with this secret{% endif %}</dd>
+</dl>
+<p class="hint">The secret isn't shown again. If the service lost it, make a new one and give it that: the old one stops working.</p>
+{% else %}<p class="hint"><b>Not working yet:</b> there's no secret. Make one, then give it to the service.</p>{% endif %}
 {% if wh_failure %}<p class="error" role="alert">The last event failed: {{ wh_failure.kind }}, {{ wh_failure.when }}, {{ wh_failure.error }}. This goes away after the next one is sent.</p>{% endif %}
 <p class="row"><button class="btn">Save</button>
 <button class="btn small{{ ' ghost' if wh_made }}" form="webhook-secret"{% if wh_made %} data-confirm="Make a new secret? The service stops accepting events until it has the new one."{% endif %}>{{ 'Make a new webhook secret' if wh_made else 'Make a webhook secret' }}</button>
-{% if wh_made and wh_url %}<button class="btn small ghost" form="webhook-test">Send a test event</button>{% endif %}</p>
+{% if wh_made and wh_url %}<button class="btn small ghost" form="webhook-test">Send a test event</button>{% endif %}
+{% if wh_made %}<button class="btn small ghost" form="webhook-secret-remove">Remove the secret</button>{% endif %}</p>
 </div>
 </form>
-<form id="webhook-secret" method="post" action="/admin/site/webhook-secret"></form><form id="webhook-test" method="post" action="/admin/site/webhook-test"></form>
+<form id="webhook-secret" method="post" action="/admin/site/webhook-secret"></form><form id="webhook-test" method="post" action="/admin/site/webhook-test"></form>{% if wh_made %}<form id="webhook-secret-remove" method="post" action="/admin/site/webhook-secret/remove" data-confirm="Remove the secret? No events are sent until you make a new one, and any waiting to be sent are dropped."></form>{% endif %}
 {% elif tab == 'bylaws' %}
 <p class="muted">What the app cites from the club's bylaws, and the certificate (bond) members buy, if the club has one. Each change is in the admin log; changes here win over club.yaml on the server.</p>
 <form method="post" action="/admin/site/bylaws" class="profile sitewide">
